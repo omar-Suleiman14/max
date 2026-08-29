@@ -4,6 +4,7 @@ import type { AccountDraft } from '../shared/account-contract';
 import type { Blueprint, CompleteOnboardingDraft, ShopMetadata } from '../shared/blueprint-contract';
 import { IPC_CHANNELS, type MaxApi } from '../shared/ipc-contract';
 import type { ConfigurableRecordDraft, ObjectKind, PropertyDraft } from '../shared/object-contract';
+import type { QuickEntryDraft } from '../shared/quick-entry-contract';
 import type { TemplateDraft } from '../shared/template-contract';
 import type { TransactionDraft, TransferDraft } from '../shared/transaction-contract';
 
@@ -44,6 +45,14 @@ const maxApi: MaxApi = Object.freeze({
       ipcRenderer.invoke(IPC_CHANNELS.objectPropertyUpdate, id, draft) as ReturnType<MaxApi['objects']['updateProperty']>,
     updateRecord: (id: string, draft: ConfigurableRecordDraft) =>
       ipcRenderer.invoke(IPC_CHANNELS.objectRecordUpdate, id, draft) as ReturnType<MaxApi['objects']['updateRecord']>,
+  }),
+  quickEntry: Object.freeze({
+    getSuggestion: (itemId?: string, templateId?: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.quickEntryGetSuggestion, itemId, templateId) as ReturnType<
+        MaxApi['quickEntry']['getSuggestion']
+      >,
+    submit: (draft: QuickEntryDraft) =>
+      ipcRenderer.invoke(IPC_CHANNELS.quickEntrySubmit, draft) as ReturnType<MaxApi['quickEntry']['submit']>,
   }),
   shop: Object.freeze({
     completeOnboarding: (draft: CompleteOnboardingDraft) =>

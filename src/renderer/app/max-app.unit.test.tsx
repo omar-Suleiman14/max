@@ -50,6 +50,7 @@ const blueprintApi = {
 };
 
 import type { CompleteOnboardingDraft, ShopMetadata } from '../../shared/blueprint-contract';
+import type { QuickEntryDraft } from '../../shared/quick-entry-contract';
 
 let shopMetadataState: ShopMetadata = {
   backupSchedule: 'daily',
@@ -174,6 +175,26 @@ const transactionsApi = {
   undo: vi.fn(() => Promise.resolve({ ok: true as const, value: null })),
 };
 
+const quickEntryApi = {
+  getSuggestion: vi.fn(() => Promise.resolve({ amount: null, source: 'none' as const })),
+  submit: vi.fn((draft: QuickEntryDraft) =>
+    Promise.resolve({
+      ok: true as const,
+      value: {
+        createdAt: '2026-08-29',
+        id: 'tx-qe',
+        movements: [],
+        note: draft.note,
+        paidAmount: draft.paidAmount ?? draft.totalAmount,
+        paymentStatus: 'paid' as const,
+        totalAmount: draft.totalAmount,
+        transactionType: 'sale' as const,
+        updatedAt: '2026-08-29',
+      },
+    }),
+  ),
+};
+
 beforeEach(() => {
   window.localStorage.clear();
   document.documentElement.lang = 'en';
@@ -203,6 +224,7 @@ beforeEach(() => {
       accounts: accountsApi,
       blueprints: blueprintApi,
       objects: objectApi,
+      quickEntry: quickEntryApi,
       shop: shopApi,
       system: { getHealth },
       templates: templateApi,
@@ -214,6 +236,7 @@ beforeEach(() => {
   shopApi.completeOnboarding.mockClear();
   accountsApi.list.mockClear();
   transactionsApi.list.mockClear();
+  quickEntryApi.submit.mockClear();
 });
 
 afterEach(() => cleanup());

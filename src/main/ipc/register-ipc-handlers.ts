@@ -20,6 +20,7 @@ import {
   type PropertyDraft,
   type PropertyValue,
 } from '../../shared/object-contract';
+import type { PaymentMode, QuickEntryDraft } from '../../shared/quick-entry-contract';
 import type { TemplateDraft } from '../../shared/template-contract';
 import {
   movementTypes,
@@ -257,6 +258,31 @@ function parseTransferDraft(value: unknown): TransferDraft {
   };
 }
 
+function parseQuickEntryDraft(value: unknown): QuickEntryDraft {
+  if (!isObject(value)) {
+    throw new ObjectDomainError('invalid-input', 'A valid quick entry draft is required.');
+  }
+  const totalAmount = Number(value.totalAmount);
+  if (!Number.isFinite(totalAmount) || totalAmount <= 0) {
+    throw new ObjectDomainError('invalid-input', 'Total amount must be greater than zero.');
+  }
+  if (!['full', 'partial', 'later'].includes(String(value.paymentMode))) {
+    throw new ObjectDomainError('invalid-input', 'A valid payment mode is required.');
+  }
+
+  return {
+    accountId: typeof value.accountId === 'string' ? value.accountId : undefined,
+    collectorId: typeof value.collectorId === 'string' ? value.collectorId : undefined,
+    itemId: typeof value.itemId === 'string' ? value.itemId : undefined,
+    note: typeof value.note === 'string' ? value.note : undefined,
+    paidAmount: typeof value.paidAmount === 'number' ? value.paidAmount : undefined,
+    paymentMode: value.paymentMode as PaymentMode,
+    personId: typeof value.personId === 'string' ? value.personId : undefined,
+    templateId: typeof value.templateId === 'string' ? value.templateId : undefined,
+    totalAmount,
+  };
+}
+
 function mutation<T>(work: () => T): MutationResult<T> {
   try {
     return { ok: true, value: work() };
@@ -446,9 +472,17 @@ export function registerIpcHandlers({
       return null;
     });
   });
-  ipcMain.handle(IPC_CHANNELS.transactionSummary, (event) => {
+  // Quick Entry
+  ipcMain.handle(IPC_CHANNELS.quickEntryGetSuggestion, (event, itemId: unknown, templateId: unknown) => {
     trust(event);
-    return database.transactions.getLedgerSummary();
+    return database.quickEntry.getSuggestion(
+      typeof itemId === 'string' ? itemId : undefined,
+      typeof templateId === 'string' ? templateId : undefined,
+    );
+  });
+  ipcMain.handle(IPC_CHANNELS.quickEntrySubmit, (event, draft: unknown) => {
+    trust(event);
+    return mutation(() => database.quickEntry.submit(parseQuickEntryDraft(draft)));
   });
 }
 

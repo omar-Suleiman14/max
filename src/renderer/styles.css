@@ -455,6 +455,46 @@ kbd { display: inline-flex; min-width: 25px; min-height: 22px; align-items: cent
 .movement-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--canvas-subtle); border-radius: 8px; font-size: 13px; }
 .movement-row__left { display: flex; align-items: center; gap: 8px; }
 
+/* Quick Entry Dialog */
+.quick-entry-dialog { max-width: 580px; width: 100%; border-radius: 16px; background: var(--card); border: 1px solid var(--line); box-shadow: var(--shadow-lg); overflow: hidden; }
+.quick-entry-header-title { display: flex; flex-direction: column; gap: 4px; }
+.quick-entry-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 800; color: var(--accent); letter-spacing: 0.08em; }
+.quick-entry-form { padding: 20px 28px 24px; display: flex; flex-direction: column; gap: 18px; }
+.quick-step-block { background: var(--canvas-subtle); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+.quick-step-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 13px; }
+.step-num { width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: var(--bg); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; }
+.source-badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px; margin-inline-start: auto; }
+.source-badge--unconfirmed { background: rgba(245, 158, 11, 0.15); color: var(--warning); border: 1px dashed var(--warning); }
+.source-badge--item { background: rgba(34, 197, 94, 0.12); color: var(--success); }
+.source-badge--template { background: rgba(59, 130, 246, 0.12); color: var(--info); }
+.quick-amount-wrapper { display: flex; align-items: center; gap: 10px; }
+.quick-amount-input { font-size: 28px; font-weight: 800; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; width: 100%; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--text); }
+.quick-amount-input--unconfirmed { border-color: var(--warning); background: rgba(245, 158, 11, 0.04); }
+.confirm-badge-btn { flex-shrink: 0; }
+.field-hint--warning { color: var(--warning); font-size: 12px; margin-top: 6px; display: block; }
+.payment-mode-tabs { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-bottom: 12px; }
+.payment-mode-tab { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); font-size: 12px; font-weight: 600; color: var(--text-soft); cursor: pointer; transition: all 0.15s ease; }
+.payment-mode-tab[data-active="true"] { border-color: var(--accent); background: var(--canvas-subtle); color: var(--accent); }
+.quick-account-selector { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
+.quick-account-chip { display: flex; flex-direction: column; align-items: flex-start; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); cursor: pointer; text-align: start; transition: all 0.15s ease; }
+.quick-account-chip[data-selected="true"] { border-color: var(--accent); background: var(--canvas-subtle); outline: 2px solid var(--accent); }
+.quick-account-chip strong { font-size: 13px; color: var(--text); }
+.quick-account-chip span { font-size: 11px; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+.partial-breakdown-card { margin-top: 10px; padding: 12px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; display: flex; flex-direction: column; gap: 10px; }
+.remaining-badge { font-size: 16px; font-weight: 800; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; color: var(--danger); padding: 8px 12px; background: var(--canvas-subtle); border-radius: 8px; border: 1px solid var(--line); }
+
+/* Floating Undo Toast */
+.undo-toast { position: fixed; bottom: 24px; inset-inline-end: 24px; z-index: 9999; background: var(--card); border: 1px solid var(--line-strong); border-radius: 12px; box-shadow: var(--shadow-lg); overflow: hidden; min-width: 320px; max-width: 440px; animation: toast-in 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
+.undo-toast__body { display: flex; align-items: center; gap: 12px; padding: 14px 16px; }
+.undo-toast__icon { color: var(--success); flex-shrink: 0; }
+.undo-toast__content { flex: 1; min-width: 0; }
+.undo-toast__content strong { display: block; font-size: 13px; color: var(--text); }
+.undo-toast__meta { font-size: 11px; color: var(--muted); display: block; margin-top: 2px; }
+.undo-toast__btn { padding: 4px 10px; font-size: 12px; }
+.undo-toast__progress-track { height: 3px; background: var(--canvas-subtle); width: 100%; }
+.undo-toast__progress-bar { height: 100%; background: var(--accent); transition: width 0.05s linear; }
+
+
 
 @keyframes menu-in { from { opacity: 0; transform: translateY(-5px) scale(0.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes overlay-in { from { opacity: 0; } to { opacity: 1; } }

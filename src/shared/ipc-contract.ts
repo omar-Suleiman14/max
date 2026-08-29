@@ -39,6 +39,8 @@ export const IPC_CHANNELS = {
   objectRecordCreate: 'max:objects:records:create',
   objectRecordList: 'max:objects:records:list',
   objectRecordUpdate: 'max:objects:records:update',
+  quickEntryGetSuggestion: 'max:quick-entry:suggestion',
+  quickEntrySubmit: 'max:quick-entry:submit',
   shopCompleteOnboarding: 'max:shop:onboarding:complete',
   shopGetMetadata: 'max:shop:metadata:get',
   shopUpdateMetadata: 'max:shop:metadata:update',
@@ -71,6 +73,8 @@ export type SystemHealth = Readonly<{
   }>;
 }>;
 
+import type { QuickEntryDraft, QuickEntryPriceSuggestion } from './quick-entry-contract';
+
 export type MaxApi = Readonly<{
   accounts: Readonly<{
     archive: (id: string) => Promise<MutationResult<null>>;
@@ -93,6 +97,10 @@ export type MaxApi = Readonly<{
     listRecords: (objectKind: ObjectKind) => Promise<readonly ConfigurableRecord[]>;
     updateProperty: (id: string, draft: PropertyDraft) => Promise<MutationResult<PropertyDefinition>>;
     updateRecord: (id: string, draft: ConfigurableRecordDraft) => Promise<MutationResult<ConfigurableRecord>>;
+  }>;
+  quickEntry: Readonly<{
+    getSuggestion: (itemId?: string, templateId?: string) => Promise<QuickEntryPriceSuggestion>;
+    submit: (draft: QuickEntryDraft) => Promise<MutationResult<TransactionRecord>>;
   }>;
   shop: Readonly<{
     completeOnboarding: (draft: CompleteOnboardingDraft) => Promise<MutationResult<ShopMetadata>>;

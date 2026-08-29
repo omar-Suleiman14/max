@@ -2,6 +2,7 @@ import { ChevronDown, Command as CommandIcon, Plus, Search, X } from 'lucide-rea
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 
 import type { BackupSchedule, Blueprint } from '../../shared/blueprint-contract';
+import type { TransactionRecord } from '../../shared/transaction-contract';
 import { BlueprintDialog } from '../blueprints/blueprint-dialog';
 import { Onboarding } from '../onboarding/onboarding';
 import type { AppPage, EngineStatus } from './app-types';
@@ -21,6 +22,8 @@ import { FocusedOverlay } from '../ui/focused-overlay';
 import { SettingsDialog } from '../ui/settings-dialog';
 import { Sidebar } from '../ui/sidebar';
 import { AccountsWorkspace } from '../accounts/accounts-workspace';
+import { QuickEntryDialog } from '../quick-entry/quick-entry-dialog';
+import { UndoToast } from '../ui/undo-toast';
 import { TransactionsWorkspace } from '../transactions/transactions-workspace';
 import { ObjectWorkspace } from '../objects/object-workspace';
 
@@ -64,6 +67,8 @@ export function MaxApp() {
   const [commandOpen, setCommandOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [blueprintModalTab, setBlueprintModalTab] = useState<'export' | 'import'>();
+  const [quickEntryOpen, setQuickEntryOpen] = useState(false);
+  const [recentTxForUndo, setRecentTxForUndo] = useState<TransactionRecord>();
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [creationNoticeOpen, setCreationNoticeOpen] = useState(false);
   const [objectCreateRequest, setObjectCreateRequest] = useState(0);
@@ -145,6 +150,9 @@ export function MaxApp() {
         setSettingsOpen(false);
         setBlueprintModalTab(undefined);
         setCommandOpen(true);
+      } else if ((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === 'e') {
+        event.preventDefault();
+        setQuickEntryOpen(true);
       } else if (event.key === '/' && !isEditingTarget(event.target)) {
         event.preventDefault();
         setCommandOpen(true);
@@ -242,6 +250,12 @@ export function MaxApp() {
         keywords: ['preferences', 'appearance', 'theme', 'language', 'إعدادات', 'مظهر'],
         label: translate(locale, 'openSettings'),
         run: () => setSettingsOpen(true),
+      },
+      {
+        id: 'quick-sale-entry',
+        keywords: ['quick', 'sale', 'fast', 'بيع', 'سريع', 'تسجيل'],
+        label: locale === 'ar' ? '⚡ تسجيل بيع سريع (Ctrl+E)' : '⚡ Quick Sale Entry (Ctrl+E)',
+        run: () => setQuickEntryOpen(true),
       },
       {
         id: 'export-blueprint',
@@ -400,6 +414,31 @@ export function MaxApp() {
           onImportSuccess={() => {
             void window.maxApi.shop.getMetadata().then((d) => setShopName(d.shopName));
           }}
+        />
+      )}
+      {quickEntryOpen && (
+        <QuickEntryDialog
+          locale={locale}
+          onClose={() => setQuickEntryOpen(false)}
+          onSuccess={(tx) => {
+            setRecentTxForUndo(tx);
+            if (page === 'transactions' || page === 'accounts') {
+              setObjectCreateRequest((r) => r + 1);
+            }
+          }}
+        />
+      )}
+      {recentTxForUndo && (
+        <UndoToast
+          locale={locale}
+          onDismiss={() => setRecentTxForUndo(undefined)}
+          onUndo={async (id) => {
+            await window.maxApi.transactions.undo(id);
+            if (page === 'transactions' || page === 'accounts') {
+              setObjectCreateRequest((r) => r + 1);
+            }
+          }}
+          transaction={recentTxForUndo}
         />
       )}
       {creationNoticeOpen && (

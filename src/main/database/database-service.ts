@@ -17,11 +17,14 @@ const MIGRATIONS_TABLE_SQL = `
   ) STRICT;
 `;
 
+import { QuickEntryService } from './quick-entry-service';
+
 export class DatabaseService {
   readonly #database: DatabaseSync;
   readonly accounts: AccountRepository;
   readonly blueprints: BlueprintService;
   readonly objects: ObjectRepository;
+  readonly quickEntry: QuickEntryService;
   readonly shopMetadata: ShopMetadataRepository;
   readonly templates: TemplateRepository;
   readonly transactions: TransactionRepository;
@@ -38,6 +41,7 @@ export class DatabaseService {
     });
     this.accounts = new AccountRepository(this.#database);
     this.transactions = new TransactionRepository(this.#database);
+    this.quickEntry = new QuickEntryService(this.#database, this.transactions);
     this.objects = new ObjectRepository(this.#database);
     this.templates = new TemplateRepository(this.#database);
     this.shopMetadata = new ShopMetadataRepository(this.#database);
