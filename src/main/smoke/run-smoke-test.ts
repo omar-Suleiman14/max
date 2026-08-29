@@ -6,7 +6,7 @@ async function waitForShellReady(window: BrowserWindow): Promise<boolean> {
     new Promise((resolve) => {
       const deadline = Date.now() + 5000;
       const check = () => {
-        if (document.querySelector('[data-app-ready="true"]')) {
+        if (document.querySelector('[data-app-ready="true"]') || document.querySelector('.onboarding-container')) {
           resolve(true);
         } else if (Date.now() >= deadline) {
           resolve(false);
@@ -44,7 +44,25 @@ async function openSmokeSurface(window: BrowserWindow): Promise<void> {
   const surface = process.env.MAX_SMOKE_SURFACE;
   if (!surface) return;
 
-  if (['items', 'property', 'record'].includes(surface)) {
+  if (surface === 'onboarding') {
+    return;
+  }
+
+  // If we are on the onboarding screen and a workspace surface was requested, auto-complete onboarding for smoke test
+  await window.webContents.executeJavaScript(`
+    (async () => {
+      if (document.querySelector('.onboarding-container') && window.maxApi?.shop) {
+        await window.maxApi.shop.completeOnboarding({
+          shopName: 'Smoke Test Shop',
+          locale: (localStorage.getItem('max.ui.locale') === 'ar' ? 'ar' : 'en'),
+          backupSchedule: 'daily'
+        });
+        location.reload();
+      }
+    })();
+  `);
+
+  if (['items', 'property', 'record', 'template'].includes(surface)) {
     const opened = (await window.webContents.executeJavaScript(`
       (async () => {
         const waitFor = async (selector) => {
@@ -64,6 +82,11 @@ async function openSmokeSurface(window: BrowserWindow): Promise<void> {
           const trigger = await waitFor('.schema-panel__head button');
           trigger?.click();
           return Boolean(trigger);
+        }
+        if (surface === 'template') {
+          const tab = await waitFor('.schema-tab-button:nth-child(2)');
+          tab?.click();
+          return Boolean(tab);
         }
         if (surface === 'record') {
           const trigger = await waitFor('.object-toolbar .button');

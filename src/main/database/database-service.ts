@@ -1,8 +1,11 @@
 import { DatabaseSync } from 'node:sqlite';
 
 import type { DatabaseHealth } from '../../shared/ipc-contract';
+import { BlueprintService } from './blueprint-service';
 import { migrations, type Migration } from './migrations';
 import { ObjectRepository } from './object-repository';
+import { ShopMetadataRepository } from './shop-metadata-repository';
+import { TemplateRepository } from './template-repository';
 
 const MIGRATIONS_TABLE_SQL = `
   CREATE TABLE IF NOT EXISTS system_migrations (
@@ -14,7 +17,10 @@ const MIGRATIONS_TABLE_SQL = `
 
 export class DatabaseService {
   readonly #database: DatabaseSync;
+  readonly blueprints: BlueprintService;
   readonly objects: ObjectRepository;
+  readonly shopMetadata: ShopMetadataRepository;
+  readonly templates: TemplateRepository;
   #initialized = false;
 
   constructor(filename: string) {
@@ -27,6 +33,14 @@ export class DatabaseService {
       timeout: 5_000,
     });
     this.objects = new ObjectRepository(this.#database);
+    this.templates = new TemplateRepository(this.#database);
+    this.shopMetadata = new ShopMetadataRepository(this.#database);
+    this.blueprints = new BlueprintService(
+      this.#database,
+      this.objects,
+      this.templates,
+      this.shopMetadata,
+    );
 
     if (filename !== ':memory:') {
       this.#database.exec('PRAGMA journal_mode = WAL;');
@@ -77,9 +91,9 @@ export class DatabaseService {
       .get() as { migrationCount: number; schemaVersion: number };
 
     return {
-      status: 'ready',
       migrationCount: row.migrationCount,
       schemaVersion: row.schemaVersion,
+      status: 'ready',
     };
   }
 

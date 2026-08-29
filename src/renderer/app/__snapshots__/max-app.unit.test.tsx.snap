@@ -11,6 +11,7 @@ exports[`Max shell > renders the English shell and an actionable empty page 1`] 
       class="topbar__title"
     >
       <p>
+        Test Shop · 
         Workspace
          /
       </p>
@@ -155,6 +156,10 @@ exports[`Max shell > renders the English shell and an actionable empty page 1`] 
             0
              
             properties
+             · 
+            0
+             
+            templates
           </span>
         </div>
         <button
@@ -250,6 +255,103 @@ exports[`Max shell > renders the English shell and an actionable empty page 1`] 
         <aside
           class="schema-panel"
         >
+          <div
+            class="schema-panel__tabs"
+            role="tablist"
+          >
+            <button
+              aria-selected="true"
+              class="schema-tab-button"
+              data-active="true"
+              role="tab"
+              type="button"
+            >
+              <svg
+                aria-hidden="true"
+                class="lucide lucide-sliders-horizontal"
+                fill="none"
+                height="15"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                width="15"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M10 5H3"
+                />
+                <path
+                  d="M12 19H3"
+                />
+                <path
+                  d="M14 3v4"
+                />
+                <path
+                  d="M16 17v4"
+                />
+                <path
+                  d="M21 12h-9"
+                />
+                <path
+                  d="M21 19h-5"
+                />
+                <path
+                  d="M21 5h-7"
+                />
+                <path
+                  d="M8 10v4"
+                />
+                <path
+                  d="M8 12H3"
+                />
+              </svg>
+              <span>
+                Properties
+              </span>
+            </button>
+            <button
+              aria-selected="false"
+              class="schema-tab-button"
+              data-active="false"
+              role="tab"
+              type="button"
+            >
+              <svg
+                aria-hidden="true"
+                class="lucide lucide-file-text"
+                fill="none"
+                height="15"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                width="15"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+                />
+                <path
+                  d="M14 2v5a1 1 0 0 0 1 1h5"
+                />
+                <path
+                  d="M10 9H8"
+                />
+                <path
+                  d="M16 13H8"
+                />
+                <path
+                  d="M16 17H8"
+                />
+              </svg>
+              <span>
+                Templates
+              </span>
+            </button>
+          </div>
           <div
             class="schema-panel__head"
           >
@@ -474,6 +576,7 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
       class="topbar__title"
     >
       <p>
+        Test Shop · 
         مساحة العمل
          /
       </p>

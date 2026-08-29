@@ -83,4 +83,48 @@ export const migrations: readonly Migration[] = [
       `);
     },
   },
+  {
+    id: 3,
+    name: 'templates_and_onboarding',
+    up(database) {
+      database.exec(`
+        CREATE TABLE shop_templates (
+          id TEXT PRIMARY KEY NOT NULL,
+          object_kind TEXT NOT NULL CHECK (object_kind IN ('item', 'person')),
+          name TEXT NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 80),
+          field_order_json TEXT NOT NULL CHECK (json_valid(field_order_json)),
+          defaults_json TEXT NOT NULL CHECK (json_valid(defaults_json)),
+          progressive_json TEXT NOT NULL CHECK (json_valid(progressive_json)),
+          position INTEGER NOT NULL CHECK (position >= 0),
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          archived_at TEXT
+        ) STRICT;
+
+        CREATE UNIQUE INDEX shop_templates_active_name
+          ON shop_templates (object_kind, name COLLATE NOCASE)
+          WHERE archived_at IS NULL;
+
+        CREATE TABLE object_audit_log_v3 (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          entity_type TEXT NOT NULL CHECK (entity_type IN ('property', 'record', 'template')),
+          entity_id TEXT NOT NULL,
+          action TEXT NOT NULL CHECK (action IN ('created', 'updated', 'archived')),
+          actor TEXT NOT NULL CHECK (actor = 'local-user'),
+          snapshot_json TEXT NOT NULL CHECK (json_valid(snapshot_json)),
+          created_at TEXT NOT NULL
+        ) STRICT;
+
+        INSERT INTO object_audit_log_v3 (id, entity_type, entity_id, action, actor, snapshot_json, created_at)
+          SELECT id, entity_type, entity_id, action, actor, snapshot_json, created_at FROM object_audit_log;
+
+        DROP TABLE object_audit_log;
+
+        ALTER TABLE object_audit_log_v3 RENAME TO object_audit_log;
+
+        CREATE INDEX object_audit_log_entity
+          ON object_audit_log (entity_id, id DESC);
+      `);
+    },
+  },
 ];

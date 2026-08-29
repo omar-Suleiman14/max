@@ -1,5 +1,10 @@
 import { app, ipcMain } from 'electron';
 
+import type {
+  Blueprint,
+  CompleteOnboardingDraft,
+  ShopMetadata,
+} from '../../shared/blueprint-contract';
 import { IPC_CHANNELS, type SystemHealth } from '../../shared/ipc-contract';
 import {
   objectKinds,
@@ -10,6 +15,7 @@ import {
   type PropertyDraft,
   type PropertyValue,
 } from '../../shared/object-contract';
+import type { TemplateDraft } from '../../shared/template-contract';
 import type { DatabaseService } from '../database/database-service';
 import { ObjectDomainError } from '../database/object-repository';
 import type { PlatformAdapter } from '../platform/platform-adapter';
@@ -110,6 +116,52 @@ function parseRecordDraft(value: unknown): ConfigurableRecordDraft {
   return { label: value.label, objectKind: parseObjectKind(value.objectKind), values };
 }
 
+function parseTemplateDraft(value: unknown): TemplateDraft {
+  if (!isObject(value) || typeof value.name !== 'string' || !isObject(value.defaults)) {
+    throw new ObjectDomainError('invalid-input', 'A valid template is required.');
+  }
+  if (!Array.isArray(value.fieldOrder) || !value.fieldOrder.every((f) => typeof f === 'string')) {
+    throw new ObjectDomainError('invalid-input', 'Field order must be an array of property identifiers.');
+  }
+  if (!Array.isArray(value.progressive) || !value.progressive.every((f) => typeof f === 'string')) {
+    throw new ObjectDomainError('invalid-input', 'Progressive fields must be an array of property identifiers.');
+  }
+
+  const defaults: Record<string, PropertyValue> = {};
+  for (const [key, val] of Object.entries(value.defaults)) {
+    if (['boolean', 'number', 'string'].includes(typeof val)) {
+      defaults[key] = val as PropertyValue;
+    }
+  }
+
+  return {
+    defaults,
+    fieldOrder: value.fieldOrder,
+    name: value.name,
+    objectKind: parseObjectKind(value.objectKind),
+    progressive: value.progressive,
+  };
+}
+
+function parseCompleteOnboardingDraft(value: unknown): CompleteOnboardingDraft {
+  if (!isObject(value) || typeof value.shopName !== 'string') {
+    throw new ObjectDomainError('invalid-input', 'A valid shop name is required.');
+  }
+  if (value.locale !== 'ar' && value.locale !== 'en') {
+    throw new ObjectDomainError('invalid-input', 'A valid locale (ar or en) is required.');
+  }
+  if (!['daily', 'weekly', 'manual'].includes(String(value.backupSchedule))) {
+    throw new ObjectDomainError('invalid-input', 'A valid backup schedule is required.');
+  }
+
+  return {
+    backupSchedule: value.backupSchedule as CompleteOnboardingDraft['backupSchedule'],
+    blueprint: value.blueprint as Blueprint | undefined,
+    locale: value.locale,
+    shopName: value.shopName,
+  };
+}
+
 function mutation<T>(work: () => T): MutationResult<T> {
   try {
     return { ok: true, value: work() };
@@ -147,6 +199,7 @@ export function registerIpcHandlers({
     };
   });
 
+  // Object Properties
   ipcMain.handle(IPC_CHANNELS.objectPropertyList, (event, objectKind: unknown) => {
     trust(event);
     return database.objects.listProperties(parseObjectKind(objectKind));
@@ -166,6 +219,8 @@ export function registerIpcHandlers({
       return null;
     });
   });
+
+  // Object Records
   ipcMain.handle(IPC_CHANNELS.objectRecordList, (event, objectKind: unknown) => {
     trust(event);
     return database.objects.listRecords(parseObjectKind(objectKind));
@@ -188,6 +243,61 @@ export function registerIpcHandlers({
   ipcMain.handle(IPC_CHANNELS.objectAuditList, (event, entityId: unknown) => {
     trust(event);
     return database.objects.listAudit(parseId(entityId));
+  });
+
+  // Templates
+  ipcMain.handle(IPC_CHANNELS.templateList, (event, objectKind: unknown) => {
+    trust(event);
+    return database.templates.listTemplates(parseObjectKind(objectKind));
+  });
+  ipcMain.handle(IPC_CHANNELS.templateCreate, (event, draft: unknown) => {
+    trust(event);
+    return mutation(() => database.templates.createTemplate(parseTemplateDraft(draft)));
+  });
+  ipcMain.handle(IPC_CHANNELS.templateUpdate, (event, id: unknown, draft: unknown) => {
+    trust(event);
+    return mutation(() => database.templates.updateTemplate(parseId(id), parseTemplateDraft(draft)));
+  });
+  ipcMain.handle(IPC_CHANNELS.templateArchive, (event, id: unknown) => {
+    trust(event);
+    return mutation(() => {
+      database.templates.archiveTemplate(parseId(id));
+      return null;
+    });
+  });
+
+  // Blueprints
+  ipcMain.handle(IPC_CHANNELS.blueprintExport, (event) => {
+    trust(event);
+    return database.blueprints.exportBlueprint();
+  });
+  ipcMain.handle(IPC_CHANNELS.blueprintValidate, (event, blueprint: unknown) => {
+    trust(event);
+    return database.blueprints.validateBlueprint(blueprint);
+  });
+  ipcMain.handle(IPC_CHANNELS.blueprintImport, (event, blueprint: unknown) => {
+    trust(event);
+    return mutation(() => database.blueprints.importBlueprint(blueprint as Blueprint));
+  });
+
+  // Shop Metadata
+  ipcMain.handle(IPC_CHANNELS.shopGetMetadata, (event) => {
+    trust(event);
+    return database.shopMetadata.getMetadata();
+  });
+  ipcMain.handle(IPC_CHANNELS.shopUpdateMetadata, (event, patch: unknown) => {
+    trust(event);
+    return mutation(() => database.shopMetadata.updateMetadata(patch as Partial<ShopMetadata>));
+  });
+  ipcMain.handle(IPC_CHANNELS.shopCompleteOnboarding, (event, draft: unknown) => {
+    trust(event);
+    return mutation(() => {
+      const parsed = parseCompleteOnboardingDraft(draft);
+      if (parsed.blueprint) {
+        database.blueprints.importBlueprint(parsed.blueprint);
+      }
+      return database.shopMetadata.completeOnboarding(parsed);
+    });
   });
 }
 

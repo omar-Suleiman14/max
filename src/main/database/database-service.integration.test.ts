@@ -23,9 +23,9 @@ describe('DatabaseService', () => {
     service.initialize();
 
     expect(service.getHealth()).toEqual({
+      migrationCount: 3,
+      schemaVersion: 3,
       status: 'ready',
-      migrationCount: 2,
-      schemaVersion: 2,
     });
     service.close();
   });
@@ -42,7 +42,7 @@ describe('DatabaseService', () => {
 
     const second = new DatabaseService(filename);
     second.initialize();
-    expect(second.getHealth().migrationCount).toBe(2);
+    expect(second.getHealth().migrationCount).toBe(3);
     second.close();
 
     const inspection = new DatabaseSync(filename, { readOnly: true });
@@ -83,11 +83,11 @@ describe('DatabaseService', () => {
     const future = new DatabaseSync(filename);
     future
       .prepare('INSERT INTO system_migrations (id, name, applied_at) VALUES (?, ?, ?)')
-      .run(3, 'future_schema', new Date().toISOString());
+      .run(4, 'future_schema', new Date().toISOString());
     future.close();
 
     const reopened = new DatabaseService(filename);
-    expect(() => reopened.initialize()).toThrow('Database schema 3 is newer than this Max build.');
+    expect(() => reopened.initialize()).toThrow('Database schema 4 is newer than this Max build.');
     reopened.close();
   });
 
@@ -114,12 +114,13 @@ describe('DatabaseService', () => {
 
     const upgraded = new DatabaseService(filename);
     upgraded.initialize();
-    expect(upgraded.getHealth().schemaVersion).toBe(2);
+    expect(upgraded.getHealth().schemaVersion).toBe(3);
     upgraded.close();
 
     const inspection = new DatabaseSync(filename, { readOnly: true });
     expect(inspection.prepare('SELECT value FROM app_metadata WHERE key = ?').get('shop-name')).toEqual({ value: 'Existing shop' });
     expect(inspection.prepare("SELECT name FROM sqlite_master WHERE name = 'object_records'").get()).toEqual({ name: 'object_records' });
+    expect(inspection.prepare("SELECT name FROM sqlite_master WHERE name = 'shop_templates'").get()).toEqual({ name: 'shop_templates' });
     inspection.close();
   });
 });

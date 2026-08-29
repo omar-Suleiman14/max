@@ -12,10 +12,11 @@ import { MaxApp } from './max-app';
 const getHealth = vi.fn(() =>
   Promise.resolve({
     appVersion: '0.1.0',
-    database: { migrationCount: 1, schemaVersion: 1, status: 'ready' as const },
+    database: { migrationCount: 3, schemaVersion: 3, status: 'ready' as const },
     runtime: { arch: 'x64', platform: 'windows' as const },
   }),
 );
+
 const objectApi = {
   archiveProperty: vi.fn(),
   archiveRecord: vi.fn(),
@@ -28,11 +29,66 @@ const objectApi = {
   updateRecord: vi.fn(),
 };
 
+const templateApi = {
+  archive: vi.fn(),
+  create: vi.fn(),
+  list: vi.fn(() => Promise.resolve([])),
+  update: vi.fn(),
+};
+
+const blueprintApi = {
+  export: vi.fn(() =>
+    Promise.resolve({
+      name: 'Test Shop',
+      properties: { item: [], person: [] },
+      templates: [],
+      version: 1 as const,
+    }),
+  ),
+  import: vi.fn(),
+  validate: vi.fn(() => Promise.resolve({ issues: [], valid: true })),
+};
+
+import type { CompleteOnboardingDraft, ShopMetadata } from '../../shared/blueprint-contract';
+
+let shopMetadataState: ShopMetadata = {
+  backupSchedule: 'daily',
+  blueprintName: undefined,
+  locale: 'en',
+  onboardingCompleted: true,
+  shopName: 'Test Shop',
+};
+
+const shopApi = {
+  completeOnboarding: vi.fn((draft: CompleteOnboardingDraft) => {
+    shopMetadataState = {
+      backupSchedule: draft.backupSchedule,
+      blueprintName: draft.blueprint?.name,
+      locale: draft.locale,
+      onboardingCompleted: true,
+      shopName: draft.shopName,
+    };
+    return Promise.resolve({ ok: true as const, value: shopMetadataState });
+  }),
+  getMetadata: vi.fn(() => Promise.resolve(shopMetadataState)),
+  updateMetadata: vi.fn((patch: Partial<ShopMetadata>) => {
+    shopMetadataState = { ...shopMetadataState, ...patch };
+    return Promise.resolve({ ok: true as const, value: shopMetadataState });
+  }),
+};
+
 beforeEach(() => {
   window.localStorage.clear();
   document.documentElement.lang = 'en';
   document.documentElement.dir = 'ltr';
   document.documentElement.removeAttribute('data-theme');
+  shopMetadataState = {
+    backupSchedule: 'daily',
+    blueprintName: undefined,
+    locale: 'en',
+    onboardingCompleted: true,
+    shopName: 'Test Shop',
+  };
   Object.defineProperty(window, 'matchMedia', {
     configurable: true,
     value: vi.fn(() => ({
@@ -46,14 +102,55 @@ beforeEach(() => {
   });
   Object.defineProperty(window, 'maxApi', {
     configurable: true,
-    value: { objects: objectApi, system: { getHealth } },
+    value: {
+      blueprints: blueprintApi,
+      objects: objectApi,
+      shop: shopApi,
+      system: { getHealth },
+      templates: templateApi,
+    },
   });
   getHealth.mockClear();
+  shopApi.getMetadata.mockClear();
+  shopApi.completeOnboarding.mockClear();
 });
 
 afterEach(() => cleanup());
 
 describe('Max shell', () => {
+  it('renders the onboarding wizard on first launch and completes setup', async () => {
+    shopMetadataState = { ...shopMetadataState, onboardingCompleted: false };
+    const user = userEvent.setup();
+    render(<MaxApp />);
+
+    // Step 1: Language
+    expect(await screen.findByText('Select your preferred language')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+    // Step 2: Shop Name
+    expect(screen.getByText('Shop Name')).toBeInTheDocument();
+    const shopInput = screen.getByPlaceholderText('e.g., Al-Amal Telecom, Downtown Accessories');
+    await user.type(shopInput, 'Downtown Phones');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+    // Step 3: Blueprint
+    expect(screen.getByText('Choose how to structure your shop')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+    // Step 4: Backup Schedule
+    expect(screen.getByText('Disaster recovery snapshot schedule')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+    // Step 5: Summary
+    expect(screen.getByText('Setup Complete')).toBeInTheDocument();
+    expect(screen.getByText('Downtown Phones')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Enter Max Workspace' }));
+
+    // Transition into main workspace
+    await screen.findByText('Local and ready');
+    expect(screen.getByRole('heading', { name: 'Home' })).toBeInTheDocument();
+  });
+
   it('renders the English shell and an actionable empty page', async () => {
     const user = userEvent.setup();
     const { container } = render(<MaxApp />);

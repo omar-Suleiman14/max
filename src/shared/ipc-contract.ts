@@ -1,4 +1,10 @@
 import type {
+  Blueprint,
+  BlueprintValidationResult,
+  CompleteOnboardingDraft,
+  ShopMetadata,
+} from './blueprint-contract';
+import type {
   AuditEntry,
   ConfigurableRecord,
   ConfigurableRecordDraft,
@@ -7,8 +13,12 @@ import type {
   PropertyDefinition,
   PropertyDraft,
 } from './object-contract';
+import type { TemplateDefinition, TemplateDraft } from './template-contract';
 
 export const IPC_CHANNELS = {
+  blueprintExport: 'max:blueprints:export',
+  blueprintImport: 'max:blueprints:import',
+  blueprintValidate: 'max:blueprints:validate',
   objectAuditList: 'max:objects:audit:list',
   objectPropertyArchive: 'max:objects:properties:archive',
   objectPropertyCreate: 'max:objects:properties:create',
@@ -18,13 +28,20 @@ export const IPC_CHANNELS = {
   objectRecordCreate: 'max:objects:records:create',
   objectRecordList: 'max:objects:records:list',
   objectRecordUpdate: 'max:objects:records:update',
+  shopCompleteOnboarding: 'max:shop:onboarding:complete',
+  shopGetMetadata: 'max:shop:metadata:get',
+  shopUpdateMetadata: 'max:shop:metadata:update',
   systemHealth: 'max:system:health',
+  templateArchive: 'max:templates:archive',
+  templateCreate: 'max:templates:create',
+  templateList: 'max:templates:list',
+  templateUpdate: 'max:templates:update',
 } as const;
 
 export type DatabaseHealth = Readonly<{
-  status: 'ready';
-  schemaVersion: number;
   migrationCount: number;
+  schemaVersion: number;
+  status: 'ready';
 }>;
 
 export type SystemHealth = Readonly<{
@@ -37,6 +54,11 @@ export type SystemHealth = Readonly<{
 }>;
 
 export type MaxApi = Readonly<{
+  blueprints: Readonly<{
+    export: () => Promise<Blueprint>;
+    import: (blueprint: Blueprint) => Promise<MutationResult<Blueprint>>;
+    validate: (blueprint: unknown) => Promise<BlueprintValidationResult>;
+  }>;
   objects: Readonly<{
     archiveProperty: (id: string) => Promise<MutationResult<null>>;
     archiveRecord: (id: string) => Promise<MutationResult<null>>;
@@ -48,7 +70,18 @@ export type MaxApi = Readonly<{
     updateProperty: (id: string, draft: PropertyDraft) => Promise<MutationResult<PropertyDefinition>>;
     updateRecord: (id: string, draft: ConfigurableRecordDraft) => Promise<MutationResult<ConfigurableRecord>>;
   }>;
+  shop: Readonly<{
+    completeOnboarding: (draft: CompleteOnboardingDraft) => Promise<MutationResult<ShopMetadata>>;
+    getMetadata: () => Promise<ShopMetadata>;
+    updateMetadata: (patch: Partial<ShopMetadata>) => Promise<MutationResult<ShopMetadata>>;
+  }>;
   system: Readonly<{
     getHealth: () => Promise<SystemHealth>;
+  }>;
+  templates: Readonly<{
+    archive: (id: string) => Promise<MutationResult<null>>;
+    create: (draft: TemplateDraft) => Promise<MutationResult<TemplateDefinition>>;
+    list: (objectKind: ObjectKind) => Promise<readonly TemplateDefinition[]>;
+    update: (id: string, draft: TemplateDraft) => Promise<MutationResult<TemplateDefinition>>;
   }>;
 }>;

@@ -520,13 +520,20 @@ export class ObjectRepository {
   }
 
   #transaction<T>(work: () => T): T {
-    this.database.exec('BEGIN IMMEDIATE;');
+    const isNested = this.database.isTransaction;
+    if (!isNested) {
+      this.database.exec('BEGIN IMMEDIATE;');
+    }
     try {
       const result = work();
-      this.database.exec('COMMIT;');
+      if (!isNested) {
+        this.database.exec('COMMIT;');
+      }
       return result;
     } catch (error) {
-      if (this.database.isTransaction) this.database.exec('ROLLBACK;');
+      if (!isNested && this.database.isTransaction) {
+        this.database.exec('ROLLBACK;');
+      }
       throw error;
     }
   }

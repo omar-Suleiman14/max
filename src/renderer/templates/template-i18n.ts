@@ -1,0 +1,66 @@
+import type { Locale } from '../app/i18n';
+
+const copy = {
+  en: {
+    addTemplate: 'New Template',
+    archive: 'Archive',
+    archiveBody: 'Archiving this template removes it from new record creation prompts while keeping existing records safe.',
+    archiveTemplate: 'Archive template?',
+    cancel: 'Cancel',
+    createItemWithTemplate: 'What are you creating?',
+    createPersonWithTemplate: 'What kind of person are you adding?',
+    customBlankRecord: 'Custom / Blank Record',
+    defaults: 'Default values',
+    defaultsHint: 'Pre-filled values when creating records with this template.',
+    editTemplate: 'Edit Template',
+    emptyTemplates: 'No templates yet',
+    emptyTemplatesBody: 'Templates define field order, default values, and progressive disclosure for fast shop entry.',
+    fieldOrder: 'Field order',
+    fieldOrderHint: 'Order properties from most important to least important for fast keyboard navigation.',
+    moveDown: 'Move down',
+    moveUp: 'Move up',
+    noPropertiesConfigured: 'No properties configured in this schema yet.',
+    progressive: 'Progressive disclosure ("Show more")',
+    progressiveHint: 'Properties checked here stay hidden behind "Show more fields" during routine entry.',
+    save: 'Save Template',
+    showMore: 'Show more fields',
+    template: 'Template',
+    templateName: 'Template name',
+    templateNameHint: 'e.g., New Phone, Screen Protector, Wholesaler',
+    templates: 'Templates',
+  },
+  ar: {
+    addTemplate: 'قالب جديد',
+    archive: 'أرشفة',
+    archiveBody: 'أرشفة هذا القالب ستخفيه من خيارات الإنشاء الجديدة مع الحفاظ على كل السجلات السابقة.',
+    archiveTemplate: 'أرشفة القالب؟',
+    cancel: 'إلغاء',
+    createItemWithTemplate: 'ماذا تريد أن تنشئ؟',
+    createPersonWithTemplate: 'ما نوع الشخص الذي تريد إضافته؟',
+    customBlankRecord: 'سجل مخصص / فارغ',
+    defaults: 'القيم الافتراضية',
+    defaultsHint: 'قيم معبأة مسبقًا لتسريع الإدخال عند استخدام هذا القالب.',
+    editTemplate: 'تعديل القالب',
+    emptyTemplates: 'لا توجد قوالب بعد',
+    emptyTemplatesBody: 'تحدد القوالب ترتيب الحقول، القيم الافتراضية، والإظهار التدريجي للإدخال السريع.',
+    fieldOrder: 'ترتيب الحقول',
+    fieldOrderHint: 'رتّب الخصائص من الأهم إلى الأقل أهمية للتنقل السريع بلوحة المفاتيح.',
+    moveDown: 'تحريك لأسفل',
+    moveUp: 'تحريك لأعلى',
+    noPropertiesConfigured: 'لا توجد خصائص مجهزة في هذا المخطط بعد.',
+    progressive: 'الإظهار التدريجي (إخفاء خلف "المزيد")',
+    progressiveHint: 'الخصائص المحددة هنا ستظل مخفية خلف زر "إظهار المزيد من الحقول" أثناء الإدخال الروتيني.',
+    save: 'حفظ القالب',
+    showMore: 'إظهار المزيد من الحقول',
+    template: 'قالب',
+    templateName: 'اسم القالب',
+    templateNameHint: 'مثال: هاتف جديد، لاصقة حماية، تاجر جملة',
+    templates: 'القوالب',
+  },
+} as const;
+
+export type TemplateCopyKey = keyof typeof copy.en;
+
+export function templateCopy(locale: Locale, key: TemplateCopyKey): string {
+  return copy[locale][key];
+}

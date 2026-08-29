@@ -1,6 +1,9 @@
 import { ChevronDown, Command as CommandIcon, Plus, Search, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 
+import type { BackupSchedule, Blueprint } from '../../shared/blueprint-contract';
+import { BlueprintDialog } from '../blueprints/blueprint-dialog';
+import { Onboarding } from '../onboarding/onboarding';
 import type { AppPage, EngineStatus } from './app-types';
 import { localeDirection, type Locale, type TranslationKey, translate } from './i18n';
 import {
@@ -58,12 +61,16 @@ export function MaxApp() {
   const [page, setPage] = useState<AppPage>('home');
   const [commandOpen, setCommandOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [blueprintModalTab, setBlueprintModalTab] = useState<'export' | 'import'>();
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [creationNoticeOpen, setCreationNoticeOpen] = useState(false);
   const [objectCreateRequest, setObjectCreateRequest] = useState(0);
   const [engineStatus, setEngineStatus] = useState<EngineStatus>('checking');
   const [runtimePlatform, setRuntimePlatform] = useState<'linux' | 'macos' | 'windows'>();
   const [engineNoticeVisible, setEngineNoticeVisible] = useState(false);
+  const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(null);
+  const [shopName, setShopName] = useState('');
+
   const createMenuRef = useRef<HTMLDivElement>(null);
   const createMenuTriggerRef = useRef<HTMLButtonElement>(null);
   const effectiveTheme = resolveTheme(theme, systemUsesDark);
@@ -106,6 +113,24 @@ export function MaxApp() {
           setEngineNoticeVisible(true);
         }
       });
+
+    void window.maxApi.shop
+      .getMetadata()
+      .then((data) => {
+        if (active) {
+          setOnboardingCompleted(data.onboardingCompleted);
+          setShopName(data.shopName);
+          if (data.locale) {
+            setLocale((current) => (data.locale !== current ? data.locale : current));
+          }
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setOnboardingCompleted(true);
+        }
+      });
+
     return () => {
       active = false;
     };
@@ -116,6 +141,7 @@ export function MaxApp() {
       if ((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === 'k') {
         event.preventDefault();
         setSettingsOpen(false);
+        setBlueprintModalTab(undefined);
         setCommandOpen(true);
       } else if (event.key === '/' && !isEditingTarget(event.target)) {
         event.preventDefault();
@@ -178,6 +204,25 @@ export function MaxApp() {
     }
   }
 
+  async function handleCompleteOnboarding(
+    nextShopName: string,
+    nextLocale: Locale,
+    backupSchedule: BackupSchedule,
+    blueprint?: Blueprint,
+  ) {
+    const res = await window.maxApi.shop.completeOnboarding({
+      backupSchedule,
+      blueprint,
+      locale: nextLocale,
+      shopName: nextShopName,
+    });
+    if (res.ok) {
+      setShopName(res.value.shopName);
+      setLocale(res.value.locale);
+      setOnboardingCompleted(true);
+    }
+  }
+
   const commands = useMemo<readonly Command[]>(() => {
     const navigationCommands = (Object.keys(pageLabels) as AppPage[]).map((destination) => {
       const pageLabel = translate(locale, pageLabels[destination]);
@@ -197,6 +242,18 @@ export function MaxApp() {
         run: () => setSettingsOpen(true),
       },
       {
+        id: 'export-blueprint',
+        keywords: ['blueprint', 'export', 'schema', 'تصدير', 'مخطط'],
+        label: translate(locale, 'exportBlueprint'),
+        run: () => setBlueprintModalTab('export'),
+      },
+      {
+        id: 'import-blueprint',
+        keywords: ['blueprint', 'import', 'schema', 'استيراد', 'مخطط'],
+        label: translate(locale, 'importBlueprint'),
+        run: () => setBlueprintModalTab('import'),
+      },
+      {
         id: 'switch-language',
         keywords: ['arabic', 'english', 'العربية', 'الإنجليزية'],
         label: locale === 'en' ? 'التبديل إلى العربية' : 'Switch to English',
@@ -211,12 +268,18 @@ export function MaxApp() {
     ];
   }, [locale]);
 
+  if (onboardingCompleted === false) {
+    return <Onboarding initialLocale={locale} onComplete={handleCompleteOnboarding} />;
+  }
+
   const pageLabel = translate(locale, pageLabels[page]);
   const createLabel = translate(locale, createLabels[page]);
 
   return (
     <div className="app-shell" data-app-ready={engineStatus === 'ready' ? 'true' : undefined}>
-      <a className="skip-link" href="#main-content">{locale === 'ar' ? 'انتقل إلى المحتوى' : 'Skip to content'}</a>
+      <a className="skip-link" href="#main-content">
+        {locale === 'ar' ? 'انتقل إلى المحتوى' : 'Skip to content'}
+      </a>
       <Sidebar
         collapsed={sidebarCollapsed}
         engineStatus={engineStatus}
@@ -231,7 +294,10 @@ export function MaxApp() {
       <div className="app-frame">
         <header className="topbar">
           <div className="topbar__title">
-            <p>{translate(locale, 'workspace')} /</p>
+            <p>
+              {shopName ? `${shopName} · ` : ''}
+              {translate(locale, 'workspace')} /
+            </p>
             <strong>{pageLabel}</strong>
           </div>
           <div className="topbar__actions">
@@ -256,11 +322,17 @@ export function MaxApp() {
                 <div aria-label={translate(locale, 'createMenu')} className="popover-menu" onKeyDown={moveWithinCreateMenu} role="menu">
                   <button onClick={beginCreation} role="menuitem" type="button">
                     <Plus aria-hidden="true" size={17} />
-                    <span><strong>{createLabel}</strong><small>{translate(locale, pageSubtitles[page])}</small></span>
+                    <span>
+                      <strong>{createLabel}</strong>
+                      <small>{translate(locale, pageSubtitles[page])}</small>
+                    </span>
                   </button>
                   <button onClick={() => { setCreateMenuOpen(false); setCommandOpen(true); }} role="menuitem" type="button">
                     <Search aria-hidden="true" size={17} />
-                    <span><strong>{translate(locale, 'openCommand')}</strong><small>{runtimePlatform === 'macos' ? '⌘ K' : translate(locale, 'pressCommand')}</small></span>
+                    <span>
+                      <strong>{translate(locale, 'openCommand')}</strong>
+                      <small>{runtimePlatform === 'macos' ? '⌘ K' : translate(locale, 'pressCommand')}</small>
+                    </span>
                   </button>
                 </div>
               )}
@@ -306,9 +378,21 @@ export function MaxApp() {
           theme={theme}
         />
       )}
+      {blueprintModalTab && (
+        <BlueprintDialog
+          initialTab={blueprintModalTab}
+          locale={locale}
+          onClose={() => setBlueprintModalTab(undefined)}
+          onImportSuccess={() => {
+            void window.maxApi.shop.getMetadata().then((d) => setShopName(d.shopName));
+          }}
+        />
+      )}
       {creationNoticeOpen && (
         <FocusedOverlay className="scope-dialog" labelId="scope-dialog-title" onClose={() => setCreationNoticeOpen(false)}>
-          <div className="scope-dialog__icon"><Plus aria-hidden="true" size={23} /></div>
+          <div className="scope-dialog__icon">
+            <Plus aria-hidden="true" size={23} />
+          </div>
           <p className="eyebrow">{translate(locale, 'nextStep')}</p>
           <h2 id="scope-dialog-title">{translate(locale, 'configureFirst')}</h2>
           <p>{translate(locale, 'configureFirstBody')}</p>
