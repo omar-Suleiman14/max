@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import { FoundationStatus } from './ui/foundation-status';
+import { MaxApp } from './app/max-app';
 import './styles.css';
 
 const root = document.getElementById('root');
@@ -12,6 +12,6 @@ if (!root) {
 
 createRoot(root).render(
   <StrictMode>
-    <FoundationStatus />
+    <MaxApp />
   </StrictMode>,
 );

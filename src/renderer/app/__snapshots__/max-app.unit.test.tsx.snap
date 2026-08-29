@@ -1,0 +1,586 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Max shell > renders the English shell and an actionable empty page 1`] = `
+<div
+  class="app-frame"
+>
+  <header
+    class="topbar"
+  >
+    <div
+      class="topbar__title"
+    >
+      <p>
+        Workspace
+         /
+      </p>
+      <strong>
+        Items
+      </strong>
+    </div>
+    <div
+      class="topbar__actions"
+    >
+      <button
+        class="command-trigger"
+        type="button"
+      >
+        <svg
+          aria-hidden="true"
+          class="lucide lucide-search"
+          fill="none"
+          height="17"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+          width="17"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="m21 21-4.34-4.34"
+          />
+          <circle
+            cx="11"
+            cy="11"
+            r="8"
+          />
+        </svg>
+        <span>
+          Search commands
+        </span>
+        <kbd>
+          Ctrl
+           K
+        </kbd>
+      </button>
+      <div
+        class="create-menu"
+      >
+        <button
+          aria-expanded="false"
+          aria-haspopup="menu"
+          class="button button--primary"
+          type="button"
+        >
+          <span
+            class="button__icon"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-plus"
+              fill="none"
+              height="18"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="18"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M5 12h14"
+              />
+              <path
+                d="M12 5v14"
+              />
+            </svg>
+          </span>
+          <span
+            class="button__label"
+          >
+            New
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-chevron-down button__chevron"
+              fill="none"
+              height="15"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="15"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="m6 9 6 6 6-6"
+              />
+            </svg>
+          </span>
+        </button>
+      </div>
+    </div>
+  </header>
+  <main
+    aria-labelledby="page-title"
+    class="content"
+    id="main-content"
+    tabindex="-1"
+  >
+    <header
+      class="page-header"
+    >
+      <div>
+        <p
+          class="eyebrow"
+        >
+          Workspace
+        </p>
+        <h1
+          id="page-title"
+        >
+          Items
+        </h1>
+        <p>
+          Universal items, shaped later by configurable properties.
+        </p>
+      </div>
+    </header>
+    <section
+      class="empty-state"
+    >
+      <div
+        class="empty-state__icon"
+      >
+        <svg
+          aria-hidden="true"
+          class="lucide lucide-package"
+          fill="none"
+          height="27"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="1.65"
+          viewBox="0 0 24 24"
+          width="27"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"
+          />
+          <path
+            d="M12 22V12"
+          />
+          <polyline
+            points="3.29 7 12 12 20.71 7"
+          />
+          <path
+            d="m7.5 4.27 9 5.15"
+          />
+        </svg>
+      </div>
+      <p
+        class="eyebrow"
+      >
+        Create something
+      </p>
+      <h2>
+        No items yet
+      </h2>
+      <p>
+        Create an item when your workspace has the properties your shop actually needs.
+      </p>
+      <div
+        class="empty-state__actions"
+      >
+        <button
+          class="button button--primary"
+          type="button"
+        >
+          <span
+            class="button__icon"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-plus"
+              fill="none"
+              height="18"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="18"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M5 12h14"
+              />
+              <path
+                d="M12 5v14"
+              />
+            </svg>
+          </span>
+          <span
+            class="button__label"
+          >
+            Create item
+          </span>
+        </button>
+        <button
+          class="button button--secondary"
+          type="button"
+        >
+          <span
+            class="button__icon"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-search"
+              fill="none"
+              height="18"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="18"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="m21 21-4.34-4.34"
+              />
+              <circle
+                cx="11"
+                cy="11"
+                r="8"
+              />
+            </svg>
+          </span>
+          <span
+            class="button__label"
+          >
+            Open command menu
+          </span>
+        </button>
+      </div>
+    </section>
+  </main>
+</div>
+`;
+
+exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
+<div
+  class="app-frame"
+>
+  <header
+    class="topbar"
+  >
+    <div
+      class="topbar__title"
+    >
+      <p>
+        مساحة العمل
+         /
+      </p>
+      <strong>
+        الرئيسية
+      </strong>
+    </div>
+    <div
+      class="topbar__actions"
+    >
+      <button
+        class="command-trigger"
+        type="button"
+      >
+        <svg
+          aria-hidden="true"
+          class="lucide lucide-search"
+          fill="none"
+          height="17"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+          width="17"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="m21 21-4.34-4.34"
+          />
+          <circle
+            cx="11"
+            cy="11"
+            r="8"
+          />
+        </svg>
+        <span>
+          البحث في الأوامر
+        </span>
+        <kbd>
+          Ctrl
+           K
+        </kbd>
+      </button>
+      <div
+        class="create-menu"
+      >
+        <button
+          aria-expanded="false"
+          aria-haspopup="menu"
+          class="button button--primary"
+          type="button"
+        >
+          <span
+            class="button__icon"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-plus"
+              fill="none"
+              height="18"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="18"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M5 12h14"
+              />
+              <path
+                d="M12 5v14"
+              />
+            </svg>
+          </span>
+          <span
+            class="button__label"
+          >
+            جديد
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-chevron-down button__chevron"
+              fill="none"
+              height="15"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="15"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="m6 9 6 6 6-6"
+              />
+            </svg>
+          </span>
+        </button>
+      </div>
+    </div>
+  </header>
+  <main
+    aria-labelledby="page-title"
+    class="content"
+    id="main-content"
+    tabindex="-1"
+  >
+    <header
+      class="page-header"
+    >
+      <div>
+        <p
+          class="eyebrow"
+        >
+          مساحة العمل
+        </p>
+        <h1
+          id="page-title"
+        >
+          الرئيسية
+        </h1>
+        <p>
+          نقطة بداية هادئة للعمل المهم اليوم.
+        </p>
+      </div>
+    </header>
+    <div
+      class="home-page"
+    >
+      <section
+        class="home-hero"
+      >
+        <div
+          aria-hidden="true"
+          class="home-hero__glow"
+        />
+        <p
+          class="eyebrow"
+        >
+          MAX · LOCAL WORKSPACE
+        </p>
+        <h2>
+          متجرُك، بطريقتك
+        </h2>
+        <p>
+          يعمل ماكس محليًا ويتشكل حسب إعدادات متجرك.
+        </p>
+        <div
+          class="home-hero__actions"
+        >
+          <button
+            class="button button--primary"
+            type="button"
+          >
+            <span
+              class="button__icon"
+            >
+              <svg
+                aria-hidden="true"
+                class="lucide lucide-package"
+                fill="none"
+                height="18"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                width="18"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"
+                />
+                <path
+                  d="M12 22V12"
+                />
+                <polyline
+                  points="3.29 7 12 12 20.71 7"
+                />
+                <path
+                  d="m7.5 4.27 9 5.15"
+                />
+              </svg>
+            </span>
+            <span
+              class="button__label"
+            >
+              استكشف العناصر
+            </span>
+          </button>
+          <button
+            class="button button--secondary"
+            type="button"
+          >
+            <span
+              class="button__icon"
+            >
+              <svg
+                aria-hidden="true"
+                class="lucide lucide-search"
+                fill="none"
+                height="18"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                width="18"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="m21 21-4.34-4.34"
+                />
+                <circle
+                  cx="11"
+                  cy="11"
+                  r="8"
+                />
+              </svg>
+            </span>
+            <span
+              class="button__label"
+            >
+              افتح قائمة الأوامر
+            </span>
+          </button>
+        </div>
+      </section>
+      <section
+        aria-label="مساحة العمل"
+        class="principle-grid"
+      >
+        <article
+          class="principle-card"
+        >
+          <span
+            class="principle-card__number"
+          >
+            0
+            1
+          </span>
+          <h3>
+            محلي افتراضيًا
+          </h3>
+          <p>
+            تبقى مساحة SQLite هي المرجع وتعمل من دون اتصال بالإنترنت.
+          </p>
+        </article>
+        <article
+          class="principle-card"
+        >
+          <span
+            class="principle-card__number"
+          >
+            0
+            2
+          </span>
+          <h3>
+            جاهز للتخصيص
+          </h3>
+          <p>
+            واجهة العمل جاهزة، وبنية المتجر ما زالت منفصلة عن قصد.
+          </p>
+        </article>
+        <article
+          class="principle-card"
+        >
+          <span
+            class="principle-card__number"
+          >
+            0
+            3
+          </span>
+          <h3>
+            مصمم للسرعة
+          </h3>
+          <p>
+            مسارات لوحة المفاتيح والإجراءات المركزة متاحة في كل مكان.
+          </p>
+        </article>
+      </section>
+      <section
+        class="keyboard-note"
+      >
+        <kbd>
+          Tab
+        </kbd>
+        <kbd>
+          Enter
+        </kbd>
+        <kbd>
+          Esc
+        </kbd>
+        <kbd>
+          ↑ ↓
+        </kbd>
+        <div>
+          <strong>
+            لوحة المفاتيح
+          </strong>
+          <p>
+            ينتقل Tab للأمام ويفعّل Enter ويغلق Escape وتتنقل الأسهم داخل القوائم.
+          </p>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+`;

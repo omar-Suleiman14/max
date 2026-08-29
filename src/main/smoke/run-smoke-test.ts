@@ -1,0 +1,79 @@
+import type { BrowserWindow } from 'electron';
+import { writeFile } from 'node:fs/promises';
+
+async function waitForShellReady(window: BrowserWindow): Promise<boolean> {
+  return (await window.webContents.executeJavaScript(`
+    new Promise((resolve) => {
+      const deadline = Date.now() + 5000;
+      const check = () => {
+        if (document.querySelector('[data-app-ready="true"]')) {
+          resolve(true);
+        } else if (Date.now() >= deadline) {
+          resolve(false);
+        } else {
+          setTimeout(check, 50);
+        }
+      };
+      check();
+    });
+  `)) as boolean;
+}
+
+async function applySmokePreferences(window: BrowserWindow): Promise<void> {
+  const requestedLocale = process.env.MAX_SMOKE_LOCALE;
+  const requestedTheme = process.env.MAX_SMOKE_THEME;
+  const locale = ['ar', 'en'].includes(requestedLocale ?? '') ? requestedLocale : undefined;
+  const theme = ['dark', 'light', 'system'].includes(requestedTheme ?? '') ? requestedTheme : undefined;
+  if (!locale && !theme) return;
+
+  const reloadCompleted = new Promise<void>((resolveReload) => {
+    window.webContents.once('did-finish-load', () => resolveReload());
+  });
+  const preferences = JSON.stringify({ locale, theme });
+  await window.webContents.executeJavaScript(`
+    const preferences = ${preferences};
+    if (preferences.locale) localStorage.setItem('max.ui.locale', preferences.locale);
+    if (preferences.theme) localStorage.setItem('max.ui.theme', preferences.theme);
+    setTimeout(() => location.reload(), 0);
+    true;
+  `);
+  await reloadCompleted;
+}
+
+async function openSmokeSurface(window: BrowserWindow): Promise<void> {
+  const surface = process.env.MAX_SMOKE_SURFACE;
+  if (!surface) return;
+
+  const selectorBySurface: Readonly<Record<string, string>> = {
+    create: '.topbar [aria-haspopup="menu"]',
+    settings: '.sidebar__footer button:last-child',
+  };
+  const selector = selectorBySurface[surface];
+  if (surface !== 'command' && !selector) {
+    throw new Error(`Unknown smoke surface: ${surface}.`);
+  }
+  const opened = (await window.webContents.executeJavaScript(
+    surface === 'command'
+      ? `document.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, ctrlKey: true, key: 'k' })); true;`
+      : `(() => { const target = document.querySelector(${JSON.stringify(selector)}); target?.click(); return Boolean(target); })();`,
+  )) as boolean;
+  if (!opened) throw new Error(`Smoke surface ${surface} could not be opened.`);
+}
+
+export async function runSmokeTest(window: BrowserWindow): Promise<void> {
+  let shellBecameReady = await waitForShellReady(window);
+  await applySmokePreferences(window);
+  if (process.env.MAX_SMOKE_LOCALE || process.env.MAX_SMOKE_THEME) {
+    shellBecameReady = await waitForShellReady(window);
+  }
+  if (!shellBecameReady) {
+    throw new Error('The renderer did not reach its database-backed ready state.');
+  }
+
+  const screenshotPath = process.env.MAX_SMOKE_SCREENSHOT_PATH;
+  if (!screenshotPath) return;
+  await openSmokeSurface(window);
+  await new Promise((resolveDelay) => setTimeout(resolveDelay, 250));
+  const screenshot = await window.capturePage();
+  await writeFile(screenshotPath, screenshot.toPNG());
+}

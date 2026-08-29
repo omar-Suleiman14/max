@@ -12,8 +12,8 @@ The current release is built through bounded feature branches into
 
 ## Status
 
-Sprint 0 foundation work is in progress. User-facing shop functionality has not
-been implemented yet.
+Sprint 0 is integrated. The Sprint 1 bilingual application shell is prepared for review;
+shop objects and transactions have deliberately not been implemented yet.
 
 ## Foundation commands
 
