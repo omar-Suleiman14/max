@@ -25,6 +25,10 @@ import type {
   RepaymentDraft,
 } from '../../shared/person-debt-contract';
 import type { PaymentMode, QuickEntryDraft } from '../../shared/quick-entry-contract';
+import type {
+  CloseSessionDraft,
+  OpenSessionDraft,
+} from '../../shared/reconciliation-contract';
 import type { TemplateDraft } from '../../shared/template-contract';
 import type {
   CustomPageDraft,
@@ -357,6 +361,35 @@ function parseCustomPageDraft(value: unknown): CustomPageDraft {
   };
 }
 
+function parseOpenSessionDraft(value: unknown): OpenSessionDraft {
+  if (!isObject(value) || typeof value.accountId !== 'string') {
+    throw new ObjectDomainError('invalid-input', 'A valid account identifier is required to open a register session.');
+  }
+  const openingBalance = Number(value.openingBalance);
+  if (!Number.isFinite(openingBalance) || openingBalance < 0) {
+    throw new ObjectDomainError('invalid-input', 'Opening balance must be zero or positive.');
+  }
+  return {
+    accountId: value.accountId,
+    openingBalance,
+  };
+}
+
+function parseCloseSessionDraft(value: unknown): CloseSessionDraft {
+  if (!isObject(value) || typeof value.sessionId !== 'string') {
+    throw new ObjectDomainError('invalid-input', 'A valid session identifier is required.');
+  }
+  const actualClosingBalance = Number(value.actualClosingBalance);
+  if (!Number.isFinite(actualClosingBalance) || actualClosingBalance < 0) {
+    throw new ObjectDomainError('invalid-input', 'Counted actual closing balance must be zero or positive.');
+  }
+  return {
+    actualClosingBalance,
+    discrepancyNote: typeof value.discrepancyNote === 'string' ? value.discrepancyNote : undefined,
+    sessionId: value.sessionId,
+  };
+}
+
 function mutation<T>(work: () => T): MutationResult<T> {
   try {
     return { ok: true, value: work() };
@@ -623,6 +656,28 @@ export function registerIpcHandlers({
   ipcMain.handle(IPC_CHANNELS.searchQuery, (event, searchTerm: unknown) => {
     trust(event);
     return database.search.query(typeof searchTerm === 'string' ? searchTerm : '');
+  });
+
+  // Daily Reconciliation
+  ipcMain.handle(IPC_CHANNELS.reconciliationCurrentSession, (event, accountId: unknown) => {
+    trust(event);
+    return database.reconciliation.getCurrentSession(typeof accountId === 'string' ? accountId : undefined);
+  });
+  ipcMain.handle(IPC_CHANNELS.reconciliationOpenSession, (event, draft: unknown) => {
+    trust(event);
+    return mutation(() => database.reconciliation.openSession(parseOpenSessionDraft(draft)));
+  });
+  ipcMain.handle(IPC_CHANNELS.reconciliationExpectedClosing, (event, sessionId: unknown) => {
+    trust(event);
+    return database.reconciliation.getExpectedClosing(parseId(sessionId));
+  });
+  ipcMain.handle(IPC_CHANNELS.reconciliationCloseSession, (event, draft: unknown) => {
+    trust(event);
+    return mutation(() => database.reconciliation.closeSession(parseCloseSessionDraft(draft)));
+  });
+  ipcMain.handle(IPC_CHANNELS.reconciliationListSessions, (event, limit: unknown) => {
+    trust(event);
+    return database.reconciliation.listSessions(typeof limit === 'number' ? limit : undefined);
   });
 }
 

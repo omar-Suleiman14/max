@@ -22,6 +22,7 @@ import { FocusedOverlay } from '../ui/focused-overlay';
 import { SettingsDialog } from '../ui/settings-dialog';
 import { Sidebar } from '../ui/sidebar';
 import { AccountsWorkspace } from '../accounts/accounts-workspace';
+import { ReconciliationWorkspace } from '../reconciliation/reconciliation-workspace';
 import { UniversalSearchDialog } from '../search/universal-search-dialog';
 import { QuickEntryDialog } from '../quick-entry/quick-entry-dialog';
 import { UndoToast } from '../ui/undo-toast';
@@ -33,6 +34,7 @@ const pageLabels: Record<AppPage, TranslationKey> = {
   home: 'home',
   items: 'item',
   people: 'person',
+  reconciliation: 'reconciliation',
   transactions: 'transaction',
   views: 'view',
 };
@@ -42,6 +44,7 @@ const pageSubtitles: Record<AppPage, TranslationKey> = {
   home: 'pageSubtitleHome',
   items: 'pageSubtitleItems',
   people: 'pageSubtitlePeople',
+  reconciliation: 'pageSubtitleReconciliation',
   transactions: 'pageSubtitleTransactions',
   views: 'pageSubtitleViews',
 };
@@ -51,6 +54,7 @@ const createLabels: Record<AppPage, TranslationKey> = {
   home: 'createSomething',
   items: 'itemCreate',
   people: 'personCreate',
+  reconciliation: 'reconciliationCreate',
   transactions: 'transactionCreate',
   views: 'viewCreate',
 };
@@ -388,6 +392,8 @@ export function MaxApp() {
               key="transactions"
               locale={locale}
             />
+          ) : page === 'reconciliation' ? (
+            <ReconciliationWorkspace key="reconciliation" locale={locale} />
           ) : (
             <EmptyPage
               locale={locale}

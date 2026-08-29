@@ -254,6 +254,14 @@ const viewsApi = {
   update: vi.fn(),
 };
 
+const reconciliationApi = {
+  closeSession: vi.fn(),
+  getCurrentSession: vi.fn(() => Promise.resolve(null)),
+  getExpectedClosing: vi.fn(),
+  listSessions: vi.fn(() => Promise.resolve([])),
+  openSession: vi.fn(),
+};
+
 beforeEach(() => {
   window.localStorage.clear();
   document.documentElement.lang = 'en';
@@ -286,6 +294,7 @@ beforeEach(() => {
       pages: pagesApi,
       people: peopleApi,
       quickEntry: quickEntryApi,
+      reconciliation: reconciliationApi,
       search: searchApi,
       shop: shopApi,
       system: { getHealth },
@@ -301,6 +310,8 @@ beforeEach(() => {
   transactionsApi.list.mockClear();
   quickEntryApi.submit.mockClear();
   searchApi.query.mockClear();
+  reconciliationApi.getCurrentSession.mockClear();
+  reconciliationApi.listSessions.mockClear();
 });
 
 afterEach(() => cleanup());

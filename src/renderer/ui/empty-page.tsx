@@ -1,4 +1,4 @@
-import { CircleDollarSign, ContactRound, Eye, Package, Plus, ReceiptText, Search } from 'lucide-react';
+import { CircleDollarSign, ContactRound, Eye, Package, Plus, ReceiptText, Scale, Search } from 'lucide-react';
 
 import type { AppPage } from '../app/app-types';
 import { type Locale, type TranslationKey, translate } from '../app/i18n';
@@ -21,6 +21,7 @@ const pageContent: Record<Exclude<AppPage, 'home'>, Readonly<{
   accounts: { body: 'accountEmptyBody', create: 'accountCreate', empty: 'accountEmpty', icon: CircleDollarSign },
   items: { body: 'itemEmptyBody', create: 'itemCreate', empty: 'itemEmpty', icon: Package },
   people: { body: 'personEmptyBody', create: 'personCreate', empty: 'personEmpty', icon: ContactRound },
+  reconciliation: { body: 'reconciliationEmptyBody', create: 'reconciliationCreate', empty: 'reconciliationEmpty', icon: Scale },
   transactions: { body: 'transactionEmptyBody', create: 'transactionCreate', empty: 'transactionEmpty', icon: ReceiptText },
   views: { body: 'viewEmptyBody', create: 'viewCreate', empty: 'viewEmpty', icon: Eye },
 };

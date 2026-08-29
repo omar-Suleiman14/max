@@ -264,4 +264,54 @@ export const migrations: readonly Migration[] = [
       `);
     },
   },
+  {
+    id: 6,
+    name: 'daily_reconciliation',
+    up(database) {
+      database.exec(`
+        CREATE TABLE shop_daily_sessions (
+          id TEXT PRIMARY KEY NOT NULL,
+          account_id TEXT NOT NULL REFERENCES shop_accounts(id) ON DELETE RESTRICT,
+          status TEXT NOT NULL CHECK (status IN ('open', 'closed')),
+          opening_balance REAL NOT NULL CHECK (opening_balance >= 0),
+          opened_at TEXT NOT NULL,
+          closed_at TEXT,
+          expected_closing_balance REAL,
+          actual_closing_balance REAL,
+          discrepancy REAL,
+          discrepancy_note TEXT,
+          total_sales REAL NOT NULL DEFAULT 0.0,
+          total_expenses REAL NOT NULL DEFAULT 0.0,
+          total_inflows REAL NOT NULL DEFAULT 0.0,
+          total_outflows REAL NOT NULL DEFAULT 0.0,
+          reconciliation_transaction_id TEXT REFERENCES shop_transactions(id) ON DELETE RESTRICT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        ) STRICT;
+
+        CREATE INDEX shop_daily_sessions_account
+          ON shop_daily_sessions (account_id, status);
+
+        CREATE TABLE object_audit_log_v6 (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          entity_type TEXT NOT NULL CHECK (entity_type IN ('property', 'record', 'template', 'account', 'transaction', 'view', 'page', 'daily_session')),
+          entity_id TEXT NOT NULL,
+          action TEXT NOT NULL CHECK (action IN ('created', 'updated', 'archived')),
+          actor TEXT NOT NULL CHECK (actor = 'local-user'),
+          snapshot_json TEXT NOT NULL CHECK (json_valid(snapshot_json)),
+          created_at TEXT NOT NULL
+        ) STRICT;
+
+        INSERT INTO object_audit_log_v6 (id, entity_type, entity_id, action, actor, snapshot_json, created_at)
+          SELECT id, entity_type, entity_id, action, actor, snapshot_json, created_at FROM object_audit_log;
+
+        DROP TABLE object_audit_log;
+
+        ALTER TABLE object_audit_log_v6 RENAME TO object_audit_log;
+
+        CREATE INDEX object_audit_log_entity
+          ON object_audit_log (entity_id, id DESC);
+      `);
+    },
+  },
 ];

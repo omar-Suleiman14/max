@@ -542,6 +542,30 @@ kbd { display: inline-flex; min-width: 25px; min-height: 22px; align-items: cent
 .view-tab-delete:hover { color: var(--danger); }
 .view-tab--save { border-style: dashed; color: var(--accent); }
 
+/* Daily Reconciliation Workspace */
+.reconciliation-workspace { display: flex; flex-direction: column; gap: 20px; }
+.reconciliation-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 14px; }
+.active-drawer-card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 22px 24px; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; gap: 16px; }
+.active-drawer-head { display: flex; justify-content: space-between; align-items: center; }
+.drawer-status-pill { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; padding: 6px 14px; border-radius: 20px; background: var(--canvas-subtle); border: 1px solid var(--line); }
+.drawer-status-pill[data-open="true"] { background: rgba(34, 197, 94, 0.12); color: var(--success); border-color: rgba(34, 197, 94, 0.3); }
+.drawer-account-name { font-size: 13px; font-weight: 600; color: var(--text-soft); display: inline-flex; align-items: center; gap: 6px; }
+.equation-grid { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 16px 20px; background: var(--canvas-subtle); border-radius: 12px; border: 1px solid var(--line); }
+.equation-box { display: flex; flex-direction: column; gap: 4px; }
+.equation-box small { font-size: 11px; text-transform: uppercase; font-weight: 700; color: var(--muted); letter-spacing: 0.04em; }
+.equation-box strong { font-size: 20px; font-weight: 800; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+.equation-box--expected { padding: 8px 14px; background: var(--card); border-radius: 8px; border: 1px solid var(--accent); }
+.equation-box--expected strong { color: var(--accent); }
+.equation-op { font-size: 20px; font-weight: 800; color: var(--muted); }
+.drawer-closed-banner { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 32px 20px; text-align: center; color: var(--text-soft); }
+.reconciliation-history-section { display: flex; flex-direction: column; gap: 12px; }
+.reconciliation-summary-box { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; padding: 12px; background: var(--canvas-subtle); border-radius: 10px; margin-bottom: 12px; }
+.summary-col { display: flex; flex-direction: column; gap: 2px; }
+.summary-col small { font-size: 10px; color: var(--muted); text-transform: uppercase; font-weight: 700; }
+.summary-col strong { font-size: 15px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+.discrepancy-indicator { margin-bottom: 12px; }
+
+
 
 
 

@@ -6,6 +6,7 @@ import { IPC_CHANNELS, type MaxApi } from '../shared/ipc-contract';
 import type { ConfigurableRecordDraft, ObjectKind, PropertyDraft } from '../shared/object-contract';
 import type { ForgivenessDraft, RepaymentDraft } from '../shared/person-debt-contract';
 import type { QuickEntryDraft } from '../shared/quick-entry-contract';
+import type { CloseSessionDraft, OpenSessionDraft } from '../shared/reconciliation-contract';
 import type { TemplateDraft } from '../shared/template-contract';
 import type { TransactionDraft, TransferDraft } from '../shared/transaction-contract';
 import type { CustomPageDraft, SavedViewDraft, ViewTargetKind } from '../shared/views-search-contract';
@@ -65,6 +66,28 @@ const maxApi: MaxApi = Object.freeze({
       >,
     submit: (draft: QuickEntryDraft) =>
       ipcRenderer.invoke(IPC_CHANNELS.quickEntrySubmit, draft) as ReturnType<MaxApi['quickEntry']['submit']>,
+  }),
+  reconciliation: Object.freeze({
+    closeSession: (draft: CloseSessionDraft) =>
+      ipcRenderer.invoke(IPC_CHANNELS.reconciliationCloseSession, draft) as ReturnType<
+        MaxApi['reconciliation']['closeSession']
+      >,
+    getCurrentSession: (accountId?: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.reconciliationCurrentSession, accountId) as ReturnType<
+        MaxApi['reconciliation']['getCurrentSession']
+      >,
+    getExpectedClosing: (sessionId: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.reconciliationExpectedClosing, sessionId) as ReturnType<
+        MaxApi['reconciliation']['getExpectedClosing']
+      >,
+    listSessions: (limit?: number) =>
+      ipcRenderer.invoke(IPC_CHANNELS.reconciliationListSessions, limit) as ReturnType<
+        MaxApi['reconciliation']['listSessions']
+      >,
+    openSession: (draft: OpenSessionDraft) =>
+      ipcRenderer.invoke(IPC_CHANNELS.reconciliationOpenSession, draft) as ReturnType<
+        MaxApi['reconciliation']['openSession']
+      >,
   }),
   shop: Object.freeze({
     completeOnboarding: (draft: CompleteOnboardingDraft) =>

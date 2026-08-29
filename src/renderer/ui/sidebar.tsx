@@ -7,6 +7,7 @@ import {
   Languages,
   Package,
   ReceiptText,
+  Scale,
   Settings,
   SlidersHorizontal,
   type LucideIcon,
@@ -32,15 +33,17 @@ const navigation: readonly NavigationItem[] = [
   { icon: Package, page: 'items' },
   { icon: ContactRound, page: 'people' },
   { icon: ReceiptText, page: 'transactions' },
+  { icon: Scale, page: 'reconciliation' },
   { icon: CircleDollarSign, page: 'accounts' },
   { icon: SlidersHorizontal, page: 'views' },
 ];
 
-const pageLabelKey: Record<AppPage, 'account' | 'home' | 'item' | 'person' | 'transaction' | 'view'> = {
+const pageLabelKey: Record<AppPage, 'account' | 'home' | 'item' | 'person' | 'reconciliation' | 'transaction' | 'view'> = {
   accounts: 'account',
   home: 'home',
   items: 'item',
   people: 'person',
+  reconciliation: 'reconciliation',
   transactions: 'transaction',
   views: 'view',
 };

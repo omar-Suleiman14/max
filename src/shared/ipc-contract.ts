@@ -49,6 +49,11 @@ export const IPC_CHANNELS = {
   peopleStatement: 'max:people:statement',
   quickEntryGetSuggestion: 'max:quick-entry:suggestion',
   quickEntrySubmit: 'max:quick-entry:submit',
+  reconciliationCloseSession: 'max:reconciliation:session:close',
+  reconciliationCurrentSession: 'max:reconciliation:session:current',
+  reconciliationExpectedClosing: 'max:reconciliation:session:expected',
+  reconciliationListSessions: 'max:reconciliation:session:list',
+  reconciliationOpenSession: 'max:reconciliation:session:open',
   searchQuery: 'max:search:query',
   shopCompleteOnboarding: 'max:shop:onboarding:complete',
   shopGetMetadata: 'max:shop:metadata:get',
@@ -93,6 +98,12 @@ import type {
   RepaymentDraft,
 } from './person-debt-contract';
 import type { QuickEntryDraft, QuickEntryPriceSuggestion } from './quick-entry-contract';
+import type {
+  CloseSessionDraft,
+  DailySession,
+  OpenSessionDraft,
+  SessionExpectedClosing,
+} from './reconciliation-contract';
 import type {
   CustomPage,
   CustomPageDraft,
@@ -140,6 +151,13 @@ export type MaxApi = Readonly<{
   quickEntry: Readonly<{
     getSuggestion: (itemId?: string, templateId?: string) => Promise<QuickEntryPriceSuggestion>;
     submit: (draft: QuickEntryDraft) => Promise<MutationResult<TransactionRecord>>;
+  }>;
+  reconciliation: Readonly<{
+    closeSession: (draft: CloseSessionDraft) => Promise<MutationResult<DailySession>>;
+    getCurrentSession: (accountId?: string) => Promise<DailySession | null>;
+    getExpectedClosing: (sessionId: string) => Promise<SessionExpectedClosing>;
+    listSessions: (limit?: number) => Promise<readonly DailySession[]>;
+    openSession: (draft: OpenSessionDraft) => Promise<MutationResult<DailySession>>;
   }>;
   search: Readonly<{
     query: (searchTerm: string) => Promise<readonly SearchResult[]>;
