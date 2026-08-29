@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 
 import type { DatabaseHealth } from '../../shared/ipc-contract';
 import { migrations, type Migration } from './migrations';
+import { ObjectRepository } from './object-repository';
 
 const MIGRATIONS_TABLE_SQL = `
   CREATE TABLE IF NOT EXISTS system_migrations (
@@ -13,6 +14,7 @@ const MIGRATIONS_TABLE_SQL = `
 
 export class DatabaseService {
   readonly #database: DatabaseSync;
+  readonly objects: ObjectRepository;
   #initialized = false;
 
   constructor(filename: string) {
@@ -24,6 +26,7 @@ export class DatabaseService {
       enableForeignKeyConstraints: true,
       timeout: 5_000,
     });
+    this.objects = new ObjectRepository(this.#database);
 
     if (filename !== ':memory:') {
       this.#database.exec('PRAGMA journal_mode = WAL;');

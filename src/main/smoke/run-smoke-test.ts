@@ -44,6 +44,39 @@ async function openSmokeSurface(window: BrowserWindow): Promise<void> {
   const surface = process.env.MAX_SMOKE_SURFACE;
   if (!surface) return;
 
+  if (['items', 'property', 'record'].includes(surface)) {
+    const opened = (await window.webContents.executeJavaScript(`
+      (async () => {
+        const waitFor = async (selector) => {
+          const deadline = Date.now() + 3000;
+          while (Date.now() < deadline) {
+            const element = document.querySelector(selector);
+            if (element) return element;
+            await new Promise((resolve) => setTimeout(resolve, 40));
+          }
+          return null;
+        };
+        document.querySelector('.sidebar__nav .nav-item:nth-child(2)')?.click();
+        const workspace = await waitFor('.object-workspace');
+        if (!workspace) return false;
+        const surface = ${JSON.stringify(surface)};
+        if (surface === 'property') {
+          const trigger = await waitFor('.schema-panel__head button');
+          trigger?.click();
+          return Boolean(trigger);
+        }
+        if (surface === 'record') {
+          const trigger = await waitFor('.object-toolbar .button');
+          trigger?.click();
+          return Boolean(trigger);
+        }
+        return true;
+      })();
+    `)) as boolean;
+    if (!opened) throw new Error(`Smoke surface ${surface} could not be opened.`);
+    return;
+  }
+
   const selectorBySurface: Readonly<Record<string, string>> = {
     create: '.topbar [aria-haspopup="menu"]',
     settings: '.sidebar__footer button:last-child',

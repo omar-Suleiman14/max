@@ -16,6 +16,17 @@ const getHealth = vi.fn(() =>
     runtime: { arch: 'x64', platform: 'windows' as const },
   }),
 );
+const objectApi = {
+  archiveProperty: vi.fn(),
+  archiveRecord: vi.fn(),
+  createProperty: vi.fn(),
+  createRecord: vi.fn(),
+  listAudit: vi.fn(() => Promise.resolve([])),
+  listProperties: vi.fn(() => Promise.resolve([])),
+  listRecords: vi.fn(() => Promise.resolve([])),
+  updateProperty: vi.fn(),
+  updateRecord: vi.fn(),
+};
 
 beforeEach(() => {
   window.localStorage.clear();
@@ -35,7 +46,7 @@ beforeEach(() => {
   });
   Object.defineProperty(window, 'maxApi', {
     configurable: true,
-    value: { system: { getHealth } },
+    value: { objects: objectApi, system: { getHealth } },
   });
   getHealth.mockClear();
 });
@@ -51,8 +62,8 @@ describe('Max shell', () => {
 
     await user.click(screen.getByRole('button', { name: 'Items' }));
     expect(screen.getByRole('heading', { name: 'No items yet' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Create item' }));
-    expect(screen.getByRole('dialog', { name: 'Configure before creating' })).toBeInTheDocument();
+    await user.click(screen.getAllByRole('button', { name: 'Create item' })[0]!);
+    expect(screen.getByRole('dialog', { name: 'Create item' })).toBeInTheDocument();
     expect(container.querySelector('.app-frame')).toMatchSnapshot();
   });
 

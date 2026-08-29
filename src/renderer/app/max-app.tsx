@@ -17,6 +17,7 @@ import { EmptyPage } from '../ui/empty-page';
 import { FocusedOverlay } from '../ui/focused-overlay';
 import { SettingsDialog } from '../ui/settings-dialog';
 import { Sidebar } from '../ui/sidebar';
+import { ObjectWorkspace } from '../objects/object-workspace';
 
 const pageLabels: Record<AppPage, TranslationKey> = {
   accounts: 'account',
@@ -59,6 +60,7 @@ export function MaxApp() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [creationNoticeOpen, setCreationNoticeOpen] = useState(false);
+  const [objectCreateRequest, setObjectCreateRequest] = useState(0);
   const [engineStatus, setEngineStatus] = useState<EngineStatus>('checking');
   const [runtimePlatform, setRuntimePlatform] = useState<'linux' | 'macos' | 'windows'>();
   const [engineNoticeVisible, setEngineNoticeVisible] = useState(false);
@@ -167,6 +169,15 @@ export function MaxApp() {
     setCreateMenuOpen(false);
   }
 
+  function beginCreation() {
+    setCreateMenuOpen(false);
+    if (page === 'items' || page === 'people') {
+      setObjectCreateRequest((request) => request + 1);
+    } else {
+      setCreationNoticeOpen(true);
+    }
+  }
+
   const commands = useMemo<readonly Command[]>(() => {
     const navigationCommands = (Object.keys(pageLabels) as AppPage[]).map((destination) => {
       const pageLabel = translate(locale, pageLabels[destination]);
@@ -243,9 +254,9 @@ export function MaxApp() {
               </Button>
               {createMenuOpen && (
                 <div aria-label={translate(locale, 'createMenu')} className="popover-menu" onKeyDown={moveWithinCreateMenu} role="menu">
-                  <button onClick={() => { setCreateMenuOpen(false); setCreationNoticeOpen(true); }} role="menuitem" type="button">
+                  <button onClick={beginCreation} role="menuitem" type="button">
                     <Plus aria-hidden="true" size={17} />
-                    <span><strong>{createLabel}</strong><small>{translate(locale, 'configureFirst')}</small></span>
+                    <span><strong>{createLabel}</strong><small>{translate(locale, pageSubtitles[page])}</small></span>
                   </button>
                   <button onClick={() => { setCreateMenuOpen(false); setCommandOpen(true); }} role="menuitem" type="button">
                     <Search aria-hidden="true" size={17} />
@@ -265,13 +276,22 @@ export function MaxApp() {
               <p>{translate(locale, pageSubtitles[page])}</p>
             </div>
           </header>
-          <EmptyPage
-            locale={locale}
-            onCreate={() => setCreationNoticeOpen(true)}
-            onNavigate={navigate}
-            onOpenCommand={() => setCommandOpen(true)}
-            page={page}
-          />
+          {page === 'items' || page === 'people' ? (
+            <ObjectWorkspace
+              createRequest={objectCreateRequest}
+              key={page}
+              locale={locale}
+              objectKind={page === 'items' ? 'item' : 'person'}
+            />
+          ) : (
+            <EmptyPage
+              locale={locale}
+              onCreate={beginCreation}
+              onNavigate={navigate}
+              onOpenCommand={() => setCommandOpen(true)}
+              page={page}
+            />
+          )}
         </main>
       </div>
 
