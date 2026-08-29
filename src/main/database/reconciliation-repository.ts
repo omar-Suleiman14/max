@@ -73,7 +73,7 @@ export class ReconciliationRepository {
 
   listSessions(limit = 50): readonly DailySession[] {
     const rows = this.database
-      .prepare('SELECT * FROM shop_daily_sessions ORDER BY opened_at DESC, created_at DESC, id DESC LIMIT ?')
+      .prepare('SELECT * FROM shop_daily_sessions ORDER BY opened_at DESC, rowid DESC LIMIT ?')
       .all(limit) as DailySessionRow[];
     return rows.map((r) => this.#rowToSession(r));
   }
