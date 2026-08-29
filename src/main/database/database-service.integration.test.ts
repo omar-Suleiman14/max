@@ -23,8 +23,8 @@ describe('DatabaseService', () => {
     service.initialize();
 
     expect(service.getHealth()).toEqual({
-      migrationCount: 4,
-      schemaVersion: 4,
+      migrationCount: 5,
+      schemaVersion: 5,
       status: 'ready',
     });
     service.close();
@@ -42,7 +42,7 @@ describe('DatabaseService', () => {
 
     const second = new DatabaseService(filename);
     second.initialize();
-    expect(second.getHealth().migrationCount).toBe(4);
+    expect(second.getHealth().migrationCount).toBe(5);
     second.close();
 
     const inspection = new DatabaseSync(filename, { readOnly: true });
@@ -83,11 +83,11 @@ describe('DatabaseService', () => {
     const future = new DatabaseSync(filename);
     future
       .prepare('INSERT INTO system_migrations (id, name, applied_at) VALUES (?, ?, ?)')
-      .run(5, 'future_schema', new Date().toISOString());
+      .run(6, 'future_schema', new Date().toISOString());
     future.close();
 
     const reopened = new DatabaseService(filename);
-    expect(() => reopened.initialize()).toThrow('Database schema 5 is newer than this Max build.');
+    expect(() => reopened.initialize()).toThrow('Database schema 6 is newer than this Max build.');
     reopened.close();
   });
 
@@ -114,7 +114,7 @@ describe('DatabaseService', () => {
 
     const upgraded = new DatabaseService(filename);
     upgraded.initialize();
-    expect(upgraded.getHealth().schemaVersion).toBe(4);
+    expect(upgraded.getHealth().schemaVersion).toBe(5);
     upgraded.close();
 
     const inspection = new DatabaseSync(filename, { readOnly: true });

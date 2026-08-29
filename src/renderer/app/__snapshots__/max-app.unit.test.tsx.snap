@@ -205,6 +205,68 @@ exports[`Max shell > renders the English shell and an actionable empty page 1`] 
           class="record-panel"
         >
           <div
+            class="view-bar"
+          >
+            <div
+              class="view-bar__tabs"
+            >
+              <button
+                class="view-tab"
+                data-active="true"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-bookmark"
+                  fill="none"
+                  height="14"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="14"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M17 3a2 2 0 0 1 2 2v15a1 1 0 0 1-1.496.868l-4.512-2.578a2 2 0 0 0-1.984 0l-4.512 2.578A1 1 0 0 1 5 20V5a2 2 0 0 1 2-2z"
+                  />
+                </svg>
+                <span>
+                  Default View
+                </span>
+              </button>
+              <button
+                class="view-tab view-tab--save"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-plus"
+                  fill="none"
+                  height="14"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="14"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M5 12h14"
+                  />
+                  <path
+                    d="M12 5v14"
+                  />
+                </svg>
+                <span>
+                  Save View
+                </span>
+              </button>
+            </div>
+          </div>
+          <div
             class="object-empty"
           >
             <div

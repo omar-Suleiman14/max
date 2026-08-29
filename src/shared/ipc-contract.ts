@@ -39,12 +39,17 @@ export const IPC_CHANNELS = {
   objectRecordCreate: 'max:objects:records:create',
   objectRecordList: 'max:objects:records:list',
   objectRecordUpdate: 'max:objects:records:update',
+  pageArchive: 'max:pages:archive',
+  pageCreate: 'max:pages:create',
+  pageList: 'max:pages:list',
+  pageUpdate: 'max:pages:update',
   peopleBalances: 'max:people:balances',
   peopleForgiveDebt: 'max:people:debt:forgive',
   peopleRepayDebt: 'max:people:debt:repay',
   peopleStatement: 'max:people:statement',
   quickEntryGetSuggestion: 'max:quick-entry:suggestion',
   quickEntrySubmit: 'max:quick-entry:submit',
+  searchQuery: 'max:search:query',
   shopCompleteOnboarding: 'max:shop:onboarding:complete',
   shopGetMetadata: 'max:shop:metadata:get',
   shopUpdateMetadata: 'max:shop:metadata:update',
@@ -60,6 +65,10 @@ export const IPC_CHANNELS = {
   transactionSummary: 'max:transactions:summary',
   transactionTransfer: 'max:transactions:transfer',
   transactionUndo: 'max:transactions:undo',
+  viewArchive: 'max:views:archive',
+  viewCreate: 'max:views:create',
+  viewList: 'max:views:list',
+  viewUpdate: 'max:views:update',
 } as const;
 
 export type DatabaseHealth = Readonly<{
@@ -84,6 +93,14 @@ import type {
   RepaymentDraft,
 } from './person-debt-contract';
 import type { QuickEntryDraft, QuickEntryPriceSuggestion } from './quick-entry-contract';
+import type {
+  CustomPage,
+  CustomPageDraft,
+  SavedView,
+  SavedViewDraft,
+  SearchResult,
+  ViewTargetKind,
+} from './views-search-contract';
 
 export type MaxApi = Readonly<{
   accounts: Readonly<{
@@ -108,6 +125,12 @@ export type MaxApi = Readonly<{
     updateProperty: (id: string, draft: PropertyDraft) => Promise<MutationResult<PropertyDefinition>>;
     updateRecord: (id: string, draft: ConfigurableRecordDraft) => Promise<MutationResult<ConfigurableRecord>>;
   }>;
+  pages: Readonly<{
+    archive: (id: string) => Promise<MutationResult<null>>;
+    create: (draft: CustomPageDraft) => Promise<MutationResult<CustomPage>>;
+    list: () => Promise<readonly CustomPage[]>;
+    update: (id: string, draft: CustomPageDraft) => Promise<MutationResult<CustomPage>>;
+  }>;
   people: Readonly<{
     forgiveDebt: (draft: ForgivenessDraft) => Promise<MutationResult<TransactionRecord>>;
     getBalances: () => Promise<readonly PersonBalanceSummary[]>;
@@ -117,6 +140,9 @@ export type MaxApi = Readonly<{
   quickEntry: Readonly<{
     getSuggestion: (itemId?: string, templateId?: string) => Promise<QuickEntryPriceSuggestion>;
     submit: (draft: QuickEntryDraft) => Promise<MutationResult<TransactionRecord>>;
+  }>;
+  search: Readonly<{
+    query: (searchTerm: string) => Promise<readonly SearchResult[]>;
   }>;
   shop: Readonly<{
     completeOnboarding: (draft: CompleteOnboardingDraft) => Promise<MutationResult<ShopMetadata>>;
@@ -140,5 +166,11 @@ export type MaxApi = Readonly<{
     list: () => Promise<readonly TransactionRecord[]>;
     reverse: (id: string, reason?: string) => Promise<MutationResult<TransactionRecord>>;
     undo: (id: string) => Promise<MutationResult<null>>;
+  }>;
+  views: Readonly<{
+    archive: (id: string) => Promise<MutationResult<null>>;
+    create: (draft: SavedViewDraft) => Promise<MutationResult<SavedView>>;
+    list: (targetKind?: ViewTargetKind) => Promise<readonly SavedView[]>;
+    update: (id: string, draft: SavedViewDraft) => Promise<MutationResult<SavedView>>;
   }>;
 }>;

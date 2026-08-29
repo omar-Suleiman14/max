@@ -26,6 +26,13 @@ import type {
 } from '../../shared/person-debt-contract';
 import type { PaymentMode, QuickEntryDraft } from '../../shared/quick-entry-contract';
 import type { TemplateDraft } from '../../shared/template-contract';
+import type {
+  CustomPageDraft,
+  SavedViewDraft,
+  ViewFilterRule,
+  ViewSortRule,
+  ViewTargetKind,
+} from '../../shared/views-search-contract';
 import {
   movementTypes,
   transactionTypes,
@@ -318,6 +325,38 @@ function parseForgivenessDraft(value: unknown): ForgivenessDraft {
   };
 }
 
+function parseSavedViewDraft(value: unknown): SavedViewDraft {
+  if (!isObject(value) || typeof value.name !== 'string' || !value.name.trim()) {
+    throw new ObjectDomainError('invalid-input', 'Saved view name is required.');
+  }
+  if (!['item', 'person', 'transaction', 'account'].includes(String(value.targetKind))) {
+    throw new ObjectDomainError('invalid-input', 'Valid target kind is required.');
+  }
+  return {
+    filterRules: Array.isArray(value.filterRules) ? (value.filterRules as readonly ViewFilterRule[]) : undefined,
+    groupByPropertyId: typeof value.groupByPropertyId === 'string' ? value.groupByPropertyId : undefined,
+    name: value.name.trim(),
+    position: typeof value.position === 'number' ? value.position : undefined,
+    sortRules: Array.isArray(value.sortRules) ? (value.sortRules as readonly ViewSortRule[]) : undefined,
+    targetKind: value.targetKind as ViewTargetKind,
+  };
+}
+
+function parseCustomPageDraft(value: unknown): CustomPageDraft {
+  if (!isObject(value) || typeof value.name !== 'string' || !value.name.trim()) {
+    throw new ObjectDomainError('invalid-input', 'Custom page name is required.');
+  }
+  if (typeof value.layoutJson !== 'string') {
+    throw new ObjectDomainError('invalid-input', 'Custom page layout JSON is required.');
+  }
+  return {
+    icon: typeof value.icon === 'string' ? value.icon : undefined,
+    layoutJson: value.layoutJson,
+    name: value.name.trim(),
+    position: typeof value.position === 'number' ? value.position : undefined,
+  };
+}
+
 function mutation<T>(work: () => T): MutationResult<T> {
   try {
     return { ok: true, value: work() };
@@ -536,6 +575,54 @@ export function registerIpcHandlers({
   ipcMain.handle(IPC_CHANNELS.peopleForgiveDebt, (event, draft: unknown) => {
     trust(event);
     return mutation(() => database.personDebt.forgiveDebt(parseForgivenessDraft(draft)));
+  });
+
+  // Saved Views
+  ipcMain.handle(IPC_CHANNELS.viewList, (event, targetKind: unknown) => {
+    trust(event);
+    return database.viewsPages.listViews(typeof targetKind === 'string' ? (targetKind as ViewTargetKind) : undefined);
+  });
+  ipcMain.handle(IPC_CHANNELS.viewCreate, (event, draft: unknown) => {
+    trust(event);
+    return mutation(() => database.viewsPages.createView(parseSavedViewDraft(draft)));
+  });
+  ipcMain.handle(IPC_CHANNELS.viewUpdate, (event, id: unknown, draft: unknown) => {
+    trust(event);
+    return mutation(() => database.viewsPages.updateView(parseId(id), parseSavedViewDraft(draft)));
+  });
+  ipcMain.handle(IPC_CHANNELS.viewArchive, (event, id: unknown) => {
+    trust(event);
+    return mutation(() => {
+      database.viewsPages.archiveView(parseId(id));
+      return null;
+    });
+  });
+
+  // Custom Pages
+  ipcMain.handle(IPC_CHANNELS.pageList, (event) => {
+    trust(event);
+    return database.viewsPages.listPages();
+  });
+  ipcMain.handle(IPC_CHANNELS.pageCreate, (event, draft: unknown) => {
+    trust(event);
+    return mutation(() => database.viewsPages.createPage(parseCustomPageDraft(draft)));
+  });
+  ipcMain.handle(IPC_CHANNELS.pageUpdate, (event, id: unknown, draft: unknown) => {
+    trust(event);
+    return mutation(() => database.viewsPages.updatePage(parseId(id), parseCustomPageDraft(draft)));
+  });
+  ipcMain.handle(IPC_CHANNELS.pageArchive, (event, id: unknown) => {
+    trust(event);
+    return mutation(() => {
+      database.viewsPages.archivePage(parseId(id));
+      return null;
+    });
+  });
+
+  // Universal Search
+  ipcMain.handle(IPC_CHANNELS.searchQuery, (event, searchTerm: unknown) => {
+    trust(event);
+    return database.search.query(typeof searchTerm === 'string' ? searchTerm : '');
   });
 }
 

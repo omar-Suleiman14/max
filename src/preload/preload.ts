@@ -8,6 +8,7 @@ import type { ForgivenessDraft, RepaymentDraft } from '../shared/person-debt-con
 import type { QuickEntryDraft } from '../shared/quick-entry-contract';
 import type { TemplateDraft } from '../shared/template-contract';
 import type { TransactionDraft, TransferDraft } from '../shared/transaction-contract';
+import type { CustomPageDraft, SavedViewDraft, ViewTargetKind } from '../shared/views-search-contract';
 
 const maxApi: MaxApi = Object.freeze({
   accounts: Object.freeze({
@@ -102,6 +103,30 @@ const maxApi: MaxApi = Object.freeze({
       ipcRenderer.invoke(IPC_CHANNELS.transactionReverse, id, reason) as ReturnType<MaxApi['transactions']['reverse']>,
     undo: (id: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.transactionUndo, id) as ReturnType<MaxApi['transactions']['undo']>,
+  }),
+  pages: Object.freeze({
+    archive: (id: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.pageArchive, id) as ReturnType<MaxApi['pages']['archive']>,
+    create: (draft: CustomPageDraft) =>
+      ipcRenderer.invoke(IPC_CHANNELS.pageCreate, draft) as ReturnType<MaxApi['pages']['create']>,
+    list: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.pageList) as ReturnType<MaxApi['pages']['list']>,
+    update: (id: string, draft: CustomPageDraft) =>
+      ipcRenderer.invoke(IPC_CHANNELS.pageUpdate, id, draft) as ReturnType<MaxApi['pages']['update']>,
+  }),
+  search: Object.freeze({
+    query: (searchTerm: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.searchQuery, searchTerm) as ReturnType<MaxApi['search']['query']>,
+  }),
+  views: Object.freeze({
+    archive: (id: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.viewArchive, id) as ReturnType<MaxApi['views']['archive']>,
+    create: (draft: SavedViewDraft) =>
+      ipcRenderer.invoke(IPC_CHANNELS.viewCreate, draft) as ReturnType<MaxApi['views']['create']>,
+    list: (targetKind?: ViewTargetKind) =>
+      ipcRenderer.invoke(IPC_CHANNELS.viewList, targetKind) as ReturnType<MaxApi['views']['list']>,
+    update: (id: string, draft: SavedViewDraft) =>
+      ipcRenderer.invoke(IPC_CHANNELS.viewUpdate, id, draft) as ReturnType<MaxApi['views']['update']>,
   }),
 });
 

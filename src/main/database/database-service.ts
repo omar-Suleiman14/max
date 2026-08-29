@@ -19,6 +19,8 @@ const MIGRATIONS_TABLE_SQL = `
 
 import { PersonDebtService } from './person-debt-service';
 import { QuickEntryService } from './quick-entry-service';
+import { SearchService } from './search-service';
+import { ViewsPagesRepository } from './views-pages-repository';
 
 export class DatabaseService {
   readonly #database: DatabaseSync;
@@ -27,9 +29,11 @@ export class DatabaseService {
   readonly objects: ObjectRepository;
   readonly personDebt: PersonDebtService;
   readonly quickEntry: QuickEntryService;
+  readonly search: SearchService;
   readonly shopMetadata: ShopMetadataRepository;
   readonly templates: TemplateRepository;
   readonly transactions: TransactionRepository;
+  readonly viewsPages: ViewsPagesRepository;
   #initialized = false;
 
   constructor(filename: string) {
@@ -45,6 +49,8 @@ export class DatabaseService {
     this.transactions = new TransactionRepository(this.#database);
     this.personDebt = new PersonDebtService(this.#database, this.transactions);
     this.quickEntry = new QuickEntryService(this.#database, this.transactions);
+    this.viewsPages = new ViewsPagesRepository(this.#database);
+    this.search = new SearchService(this.#database);
     this.objects = new ObjectRepository(this.#database);
     this.templates = new TemplateRepository(this.#database);
     this.shopMetadata = new ShopMetadataRepository(this.#database);

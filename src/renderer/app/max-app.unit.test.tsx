@@ -236,6 +236,24 @@ const peopleApi = {
   ),
 };
 
+const pagesApi = {
+  archive: vi.fn(),
+  create: vi.fn(),
+  list: vi.fn(() => Promise.resolve([])),
+  update: vi.fn(),
+};
+
+const searchApi = {
+  query: vi.fn(() => Promise.resolve([])),
+};
+
+const viewsApi = {
+  archive: vi.fn(),
+  create: vi.fn(),
+  list: vi.fn(() => Promise.resolve([])),
+  update: vi.fn(),
+};
+
 beforeEach(() => {
   window.localStorage.clear();
   document.documentElement.lang = 'en';
@@ -265,12 +283,15 @@ beforeEach(() => {
       accounts: accountsApi,
       blueprints: blueprintApi,
       objects: objectApi,
+      pages: pagesApi,
       people: peopleApi,
       quickEntry: quickEntryApi,
+      search: searchApi,
       shop: shopApi,
       system: { getHealth },
       templates: templateApi,
       transactions: transactionsApi,
+      views: viewsApi,
     },
   });
   getHealth.mockClear();
@@ -279,6 +300,7 @@ beforeEach(() => {
   accountsApi.list.mockClear();
   transactionsApi.list.mockClear();
   quickEntryApi.submit.mockClear();
+  searchApi.query.mockClear();
 });
 
 afterEach(() => cleanup());

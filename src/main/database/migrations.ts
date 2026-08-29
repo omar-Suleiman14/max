@@ -207,4 +207,61 @@ export const migrations: readonly Migration[] = [
       `);
     },
   },
+  {
+    id: 5,
+    name: 'views_pages_and_search',
+    up(database) {
+      database.exec(`
+        CREATE TABLE shop_saved_views (
+          id TEXT PRIMARY KEY NOT NULL,
+          name TEXT NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 80),
+          target_kind TEXT NOT NULL CHECK (target_kind IN ('item', 'person', 'transaction', 'account')),
+          filter_json TEXT NOT NULL CHECK (json_valid(filter_json)),
+          sort_json TEXT NOT NULL CHECK (json_valid(sort_json)),
+          group_by_property_id TEXT,
+          position INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          archived_at TEXT
+        ) STRICT;
+
+        CREATE INDEX shop_saved_views_kind
+          ON shop_saved_views (target_kind, position);
+
+        CREATE TABLE shop_custom_pages (
+          id TEXT PRIMARY KEY NOT NULL,
+          name TEXT NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 80),
+          icon TEXT,
+          layout_json TEXT NOT NULL CHECK (json_valid(layout_json)),
+          position INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          archived_at TEXT
+        ) STRICT;
+
+        CREATE INDEX shop_custom_pages_position
+          ON shop_custom_pages (position);
+
+        CREATE TABLE object_audit_log_v5 (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          entity_type TEXT NOT NULL CHECK (entity_type IN ('property', 'record', 'template', 'account', 'transaction', 'view', 'page')),
+          entity_id TEXT NOT NULL,
+          action TEXT NOT NULL CHECK (action IN ('created', 'updated', 'archived')),
+          actor TEXT NOT NULL CHECK (actor = 'local-user'),
+          snapshot_json TEXT NOT NULL CHECK (json_valid(snapshot_json)),
+          created_at TEXT NOT NULL
+        ) STRICT;
+
+        INSERT INTO object_audit_log_v5 (id, entity_type, entity_id, action, actor, snapshot_json, created_at)
+          SELECT id, entity_type, entity_id, action, actor, snapshot_json, created_at FROM object_audit_log;
+
+        DROP TABLE object_audit_log;
+
+        ALTER TABLE object_audit_log_v5 RENAME TO object_audit_log;
+
+        CREATE INDEX object_audit_log_entity
+          ON object_audit_log (entity_id, id DESC);
+      `);
+    },
+  },
 ];

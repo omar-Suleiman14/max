@@ -22,6 +22,7 @@ import { FocusedOverlay } from '../ui/focused-overlay';
 import { SettingsDialog } from '../ui/settings-dialog';
 import { Sidebar } from '../ui/sidebar';
 import { AccountsWorkspace } from '../accounts/accounts-workspace';
+import { UniversalSearchDialog } from '../search/universal-search-dialog';
 import { QuickEntryDialog } from '../quick-entry/quick-entry-dialog';
 import { UndoToast } from '../ui/undo-toast';
 import { TransactionsWorkspace } from '../transactions/transactions-workspace';
@@ -65,6 +66,7 @@ export function MaxApp() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => readSidebarCollapsed(window.localStorage));
   const [page, setPage] = useState<AppPage>('home');
   const [commandOpen, setCommandOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [blueprintModalTab, setBlueprintModalTab] = useState<'export' | 'import'>();
   const [quickEntryOpen, setQuickEntryOpen] = useState(false);
@@ -150,12 +152,15 @@ export function MaxApp() {
         setSettingsOpen(false);
         setBlueprintModalTab(undefined);
         setCommandOpen(true);
+      } else if ((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === 'f') {
+        event.preventDefault();
+        setSearchOpen(true);
       } else if ((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === 'e') {
         event.preventDefault();
         setQuickEntryOpen(true);
       } else if (event.key === '/' && !isEditingTarget(event.target)) {
         event.preventDefault();
-        setCommandOpen(true);
+        setSearchOpen(true);
       }
     }
     document.addEventListener('keydown', handleGlobalKeyDown);
@@ -396,6 +401,18 @@ export function MaxApp() {
       </div>
 
       {commandOpen && <CommandMenu commands={commands} locale={locale} onClose={() => setCommandOpen(false)} />}
+      {searchOpen && (
+        <UniversalSearchDialog
+          locale={locale}
+          onClose={() => setSearchOpen(false)}
+          onSelect={(res) => {
+            if (res.kind === 'item') navigate('items');
+            else if (res.kind === 'person') navigate('people');
+            else if (res.kind === 'account') navigate('accounts');
+            else if (res.kind === 'transaction') navigate('transactions');
+          }}
+        />
+      )}
       {settingsOpen && (
         <SettingsDialog
           locale={locale}

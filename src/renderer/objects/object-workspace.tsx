@@ -12,8 +12,10 @@ import {
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
 import type { PersonBalanceSummary } from '../../shared/person-debt-contract';
+import type { SavedView } from '../../shared/views-search-contract';
 import { PersonStatementDialog } from '../people/person-statement-dialog';
 import { peopleDebtCopy } from '../people/people-debt-i18n';
+import { ViewBar } from '../views/view-bar';
 import {
   propertyTypes,
   type AuditEntry,
@@ -489,6 +491,7 @@ export function ObjectWorkspace({ createRequest, locale, objectKind }: ObjectWor
   const [auditEntries, setAuditEntries] = useState<readonly AuditEntry[]>();
   const [personBalances, setPersonBalances] = useState<readonly PersonBalanceSummary[]>([]);
   const [selectedStatementPersonId, setSelectedStatementPersonId] = useState<string>();
+  const [activeView, setActiveView] = useState<SavedView>();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -631,6 +634,14 @@ export function ObjectWorkspace({ createRequest, locale, objectKind }: ObjectWor
 
       <div className="object-layout">
         <div className="record-panel" aria-busy={loading}>
+          <ViewBar
+            activeFilterRules={activeView?.filterRules ?? []}
+            activeSortRules={activeView?.sortRules ?? []}
+            locale={locale}
+            onApplyView={setActiveView}
+            selectedViewId={activeView?.id}
+            targetKind={objectKind}
+          />
           {!loading && records.length === 0 && (
             <div className="object-empty">
               <div className="empty-state__icon">
