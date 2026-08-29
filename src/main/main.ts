@@ -6,6 +6,7 @@ import { registerIpcHandlers, removeIpcHandlers } from './ipc/register-ipc-handl
 import { getPlatformAdapter } from './platform/platform-adapter';
 import { handleWindowsSquirrelLifecycle } from './platform/windows/squirrel-lifecycle';
 import { registerAppProtocol, registerAppScheme } from './protocol/register-app-protocol';
+import { runSmokeTest } from './smoke/run-smoke-test';
 import { createMainWindow } from './window/create-main-window';
 
 const platform = getPlatformAdapter();
@@ -56,25 +57,7 @@ if (handledInstallerLifecycle) {
       const mainWindow = await createMainWindow();
 
       if (process.env.MAX_SMOKE_TEST === '1') {
-        const foundationBecameReady = (await mainWindow.webContents.executeJavaScript(`
-          new Promise((resolve) => {
-            const deadline = Date.now() + 5000;
-            const check = () => {
-              if (document.querySelector('.foundation__ready')) {
-                resolve(true);
-              } else if (Date.now() >= deadline) {
-                resolve(false);
-              } else {
-                setTimeout(check, 50);
-              }
-            };
-            check();
-          });
-        `)) as boolean;
-
-        if (!foundationBecameReady) {
-          throw new Error('The renderer did not reach its database-backed ready state.');
-        }
+        await runSmokeTest(mainWindow);
         app.quit();
         return;
       }
