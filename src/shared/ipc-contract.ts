@@ -39,6 +39,10 @@ export const IPC_CHANNELS = {
   objectRecordCreate: 'max:objects:records:create',
   objectRecordList: 'max:objects:records:list',
   objectRecordUpdate: 'max:objects:records:update',
+  peopleBalances: 'max:people:balances',
+  peopleForgiveDebt: 'max:people:debt:forgive',
+  peopleRepayDebt: 'max:people:debt:repay',
+  peopleStatement: 'max:people:statement',
   quickEntryGetSuggestion: 'max:quick-entry:suggestion',
   quickEntrySubmit: 'max:quick-entry:submit',
   shopCompleteOnboarding: 'max:shop:onboarding:complete',
@@ -73,6 +77,12 @@ export type SystemHealth = Readonly<{
   }>;
 }>;
 
+import type {
+  ForgivenessDraft,
+  PersonBalanceSummary,
+  PersonFinancialStatement,
+  RepaymentDraft,
+} from './person-debt-contract';
 import type { QuickEntryDraft, QuickEntryPriceSuggestion } from './quick-entry-contract';
 
 export type MaxApi = Readonly<{
@@ -97,6 +107,12 @@ export type MaxApi = Readonly<{
     listRecords: (objectKind: ObjectKind) => Promise<readonly ConfigurableRecord[]>;
     updateProperty: (id: string, draft: PropertyDraft) => Promise<MutationResult<PropertyDefinition>>;
     updateRecord: (id: string, draft: ConfigurableRecordDraft) => Promise<MutationResult<ConfigurableRecord>>;
+  }>;
+  people: Readonly<{
+    forgiveDebt: (draft: ForgivenessDraft) => Promise<MutationResult<TransactionRecord>>;
+    getBalances: () => Promise<readonly PersonBalanceSummary[]>;
+    getStatement: (personId: string) => Promise<PersonFinancialStatement>;
+    repayDebt: (draft: RepaymentDraft) => Promise<MutationResult<TransactionRecord>>;
   }>;
   quickEntry: Readonly<{
     getSuggestion: (itemId?: string, templateId?: string) => Promise<QuickEntryPriceSuggestion>;

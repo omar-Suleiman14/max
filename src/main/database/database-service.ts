@@ -17,6 +17,7 @@ const MIGRATIONS_TABLE_SQL = `
   ) STRICT;
 `;
 
+import { PersonDebtService } from './person-debt-service';
 import { QuickEntryService } from './quick-entry-service';
 
 export class DatabaseService {
@@ -24,6 +25,7 @@ export class DatabaseService {
   readonly accounts: AccountRepository;
   readonly blueprints: BlueprintService;
   readonly objects: ObjectRepository;
+  readonly personDebt: PersonDebtService;
   readonly quickEntry: QuickEntryService;
   readonly shopMetadata: ShopMetadataRepository;
   readonly templates: TemplateRepository;
@@ -41,6 +43,7 @@ export class DatabaseService {
     });
     this.accounts = new AccountRepository(this.#database);
     this.transactions = new TransactionRepository(this.#database);
+    this.personDebt = new PersonDebtService(this.#database, this.transactions);
     this.quickEntry = new QuickEntryService(this.#database, this.transactions);
     this.objects = new ObjectRepository(this.#database);
     this.templates = new TemplateRepository(this.#database);

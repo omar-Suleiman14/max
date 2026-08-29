@@ -20,6 +20,10 @@ import {
   type PropertyDraft,
   type PropertyValue,
 } from '../../shared/object-contract';
+import type {
+  ForgivenessDraft,
+  RepaymentDraft,
+} from '../../shared/person-debt-contract';
 import type { PaymentMode, QuickEntryDraft } from '../../shared/quick-entry-contract';
 import type { TemplateDraft } from '../../shared/template-contract';
 import {
@@ -283,6 +287,37 @@ function parseQuickEntryDraft(value: unknown): QuickEntryDraft {
   };
 }
 
+function parseRepaymentDraft(value: unknown): RepaymentDraft {
+  if (!isObject(value) || typeof value.personId !== 'string' || typeof value.accountId !== 'string') {
+    throw new ObjectDomainError('invalid-input', 'A valid repayment draft is required.');
+  }
+  const amount = Number(value.amount);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new ObjectDomainError('invalid-input', 'Repayment amount must be greater than zero.');
+  }
+  return {
+    accountId: value.accountId,
+    amount,
+    note: typeof value.note === 'string' ? value.note : undefined,
+    personId: value.personId,
+  };
+}
+
+function parseForgivenessDraft(value: unknown): ForgivenessDraft {
+  if (!isObject(value) || typeof value.personId !== 'string' || typeof value.reason !== 'string') {
+    throw new ObjectDomainError('invalid-input', 'A valid forgiveness draft is required.');
+  }
+  const amount = Number(value.amount);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new ObjectDomainError('invalid-input', 'Forgiveness amount must be greater than zero.');
+  }
+  return {
+    amount,
+    personId: value.personId,
+    reason: value.reason,
+  };
+}
+
 function mutation<T>(work: () => T): MutationResult<T> {
   try {
     return { ok: true, value: work() };
@@ -483,6 +518,24 @@ export function registerIpcHandlers({
   ipcMain.handle(IPC_CHANNELS.quickEntrySubmit, (event, draft: unknown) => {
     trust(event);
     return mutation(() => database.quickEntry.submit(parseQuickEntryDraft(draft)));
+  });
+
+  // People Debt
+  ipcMain.handle(IPC_CHANNELS.peopleBalances, (event) => {
+    trust(event);
+    return database.personDebt.getBalances();
+  });
+  ipcMain.handle(IPC_CHANNELS.peopleStatement, (event, personId: unknown) => {
+    trust(event);
+    return database.personDebt.getStatement(parseId(personId));
+  });
+  ipcMain.handle(IPC_CHANNELS.peopleRepayDebt, (event, draft: unknown) => {
+    trust(event);
+    return mutation(() => database.personDebt.repayDebt(parseRepaymentDraft(draft)));
+  });
+  ipcMain.handle(IPC_CHANNELS.peopleForgiveDebt, (event, draft: unknown) => {
+    trust(event);
+    return mutation(() => database.personDebt.forgiveDebt(parseForgivenessDraft(draft)));
   });
 }
 

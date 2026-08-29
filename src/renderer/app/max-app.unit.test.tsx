@@ -195,6 +195,47 @@ const quickEntryApi = {
   ),
 };
 
+const peopleApi = {
+  forgiveDebt: vi.fn(() =>
+    Promise.resolve({
+      ok: true as const,
+      value: {
+        createdAt: '2026-08-29',
+        id: 'forgive-1',
+        movements: [],
+        paidAmount: 0,
+        paymentStatus: 'unpaid' as const,
+        totalAmount: 100,
+        transactionType: 'adjustment' as const,
+        updatedAt: '2026-08-29',
+      },
+    }),
+  ),
+  getBalances: vi.fn(() => Promise.resolve([])),
+  getStatement: vi.fn((personId: string) =>
+    Promise.resolve({
+      history: [],
+      summary: { netBalance: 0, payable: 0, personId, personLabel: 'Test', receivable: 0 },
+      unpaidTransactions: [],
+    }),
+  ),
+  repayDebt: vi.fn(() =>
+    Promise.resolve({
+      ok: true as const,
+      value: {
+        createdAt: '2026-08-29',
+        id: 'repay-1',
+        movements: [],
+        paidAmount: 100,
+        paymentStatus: 'paid' as const,
+        totalAmount: 100,
+        transactionType: 'income' as const,
+        updatedAt: '2026-08-29',
+      },
+    }),
+  ),
+};
+
 beforeEach(() => {
   window.localStorage.clear();
   document.documentElement.lang = 'en';
@@ -224,6 +265,7 @@ beforeEach(() => {
       accounts: accountsApi,
       blueprints: blueprintApi,
       objects: objectApi,
+      people: peopleApi,
       quickEntry: quickEntryApi,
       shop: shopApi,
       system: { getHealth },

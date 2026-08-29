@@ -4,6 +4,7 @@ import type { AccountDraft } from '../shared/account-contract';
 import type { Blueprint, CompleteOnboardingDraft, ShopMetadata } from '../shared/blueprint-contract';
 import { IPC_CHANNELS, type MaxApi } from '../shared/ipc-contract';
 import type { ConfigurableRecordDraft, ObjectKind, PropertyDraft } from '../shared/object-contract';
+import type { ForgivenessDraft, RepaymentDraft } from '../shared/person-debt-contract';
 import type { QuickEntryDraft } from '../shared/quick-entry-contract';
 import type { TemplateDraft } from '../shared/template-contract';
 import type { TransactionDraft, TransferDraft } from '../shared/transaction-contract';
@@ -45,6 +46,16 @@ const maxApi: MaxApi = Object.freeze({
       ipcRenderer.invoke(IPC_CHANNELS.objectPropertyUpdate, id, draft) as ReturnType<MaxApi['objects']['updateProperty']>,
     updateRecord: (id: string, draft: ConfigurableRecordDraft) =>
       ipcRenderer.invoke(IPC_CHANNELS.objectRecordUpdate, id, draft) as ReturnType<MaxApi['objects']['updateRecord']>,
+  }),
+  people: Object.freeze({
+    forgiveDebt: (draft: ForgivenessDraft) =>
+      ipcRenderer.invoke(IPC_CHANNELS.peopleForgiveDebt, draft) as ReturnType<MaxApi['people']['forgiveDebt']>,
+    getBalances: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.peopleBalances) as ReturnType<MaxApi['people']['getBalances']>,
+    getStatement: (personId: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.peopleStatement, personId) as ReturnType<MaxApi['people']['getStatement']>,
+    repayDebt: (draft: RepaymentDraft) =>
+      ipcRenderer.invoke(IPC_CHANNELS.peopleRepayDebt, draft) as ReturnType<MaxApi['people']['repayDebt']>,
   }),
   quickEntry: Object.freeze({
     getSuggestion: (itemId?: string, templateId?: string) =>

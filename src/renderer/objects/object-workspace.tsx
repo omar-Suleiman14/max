@@ -11,6 +11,9 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
+import type { PersonBalanceSummary } from '../../shared/person-debt-contract';
+import { PersonStatementDialog } from '../people/person-statement-dialog';
+import { peopleDebtCopy } from '../people/people-debt-i18n';
 import {
   propertyTypes,
   type AuditEntry,
@@ -484,22 +487,26 @@ export function ObjectWorkspace({ createRequest, locale, objectKind }: ObjectWor
   const [recordEditor, setRecordEditor] = useState<ConfigurableRecord | 'new'>();
   const [archiveTarget, setArchiveTarget] = useState<ArchiveTarget>();
   const [auditEntries, setAuditEntries] = useState<readonly AuditEntry[]>();
+  const [personBalances, setPersonBalances] = useState<readonly PersonBalanceSummary[]>([]);
+  const [selectedStatementPersonId, setSelectedStatementPersonId] = useState<string>();
 
   const load = useCallback(async () => {
     setLoading(true);
     setLoadError(false);
     try {
-      const [nextProperties, nextTemplates, nextRecords, items, people] = await Promise.all([
+      const [nextProperties, nextTemplates, nextRecords, items, people, pBalances] = await Promise.all([
         window.maxApi.objects.listProperties(objectKind),
         window.maxApi.templates.list(objectKind),
         window.maxApi.objects.listRecords(objectKind),
         window.maxApi.objects.listRecords('item'),
         window.maxApi.objects.listRecords('person'),
+        objectKind === 'person' ? window.maxApi.people.getBalances() : Promise.resolve([]),
       ]);
       setProperties(nextProperties);
       setTemplates(nextTemplates);
       setRecords(nextRecords);
       setRelatedRecords([...items, ...people]);
+      setPersonBalances(pBalances);
     } catch {
       setLoadError(true);
     } finally {
@@ -637,55 +644,83 @@ export function ObjectWorkspace({ createRequest, locale, objectKind }: ObjectWor
             </div>
           )}
           <div className="record-grid">
-            {records.map((record) => (
-              <article className="record-card" key={record.id}>
-                <div className="record-card__head">
-                  <div>
-                    <span>{objectKindLabel(locale, objectKind)}</span>
-                    <h2>{record.label}</h2>
+            {records.map((record) => {
+              const balance = objectKind === 'person' ? personBalances.find((b) => b.personId === record.id) : undefined;
+              return (
+                <article className="record-card" key={record.id}>
+                  <div className="record-card__head">
+                    <div>
+                      <span>{objectKindLabel(locale, objectKind)}</span>
+                      <h2>{record.label}</h2>
+                      {balance && (
+                        <div style={{ marginTop: '4px' }}>
+                          {balance.receivable > 0 ? (
+                            <span className="badge badge--danger">
+                              {peopleDebtCopy(locale, 'owesShop')}: {balance.receivable.toFixed(2)}
+                            </span>
+                          ) : balance.payable > 0 ? (
+                            <span className="badge badge--info">
+                              {peopleDebtCopy(locale, 'shopOwes')}: {balance.payable.toFixed(2)}
+                            </span>
+                          ) : (
+                            <span className="badge badge--success">{peopleDebtCopy(locale, 'allSettled')}</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <div className="record-card__actions">
+                      {objectKind === 'person' && (
+                        <button
+                          aria-label={`${peopleDebtCopy(locale, 'debtStatement')}: ${record.label}`}
+                          className="icon-button"
+                          onClick={() => setSelectedStatementPersonId(record.id)}
+                          type="button"
+                        >
+                          <FileText aria-hidden="true" size={16} />
+                        </button>
+                      )}
+                      <button
+                        aria-label={`${objectCopy(locale, 'auditTitle')}: ${record.label}`}
+                        className="icon-button"
+                        onClick={() => void showAudit(record.id)}
+                        type="button"
+                      >
+                        <Clock3 aria-hidden="true" size={16} />
+                      </button>
+                      <button
+                        aria-label={`${objectCopy(locale, 'edit')}: ${record.label}`}
+                        className="icon-button"
+                        onClick={() => {
+                          setActiveTemplate(undefined);
+                          setRecordEditor(record);
+                        }}
+                        type="button"
+                      >
+                        <Edit3 aria-hidden="true" size={16} />
+                      </button>
+                      <button
+                        aria-label={`${objectCopy(locale, 'archive')}: ${record.label}`}
+                        className="icon-button icon-button--danger"
+                        onClick={() => setArchiveTarget({ id: record.id, kind: 'record', name: record.label })}
+                        type="button"
+                      >
+                        <Archive aria-hidden="true" size={16} />
+                      </button>
+                    </div>
                   </div>
-                  <div className="record-card__actions">
-                    <button
-                      aria-label={`${objectCopy(locale, 'auditTitle')}: ${record.label}`}
-                      className="icon-button"
-                      onClick={() => void showAudit(record.id)}
-                      type="button"
-                    >
-                      <Clock3 aria-hidden="true" size={16} />
-                    </button>
-                    <button
-                      aria-label={`${objectCopy(locale, 'edit')}: ${record.label}`}
-                      className="icon-button"
-                      onClick={() => {
-                        setActiveTemplate(undefined);
-                        setRecordEditor(record);
-                      }}
-                      type="button"
-                    >
-                      <Edit3 aria-hidden="true" size={16} />
-                    </button>
-                    <button
-                      aria-label={`${objectCopy(locale, 'archive')}: ${record.label}`}
-                      className="icon-button icon-button--danger"
-                      onClick={() => setArchiveTarget({ id: record.id, kind: 'record', name: record.label })}
-                      type="button"
-                    >
-                      <Archive aria-hidden="true" size={16} />
-                    </button>
-                  </div>
-                </div>
-                <dl>
-                  {properties.map((property) =>
-                    record.values[property.id] === undefined ? null : (
-                      <div key={property.id}>
-                        <dt>{property.name}</dt>
-                        <dd>{formatValue(record.values[property.id], property, relatedRecords, locale)}</dd>
-                      </div>
-                    ),
-                  )}
-                </dl>
-              </article>
-            ))}
+                  <dl>
+                    {properties.map((property) =>
+                      record.values[property.id] === undefined ? null : (
+                        <div key={property.id}>
+                          <dt>{property.name}</dt>
+                          <dd>{formatValue(record.values[property.id], property, relatedRecords, locale)}</dd>
+                        </div>
+                      ),
+                    )}
+                  </dl>
+                </article>
+              );
+            })}
           </div>
         </div>
 
@@ -900,6 +935,17 @@ export function ObjectWorkspace({ createRequest, locale, objectKind }: ObjectWor
       )}
 
       {auditEntries && <AuditDialog entries={auditEntries} locale={locale} onClose={() => setAuditEntries(undefined)} />}
+
+      {selectedStatementPersonId && (
+        <PersonStatementDialog
+          locale={locale}
+          onClose={() => {
+            setSelectedStatementPersonId(undefined);
+            void load();
+          }}
+          personId={selectedStatementPersonId}
+        />
+      )}
     </section>
   );
 }
