@@ -1,0 +1,72 @@
+import { app } from 'electron';
+import { spawn } from 'node:child_process';
+import { basename, dirname, resolve } from 'node:path';
+
+type SquirrelCommand =
+  | '--squirrel-install'
+  | '--squirrel-obsolete'
+  | '--squirrel-uninstall'
+  | '--squirrel-updated';
+
+type HandleSquirrelCommandOptions = Readonly<{
+  command?: string;
+  executablePath: string;
+  quit: () => void;
+  runUpdate: (updateExecutable: string, args: readonly string[], done: () => void) => void;
+}>;
+
+const commands = new Set<SquirrelCommand>([
+  '--squirrel-install',
+  '--squirrel-obsolete',
+  '--squirrel-uninstall',
+  '--squirrel-updated',
+]);
+
+function isSquirrelCommand(value: string | undefined): value is SquirrelCommand {
+  return value !== undefined && commands.has(value as SquirrelCommand);
+}
+
+export function handleSquirrelCommand({
+  command,
+  executablePath,
+  quit,
+  runUpdate,
+}: HandleSquirrelCommandOptions): boolean {
+  if (!isSquirrelCommand(command)) {
+    return false;
+  }
+
+  if (command === '--squirrel-obsolete') {
+    quit();
+    return true;
+  }
+
+  const updateExecutable = resolve(dirname(executablePath), '..', 'Update.exe');
+  const shortcutAction =
+    command === '--squirrel-uninstall' ? '--removeShortcut' : '--createShortcut';
+  runUpdate(updateExecutable, [shortcutAction, basename(executablePath)], quit);
+  return true;
+}
+
+export function handleWindowsSquirrelLifecycle(): boolean {
+  return handleSquirrelCommand({
+    command: process.argv[1],
+    executablePath: process.execPath,
+    quit: () => app.quit(),
+    runUpdate(updateExecutable, args, done) {
+      const child = spawn(updateExecutable, args, {
+        detached: true,
+        stdio: 'ignore',
+      });
+      let finished = false;
+      const finish = () => {
+        if (!finished) {
+          finished = true;
+          done();
+        }
+      };
+      child.once('error', finish);
+      child.once('close', finish);
+    },
+  });
+}
