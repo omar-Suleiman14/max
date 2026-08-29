@@ -679,6 +679,30 @@ export function registerIpcHandlers({
     trust(event);
     return database.reconciliation.listSessions(typeof limit === 'number' ? limit : undefined);
   });
+
+  // Local Backup & Recovery
+  ipcMain.handle(IPC_CHANNELS.backupCreate, (event, trigger: unknown) => {
+    trust(event);
+    return mutation(() =>
+      database.backups.createBackup(
+        typeof trigger === 'string' && ['daily', 'manual', 'pre-restore', 'weekly'].includes(trigger)
+          ? (trigger as 'daily' | 'manual' | 'pre-restore' | 'weekly')
+          : 'manual',
+      ),
+    );
+  });
+  ipcMain.handle(IPC_CHANNELS.backupList, (event) => {
+    trust(event);
+    return database.backups.listBackups();
+  });
+  ipcMain.handle(IPC_CHANNELS.backupVerify, (event, backupIdOrPath: unknown) => {
+    trust(event);
+    return database.backups.verifyBackup(parseId(backupIdOrPath));
+  });
+  ipcMain.handle(IPC_CHANNELS.backupRestore, (event, backupIdOrPath: unknown) => {
+    trust(event);
+    return mutation(() => database.backups.restoreBackup(parseId(backupIdOrPath)));
+  });
 }
 
 export function removeIpcHandlers(): void {

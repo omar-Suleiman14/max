@@ -17,6 +17,7 @@ const MIGRATIONS_TABLE_SQL = `
   ) STRICT;
 `;
 
+import { BackupService } from './backup-service';
 import { PersonDebtService } from './person-debt-service';
 import { QuickEntryService } from './quick-entry-service';
 import { ReconciliationRepository } from './reconciliation-repository';
@@ -26,6 +27,7 @@ import { ViewsPagesRepository } from './views-pages-repository';
 export class DatabaseService {
   readonly #database: DatabaseSync;
   readonly accounts: AccountRepository;
+  readonly backups: BackupService;
   readonly blueprints: BlueprintService;
   readonly objects: ObjectRepository;
   readonly personDebt: PersonDebtService;
@@ -47,6 +49,7 @@ export class DatabaseService {
       enableForeignKeyConstraints: true,
       timeout: 5_000,
     });
+    this.backups = new BackupService(filename);
     this.accounts = new AccountRepository(this.#database);
     this.transactions = new TransactionRepository(this.#database);
     this.reconciliation = new ReconciliationRepository(this.#database, this.transactions);

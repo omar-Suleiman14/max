@@ -1,5 +1,11 @@
 import type { AccountDefinition, AccountDraft } from './account-contract';
 import type {
+  BackupMetadata,
+  BackupTrigger,
+  BackupVerificationResult,
+  RestoreResult,
+} from './backup-contract';
+import type {
   Blueprint,
   BlueprintValidationResult,
   CompleteOnboardingDraft,
@@ -27,6 +33,10 @@ export const IPC_CHANNELS = {
   accountCreate: 'max:accounts:create',
   accountList: 'max:accounts:list',
   accountUpdate: 'max:accounts:update',
+  backupCreate: 'max:backup:create',
+  backupList: 'max:backup:list',
+  backupRestore: 'max:backup:restore',
+  backupVerify: 'max:backup:verify',
   blueprintExport: 'max:blueprints:export',
   blueprintImport: 'max:blueprints:import',
   blueprintValidate: 'max:blueprints:validate',
@@ -119,6 +129,12 @@ export type MaxApi = Readonly<{
     create: (draft: AccountDraft) => Promise<MutationResult<AccountDefinition>>;
     list: () => Promise<readonly AccountDefinition[]>;
     update: (id: string, draft: AccountDraft) => Promise<MutationResult<AccountDefinition>>;
+  }>;
+  backups: Readonly<{
+    create: (trigger?: BackupTrigger) => Promise<MutationResult<BackupMetadata>>;
+    list: () => Promise<readonly BackupMetadata[]>;
+    restore: (backupIdOrPath: string) => Promise<MutationResult<RestoreResult>>;
+    verify: (backupIdOrPath: string) => Promise<BackupVerificationResult>;
   }>;
   blueprints: Readonly<{
     export: () => Promise<Blueprint>;

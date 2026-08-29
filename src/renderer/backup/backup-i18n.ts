@@ -1,0 +1,68 @@
+import type { Locale } from '../app/i18n';
+
+const copy = {
+  en: {
+    backupCreated: 'Backup created successfully.',
+    backupHistory: 'Backup Snapshots',
+    backupSchedule: 'Auto-Backup Schedule',
+    backupVerified: 'Backup is valid and healthy.',
+    cancel: 'Cancel',
+    checksum: 'SHA-256 Checksum',
+    confirmRestore: 'Restore this backup? A safety snapshot of your current data will be taken automatically before restoring.',
+    corrupted: 'Corrupted',
+    createBackup: 'Create Local Backup Now',
+    daily: 'Daily (Every midnight)',
+    emptyBackups: 'No backups created yet. Max can create a local snapshot anytime.',
+    integrityOk: 'Integrity OK',
+    localBackupTitle: 'Local Backup & Recovery',
+    manual: 'Manual Only',
+    preRestore: 'Pre-Restore Safety Snapshot',
+    restore: 'Restore',
+    restoreFailed: 'Restore failed; safely rolled back to previous state.',
+    restoreSuccess: 'Database restored successfully from backup.',
+    restoring: 'Restoring...',
+    safetyGuarantee: 'Max takes an automatic safety snapshot before every restore to prevent accidental data loss.',
+    size: 'Size',
+    time: 'Created At',
+    trigger: 'Trigger',
+    valid: 'Valid',
+    verify: 'Verify Integrity',
+    verifying: 'Verifying...',
+    weekly: 'Weekly',
+  },
+  ar: {
+    backupCreated: 'تم إنشاء النسخة الاحتياطية بنجاح.',
+    backupHistory: 'النسخ الاحتياطية المحفوظة',
+    backupSchedule: 'جدولة النسخ الاحتياطي التلقائي',
+    backupVerified: 'النسخة الاحتياطية سليمة وصالحة تمامًا.',
+    cancel: 'إلغاء',
+    checksum: 'بصمة الحماية SHA-256',
+    confirmRestore: 'هل تريد استعادة هذه النسخة؟ سيتم أخذ نسخة أمان احتياطية لبياناتك الحالية تلقائيًا قبل الاستعادة.',
+    corrupted: 'تالفة',
+    createBackup: 'إنشاء نسخة احتياطية محلية الآن',
+    daily: 'يوميًا (منتصف الليل)',
+    emptyBackups: 'لا توجد نسخ احتياطية بعد. يمكنك إنشاء لقطة محلية في أي وقت.',
+    integrityOk: 'سليمة ومعتمدة',
+    localBackupTitle: 'النسخ الاحتياطي والاستعادة المحلية',
+    manual: 'يدوي فقط',
+    preRestore: 'نسخة أمان قبل الاستعادة',
+    restore: 'استعادة',
+    restoreFailed: 'فشلت الاستعادة؛ وتم التراجع بأمان إلى الحالة السابقة.',
+    restoreSuccess: 'تمت استعادة قاعدة البيانات بنجاح من النسخة الاحتياطية.',
+    restoring: 'جارٍ الاستعادة...',
+    safetyGuarantee: 'يأخذ ماكس نسخة أمان تلقائية قبل كل عملية استعادة لحماية بياناتك من أي فقدان.',
+    size: 'الحجم',
+    time: 'تاريخ الإنشاء',
+    trigger: 'النوع',
+    valid: 'صالحة',
+    verify: 'فحص السلامة',
+    verifying: 'جارٍ الفحص...',
+    weekly: 'أسبوعيًا',
+  },
+} as const;
+
+export type BackupCopyKey = keyof typeof copy.en;
+
+export function backupCopy(locale: Locale, key: BackupCopyKey): string {
+  return copy[locale][key];
+}

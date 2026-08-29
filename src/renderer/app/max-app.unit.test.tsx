@@ -262,6 +262,13 @@ const reconciliationApi = {
   openSession: vi.fn(),
 };
 
+const backupsApi = {
+  create: vi.fn(),
+  list: vi.fn(() => Promise.resolve([])),
+  restore: vi.fn(),
+  verify: vi.fn(() => Promise.resolve({ checksumMatch: true, sqliteIntegrityPassed: true, valid: true })),
+};
+
 beforeEach(() => {
   window.localStorage.clear();
   document.documentElement.lang = 'en';
@@ -289,6 +296,7 @@ beforeEach(() => {
     configurable: true,
     value: {
       accounts: accountsApi,
+      backups: backupsApi,
       blueprints: blueprintApi,
       objects: objectApi,
       pages: pagesApi,
@@ -312,6 +320,7 @@ beforeEach(() => {
   searchApi.query.mockClear();
   reconciliationApi.getCurrentSession.mockClear();
   reconciliationApi.listSessions.mockClear();
+  backupsApi.list.mockClear();
 });
 
 afterEach(() => cleanup());

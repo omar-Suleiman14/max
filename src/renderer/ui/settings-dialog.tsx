@@ -15,6 +15,7 @@ import { useEffect, useState, type KeyboardEvent } from 'react';
 import type { BackupSchedule, ShopMetadata } from '../../shared/blueprint-contract';
 import { type Locale, translate } from '../app/i18n';
 import type { ThemePreference } from '../app/preferences';
+import { BackupManager } from '../backup/backup-manager';
 import { BlueprintDialog } from '../blueprints/blueprint-dialog';
 import { Button } from './button';
 import { FocusedOverlay } from './focused-overlay';
@@ -183,6 +184,10 @@ export function SettingsDialog({
             >
               <span>{translate(locale, 'backupManual')}</span>
             </button>
+          </div>
+
+          <div style={{ marginTop: '16px' }}>
+            <BackupManager locale={locale} />
           </div>
         </section>
 

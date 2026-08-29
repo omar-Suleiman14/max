@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 import type { AccountDraft } from '../shared/account-contract';
+import type { BackupTrigger } from '../shared/backup-contract';
 import type { Blueprint, CompleteOnboardingDraft, ShopMetadata } from '../shared/blueprint-contract';
 import { IPC_CHANNELS, type MaxApi } from '../shared/ipc-contract';
 import type { ConfigurableRecordDraft, ObjectKind, PropertyDraft } from '../shared/object-contract';
@@ -21,6 +22,16 @@ const maxApi: MaxApi = Object.freeze({
       ipcRenderer.invoke(IPC_CHANNELS.accountList) as ReturnType<MaxApi['accounts']['list']>,
     update: (id: string, draft: AccountDraft) =>
       ipcRenderer.invoke(IPC_CHANNELS.accountUpdate, id, draft) as ReturnType<MaxApi['accounts']['update']>,
+  }),
+  backups: Object.freeze({
+    create: (trigger?: BackupTrigger) =>
+      ipcRenderer.invoke(IPC_CHANNELS.backupCreate, trigger) as ReturnType<MaxApi['backups']['create']>,
+    list: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.backupList) as ReturnType<MaxApi['backups']['list']>,
+    restore: (backupIdOrPath: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.backupRestore, backupIdOrPath) as ReturnType<MaxApi['backups']['restore']>,
+    verify: (backupIdOrPath: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.backupVerify, backupIdOrPath) as ReturnType<MaxApi['backups']['verify']>,
   }),
   blueprints: Object.freeze({
     export: () => ipcRenderer.invoke(IPC_CHANNELS.blueprintExport) as ReturnType<MaxApi['blueprints']['export']>,

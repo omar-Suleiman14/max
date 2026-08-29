@@ -565,6 +565,12 @@ kbd { display: inline-flex; min-width: 25px; min-height: 22px; align-items: cent
 .summary-col strong { font-size: 15px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
 .discrepancy-indicator { margin-bottom: 12px; }
 
+/* Backup Manager */
+.backup-manager { display: flex; flex-direction: column; gap: 16px; width: 100%; }
+.backup-manager__header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.backup-history { display: flex; flex-direction: column; gap: 10px; }
+
+
 
 
 
