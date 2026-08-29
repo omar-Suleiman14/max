@@ -1,4 +1,6 @@
 node_modules/
+.npm-cache/
+.cache/
 .vite/
 out/
 dist/
@@ -8,9 +10,9 @@ artifacts/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+*.tsbuildinfo
 .env
 .env.*
 !.env.example
 .DS_Store
 Thumbs.db
-
