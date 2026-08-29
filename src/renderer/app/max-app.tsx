@@ -20,6 +20,8 @@ import { EmptyPage } from '../ui/empty-page';
 import { FocusedOverlay } from '../ui/focused-overlay';
 import { SettingsDialog } from '../ui/settings-dialog';
 import { Sidebar } from '../ui/sidebar';
+import { AccountsWorkspace } from '../accounts/accounts-workspace';
+import { TransactionsWorkspace } from '../transactions/transactions-workspace';
 import { ObjectWorkspace } from '../objects/object-workspace';
 
 const pageLabels: Record<AppPage, TranslationKey> = {
@@ -197,7 +199,7 @@ export function MaxApp() {
 
   function beginCreation() {
     setCreateMenuOpen(false);
-    if (page === 'items' || page === 'people') {
+    if (page === 'items' || page === 'people' || page === 'accounts' || page === 'transactions') {
       setObjectCreateRequest((request) => request + 1);
     } else {
       setCreationNoticeOpen(true);
@@ -354,6 +356,18 @@ export function MaxApp() {
               key={page}
               locale={locale}
               objectKind={page === 'items' ? 'item' : 'person'}
+            />
+          ) : page === 'accounts' ? (
+            <AccountsWorkspace
+              createRequest={objectCreateRequest}
+              key="accounts"
+              locale={locale}
+            />
+          ) : page === 'transactions' ? (
+            <TransactionsWorkspace
+              createRequest={objectCreateRequest}
+              key="transactions"
+              locale={locale}
             />
           ) : (
             <EmptyPage

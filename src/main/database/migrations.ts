@@ -127,4 +127,84 @@ export const migrations: readonly Migration[] = [
       `);
     },
   },
+  {
+    id: 4,
+    name: 'accounts_and_transactions',
+    up(database) {
+      database.exec(`
+        CREATE TABLE shop_accounts (
+          id TEXT PRIMARY KEY NOT NULL,
+          name TEXT NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 80),
+          account_type TEXT NOT NULL CHECK (account_type IN ('cash', 'bank', 'wallet', 'other')),
+          initial_balance REAL NOT NULL DEFAULT 0.0 CHECK (initial_balance >= 0),
+          position INTEGER NOT NULL CHECK (position >= 0),
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          archived_at TEXT
+        ) STRICT;
+
+        CREATE UNIQUE INDEX shop_accounts_active_name
+          ON shop_accounts (name COLLATE NOCASE)
+          WHERE archived_at IS NULL;
+
+        CREATE TABLE shop_transactions (
+          id TEXT PRIMARY KEY NOT NULL,
+          transaction_type TEXT NOT NULL CHECK (transaction_type IN ('sale', 'purchase', 'expense', 'transfer', 'income', 'adjustment', 'reversal')),
+          total_amount REAL NOT NULL CHECK (total_amount >= 0),
+          paid_amount REAL NOT NULL CHECK (paid_amount >= 0),
+          payment_status TEXT NOT NULL CHECK (payment_status IN ('paid', 'partial', 'unpaid')),
+          person_id TEXT REFERENCES object_records(id) ON DELETE RESTRICT,
+          item_id TEXT REFERENCES object_records(id) ON DELETE RESTRICT,
+          note TEXT,
+          reversal_of_id TEXT REFERENCES shop_transactions(id) ON DELETE RESTRICT,
+          reversed_at TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          archived_at TEXT
+        ) STRICT;
+
+        CREATE INDEX shop_transactions_created_at
+          ON shop_transactions (created_at DESC);
+
+        CREATE INDEX shop_transactions_reversal
+          ON shop_transactions (reversal_of_id);
+
+        CREATE TABLE shop_money_movements (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          transaction_id TEXT NOT NULL REFERENCES shop_transactions(id) ON DELETE RESTRICT,
+          account_id TEXT NOT NULL REFERENCES shop_accounts(id) ON DELETE RESTRICT,
+          movement_type TEXT NOT NULL CHECK (movement_type IN ('inflow', 'outflow')),
+          amount REAL NOT NULL CHECK (amount > 0),
+          created_at TEXT NOT NULL,
+          archived_at TEXT
+        ) STRICT;
+
+        CREATE INDEX shop_money_movements_tx
+          ON shop_money_movements (transaction_id);
+
+        CREATE INDEX shop_money_movements_account
+          ON shop_money_movements (account_id);
+
+        CREATE TABLE object_audit_log_v4 (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          entity_type TEXT NOT NULL CHECK (entity_type IN ('property', 'record', 'template', 'account', 'transaction')),
+          entity_id TEXT NOT NULL,
+          action TEXT NOT NULL CHECK (action IN ('created', 'updated', 'archived')),
+          actor TEXT NOT NULL CHECK (actor = 'local-user'),
+          snapshot_json TEXT NOT NULL CHECK (json_valid(snapshot_json)),
+          created_at TEXT NOT NULL
+        ) STRICT;
+
+        INSERT INTO object_audit_log_v4 (id, entity_type, entity_id, action, actor, snapshot_json, created_at)
+          SELECT id, entity_type, entity_id, action, actor, snapshot_json, created_at FROM object_audit_log;
+
+        DROP TABLE object_audit_log;
+
+        ALTER TABLE object_audit_log_v4 RENAME TO object_audit_log;
+
+        CREATE INDEX object_audit_log_entity
+          ON object_audit_log (entity_id, id DESC);
+      `);
+    },
+  },
 ];

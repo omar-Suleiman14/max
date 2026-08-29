@@ -1,11 +1,13 @@
 import { DatabaseSync } from 'node:sqlite';
 
 import type { DatabaseHealth } from '../../shared/ipc-contract';
+import { AccountRepository } from './account-repository';
 import { BlueprintService } from './blueprint-service';
 import { migrations, type Migration } from './migrations';
 import { ObjectRepository } from './object-repository';
 import { ShopMetadataRepository } from './shop-metadata-repository';
 import { TemplateRepository } from './template-repository';
+import { TransactionRepository } from './transaction-repository';
 
 const MIGRATIONS_TABLE_SQL = `
   CREATE TABLE IF NOT EXISTS system_migrations (
@@ -17,10 +19,12 @@ const MIGRATIONS_TABLE_SQL = `
 
 export class DatabaseService {
   readonly #database: DatabaseSync;
+  readonly accounts: AccountRepository;
   readonly blueprints: BlueprintService;
   readonly objects: ObjectRepository;
   readonly shopMetadata: ShopMetadataRepository;
   readonly templates: TemplateRepository;
+  readonly transactions: TransactionRepository;
   #initialized = false;
 
   constructor(filename: string) {
@@ -32,6 +36,8 @@ export class DatabaseService {
       enableForeignKeyConstraints: true,
       timeout: 5_000,
     });
+    this.accounts = new AccountRepository(this.#database);
+    this.transactions = new TransactionRepository(this.#database);
     this.objects = new ObjectRepository(this.#database);
     this.templates = new TemplateRepository(this.#database);
     this.shopMetadata = new ShopMetadataRepository(this.#database);

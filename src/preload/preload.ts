@@ -1,11 +1,23 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
+import type { AccountDraft } from '../shared/account-contract';
 import type { Blueprint, CompleteOnboardingDraft, ShopMetadata } from '../shared/blueprint-contract';
 import { IPC_CHANNELS, type MaxApi } from '../shared/ipc-contract';
 import type { ConfigurableRecordDraft, ObjectKind, PropertyDraft } from '../shared/object-contract';
 import type { TemplateDraft } from '../shared/template-contract';
+import type { TransactionDraft, TransferDraft } from '../shared/transaction-contract';
 
 const maxApi: MaxApi = Object.freeze({
+  accounts: Object.freeze({
+    archive: (id: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.accountArchive, id) as ReturnType<MaxApi['accounts']['archive']>,
+    create: (draft: AccountDraft) =>
+      ipcRenderer.invoke(IPC_CHANNELS.accountCreate, draft) as ReturnType<MaxApi['accounts']['create']>,
+    list: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.accountList) as ReturnType<MaxApi['accounts']['list']>,
+    update: (id: string, draft: AccountDraft) =>
+      ipcRenderer.invoke(IPC_CHANNELS.accountUpdate, id, draft) as ReturnType<MaxApi['accounts']['update']>,
+  }),
   blueprints: Object.freeze({
     export: () => ipcRenderer.invoke(IPC_CHANNELS.blueprintExport) as ReturnType<MaxApi['blueprints']['export']>,
     import: (blueprint: Blueprint) =>
@@ -54,6 +66,22 @@ const maxApi: MaxApi = Object.freeze({
       ipcRenderer.invoke(IPC_CHANNELS.templateList, objectKind) as ReturnType<MaxApi['templates']['list']>,
     update: (id: string, draft: TemplateDraft) =>
       ipcRenderer.invoke(IPC_CHANNELS.templateUpdate, id, draft) as ReturnType<MaxApi['templates']['update']>,
+  }),
+  transactions: Object.freeze({
+    create: (draft: TransactionDraft) =>
+      ipcRenderer.invoke(IPC_CHANNELS.transactionCreate, draft) as ReturnType<MaxApi['transactions']['create']>,
+    createTransfer: (draft: TransferDraft) =>
+      ipcRenderer.invoke(IPC_CHANNELS.transactionTransfer, draft) as ReturnType<MaxApi['transactions']['createTransfer']>,
+    get: (id: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.transactionGet, id) as ReturnType<MaxApi['transactions']['get']>,
+    getSummary: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.transactionSummary) as ReturnType<MaxApi['transactions']['getSummary']>,
+    list: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.transactionList) as ReturnType<MaxApi['transactions']['list']>,
+    reverse: (id: string, reason?: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.transactionReverse, id, reason) as ReturnType<MaxApi['transactions']['reverse']>,
+    undo: (id: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.transactionUndo, id) as ReturnType<MaxApi['transactions']['undo']>,
   }),
 });
 

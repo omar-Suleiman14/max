@@ -1,3 +1,4 @@
+import type { AccountDefinition, AccountDraft } from './account-contract';
 import type {
   Blueprint,
   BlueprintValidationResult,
@@ -14,8 +15,18 @@ import type {
   PropertyDraft,
 } from './object-contract';
 import type { TemplateDefinition, TemplateDraft } from './template-contract';
+import type {
+  LedgerSummary,
+  TransactionDraft,
+  TransactionRecord,
+  TransferDraft,
+} from './transaction-contract';
 
 export const IPC_CHANNELS = {
+  accountArchive: 'max:accounts:archive',
+  accountCreate: 'max:accounts:create',
+  accountList: 'max:accounts:list',
+  accountUpdate: 'max:accounts:update',
   blueprintExport: 'max:blueprints:export',
   blueprintImport: 'max:blueprints:import',
   blueprintValidate: 'max:blueprints:validate',
@@ -36,6 +47,13 @@ export const IPC_CHANNELS = {
   templateCreate: 'max:templates:create',
   templateList: 'max:templates:list',
   templateUpdate: 'max:templates:update',
+  transactionCreate: 'max:transactions:create',
+  transactionGet: 'max:transactions:get',
+  transactionList: 'max:transactions:list',
+  transactionReverse: 'max:transactions:reverse',
+  transactionSummary: 'max:transactions:summary',
+  transactionTransfer: 'max:transactions:transfer',
+  transactionUndo: 'max:transactions:undo',
 } as const;
 
 export type DatabaseHealth = Readonly<{
@@ -54,6 +72,12 @@ export type SystemHealth = Readonly<{
 }>;
 
 export type MaxApi = Readonly<{
+  accounts: Readonly<{
+    archive: (id: string) => Promise<MutationResult<null>>;
+    create: (draft: AccountDraft) => Promise<MutationResult<AccountDefinition>>;
+    list: () => Promise<readonly AccountDefinition[]>;
+    update: (id: string, draft: AccountDraft) => Promise<MutationResult<AccountDefinition>>;
+  }>;
   blueprints: Readonly<{
     export: () => Promise<Blueprint>;
     import: (blueprint: Blueprint) => Promise<MutationResult<Blueprint>>;
@@ -83,5 +107,14 @@ export type MaxApi = Readonly<{
     create: (draft: TemplateDraft) => Promise<MutationResult<TemplateDefinition>>;
     list: (objectKind: ObjectKind) => Promise<readonly TemplateDefinition[]>;
     update: (id: string, draft: TemplateDraft) => Promise<MutationResult<TemplateDefinition>>;
+  }>;
+  transactions: Readonly<{
+    create: (draft: TransactionDraft) => Promise<MutationResult<TransactionRecord>>;
+    createTransfer: (draft: TransferDraft) => Promise<MutationResult<TransactionRecord>>;
+    get: (id: string) => Promise<TransactionRecord | null>;
+    getSummary: () => Promise<LedgerSummary>;
+    list: () => Promise<readonly TransactionRecord[]>;
+    reverse: (id: string, reason?: string) => Promise<MutationResult<TransactionRecord>>;
+    undo: (id: string) => Promise<MutationResult<null>>;
   }>;
 }>;

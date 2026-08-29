@@ -1,5 +1,10 @@
 import { app, ipcMain } from 'electron';
 
+import {
+  accountTypes,
+  type AccountDraft,
+  type AccountType,
+} from '../../shared/account-contract';
 import type {
   Blueprint,
   CompleteOnboardingDraft,
@@ -16,6 +21,15 @@ import {
   type PropertyValue,
 } from '../../shared/object-contract';
 import type { TemplateDraft } from '../../shared/template-contract';
+import {
+  movementTypes,
+  transactionTypes,
+  type MoneyMovementDraft,
+  type MovementType,
+  type TransactionDraft,
+  type TransactionType,
+  type TransferDraft,
+} from '../../shared/transaction-contract';
 import type { DatabaseService } from '../database/database-service';
 import { ObjectDomainError } from '../database/object-repository';
 import type { PlatformAdapter } from '../platform/platform-adapter';
@@ -162,6 +176,87 @@ function parseCompleteOnboardingDraft(value: unknown): CompleteOnboardingDraft {
   };
 }
 
+function parseAccountDraft(value: unknown): AccountDraft {
+  if (!isObject(value) || typeof value.name !== 'string') {
+    throw new ObjectDomainError('invalid-input', 'A valid account name is required.');
+  }
+  if (!accountTypes.includes(value.accountType as AccountType)) {
+    throw new ObjectDomainError('invalid-input', 'A valid account type is required.');
+  }
+  const initialBalance = Number(value.initialBalance ?? 0);
+  if (!Number.isFinite(initialBalance) || initialBalance < 0) {
+    throw new ObjectDomainError('invalid-input', 'Initial balance must be a non-negative number.');
+  }
+
+  return {
+    accountType: value.accountType as AccountType,
+    initialBalance,
+    name: value.name,
+  };
+}
+
+function parseTransactionDraft(value: unknown): TransactionDraft {
+  if (!isObject(value)) {
+    throw new ObjectDomainError('invalid-input', 'A valid transaction draft is required.');
+  }
+  if (!transactionTypes.includes(value.transactionType as TransactionType)) {
+    throw new ObjectDomainError('invalid-input', 'A valid transaction type is required.');
+  }
+  const totalAmount = Number(value.totalAmount);
+  if (!Number.isFinite(totalAmount) || totalAmount < 0) {
+    throw new ObjectDomainError('invalid-input', 'Total amount must be a non-negative number.');
+  }
+  const paidAmount = Number(value.paidAmount ?? 0);
+  if (!Number.isFinite(paidAmount) || paidAmount < 0) {
+    throw new ObjectDomainError('invalid-input', 'Paid amount must be a non-negative number.');
+  }
+
+  const movements: MoneyMovementDraft[] = [];
+  if (Array.isArray(value.movements)) {
+    for (const m of value.movements) {
+      if (!isObject(m) || typeof m.accountId !== 'string' || !movementTypes.includes(m.movementType as MovementType)) {
+        throw new ObjectDomainError('invalid-input', 'Invalid money movement.');
+      }
+      const amount = Number(m.amount);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        throw new ObjectDomainError('invalid-input', 'Movement amount must be greater than zero.');
+      }
+      movements.push({
+        accountId: m.accountId,
+        amount,
+        movementType: m.movementType as MovementType,
+      });
+    }
+  }
+
+  return {
+    itemId: typeof value.itemId === 'string' ? value.itemId : undefined,
+    movements,
+    note: typeof value.note === 'string' ? value.note : undefined,
+    paidAmount,
+    personId: typeof value.personId === 'string' ? value.personId : undefined,
+    totalAmount,
+    transactionType: value.transactionType as TransactionType,
+  };
+}
+
+function parseTransferDraft(value: unknown): TransferDraft {
+  if (!isObject(value) || typeof value.fromAccountId !== 'string' || typeof value.toAccountId !== 'string') {
+    throw new ObjectDomainError('invalid-input', 'A valid transfer draft is required.');
+  }
+  const amount = Number(value.amount);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new ObjectDomainError('invalid-input', 'Transfer amount must be greater than zero.');
+  }
+
+  return {
+    amount,
+    fromAccountId: value.fromAccountId,
+    note: typeof value.note === 'string' ? value.note : undefined,
+    toAccountId: value.toAccountId,
+  };
+}
+
 function mutation<T>(work: () => T): MutationResult<T> {
   try {
     return { ok: true, value: work() };
@@ -298,6 +393,62 @@ export function registerIpcHandlers({
       }
       return database.shopMetadata.completeOnboarding(parsed);
     });
+  });
+
+  // Accounts
+  ipcMain.handle(IPC_CHANNELS.accountList, (event) => {
+    trust(event);
+    return database.accounts.listAccounts();
+  });
+  ipcMain.handle(IPC_CHANNELS.accountCreate, (event, draft: unknown) => {
+    trust(event);
+    return mutation(() => database.accounts.createAccount(parseAccountDraft(draft)));
+  });
+  ipcMain.handle(IPC_CHANNELS.accountUpdate, (event, id: unknown, draft: unknown) => {
+    trust(event);
+    return mutation(() => database.accounts.updateAccount(parseId(id), parseAccountDraft(draft)));
+  });
+  ipcMain.handle(IPC_CHANNELS.accountArchive, (event, id: unknown) => {
+    trust(event);
+    return mutation(() => {
+      database.accounts.archiveAccount(parseId(id));
+      return null;
+    });
+  });
+
+  // Transactions
+  ipcMain.handle(IPC_CHANNELS.transactionList, (event) => {
+    trust(event);
+    return database.transactions.listTransactions();
+  });
+  ipcMain.handle(IPC_CHANNELS.transactionGet, (event, id: unknown) => {
+    trust(event);
+    return database.transactions.getTransaction(parseId(id));
+  });
+  ipcMain.handle(IPC_CHANNELS.transactionCreate, (event, draft: unknown) => {
+    trust(event);
+    return mutation(() => database.transactions.createTransaction(parseTransactionDraft(draft)));
+  });
+  ipcMain.handle(IPC_CHANNELS.transactionTransfer, (event, draft: unknown) => {
+    trust(event);
+    return mutation(() => database.transactions.createTransfer(parseTransferDraft(draft)));
+  });
+  ipcMain.handle(IPC_CHANNELS.transactionReverse, (event, id: unknown, reason: unknown) => {
+    trust(event);
+    return mutation(() =>
+      database.transactions.reverseTransaction(parseId(id), typeof reason === 'string' ? reason : undefined),
+    );
+  });
+  ipcMain.handle(IPC_CHANNELS.transactionUndo, (event, id: unknown) => {
+    trust(event);
+    return mutation(() => {
+      database.transactions.undoTransaction(parseId(id));
+      return null;
+    });
+  });
+  ipcMain.handle(IPC_CHANNELS.transactionSummary, (event) => {
+    trust(event);
+    return database.transactions.getLedgerSummary();
   });
 }
 

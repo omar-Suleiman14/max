@@ -77,6 +77,103 @@ const shopApi = {
   }),
 };
 
+const accountsApi = {
+  archive: vi.fn(() => Promise.resolve({ ok: true as const, value: null })),
+  create: vi.fn((draft: { accountType: 'cash'; initialBalance: number; name: string }) =>
+    Promise.resolve({
+      ok: true as const,
+      value: {
+        ...draft,
+        balance: draft.initialBalance,
+        createdAt: '2026-08-29',
+        id: 'acc-1',
+        position: 0,
+        updatedAt: '2026-08-29',
+      },
+    }),
+  ),
+  list: vi.fn(() => Promise.resolve([])),
+  update: vi.fn((id: string, draft: { accountType: 'cash'; initialBalance: number; name: string }) =>
+    Promise.resolve({
+      ok: true as const,
+      value: {
+        ...draft,
+        balance: draft.initialBalance,
+        createdAt: '2026-08-29',
+        id,
+        position: 0,
+        updatedAt: '2026-08-29',
+      },
+    }),
+  ),
+};
+
+import type { TransactionDraft, TransferDraft } from '../../shared/transaction-contract';
+
+const transactionsApi = {
+  create: vi.fn((draft: TransactionDraft) =>
+    Promise.resolve({
+      ok: true as const,
+      value: {
+        createdAt: '2026-08-29',
+        id: 'tx-1',
+        movements: [],
+        note: draft.note,
+        paidAmount: draft.paidAmount,
+        paymentStatus: 'paid' as const,
+        totalAmount: draft.totalAmount,
+        transactionType: draft.transactionType,
+        updatedAt: '2026-08-29',
+      },
+    }),
+  ),
+  createTransfer: vi.fn((draft: TransferDraft) =>
+    Promise.resolve({
+      ok: true as const,
+      value: {
+        createdAt: '2026-08-29',
+        id: 'tx-2',
+        movements: [],
+        note: draft.note,
+        paidAmount: draft.amount,
+        paymentStatus: 'paid' as const,
+        totalAmount: draft.amount,
+        transactionType: 'transfer' as const,
+        updatedAt: '2026-08-29',
+      },
+    }),
+  ),
+  get: vi.fn(() => Promise.resolve(null)),
+  getSummary: vi.fn(() =>
+    Promise.resolve({
+      totalBank: 0,
+      totalCash: 0,
+      totalExpenses: 0,
+      totalOverall: 0,
+      totalSales: 0,
+      totalWallet: 0,
+    }),
+  ),
+  list: vi.fn(() => Promise.resolve([])),
+  reverse: vi.fn((id: string) =>
+    Promise.resolve({
+      ok: true as const,
+      value: {
+        createdAt: '2026-08-29',
+        id: 'rev-1',
+        movements: [],
+        paidAmount: 100,
+        paymentStatus: 'paid' as const,
+        reversalOfId: id,
+        totalAmount: 100,
+        transactionType: 'reversal' as const,
+        updatedAt: '2026-08-29',
+      },
+    }),
+  ),
+  undo: vi.fn(() => Promise.resolve({ ok: true as const, value: null })),
+};
+
 beforeEach(() => {
   window.localStorage.clear();
   document.documentElement.lang = 'en';
@@ -103,16 +200,20 @@ beforeEach(() => {
   Object.defineProperty(window, 'maxApi', {
     configurable: true,
     value: {
+      accounts: accountsApi,
       blueprints: blueprintApi,
       objects: objectApi,
       shop: shopApi,
       system: { getHealth },
       templates: templateApi,
+      transactions: transactionsApi,
     },
   });
   getHealth.mockClear();
   shopApi.getMetadata.mockClear();
   shopApi.completeOnboarding.mockClear();
+  accountsApi.list.mockClear();
+  transactionsApi.list.mockClear();
 });
 
 afterEach(() => cleanup());
