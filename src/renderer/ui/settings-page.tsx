@@ -295,8 +295,7 @@ export function SettingsPage({
             </div>
 
             <div className="settings-control-stack">
-              <div className="settings-control-copy"><strong>{locale === 'ar' ? 'المهملات' : 'Trash'}</strong><small>{locale === 'ar' ? 'تبقى الصفحات هنا إلى أن تستعيدها أو تفرغ المهملات.' : 'Pages stay here until you restore them or empty the trash.'}</small></div>
-              {trashedPages.length === 0 ? <div className="settings-empty-row"><Trash2 aria-hidden="true" size={17} /><span>{locale === 'ar' ? 'المهملات فارغة' : 'Trash is empty'}</span></div> : <div className="settings-trash-list">{trashedPages.map((trashedPage) => <div key={trashedPage.id}><span>{trashedPage.title || (locale === 'ar' ? 'صفحة بدون عنوان' : 'Untitled page')}</span><Button onClick={() => { restoreTrashedPage(trashedPage.id); setTrashedPages(loadTrashedPages()); }}>{locale === 'ar' ? 'استعادة' : 'Restore'}</Button></div>)}</div>}
+              {trashedPages.length === 0 ? <div className="settings-empty-row"><Trash2 aria-hidden="true" size={17} /><span>{locale === 'ar' ? 'المهملات فارغة' : 'Trash is empty'}</span></div> : <div className="settings-trash-list">{trashedPages.map((trashedPage) => <div key={trashedPage.id}><span>{trashedPage.title || (locale === 'ar' ? 'صفحة بدون عنوان' : 'Untitled page')}</span><Button onClick={() => { void restoreTrashedPage(trashedPage.id).then(() => setTrashedPages(loadTrashedPages())); }}>{locale === 'ar' ? 'استعادة' : 'Restore'}</Button></div>)}</div>}
               {trashedPages.length > 0 && <Button onClick={() => { emptyPageTrash(); setTrashedPages([]); }} variant="consequential">{locale === 'ar' ? 'إفراغ المهملات' : 'Empty trash'}</Button>}
             </div>
 

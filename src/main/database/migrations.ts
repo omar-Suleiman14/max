@@ -548,4 +548,52 @@ export const migrations: readonly Migration[] = [
       `);
     },
   },
+  {
+    id: 10,
+    name: 'semantic_roles',
+    up(database) {
+      database.exec(`
+        ALTER TABLE object_properties ADD COLUMN semantic_role TEXT
+          CHECK (semantic_role IS NULL OR semantic_role IN ('DISPLAY_NAME', 'PRICE', 'QUANTITY'));
+
+        CREATE UNIQUE INDEX object_properties_semantic_role_unique
+          ON object_properties (object_kind, semantic_role)
+          WHERE archived_at IS NULL AND semantic_role IS NOT NULL;
+      `);
+    },
+  },
+  {
+    id: 11,
+    name: 'inventory_and_quantity',
+    up(database) {
+      database.exec(`
+        ALTER TABLE object_records ADD COLUMN current_quantity INTEGER;
+
+        ALTER TABLE shop_transactions ADD COLUMN quantity INTEGER;
+        ALTER TABLE shop_transactions ADD COLUMN provider_fee REAL NOT NULL DEFAULT 0.0;
+        ALTER TABLE shop_transactions ADD COLUMN service_fee REAL NOT NULL DEFAULT 0.0;
+
+        CREATE TABLE inventory_movements (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          item_id TEXT NOT NULL REFERENCES object_records(id) ON DELETE RESTRICT,
+          operation_id TEXT REFERENCES shop_transactions(id) ON DELETE RESTRICT,
+          quantity_delta INTEGER NOT NULL,
+          reason TEXT NOT NULL CHECK (reason IN ('opening', 'sale', 'purchase', 'adjustment', 'damaged', 'refund', 'reversal')),
+          created_at TEXT NOT NULL
+        ) STRICT;
+
+        CREATE INDEX inventory_movements_item ON inventory_movements (item_id, id DESC);
+        CREATE INDEX inventory_movements_operation ON inventory_movements (operation_id);
+      `);
+    },
+  },
+  {
+    id: 12,
+    name: 'account_fee_config',
+    up(database) {
+      database.exec(`
+        ALTER TABLE shop_accounts ADD COLUMN fee_config_json TEXT;
+      `);
+    },
+  },
 ];

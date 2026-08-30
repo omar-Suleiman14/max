@@ -22,6 +22,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 
 import type { AppPage, CustomPage, SettingsSectionId } from '../app/app-types';
 import { type Locale, translate } from '../app/i18n';
+import { AuthWidget } from '../auth/auth-provider';
 import { PageIconRenderer } from './page-icon-renderer';
 
 type SidebarProps = Readonly<{
@@ -411,6 +412,7 @@ export function Sidebar({
 
       {/* FOOTER ACTIONS (DATABASES ABOVE SETTINGS) */}
       <div className="sidebar__footer">
+        {!collapsed && <AuthWidget locale={locale} />}
         {!isSettings && <SidebarAction collapsed={collapsed} icon={Database} isActive={page === 'databases'} label={translate(locale, 'databases')} onClick={() => onNavigate('databases')} />}
         <SidebarAction
           collapsed={collapsed}

@@ -27,8 +27,11 @@ type TransactionRow = Readonly<{
   payment_status: PaymentStatus;
   person_id: string | null;
   person_label: string | null;
+  provider_fee: number;
+  quantity: number | null;
   reversal_of_id: string | null;
   reversed_at: string | null;
+  service_fee: number;
   total_amount: number;
   transaction_type: TransactionType;
   updated_at: string;
@@ -122,8 +125,11 @@ export class TransactionRepository {
       paymentStatus: row.payment_status,
       personId: row.person_id ?? undefined,
       personLabel: row.person_label ?? undefined,
+      providerFee: row.provider_fee ? Math.round(row.provider_fee * 100) / 100 : undefined,
+      quantity: row.quantity ?? undefined,
       reversalOfId: row.reversal_of_id ?? undefined,
       reversedAt: row.reversed_at ?? undefined,
+      serviceFee: row.service_fee ? Math.round(row.service_fee * 100) / 100 : undefined,
       totalAmount: Math.round(row.total_amount * 100) / 100,
       transactionType: row.transaction_type,
       updatedAt: row.updated_at,
@@ -196,8 +202,11 @@ export class TransactionRepository {
       paymentStatus: row.payment_status,
       personId: row.person_id ?? undefined,
       personLabel: row.person_label ?? undefined,
+      providerFee: row.provider_fee ? Math.round(row.provider_fee * 100) / 100 : undefined,
+      quantity: row.quantity ?? undefined,
       reversalOfId: row.reversal_of_id ?? undefined,
       reversedAt: row.reversed_at ?? undefined,
+      serviceFee: row.service_fee ? Math.round(row.service_fee * 100) / 100 : undefined,
       totalAmount: Math.round(row.total_amount * 100) / 100,
       transactionType: row.transaction_type,
       updatedAt: row.updated_at,
@@ -217,12 +226,46 @@ export class TransactionRepository {
           : 'unpaid';
 
     return this.#transaction(() => {
+      // Inventory: oversell prevention + stock mutation for sale/purchase
+      if (draft.itemId && draft.quantity && draft.quantity > 0) {
+        const itemRow = this.database
+          .prepare('SELECT current_quantity FROM object_records WHERE id = ? AND archived_at IS NULL')
+          .get(draft.itemId) as { current_quantity: number | null } | undefined;
+
+        if (draft.transactionType === 'sale') {
+          const currentQty = itemRow?.current_quantity;
+          if (currentQty !== null && currentQty !== undefined && currentQty < draft.quantity) {
+            throw new ObjectDomainError(
+              'invalid-input',
+              `Only ${currentQty} available in stock.`,
+            );
+          }
+          // Deduct stock
+          this.database
+            .prepare('UPDATE object_records SET current_quantity = COALESCE(current_quantity, 0) - ? WHERE id = ?')
+            .run(draft.quantity, draft.itemId);
+          // Create inventory movement
+          this.database
+            .prepare('INSERT INTO inventory_movements (item_id, operation_id, quantity_delta, reason, created_at) VALUES (?, ?, ?, ?, ?)')
+            .run(draft.itemId, id, -draft.quantity, 'sale', now);
+        } else if (draft.transactionType === 'purchase') {
+          // Add stock
+          this.database
+            .prepare('UPDATE object_records SET current_quantity = COALESCE(current_quantity, 0) + ? WHERE id = ?')
+            .run(draft.quantity, draft.itemId);
+          this.database
+            .prepare('INSERT INTO inventory_movements (item_id, operation_id, quantity_delta, reason, created_at) VALUES (?, ?, ?, ?, ?)')
+            .run(draft.itemId, id, draft.quantity, 'purchase', now);
+        }
+      }
+
       this.database
         .prepare(`
           INSERT INTO shop_transactions (
             id, transaction_type, total_amount, paid_amount, payment_status,
-            person_id, item_id, note, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            person_id, item_id, note, quantity, provider_fee, service_fee,
+            created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `)
         .run(
           id,
@@ -233,6 +276,9 @@ export class TransactionRepository {
           draft.personId ?? null,
           draft.itemId ?? null,
           draft.note ?? null,
+          draft.quantity ?? null,
+          draft.providerFee ?? 0,
+          draft.serviceFee ?? 0,
           now,
           now,
         );
@@ -259,30 +305,35 @@ export class TransactionRepository {
     const now = new Date().toISOString();
 
     return this.#transaction(() => {
+      const providerFee = Math.round((Number(draft.providerFee) || 0) * 100) / 100;
+      const serviceFee = Math.round((Number(draft.serviceFee) || 0) * 100) / 100;
+      const outflowAmount = Math.round((draft.amount + providerFee) * 100) / 100;
+      const inflowAmount = Math.round((draft.amount + serviceFee) * 100) / 100;
+
       this.database
         .prepare(`
           INSERT INTO shop_transactions (
             id, transaction_type, total_amount, paid_amount, payment_status,
-            note, created_at, updated_at
-          ) VALUES (?, 'transfer', ?, ?, 'paid', ?, ?, ?)
+            note, provider_fee, service_fee, created_at, updated_at
+          ) VALUES (?, 'transfer', ?, ?, 'paid', ?, ?, ?, ?, ?)
         `)
-        .run(id, draft.amount, draft.amount, draft.note ?? null, now, now);
+        .run(id, draft.amount, draft.amount, draft.note ?? null, providerFee, serviceFee, now, now);
 
-      // Outflow from source account
+      // Outflow from source account (amount + provider fee)
       this.database
         .prepare(`
           INSERT INTO shop_money_movements (transaction_id, account_id, movement_type, amount, created_at)
           VALUES (?, ?, 'outflow', ?, ?)
         `)
-        .run(id, draft.fromAccountId, draft.amount, now);
+        .run(id, draft.fromAccountId, outflowAmount, now);
 
-      // Inflow to destination account
+      // Inflow to destination account (amount + service fee)
       this.database
         .prepare(`
           INSERT INTO shop_money_movements (transaction_id, account_id, movement_type, amount, created_at)
           VALUES (?, ?, 'inflow', ?, ?)
         `)
-        .run(id, draft.toAccountId, draft.amount, now);
+        .run(id, draft.toAccountId, inflowAmount, now);
 
       const created = this.getTransaction(id);
       if (!created) throw new Error('Transfer creation could not be verified.');
@@ -361,6 +412,21 @@ export class TransactionRepository {
     const now = new Date().toISOString();
 
     this.#transaction(() => {
+      // Restore inventory if the transaction had inventory movements
+      const invMovements = this.database
+        .prepare('SELECT item_id, quantity_delta FROM inventory_movements WHERE operation_id = ?')
+        .all(id) as { item_id: string; quantity_delta: number }[];
+      for (const inv of invMovements) {
+        // Reverse: add back what was deducted or deduct what was added
+        this.database
+          .prepare('UPDATE object_records SET current_quantity = COALESCE(current_quantity, 0) - ? WHERE id = ?')
+          .run(inv.quantity_delta, inv.item_id);
+      }
+      // Delete the inventory movements
+      this.database
+        .prepare('DELETE FROM inventory_movements WHERE operation_id = ?')
+        .run(id);
+
       this.database
         .prepare('UPDATE shop_transactions SET archived_at = ?, updated_at = ? WHERE id = ?')
         .run(now, now, id);
@@ -495,6 +561,9 @@ export class TransactionRepository {
       note: draft.note?.trim() || undefined,
       paidAmount: Math.round(paidAmount * 100) / 100,
       personId: draft.personId,
+      providerFee: draft.providerFee ? Math.round(Number(draft.providerFee) * 100) / 100 : undefined,
+      quantity: draft.quantity ? Math.max(1, Math.round(Number(draft.quantity))) : undefined,
+      serviceFee: draft.serviceFee ? Math.round(Number(draft.serviceFee) * 100) / 100 : undefined,
       totalAmount: Math.round(totalAmount * 100) / 100,
       transactionType: draft.transactionType,
     };

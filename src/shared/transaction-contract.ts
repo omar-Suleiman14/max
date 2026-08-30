@@ -34,6 +34,9 @@ export type TransactionDraft = Readonly<{
   note?: string;
   paidAmount: number;
   personId?: string;
+  providerFee?: number;
+  quantity?: number;
+  serviceFee?: number;
   totalAmount: number;
   transactionType: TransactionType;
 }>;
@@ -42,6 +45,8 @@ export type TransferDraft = Readonly<{
   amount: number;
   fromAccountId: string;
   note?: string;
+  providerFee?: number;
+  serviceFee?: number;
   toAccountId: string;
 }>;
 
@@ -56,8 +61,11 @@ export type TransactionRecord = Readonly<{
   paymentStatus: PaymentStatus;
   personId?: string;
   personLabel?: string;
+  providerFee?: number;
+  quantity?: number;
   reversalOfId?: string;
   reversedAt?: string;
+  serviceFee?: number;
   totalAmount: number;
   transactionType: TransactionType;
   updatedAt: string;

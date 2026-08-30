@@ -72,12 +72,29 @@ export function loadTrashedPages(): readonly CustomPage[] {
   }
 }
 
-export function restoreTrashedPage(id: string): void {
+export async function restoreTrashedPage(id: string): Promise<CustomPage | undefined> {
   const trash = loadTrashedPages();
   const page = trash.find((candidate) => candidate.id === id);
-  if (!page) return;
+  if (!page) return undefined;
+  
+  // Re-create in SQLite for persistence
+  const created = await createPersistentCustomPage(page.title, page.icon);
+  if (created) {
+    const hydrated = {
+      ...created,
+      blocks: page.blocks,
+      favorite: page.favorite,
+      wiki: page.wiki,
+    };
+    await updatePersistentCustomPage(hydrated, 0);
+    window.localStorage.setItem(TRASHED_PAGES_KEY, JSON.stringify(trash.filter((candidate) => candidate.id !== id)));
+    return hydrated;
+  }
+  
+  // Fallback to local
   saveCustomPages([...loadCustomPages(), { ...page, updatedAt: new Date().toISOString() }]);
   window.localStorage.setItem(TRASHED_PAGES_KEY, JSON.stringify(trash.filter((candidate) => candidate.id !== id)));
+  return page;
 }
 
 export function emptyPageTrash(): void {

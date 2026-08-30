@@ -23,8 +23,8 @@ export class QuickEntryService {
           FROM object_property_values v
           JOIN object_properties p ON p.id = v.property_id
           WHERE v.record_id = ? AND v.active = 1
-            AND (p.property_type = 'money' OR p.name COLLATE NOCASE IN ('Selling Price', 'Price', 'Amount', 'Cost Price'))
-          ORDER BY (CASE WHEN p.name COLLATE NOCASE = 'Selling Price' THEN 1 WHEN p.name COLLATE NOCASE = 'Price' THEN 2 ELSE 3 END)
+            AND (p.semantic_role = 'PRICE' OR p.property_type = 'money' OR p.name COLLATE NOCASE IN ('Selling Price', 'Price', 'Amount', 'Cost Price', 'سعر البيع', 'السعر'))
+          ORDER BY (CASE WHEN p.semantic_role = 'PRICE' THEN 0 WHEN p.name COLLATE NOCASE = 'Selling Price' THEN 1 WHEN p.name COLLATE NOCASE = 'Price' THEN 2 ELSE 3 END)
           LIMIT 1
         `)
         .get(itemId) as { value_json: string } | undefined;
@@ -117,6 +117,29 @@ export class QuickEntryService {
       throw new ObjectDomainError('invalid-input', 'Total amount must be greater than zero.');
     }
 
+    const operationKind = draft.operationKind ?? 'sale';
+    const quantity = draft.quantity ? Math.max(1, Math.round(Number(draft.quantity))) : undefined;
+
+    if (operationKind === 'sale') {
+      return this.#submitSale(draft, total, quantity);
+    }
+    if (operationKind === 'purchase') {
+      return this.#submitPurchase(draft, total, quantity);
+    }
+    if (operationKind === 'expense') {
+      return this.#submitExpense(draft, total);
+    }
+    if (operationKind === 'income') {
+      return this.#submitIncome(draft, total);
+    }
+    if (operationKind === 'transfer') {
+      return this.#submitTransfer(draft, total);
+    }
+
+    throw new ObjectDomainError('invalid-input', 'Unsupported operation kind.');
+  }
+
+  #submitSale(draft: QuickEntryDraft, total: number, quantity?: number): TransactionRecord {
     if (draft.paymentMode === 'full') {
       if (!draft.accountId) {
         throw new ObjectDomainError('invalid-input', 'Payment account is required for full payment.');
@@ -127,6 +150,7 @@ export class QuickEntryService {
         note: draft.note,
         paidAmount: total,
         personId: draft.personId,
+        quantity,
         totalAmount: total,
         transactionType: 'sale',
       });
@@ -149,6 +173,7 @@ export class QuickEntryService {
         note: draft.note ? `${draft.note} (Partial)` : undefined,
         paidAmount: paid,
         personId: draft.personId,
+        quantity,
         totalAmount: total,
         transactionType: 'sale',
       });
@@ -161,11 +186,70 @@ export class QuickEntryService {
         note: draft.note ? `${draft.note} (Unpaid / Later)` : 'Unpaid (Later)',
         paidAmount: 0,
         personId: draft.personId,
+        quantity,
         totalAmount: total,
         transactionType: 'sale',
       });
     }
 
     throw new ObjectDomainError('invalid-input', 'Invalid payment mode.');
+  }
+
+  #submitPurchase(draft: QuickEntryDraft, total: number, quantity?: number): TransactionRecord {
+    if (!draft.accountId) {
+      throw new ObjectDomainError('invalid-input', 'Payment account is required for purchase.');
+    }
+    return this.transactions.createTransaction({
+      itemId: draft.itemId,
+      movements: [{ accountId: draft.accountId, amount: total, movementType: 'outflow' }],
+      note: draft.note,
+      paidAmount: total,
+      personId: draft.personId,
+      quantity,
+      totalAmount: total,
+      transactionType: 'purchase',
+    });
+  }
+
+  #submitExpense(draft: QuickEntryDraft, total: number): TransactionRecord {
+    if (!draft.accountId) {
+      throw new ObjectDomainError('invalid-input', 'Payment account is required for expense.');
+    }
+    return this.transactions.createTransaction({
+      movements: [{ accountId: draft.accountId, amount: total, movementType: 'outflow' }],
+      note: draft.note,
+      paidAmount: total,
+      personId: draft.personId,
+      totalAmount: total,
+      transactionType: 'expense',
+    });
+  }
+
+  #submitIncome(draft: QuickEntryDraft, total: number): TransactionRecord {
+    if (!draft.accountId) {
+      throw new ObjectDomainError('invalid-input', 'Receiving account is required for income.');
+    }
+    return this.transactions.createTransaction({
+      movements: [{ accountId: draft.accountId, amount: total, movementType: 'inflow' }],
+      note: draft.note,
+      paidAmount: total,
+      personId: draft.personId,
+      totalAmount: total,
+      transactionType: 'income',
+    });
+  }
+
+  #submitTransfer(draft: QuickEntryDraft, total: number): TransactionRecord {
+    if (!draft.accountId || !draft.toAccountId) {
+      throw new ObjectDomainError('invalid-input', 'Both source and destination accounts are required for transfer.');
+    }
+    return this.transactions.createTransfer({
+      amount: total,
+      fromAccountId: draft.accountId,
+      note: draft.note,
+      providerFee: draft.providerFee,
+      serviceFee: draft.serviceFee,
+      toAccountId: draft.toAccountId,
+    });
   }
 }

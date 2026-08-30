@@ -300,6 +300,56 @@ a:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 68%, trans
 .sidebar-view-children button:hover { color: var(--text); background: var(--line); }
 .sidebar-view-dot { width: 5px; height: 5px; border: 1px solid currentColor; border-radius: 1px; }
 
+/* Auth Widget */
+.auth-widget {
+  margin: 6px 0;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--canvas-subtle);
+  border: 1px solid var(--line);
+}
+
+.auth-widget--offline {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.auth-widget__user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.auth-widget__info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.auth-widget__info strong {
+  font-size: 12px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.auth-widget__info small {
+  font-size: 10px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.auth-widget__signin-btn {
+  width: 100%;
+  justify-content: flex-start;
+}
+
 .app-frame { display: grid; min-width: 0; min-height: 0; grid-template-rows: 45px minmax(0, 1fr); }
 .topbar { position: relative; z-index: 4; display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 18px; padding: 0 14px; border-block-end: 1px solid var(--line); background: var(--canvas); }
 .topbar__title { display: flex; min-width: 0; align-items: center; gap: 6px; font-size: 12px; }
@@ -3063,6 +3113,351 @@ kbd { display: inline-flex; min-width: 23px; min-height: 20px; align-items: cent
   font-weight: 600;
   border-color: var(--line);
   box-shadow: none;
+}
+
+/* --- QUICK ACTION DIALOG --- */
+.quick-entry-dialog {
+  width: min(100%, 640px);
+  padding: 0;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--card-raised);
+}
+
+.quick-entry-dialog .dialog-header {
+  padding: 20px 24px 14px;
+  border-block-end: 1px solid var(--line);
+}
+
+.quick-entry-header-title {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.quick-entry-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: fit-content;
+  padding: 2px 8px;
+  border-radius: 100px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.quick-entry-dialog .step-subtitle {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* Operation Switcher Bar */
+.operation-switcher-bar {
+  display: flex;
+  gap: 4px;
+  padding: 8px 24px;
+  background: var(--canvas-subtle);
+  border-block-end: 1px solid var(--line);
+  overflow-x: auto;
+}
+
+.operation-switcher-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 120ms ease;
+  white-space: nowrap;
+}
+
+.operation-switcher-tab:hover {
+  color: var(--text);
+  background: var(--canvas);
+}
+
+.operation-switcher-tab--active,
+.operation-switcher-tab[data-active="true"] {
+  color: var(--text);
+  font-weight: 600;
+  background: var(--card-raised);
+  border-color: var(--line-strong);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.operation-switcher-tab--active svg {
+  color: var(--accent);
+}
+
+/* Form Steps */
+.quick-entry-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 24px 24px;
+  max-height: 68vh;
+  overflow-y: auto;
+}
+
+.quick-step-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.quick-step-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.quick-step-head .step-num {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.stock-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.stock-badge--in {
+  background: color-mix(in srgb, #10b981 15%, transparent);
+  color: #10b981;
+}
+
+.stock-badge--out {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* Grids */
+.field-grid-3 {
+  display: grid;
+  grid-template-columns: 2fr 1fr 2fr;
+  gap: 10px;
+}
+
+.field--quantity {
+  min-width: 80px;
+}
+
+/* Amount Input */
+.quick-amount-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.quick-amount-input {
+  flex: 1;
+  font-size: 26px !important;
+  font-weight: 700 !important;
+  height: 48px !important;
+  padding: 0 14px !important;
+  border-radius: 8px !important;
+  letter-spacing: -0.02em;
+}
+
+.quick-amount-input--unconfirmed {
+  border-color: #f59e0b !important;
+  background: color-mix(in srgb, #f59e0b 8%, transparent) !important;
+}
+
+.confirm-badge-btn {
+  height: 48px;
+}
+
+/* Source Badges */
+.source-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.source-badge--item {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.source-badge--template {
+  background: color-mix(in srgb, #8b5cf6 15%, transparent);
+  color: #8b5cf6;
+}
+
+.source-badge--unconfirmed {
+  background: color-mix(in srgb, #f59e0b 15%, transparent);
+  color: #f59e0b;
+}
+
+/* Payment Mode Tabs */
+.payment-mode-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.payment-mode-tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--canvas-subtle);
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.payment-mode-tab:hover {
+  border-color: var(--line-strong);
+  color: var(--text);
+}
+
+.payment-mode-tab[data-active="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Account Chips */
+.quick-account-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.quick-account-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--canvas);
+  color: var(--text-soft);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.quick-account-chip:hover {
+  border-color: var(--line-strong);
+  color: var(--text);
+}
+
+.quick-account-chip[data-selected="true"] {
+  border-color: var(--text);
+  background: var(--canvas-subtle);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.quick-account-chip span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* Partial / Credit Details Card */
+.partial-breakdown-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--canvas-subtle);
+  border: 1px solid var(--line);
+}
+
+.remaining-badge {
+  display: flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  color: var(--danger);
+  font-weight: 700;
+  font-size: 14px;
+}
+
+/* Transfer Fee Breakdown */
+.transfer-fee-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--canvas-subtle);
+  border: 1px solid var(--line);
+}
+
+.fee-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.fee-row strong {
+  color: var(--text);
+}
+
+.fee-row--total {
+  padding-block-start: 4px;
+  border-block-start: 1px dashed var(--line);
+  font-size: 13px;
+  color: var(--text);
+}
+
+.fee-row--total strong {
+  font-size: 15px;
+  color: var(--accent);
+}
+
+/* Form Footer */
+.form-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-block-start: 12px;
+  border-block-start: 1px solid var(--line);
 }
 
 

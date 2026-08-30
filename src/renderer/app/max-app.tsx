@@ -200,7 +200,7 @@ export function MaxApp() {
         setSearchOpen(true);
       } else if ((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === 's') {
         event.preventDefault();
-        setTransactionChooserOpen(true);
+        setQuickEntryOpen(true);
       } else if (event.key === '/' && !isEditingTarget(event.target)) {
         event.preventDefault();
         setSearchOpen(true);
@@ -457,10 +457,10 @@ export function MaxApp() {
             <Button
               className="quick-entry-trigger"
               icon={<Zap aria-hidden="true" size={16} />}
-              onClick={() => setTransactionChooserOpen(true)}
+              onClick={() => setQuickEntryOpen(true)}
               variant="ghost"
             >
-              {locale === 'ar' ? 'معاملة جديدة' : 'New transaction'}
+              {locale === 'ar' ? 'عملية سريعة' : 'Quick action'}
             </Button>
           </div>
         </header>

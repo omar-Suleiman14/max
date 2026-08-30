@@ -1,10 +1,9 @@
-import type { ForgeConfig } from '@electron-forge/shared-types';
-import { FusesPlugin } from '@electron-forge/plugin-fuses';
-import { VitePlugin } from '@electron-forge/plugin-vite';
-import { FuseV1Options, FuseVersion } from '@electron/fuses';
-import { join } from 'node:path';
+const { FusesPlugin } = require('@electron-forge/plugin-fuses');
+const { VitePlugin } = require('@electron-forge/plugin-vite');
+const { FuseV1Options, FuseVersion } = require('@electron/fuses');
+const { join } = require('node:path');
 
-const linuxMakers: NonNullable<ForgeConfig['makers']> = [
+const linuxMakers = [
   {
     name: '@electron-forge/maker-deb',
     config: {
@@ -29,7 +28,8 @@ if (process.env.MAX_ENABLE_FLATPAK === '1') {
   });
 }
 
-const config: ForgeConfig = {
+/** @type {import('@electron-forge/shared-types').ForgeConfig} */
+const config = {
   packagerConfig: {
     asar: true,
     electronZipDir: join(__dirname, '.cache', 'electron-zips'),
@@ -62,19 +62,17 @@ const config: ForgeConfig = {
       build: [
         {
           entry: 'src/main/main.ts',
-          config: 'vite.main.config.ts',
-          target: 'main',
+          config: 'vite.main.config.mjs',
         },
         {
           entry: 'src/preload/preload.ts',
-          config: 'vite.preload.config.ts',
-          target: 'preload',
+          config: 'vite.preload.config.mjs',
         },
       ],
       renderer: [
         {
           name: 'main_window',
-          config: 'vite.renderer.config.ts',
+          config: 'vite.renderer.config.mjs',
         },
       ],
     }),
@@ -90,4 +88,4 @@ const config: ForgeConfig = {
   ],
 };
 
-export default config;
+module.exports = config;

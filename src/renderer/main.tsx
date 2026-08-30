@@ -4,6 +4,8 @@ import { createRoot } from 'react-dom/client';
 import { MaxApp } from './app/max-app';
 import './styles.css';
 
+import { AppAuthProvider } from './auth/auth-provider';
+
 const root = document.getElementById('root');
 
 if (!root) {
@@ -12,6 +14,8 @@ if (!root) {
 
 createRoot(root).render(
   <StrictMode>
-    <MaxApp />
+    <AppAuthProvider>
+      <MaxApp />
+    </AppAuthProvider>
   </StrictMode>,
 );

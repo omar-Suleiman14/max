@@ -1,0 +1,12 @@
+name = "max-backup-worker"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+
+# R2 Bucket binding for cloud backups
+# Secrets (such as CLERK_SECRET_KEY) must be set via `wrangler secret put CLERK_SECRET_KEY` and never committed.
+[[r2_buckets]]
+binding = "BACKUPS_BUCKET"
+bucket_name = "max-cloud-backups"
+
+[observability]
+enabled = true

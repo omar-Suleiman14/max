@@ -5,11 +5,11 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['.vite/**', 'coverage/**', 'dist/**', 'node_modules/**', 'out/**'],
+    ignores: ['.vite/**', 'coverage/**', 'dist/**', 'node_modules/**', 'out/**', 'worker/**'],
   },
   eslint.configs.recommended,
   {
-    files: ['scripts/**/*.cjs'],
+    files: ['scripts/**/*.cjs', 'forge.config.cjs'],
     languageOptions: {
       globals: {
         __dirname: 'readonly',

@@ -18,6 +18,7 @@ describe('PersonDebtService', () => {
     // 1. Partial sale: Total 500, Paid 200 => Debt 300
     db.quickEntry.submit({
       accountId: cash.id,
+      operationKind: 'sale',
       paidAmount: 200,
       paymentMode: 'partial',
       personId: person.id,
@@ -32,6 +33,7 @@ describe('PersonDebtService', () => {
 
     // 2. Unpaid sale on credit: Total 400 => Debt becomes 700
     db.quickEntry.submit({
+      operationKind: 'sale',
       paymentMode: 'later',
       personId: person.id,
       totalAmount: 400,
@@ -73,6 +75,7 @@ describe('PersonDebtService', () => {
 
     const tx = db.quickEntry.submit({
       accountId: cash.id,
+      operationKind: 'sale',
       paidAmount: 100,
       paymentMode: 'partial',
       personId: person.id,

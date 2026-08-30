@@ -290,15 +290,25 @@ function parseQuickEntryDraft(value: unknown): QuickEntryDraft {
     throw new ObjectDomainError('invalid-input', 'A valid payment mode is required.');
   }
 
+  const validOperations = ['sale', 'purchase', 'expense', 'income', 'transfer', 'reconciliation'];
+  const operationKind = typeof value.operationKind === 'string' && validOperations.includes(value.operationKind)
+    ? value.operationKind as QuickEntryDraft['operationKind']
+    : 'sale';
+
   return {
     accountId: typeof value.accountId === 'string' ? value.accountId : undefined,
     collectorId: typeof value.collectorId === 'string' ? value.collectorId : undefined,
     itemId: typeof value.itemId === 'string' ? value.itemId : undefined,
     note: typeof value.note === 'string' ? value.note : undefined,
+    operationKind,
     paidAmount: typeof value.paidAmount === 'number' ? value.paidAmount : undefined,
     paymentMode: value.paymentMode as PaymentMode,
     personId: typeof value.personId === 'string' ? value.personId : undefined,
+    providerFee: typeof value.providerFee === 'number' ? value.providerFee : undefined,
+    quantity: typeof value.quantity === 'number' ? value.quantity : undefined,
+    serviceFee: typeof value.serviceFee === 'number' ? value.serviceFee : undefined,
     templateId: typeof value.templateId === 'string' ? value.templateId : undefined,
+    toAccountId: typeof value.toAccountId === 'string' ? value.toAccountId : undefined,
     totalAmount,
   };
 }

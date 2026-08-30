@@ -6,6 +6,7 @@ import {
   type AccountDefinition,
   type AccountDraft,
   type AccountType,
+  type FeeConfig,
 } from '../../shared/account-contract';
 import { ObjectDomainError } from './object-repository';
 
@@ -13,6 +14,7 @@ type AccountRow = Readonly<{
   account_type: AccountType;
   balance: number;
   created_at: string;
+  fee_config_json: string | null;
   id: string;
   initial_balance: number;
   name: string;
@@ -21,10 +23,17 @@ type AccountRow = Readonly<{
 }>;
 
 function rowToAccount(row: AccountRow): AccountDefinition {
+  let feeConfig: FeeConfig | undefined;
+  if (row.fee_config_json) {
+    try {
+      feeConfig = JSON.parse(row.fee_config_json) as FeeConfig;
+    } catch { /* ignore */ }
+  }
   return {
     accountType: row.account_type,
     balance: Math.round(row.balance * 100) / 100,
     createdAt: row.created_at,
+    feeConfig,
     id: row.id,
     initialBalance: Math.round(row.initial_balance * 100) / 100,
     name: row.name,
@@ -47,6 +56,7 @@ export class AccountRepository {
           a.position,
           a.created_at,
           a.updated_at,
+          a.fee_config_json,
           (
             a.initial_balance
             + COALESCE((SELECT SUM(amount) FROM shop_money_movements WHERE account_id = a.id AND movement_type = 'inflow' AND archived_at IS NULL), 0)
@@ -71,6 +81,7 @@ export class AccountRepository {
           a.position,
           a.created_at,
           a.updated_at,
+          a.fee_config_json,
           (
             a.initial_balance
             + COALESCE((SELECT SUM(amount) FROM shop_money_movements WHERE account_id = a.id AND movement_type = 'inflow' AND archived_at IS NULL), 0)
@@ -96,13 +107,14 @@ export class AccountRepository {
       .get() as { position: number };
 
     return this.#transaction(() => {
+      const feeConfigJson = draft.feeConfig ? JSON.stringify(draft.feeConfig) : null;
       try {
         this.database
           .prepare(`
-            INSERT INTO shop_accounts (id, name, account_type, initial_balance, position, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO shop_accounts (id, name, account_type, initial_balance, fee_config_json, position, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
           `)
-          .run(id, draft.name, draft.accountType, draft.initialBalance, positionRow.position, now, now);
+          .run(id, draft.name, draft.accountType, draft.initialBalance, feeConfigJson, positionRow.position, now, now);
       } catch (error) {
         if (/shop_accounts(?:_active_name|\.name)/.test(String(error))) {
           throw new ObjectDomainError('unique', 'An account with this name already exists.');
@@ -122,14 +134,15 @@ export class AccountRepository {
     const now = new Date().toISOString();
 
     return this.#transaction(() => {
+      const feeConfigJson = draft.feeConfig ? JSON.stringify(draft.feeConfig) : null;
       try {
         this.database
           .prepare(`
             UPDATE shop_accounts
-            SET name = ?, account_type = ?, initial_balance = ?, updated_at = ?
+            SET name = ?, account_type = ?, initial_balance = ?, fee_config_json = ?, updated_at = ?
             WHERE id = ? AND archived_at IS NULL
           `)
-          .run(draft.name, draft.accountType, draft.initialBalance, now, id);
+          .run(draft.name, draft.accountType, draft.initialBalance, feeConfigJson, now, id);
       } catch (error) {
         if (/shop_accounts(?:_active_name|\.name)/.test(String(error))) {
           throw new ObjectDomainError('unique', 'An account with this name already exists.');
@@ -170,6 +183,7 @@ export class AccountRepository {
 
     return {
       accountType: draft.accountType,
+      feeConfig: draft.feeConfig,
       initialBalance: Math.round(initialBalance * 100) / 100,
       name,
     };

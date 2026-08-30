@@ -82,6 +82,7 @@ describe('QuickEntryService', () => {
     // Full payment
     const tx1 = db.quickEntry.submit({
       accountId: cash.id,
+      operationKind: 'sale',
       paymentMode: 'full',
       totalAmount: 300,
     });
@@ -92,6 +93,7 @@ describe('QuickEntryService', () => {
     // Partial payment
     const tx2 = db.quickEntry.submit({
       accountId: cash.id,
+      operationKind: 'sale',
       paidAmount: 150,
       paymentMode: 'partial',
       personId: customer.id,
@@ -104,6 +106,7 @@ describe('QuickEntryService', () => {
 
     // Later / Unpaid payment
     const tx3 = db.quickEntry.submit({
+      operationKind: 'sale',
       paymentMode: 'later',
       personId: customer.id,
       totalAmount: 400,
@@ -127,6 +130,7 @@ describe('QuickEntryService', () => {
         accountId: cash.id,
         itemId: item.id,
         note: `Endurance Sale #${i}`,
+        operationKind: 'sale',
         paymentMode: 'full',
         totalAmount: amount,
       });
@@ -145,6 +149,7 @@ describe('QuickEntryService', () => {
     const db = service();
     expect(() =>
       db.quickEntry.submit({
+        operationKind: 'sale',
         paymentMode: 'full',
         totalAmount: 0,
       }),

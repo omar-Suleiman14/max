@@ -564,12 +564,10 @@ describe('Max shell', () => {
     await screen.findByRole('button', { name: 'Home' });
 
     await user.keyboard('{Control>}s{/Control}');
-    expect(await screen.findByRole('heading', { name: 'What do you want to record?' })).toBeInTheDocument();
-    for (const choice of ['Quick sale', 'Sale', 'Purchase', 'Expense', 'Income', 'Account transfer', 'Adjustment']) {
-      expect(screen.getByRole('button', { name: new RegExp(`^${choice}`) })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Quick Action' })).toBeInTheDocument();
+    for (const op of ['Sell', 'Purchase', 'Expense', 'Income', 'Transfer']) {
+      expect(screen.getByRole('tab', { name: op })).toBeInTheDocument();
     }
-    await user.click(screen.getByRole('button', { name: /^Quick sale/ }));
-    expect(await screen.findByRole('heading', { name: 'Quick Sale Entry' })).toBeInTheDocument();
     await user.keyboard('{Escape}');
     await user.click(screen.getByRole('button', { name: 'Databases' }));
     await user.click(await screen.findByRole('button', { name: 'New' }));
@@ -587,7 +585,6 @@ describe('Max shell', () => {
     render(<MaxApp />);
     await screen.findByRole('button', { name: 'Home' });
     await user.keyboard('{Control>}s{/Control}');
-    await user.click(screen.getByRole('button', { name: /^Quick sale/ }));
     await user.selectOptions(await screen.findByLabelText('Select item or enter note'), 'priced-item');
 
     expect(screen.getByPlaceholderText('e.g., Screen Protector + Fitting')).toHaveValue('Screen Protector');

@@ -1,6 +1,9 @@
 export const objectKinds = ['item', 'person'] as const;
 export type ObjectKind = (typeof objectKinds)[number];
 
+export const semanticRoles = ['DISPLAY_NAME', 'PRICE', 'QUANTITY'] as const;
+export type SemanticRole = (typeof semanticRoles)[number];
+
 export const propertyTypes = [
   'text',
   'number',
@@ -32,6 +35,7 @@ export type PropertyDraft = Readonly<{
   name: string;
   objectKind: ObjectKind;
   rules: PropertyRules;
+  semanticRole?: SemanticRole;
   type: PropertyType;
 }>;
 
@@ -51,10 +55,13 @@ export type ConfigurableRecordDraft = Readonly<{
 
 export type ConfigurableRecord = ConfigurableRecordDraft & Readonly<{
   createdAt: string;
+  currentQuantity?: number;
   id: string;
   position?: number;
   updatedAt: string;
 }>;
+
+
 
 export const objectErrorCodes = [
   'invalid-input',

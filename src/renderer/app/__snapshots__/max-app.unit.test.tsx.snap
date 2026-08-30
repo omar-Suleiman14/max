@@ -89,7 +89,7 @@ exports[`Max shell > renders the English shell and navigates to Databases worksp
         <span
           class="button__label"
         >
-          New transaction
+          Quick action
         </span>
       </button>
     </div>
@@ -792,7 +792,7 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
         <span
           class="button__label"
         >
-          معاملة جديدة
+          عملية سريعة
         </span>
       </button>
     </div>
