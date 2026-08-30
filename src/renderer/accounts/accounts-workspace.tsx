@@ -9,7 +9,7 @@ import {
   Wallet,
   X,
 } from 'lucide-react';
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 
 import type { AccountDefinition, AccountDraft, AccountType } from '../../shared/account-contract';
 import type { TransferDraft } from '../../shared/transaction-contract';
@@ -286,8 +286,10 @@ export function AccountsWorkspace({ createRequest, locale }: AccountsWorkspacePr
     void load();
   }, [load]);
 
+  const lastHandledCreateRef = useRef(createRequest);
   useEffect(() => {
-    if (createRequest > 0) {
+    if (createRequest > lastHandledCreateRef.current) {
+      lastHandledCreateRef.current = createRequest;
       setAccountEditor('new');
     }
   }, [createRequest]);

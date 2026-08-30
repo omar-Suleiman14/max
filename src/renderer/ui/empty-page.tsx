@@ -2,7 +2,6 @@ import {
   ArrowRight,
   CircleDollarSign,
   ContactRound,
-  Eye,
   Package,
   Plus,
   ReceiptText,
@@ -15,15 +14,17 @@ import type { AppPage } from '../app/app-types';
 import { type Locale, type TranslationKey, translate } from '../app/i18n';
 import { Button } from './button';
 
+export type EmptyPageTarget = 'accounts' | 'home' | 'items' | 'people' | 'reconciliation' | 'transactions';
+
 type EmptyPageProps = Readonly<{
   locale: Locale;
   onCreate: () => void;
   onNavigate: (page: AppPage) => void;
   onOpenCommand: () => void;
-  page: AppPage;
+  page: EmptyPageTarget;
 }>;
 
-const pageContent: Record<Exclude<AppPage, 'home'>, Readonly<{
+const pageContent: Record<Exclude<EmptyPageTarget, 'home'>, Readonly<{
   body: TranslationKey;
   create: TranslationKey;
   empty: TranslationKey;
@@ -34,7 +35,6 @@ const pageContent: Record<Exclude<AppPage, 'home'>, Readonly<{
   people: { body: 'personEmptyBody', create: 'personCreate', empty: 'personEmpty', icon: ContactRound },
   reconciliation: { body: 'reconciliationEmptyBody', create: 'reconciliationCreate', empty: 'reconciliationEmpty', icon: Scale },
   transactions: { body: 'transactionEmptyBody', create: 'transactionCreate', empty: 'transactionEmpty', icon: ReceiptText },
-  views: { body: 'viewEmptyBody', create: 'viewCreate', empty: 'viewEmpty', icon: Eye },
 };
 
 function HomePage({ locale, onNavigate, onOpenCommand }: Pick<EmptyPageProps, 'locale' | 'onNavigate' | 'onOpenCommand'>) {

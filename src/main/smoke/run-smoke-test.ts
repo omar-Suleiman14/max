@@ -79,11 +79,23 @@ async function openSmokeSurface(window: BrowserWindow): Promise<void> {
         if (!workspace) return false;
         const surface = ${JSON.stringify(surface)};
         if (surface === 'property') {
+          if (!document.querySelector('.schema-panel')) {
+            const propBtn = Array.from(document.querySelectorAll('.object-toolbar__actions button')).find((b) =>
+              b.textContent?.toLowerCase().includes('properties') || b.textContent?.includes('الخصائص'),
+            ) as HTMLButtonElement | undefined;
+            propBtn?.click();
+          }
           const trigger = await waitFor('.schema-panel__head button');
           trigger?.click();
           return Boolean(trigger);
         }
         if (surface === 'template') {
+          if (!document.querySelector('.schema-panel')) {
+            const templateBtn = Array.from(document.querySelectorAll('.object-toolbar__actions button')).find((b) =>
+              b.textContent?.toLowerCase().includes('templates') || b.textContent?.includes('القوالب'),
+            ) as HTMLButtonElement | undefined;
+            templateBtn?.click();
+          }
           const tab = await waitFor('.schema-tab-button:nth-child(2)');
           tab?.click();
           return Boolean(tab);

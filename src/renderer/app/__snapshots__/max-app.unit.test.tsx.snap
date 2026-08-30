@@ -1,6 +1,6 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`Max shell > renders the English shell and an actionable empty page 1`] = `
+exports[`Max shell > renders the English shell and navigates to Databases workspace 1`] = `
 <div
   class="app-frame"
 >
@@ -10,17 +10,19 @@ exports[`Max shell > renders the English shell and an actionable empty page 1`] 
     <div
       class="topbar__title"
     >
-      <p>
+      <bdi>
         Test Shop
-      </p>
+      </bdi>
       <span
         aria-hidden="true"
       >
         /
       </span>
-      <strong>
-        Items
-      </strong>
+      <bdi>
+        <strong>
+          Databases
+        </strong>
+      </bdi>
     </div>
     <div
       class="topbar__actions"
@@ -90,69 +92,12 @@ exports[`Max shell > renders the English shell and an actionable empty page 1`] 
           Quick sale
         </span>
       </button>
-      <div
-        class="create-menu"
-      >
-        <button
-          aria-expanded="false"
-          aria-haspopup="menu"
-          class="button button--primary"
-          type="button"
-        >
-          <span
-            class="button__icon"
-          >
-            <svg
-              aria-hidden="true"
-              class="lucide lucide-plus"
-              fill="none"
-              height="18"
-              stroke="currentColor"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              viewBox="0 0 24 24"
-              width="18"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                d="M5 12h14"
-              />
-              <path
-                d="M12 5v14"
-              />
-            </svg>
-          </span>
-          <span
-            class="button__label"
-          >
-            New
-            <svg
-              aria-hidden="true"
-              class="lucide lucide-chevron-down button__chevron"
-              fill="none"
-              height="15"
-              stroke="currentColor"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              viewBox="0 0 24 24"
-              width="15"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                d="m6 9 6 6 6-6"
-              />
-            </svg>
-          </span>
-        </button>
-      </div>
     </div>
   </header>
   <main
     aria-labelledby="page-title"
     class="content"
-    data-page="items"
+    data-page="databases"
     id="main-content"
     tabindex="-1"
   >
@@ -165,7 +110,7 @@ exports[`Max shell > renders the English shell and an actionable empty page 1`] 
       >
         <svg
           aria-hidden="true"
-          class="lucide lucide-package"
+          class="lucide lucide-database"
           fill="none"
           height="28"
           stroke="currentColor"
@@ -176,17 +121,17 @@ exports[`Max shell > renders the English shell and an actionable empty page 1`] 
           width="28"
           xmlns="http://www.w3.org/2000/svg"
         >
-          <path
-            d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"
+          <ellipse
+            cx="12"
+            cy="5"
+            rx="9"
+            ry="3"
           />
           <path
-            d="M12 22V12"
-          />
-          <polyline
-            points="3.29 7 12 12 20.71 7"
+            d="M3 5V19A9 3 0 0 0 21 19V5"
           />
           <path
-            d="m7.5 4.27 9 5.15"
+            d="M3 12A9 3 0 0 0 21 12"
           />
         </svg>
       </div>
@@ -196,342 +141,752 @@ exports[`Max shell > renders the English shell and an actionable empty page 1`] 
         <h1
           id="page-title"
         >
-          Items
+          Databases
         </h1>
         <p>
-          Universal items shaped by configurable properties.
+          All shop databases, inventory, contacts, and balances in one place.
         </p>
       </div>
     </header>
-    <section
-      class="object-workspace"
+    <div
+      class="databases-workspace"
     >
       <div
-        class="object-toolbar"
-      >
-        <div>
-          <strong>
-            0
-             
-            records
-          </strong>
-          <span>
-            0
-             
-            properties
-             · 
-            0
-             
-            templates
-          </span>
-        </div>
-        <div
-          class="object-toolbar__actions"
-        >
-          <button
-            class="button button--ghost"
-            type="button"
-          >
-            <span
-              class="button__icon"
-            >
-              <svg
-                aria-hidden="true"
-                class="lucide lucide-sliders-horizontal"
-                fill="none"
-                height="16"
-                stroke="currentColor"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                viewBox="0 0 24 24"
-                width="16"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M10 5H3"
-                />
-                <path
-                  d="M12 19H3"
-                />
-                <path
-                  d="M14 3v4"
-                />
-                <path
-                  d="M16 17v4"
-                />
-                <path
-                  d="M21 12h-9"
-                />
-                <path
-                  d="M21 19h-5"
-                />
-                <path
-                  d="M21 5h-7"
-                />
-                <path
-                  d="M8 10v4"
-                />
-                <path
-                  d="M8 12H3"
-                />
-              </svg>
-            </span>
-            <span
-              class="button__label"
-            >
-              Properties
-            </span>
-          </button>
-          <button
-            class="button button--primary"
-            type="button"
-          >
-            <span
-              class="button__icon"
-            >
-              <svg
-                aria-hidden="true"
-                class="lucide lucide-plus"
-                fill="none"
-                height="17"
-                stroke="currentColor"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                viewBox="0 0 24 24"
-                width="17"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M5 12h14"
-                />
-                <path
-                  d="M12 5v14"
-                />
-              </svg>
-            </span>
-            <span
-              class="button__label"
-            >
-              Create item
-            </span>
-          </button>
-        </div>
-      </div>
-      <div
-        class="object-layout"
+        class="databases-header"
       >
         <div
-          aria-busy="false"
-          class="record-panel"
+          class="databases-header__info"
         >
           <div
-            class="view-bar"
+            class="databases-header__icon"
           >
-            <div
-              class="view-bar__tabs"
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-database"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
             >
-              <button
-                class="view-tab"
-                data-active="true"
-                type="button"
-              >
-                <svg
-                  aria-hidden="true"
-                  class="lucide lucide-bookmark"
-                  fill="none"
-                  height="14"
-                  stroke="currentColor"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  viewBox="0 0 24 24"
-                  width="14"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M17 3a2 2 0 0 1 2 2v15a1 1 0 0 1-1.496.868l-4.512-2.578a2 2 0 0 0-1.984 0l-4.512 2.578A1 1 0 0 1 5 20V5a2 2 0 0 1 2-2z"
-                  />
-                </svg>
-                <span>
-                  Default View
-                </span>
-              </button>
-              <button
-                class="view-tab view-tab--save"
-                type="button"
-              >
-                <svg
-                  aria-hidden="true"
-                  class="lucide lucide-plus"
-                  fill="none"
-                  height="14"
-                  stroke="currentColor"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  viewBox="0 0 24 24"
-                  width="14"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M5 12h14"
-                  />
-                  <path
-                    d="M12 5v14"
-                  />
-                </svg>
-                <span>
-                  Save View
-                </span>
-              </button>
-            </div>
+              <ellipse
+                cx="12"
+                cy="5"
+                rx="9"
+                ry="3"
+              />
+              <path
+                d="M3 5V19A9 3 0 0 0 21 19V5"
+              />
+              <path
+                d="M3 12A9 3 0 0 0 21 12"
+              />
+            </svg>
           </div>
-          <div
-            class="object-empty"
-          >
-            <div
-              class="empty-state__icon"
-            >
-              <svg
-                aria-hidden="true"
-                class="lucide lucide-plus"
-                fill="none"
-                height="25"
-                stroke="currentColor"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                viewBox="0 0 24 24"
-                width="25"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M5 12h14"
-                />
-                <path
-                  d="M12 5v14"
-                />
-              </svg>
-            </div>
+          <div>
             <h2>
-              No items yet
+              Databases
             </h2>
             <p>
-              Create the first record or configure properties for the way this shop works.
+              All shop databases, inventory, contacts, accounts, and transactions in one unified workspace.
             </p>
-            <button
-              class="button button--primary"
-              type="button"
-            >
-              <span
-                class="button__label"
-              >
-                Create item
-              </span>
-            </button>
           </div>
         </div>
+        <nav
+          aria-label="Databases Switcher"
+          class="databases-tabs"
+        >
+          <button
+            aria-current="page"
+            class="databases-tab"
+            data-active="true"
+            type="button"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-package"
+              fill="none"
+              height="17"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="17"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"
+              />
+              <path
+                d="M12 22V12"
+              />
+              <polyline
+                points="3.29 7 12 12 20.71 7"
+              />
+              <path
+                d="m7.5 4.27 9 5.15"
+              />
+            </svg>
+            <span>
+              Items & Products
+            </span>
+          </button>
+          <button
+            class="databases-tab"
+            data-active="false"
+            type="button"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-contact-round"
+              fill="none"
+              height="17"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="17"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M16 2v2"
+              />
+              <path
+                d="M17.915 21a6 6 0 10-12 0"
+              />
+              <path
+                d="M8 2v2"
+              />
+              <circle
+                cx="12"
+                cy="11"
+                r="4"
+              />
+              <rect
+                height="18"
+                rx="2"
+                width="18"
+                x="3"
+                y="3"
+              />
+            </svg>
+            <span>
+              People & Contacts
+            </span>
+          </button>
+          <button
+            class="databases-tab"
+            data-active="false"
+            type="button"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-receipt-text"
+              fill="none"
+              height="17"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="17"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M13 16H8"
+              />
+              <path
+                d="M14 8H8"
+              />
+              <path
+                d="M16 12H8"
+              />
+              <path
+                d="M4 3a1 1 0 0 1 1-1 1.3 1.3 0 0 1 .7.2l.933.6a1.3 1.3 0 0 0 1.4 0l.934-.6a1.3 1.3 0 0 1 1.4 0l.933.6a1.3 1.3 0 0 0 1.4 0l.933-.6a1.3 1.3 0 0 1 1.4 0l.934.6a1.3 1.3 0 0 0 1.4 0l.933-.6A1.3 1.3 0 0 1 19 2a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1 1.3 1.3 0 0 1-.7-.2l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.934.6a1.3 1.3 0 0 1-1.4 0l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-1.4 0l-.934-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-.7.2 1 1 0 0 1-1-1z"
+              />
+            </svg>
+            <span>
+              Transactions
+            </span>
+          </button>
+          <button
+            class="databases-tab"
+            data-active="false"
+            type="button"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-circle-dollar-sign"
+              fill="none"
+              height="17"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="17"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <circle
+                cx="12"
+                cy="12"
+                r="10"
+              />
+              <path
+                d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"
+              />
+              <path
+                d="M12 18V6"
+              />
+            </svg>
+            <span>
+              Accounts & Drawers
+            </span>
+          </button>
+          <button
+            class="databases-tab"
+            data-active="false"
+            type="button"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-scale"
+              fill="none"
+              height="17"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="17"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M12 3v18"
+              />
+              <path
+                d="m19 8 3 8a5 5 0 0 1-6 0zV7"
+              />
+              <path
+                d="M3 7h1a17 17 0 0 0 8-2 17 17 0 0 0 8 2h1"
+              />
+              <path
+                d="m5 8 3 8a5 5 0 0 1-6 0zV7"
+              />
+              <path
+                d="M7 21h10"
+              />
+            </svg>
+            <span>
+              Daily Reconciliation
+            </span>
+          </button>
+        </nav>
       </div>
       <div
-        class="overlay"
+        class="databases-tab-content"
       >
-        <div
-          aria-labelledby="record-dialog-title"
-          aria-modal="true"
-          class="overlay__panel object-dialog"
-          role="dialog"
-          tabindex="-1"
+        <section
+          class="object-workspace"
         >
-          <header
-            class="dialog-header"
+          <div
+            class="object-toolbar"
           >
             <div>
-              <p
-                class="eyebrow"
-              >
-                MAX · 
-                Schema
-              </p>
-              <h2
-                id="record-dialog-title"
-              >
-                Create item
-              </h2>
-            </div>
-            <button
-              aria-label="Close"
-              class="icon-button"
-              type="button"
-            >
-              <svg
-                aria-hidden="true"
-                class="lucide lucide-x"
-                fill="none"
-                height="19"
-                stroke="currentColor"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                viewBox="0 0 24 24"
-                width="19"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M18 6 6 18"
-                />
-                <path
-                  d="m6 6 12 12"
-                />
-              </svg>
-            </button>
-          </header>
-          <form
-            class="object-form"
-          >
-            <label
-              class="field"
-            >
+              <strong>
+                0
+                 
+                records
+              </strong>
               <span>
-                Display name
+                <button
+                  class="toolbar-text-link"
+                  type="button"
+                >
+                  0
+                   
+                  properties
+                </button>
+                 · 
+                <button
+                  class="toolbar-text-link"
+                  type="button"
+                >
+                  0
+                   
+                  templates
+                </button>
               </span>
-              <input
-                data-autofocus="true"
-                maxlength="120"
-                placeholder="A clear name for this item"
-                required=""
-                value=""
-              />
-            </label>
-            <footer
-              class="form-footer"
+            </div>
+            <div
+              class="object-toolbar__actions"
             >
               <button
-                class="button button--secondary"
+                class="button button--ghost"
                 type="button"
               >
                 <span
+                  class="button__icon"
+                >
+                  <svg
+                    aria-hidden="true"
+                    class="lucide lucide-sliders-horizontal"
+                    fill="none"
+                    height="16"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    viewBox="0 0 24 24"
+                    width="16"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M10 5H3"
+                    />
+                    <path
+                      d="M12 19H3"
+                    />
+                    <path
+                      d="M14 3v4"
+                    />
+                    <path
+                      d="M16 17v4"
+                    />
+                    <path
+                      d="M21 12h-9"
+                    />
+                    <path
+                      d="M21 19h-5"
+                    />
+                    <path
+                      d="M21 5h-7"
+                    />
+                    <path
+                      d="M8 10v4"
+                    />
+                    <path
+                      d="M8 12H3"
+                    />
+                  </svg>
+                </span>
+                <span
                   class="button__label"
                 >
-                  Cancel
+                  Properties
+                </span>
+              </button>
+              <button
+                class="button button--ghost"
+                type="button"
+              >
+                <span
+                  class="button__icon"
+                >
+                  <svg
+                    aria-hidden="true"
+                    class="lucide lucide-file-text"
+                    fill="none"
+                    height="16"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    viewBox="0 0 24 24"
+                    width="16"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+                    />
+                    <path
+                      d="M14 2v5a1 1 0 0 0 1 1h5"
+                    />
+                    <path
+                      d="M10 9H8"
+                    />
+                    <path
+                      d="M16 13H8"
+                    />
+                    <path
+                      d="M16 17H8"
+                    />
+                  </svg>
+                </span>
+                <span
+                  class="button__label"
+                >
+                  Templates
                 </span>
               </button>
               <button
                 class="button button--primary"
-                type="submit"
+                type="button"
               >
+                <span
+                  class="button__icon"
+                >
+                  <svg
+                    aria-hidden="true"
+                    class="lucide lucide-plus"
+                    fill="none"
+                    height="17"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    viewBox="0 0 24 24"
+                    width="17"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M5 12h14"
+                    />
+                    <path
+                      d="M12 5v14"
+                    />
+                  </svg>
+                </span>
                 <span
                   class="button__label"
                 >
-                  Save
+                  Create item
                 </span>
               </button>
-            </footer>
-          </form>
-        </div>
+            </div>
+          </div>
+          <div
+            class="object-layout"
+          >
+            <div
+              aria-busy="false"
+              class="record-panel"
+            >
+              <div
+                class="notion-view-bar"
+              >
+                <div
+                  class="notion-view-bar__tabs"
+                >
+                  <button
+                    class="notion-view-tab"
+                    data-active="true"
+                    type="button"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      class="lucide lucide-table-properties"
+                      fill="none"
+                      height="14"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      width="14"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M15 3v18"
+                      />
+                      <rect
+                        height="18"
+                        rx="2"
+                        width="18"
+                        x="3"
+                        y="3"
+                      />
+                      <path
+                        d="M21 9H3"
+                      />
+                      <path
+                        d="M21 15H3"
+                      />
+                    </svg>
+                    <span>
+                      Default view
+                    </span>
+                  </button>
+                  <button
+                    aria-label="Save view"
+                    class="notion-view-tab-add"
+                    title="Save view"
+                    type="button"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      class="lucide lucide-plus"
+                      fill="none"
+                      height="14"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      width="14"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M5 12h14"
+                      />
+                      <path
+                        d="M12 5v14"
+                      />
+                    </svg>
+                  </button>
+                </div>
+                <div
+                  class="notion-view-bar__actions"
+                >
+                  <button
+                    aria-expanded="false"
+                    class="notion-db-tool-btn"
+                    data-active="false"
+                    title="Group by"
+                    type="button"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      class="lucide lucide-layers"
+                      fill="none"
+                      height="14"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      width="14"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"
+                      />
+                      <path
+                        d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"
+                      />
+                      <path
+                        d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"
+                      />
+                    </svg>
+                    <span>
+                      Group by
+                    </span>
+                  </button>
+                  <button
+                    aria-expanded="false"
+                    class="notion-db-tool-btn"
+                    data-active="false"
+                    title="Filter"
+                    type="button"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      class="lucide lucide-funnel"
+                      fill="none"
+                      height="14"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      width="14"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M10 20a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341L21.74 4.67A1 1 0 0 0 21 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14z"
+                      />
+                    </svg>
+                    <span>
+                      Filter
+                    </span>
+                  </button>
+                  <button
+                    aria-expanded="false"
+                    class="notion-db-tool-btn"
+                    data-active="false"
+                    title="Sort"
+                    type="button"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      class="lucide lucide-arrow-up-down"
+                      fill="none"
+                      height="14"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      width="14"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="m21 16-4 4-4-4"
+                      />
+                      <path
+                        d="M17 20V4"
+                      />
+                      <path
+                        d="m3 8 4-4 4 4"
+                      />
+                      <path
+                        d="M7 4v16"
+                      />
+                    </svg>
+                    <span>
+                      Sort
+                    </span>
+                  </button>
+                  <button
+                    aria-label="Database properties"
+                    class="notion-db-tool-btn"
+                    title="Properties"
+                    type="button"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      class="lucide lucide-sliders-horizontal"
+                      fill="none"
+                      height="14"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      width="14"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M10 5H3"
+                      />
+                      <path
+                        d="M12 19H3"
+                      />
+                      <path
+                        d="M14 3v4"
+                      />
+                      <path
+                        d="M16 17v4"
+                      />
+                      <path
+                        d="M21 12h-9"
+                      />
+                      <path
+                        d="M21 19h-5"
+                      />
+                      <path
+                        d="M21 5h-7"
+                      />
+                      <path
+                        d="M8 10v4"
+                      />
+                      <path
+                        d="M8 12H3"
+                      />
+                    </svg>
+                    <span>
+                      Properties
+                    </span>
+                  </button>
+                  <div
+                    class="notion-db-new-split-btn"
+                  >
+                    <button
+                      class="notion-db-new-btn"
+                      type="button"
+                    >
+                      <span>
+                        New
+                      </span>
+                    </button>
+                    <button
+                      aria-label="New options"
+                      class="notion-db-new-dropdown-btn"
+                      type="button"
+                    >
+                      <svg
+                        aria-hidden="true"
+                        class="lucide lucide-chevron-down"
+                        fill="none"
+                        height="13"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2.5"
+                        viewBox="0 0 24 24"
+                        width="13"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          d="m6 9 6 6 6-6"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div
+                class="notion-editor-canvas"
+              >
+                <div
+                  class="notion-canvas-bottom-click-target"
+                />
+              </div>
+              <div
+                class="object-empty"
+              >
+                <div
+                  class="empty-state__icon"
+                >
+                  <svg
+                    aria-hidden="true"
+                    class="lucide lucide-plus"
+                    fill="none"
+                    height="25"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    viewBox="0 0 24 24"
+                    width="25"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M5 12h14"
+                    />
+                    <path
+                      d="M12 5v14"
+                    />
+                  </svg>
+                </div>
+                <h2>
+                  No items yet
+                </h2>
+                <p>
+                  Create the first record or configure properties for the way this shop works.
+                </p>
+                <button
+                  class="button button--primary"
+                  type="button"
+                >
+                  <span
+                    class="button__label"
+                  >
+                    Create item
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
-    </section>
+    </div>
   </main>
 </div>
 `;
@@ -546,17 +901,19 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
     <div
       class="topbar__title"
     >
-      <p>
+      <bdi>
         Test Shop
-      </p>
+      </bdi>
       <span
         aria-hidden="true"
       >
         /
       </span>
-      <strong>
-        الرئيسية
-      </strong>
+      <bdi>
+        <strong>
+          الرئيسية
+        </strong>
+      </bdi>
     </div>
     <div
       class="topbar__actions"
@@ -588,7 +945,7 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
           />
         </svg>
         <span>
-          البحث في الأوامر
+          بحث في الأوامر
         </span>
         <kbd>
           Ctrl
@@ -626,63 +983,6 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
           بيع سريع
         </span>
       </button>
-      <div
-        class="create-menu"
-      >
-        <button
-          aria-expanded="false"
-          aria-haspopup="menu"
-          class="button button--primary"
-          type="button"
-        >
-          <span
-            class="button__icon"
-          >
-            <svg
-              aria-hidden="true"
-              class="lucide lucide-plus"
-              fill="none"
-              height="18"
-              stroke="currentColor"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              viewBox="0 0 24 24"
-              width="18"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                d="M5 12h14"
-              />
-              <path
-                d="M12 5v14"
-              />
-            </svg>
-          </span>
-          <span
-            class="button__label"
-          >
-            جديد
-            <svg
-              aria-hidden="true"
-              class="lucide lucide-chevron-down button__chevron"
-              fill="none"
-              height="15"
-              stroke="currentColor"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              viewBox="0 0 24 24"
-              width="15"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                d="m6 9 6 6 6-6"
-              />
-            </svg>
-          </span>
-        </button>
-      </div>
     </div>
   </header>
   <main
@@ -729,355 +1029,1208 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
           الرئيسية
         </h1>
         <p>
-          ابدأ بسرعة من أهم أجزاء مساحة عملك.
+          نظرة عامة وآخر العمليات المسجلة.
         </p>
       </div>
     </header>
     <div
-      class="home-page"
+      class="custom-page-view"
     >
-      <section
-        class="home-hero"
+      <div
+        class="custom-page-header"
       >
         <div
-          aria-hidden="true"
-          class="home-page__icon"
+          class="custom-page-header__icon-wrap"
         >
-          <svg
-            aria-hidden="true"
-            class="lucide lucide-sparkles"
-            fill="none"
-            height="31"
-            stroke="currentColor"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="1.55"
-            viewBox="0 0 24 24"
-            width="31"
-            xmlns="http://www.w3.org/2000/svg"
+          <button
+            aria-label="تغيير الرمز أو الأيقونة"
+            class="custom-page-icon-btn"
+            title="تغيير الرمز أو الأيقونة"
+            type="button"
           >
-            <path
-              d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"
-            />
-            <path
-              d="M20 2v4"
-            />
-            <path
-              d="M22 4h-4"
-            />
-            <circle
-              cx="4"
-              cy="20"
-              r="2"
-            />
-          </svg>
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-house custom-page-icon-display"
+              fill="none"
+              height="28"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.8"
+              viewBox="0 0 24 24"
+              width="28"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"
+              />
+              <path
+                d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
+              />
+            </svg>
+          </button>
         </div>
-        <h2>
-          كل شغل متجرك في مكان واحد
-        </h2>
-        <p>
-          رتّب ماكس على طريقة شغلك، وواصل العمل حتى من دون إنترنت.
-        </p>
         <div
-          class="home-hero__actions"
+          class="custom-page-header__title-row"
         >
-          <button
-            class="button button--primary"
-            type="button"
-          >
-            <span
-              class="button__icon"
-            >
-              <svg
-                aria-hidden="true"
-                class="lucide lucide-package"
-                fill="none"
-                height="18"
-                stroke="currentColor"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                viewBox="0 0 24 24"
-                width="18"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"
-                />
-                <path
-                  d="M12 22V12"
-                />
-                <polyline
-                  points="3.29 7 12 12 20.71 7"
-                />
-                <path
-                  d="m7.5 4.27 9 5.15"
-                />
-              </svg>
-            </span>
-            <span
-              class="button__label"
-            >
-              افتح العناصر
-            </span>
-          </button>
-          <button
-            class="button button--secondary"
-            type="button"
-          >
-            <span
-              class="button__icon"
-            >
-              <svg
-                aria-hidden="true"
-                class="lucide lucide-search"
-                fill="none"
-                height="18"
-                stroke="currentColor"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                viewBox="0 0 24 24"
-                width="18"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="m21 21-4.34-4.34"
-                />
-                <circle
-                  cx="11"
-                  cy="11"
-                  r="8"
-                />
-              </svg>
-            </span>
-            <span
-              class="button__label"
-            >
-              افتح قائمة الأوامر
-            </span>
-          </button>
+          <input
+            class="custom-page-title-input"
+            placeholder="نظرة عامة على المتجر"
+            value=""
+          />
         </div>
-      </section>
-      <section
-        aria-label="مساحة العمل"
-        class="workspace-start"
+      </div>
+      <div
+        class="custom-page-content"
       >
-        <p
-          class="workspace-start__label"
+        <div
+          class="notion-editor-canvas"
         >
-          مساحة العمل
-        </p>
-        <button
-          class="workspace-link"
-          type="button"
-        >
-          <span
-            class="workspace-link__icon"
+          <div
+            class="notion-block-row"
+            data-drag-over="false"
+            data-dragging="false"
+            data-type="h1"
           >
-            <svg
-              aria-hidden="true"
-              class="lucide lucide-package"
-              fill="none"
-              height="17"
-              stroke="currentColor"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              viewBox="0 0 24 24"
-              width="17"
-              xmlns="http://www.w3.org/2000/svg"
+            <div
+              class="notion-block-gutter"
             >
-              <path
-                d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"
-              />
-              <path
-                d="M12 22V12"
-              />
-              <polyline
-                points="3.29 7 12 12 20.71 7"
-              />
-              <path
-                d="m7.5 4.27 9 5.15"
-              />
-            </svg>
-          </span>
-          <span>
-            <strong>
-              العناصر
-            </strong>
-            <small>
-              أضف أول عنصر، وسجّل فقط البيانات المهمة لمتجرك.
-            </small>
-          </span>
-          <svg
-            aria-hidden="true"
-            class="lucide lucide-arrow-right workspace-link__arrow"
-            fill="none"
-            height="15"
-            stroke="currentColor"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            viewBox="0 0 24 24"
-            width="15"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path
-              d="M5 12h14"
-            />
-            <path
-              d="m12 5 7 7-7 7"
-            />
-          </svg>
-        </button>
-        <button
-          class="workspace-link"
-          type="button"
-        >
-          <span
-            class="workspace-link__icon"
-          >
-            <svg
-              aria-hidden="true"
-              class="lucide lucide-receipt-text"
-              fill="none"
-              height="17"
-              stroke="currentColor"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              viewBox="0 0 24 24"
-              width="17"
-              xmlns="http://www.w3.org/2000/svg"
+              <button
+                aria-label="Add block below"
+                class="notion-gutter-btn notion-gutter-btn--add"
+                title="إضافة سطر"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-plus"
+                  fill="none"
+                  height="14"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="14"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M5 12h14"
+                  />
+                  <path
+                    d="M12 5v14"
+                  />
+                </svg>
+              </button>
+              <button
+                aria-label="Drag to move"
+                class="notion-gutter-btn notion-gutter-btn--drag"
+                draggable="true"
+                title="سحب للترتيب"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-grip-vertical"
+                  fill="none"
+                  height="14"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="14"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <circle
+                    cx="9"
+                    cy="12"
+                    r="1"
+                  />
+                  <circle
+                    cx="9"
+                    cy="5"
+                    r="1"
+                  />
+                  <circle
+                    cx="9"
+                    cy="19"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="12"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="5"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="19"
+                    r="1"
+                  />
+                </svg>
+              </button>
+            </div>
+            <div
+              class="notion-block-body"
             >
-              <path
-                d="M13 16H8"
+              <input
+                class="notion-heading-input notion-heading-input--h1"
+                placeholder="عنوان 1..."
+                value="Shop Dashboard & Overview"
               />
-              <path
-                d="M14 8H8"
-              />
-              <path
-                d="M16 12H8"
-              />
-              <path
-                d="M4 3a1 1 0 0 1 1-1 1.3 1.3 0 0 1 .7.2l.933.6a1.3 1.3 0 0 0 1.4 0l.934-.6a1.3 1.3 0 0 1 1.4 0l.933.6a1.3 1.3 0 0 0 1.4 0l.933-.6a1.3 1.3 0 0 1 1.4 0l.934.6a1.3 1.3 0 0 0 1.4 0l.933-.6A1.3 1.3 0 0 1 19 2a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1 1.3 1.3 0 0 1-.7-.2l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.934.6a1.3 1.3 0 0 1-1.4 0l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-1.4 0l-.934-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-.7.2 1 1 0 0 1-1-1z"
-              />
-            </svg>
-          </span>
-          <span>
-            <strong>
-              المعاملات
-            </strong>
-            <small>
-              سجّل أول عملية بيع أو شراء أو تحويل لتظهر هنا.
-            </small>
-          </span>
-          <svg
-            aria-hidden="true"
-            class="lucide lucide-arrow-right workspace-link__arrow"
-            fill="none"
-            height="15"
-            stroke="currentColor"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            viewBox="0 0 24 24"
-            width="15"
-            xmlns="http://www.w3.org/2000/svg"
+            </div>
+          </div>
+          <div
+            class="notion-block-row"
+            data-drag-over="false"
+            data-dragging="false"
+            data-type="callout"
           >
-            <path
-              d="M5 12h14"
-            />
-            <path
-              d="m12 5 7 7-7 7"
-            />
-          </svg>
-        </button>
-        <button
-          class="workspace-link"
-          type="button"
-        >
-          <span
-            class="workspace-link__icon"
-          >
-            <svg
-              aria-hidden="true"
-              class="lucide lucide-search"
-              fill="none"
-              height="17"
-              stroke="currentColor"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              viewBox="0 0 24 24"
-              width="17"
-              xmlns="http://www.w3.org/2000/svg"
+            <div
+              class="notion-block-gutter"
             >
-              <path
-                d="m21 21-4.34-4.34"
-              />
-              <circle
-                cx="11"
-                cy="11"
-                r="8"
-              />
-            </svg>
-          </span>
-          <span>
-            <strong>
-              افتح قائمة الأوامر
-            </strong>
-            <small>
-              اضغط Ctrl K
-            </small>
-          </span>
-          <svg
-            aria-hidden="true"
-            class="lucide lucide-arrow-right workspace-link__arrow"
-            fill="none"
-            height="15"
-            stroke="currentColor"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            viewBox="0 0 24 24"
-            width="15"
-            xmlns="http://www.w3.org/2000/svg"
+              <button
+                aria-label="Add block below"
+                class="notion-gutter-btn notion-gutter-btn--add"
+                title="إضافة سطر"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-plus"
+                  fill="none"
+                  height="14"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="14"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M5 12h14"
+                  />
+                  <path
+                    d="M12 5v14"
+                  />
+                </svg>
+              </button>
+              <button
+                aria-label="Drag to move"
+                class="notion-gutter-btn notion-gutter-btn--drag"
+                draggable="true"
+                title="سحب للترتيب"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-grip-vertical"
+                  fill="none"
+                  height="14"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="14"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <circle
+                    cx="9"
+                    cy="12"
+                    r="1"
+                  />
+                  <circle
+                    cx="9"
+                    cy="5"
+                    r="1"
+                  />
+                  <circle
+                    cx="9"
+                    cy="19"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="12"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="5"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="19"
+                    r="1"
+                  />
+                </svg>
+              </button>
+            </div>
+            <div
+              class="notion-block-body"
+            >
+              <div
+                class="notion-callout-card"
+              >
+                <span
+                  class="notion-callout-icon"
+                >
+                  💡
+                </span>
+                <textarea
+                  class="notion-callout-input"
+                  placeholder="ملاحظة هامة..."
+                  rows="1"
+                >
+                  Welcome to Max. You can type **/** anywhere to insert headings, notes, bullet lists, or embed live interactive database tables directly into this page.
+                </textarea>
+              </div>
+            </div>
+          </div>
+          <div
+            class="notion-block-row"
+            data-drag-over="false"
+            data-dragging="false"
+            data-type="divider"
           >
-            <path
-              d="M5 12h14"
-            />
-            <path
-              d="m12 5 7 7-7 7"
-            />
-          </svg>
-        </button>
-      </section>
-      <section
-        class="keyboard-note"
-      >
-        <kbd>
-          Tab
-        </kbd>
-        <kbd>
-          Enter
-        </kbd>
-        <kbd>
-          Esc
-        </kbd>
-        <kbd>
-          ↑ ↓
-        </kbd>
-        <div>
-          <strong>
-            لوحة المفاتيح
-          </strong>
-          <p>
-            استخدم Tab للتنقّل، وEnter للتأكيد، وEscape للرجوع.
-          </p>
+            <div
+              class="notion-block-gutter"
+            >
+              <button
+                aria-label="Add block below"
+                class="notion-gutter-btn notion-gutter-btn--add"
+                title="إضافة سطر"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-plus"
+                  fill="none"
+                  height="14"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="14"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M5 12h14"
+                  />
+                  <path
+                    d="M12 5v14"
+                  />
+                </svg>
+              </button>
+              <button
+                aria-label="Drag to move"
+                class="notion-gutter-btn notion-gutter-btn--drag"
+                draggable="true"
+                title="سحب للترتيب"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-grip-vertical"
+                  fill="none"
+                  height="14"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="14"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <circle
+                    cx="9"
+                    cy="12"
+                    r="1"
+                  />
+                  <circle
+                    cx="9"
+                    cy="5"
+                    r="1"
+                  />
+                  <circle
+                    cx="9"
+                    cy="19"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="12"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="5"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="19"
+                    r="1"
+                  />
+                </svg>
+              </button>
+            </div>
+            <div
+              class="notion-block-body"
+            >
+              <div
+                class="notion-divider-wrap"
+              >
+                <hr
+                  class="notion-divider"
+                />
+              </div>
+            </div>
+          </div>
+          <div
+            class="notion-block-row"
+            data-drag-over="false"
+            data-dragging="false"
+            data-type="h2"
+          >
+            <div
+              class="notion-block-gutter"
+            >
+              <button
+                aria-label="Add block below"
+                class="notion-gutter-btn notion-gutter-btn--add"
+                title="إضافة سطر"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-plus"
+                  fill="none"
+                  height="14"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="14"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M5 12h14"
+                  />
+                  <path
+                    d="M12 5v14"
+                  />
+                </svg>
+              </button>
+              <button
+                aria-label="Drag to move"
+                class="notion-gutter-btn notion-gutter-btn--drag"
+                draggable="true"
+                title="سحب للترتيب"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-grip-vertical"
+                  fill="none"
+                  height="14"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="14"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <circle
+                    cx="9"
+                    cy="12"
+                    r="1"
+                  />
+                  <circle
+                    cx="9"
+                    cy="5"
+                    r="1"
+                  />
+                  <circle
+                    cx="9"
+                    cy="19"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="12"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="5"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="19"
+                    r="1"
+                  />
+                </svg>
+              </button>
+            </div>
+            <div
+              class="notion-block-body"
+            >
+              <input
+                class="notion-heading-input notion-heading-input--h2"
+                placeholder="عنوان 2..."
+                value="Quick Notes & Priorities"
+              />
+            </div>
+          </div>
+          <div
+            class="notion-block-row"
+            data-drag-over="false"
+            data-dragging="false"
+            data-type="bullet"
+          >
+            <div
+              class="notion-block-gutter"
+            >
+              <button
+                aria-label="Add block below"
+                class="notion-gutter-btn notion-gutter-btn--add"
+                title="إضافة سطر"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-plus"
+                  fill="none"
+                  height="14"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="14"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M5 12h14"
+                  />
+                  <path
+                    d="M12 5v14"
+                  />
+                </svg>
+              </button>
+              <button
+                aria-label="Drag to move"
+                class="notion-gutter-btn notion-gutter-btn--drag"
+                draggable="true"
+                title="سحب للترتيب"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-grip-vertical"
+                  fill="none"
+                  height="14"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="14"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <circle
+                    cx="9"
+                    cy="12"
+                    r="1"
+                  />
+                  <circle
+                    cx="9"
+                    cy="5"
+                    r="1"
+                  />
+                  <circle
+                    cx="9"
+                    cy="19"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="12"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="5"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="19"
+                    r="1"
+                  />
+                </svg>
+              </button>
+            </div>
+            <div
+              class="notion-block-body"
+            >
+              <div
+                class="notion-bullet-wrap"
+              >
+                <span
+                  class="notion-bullet-dot"
+                />
+                <input
+                  class="notion-bullet-input"
+                  placeholder="عنصر قائمة..."
+                  value="Track daily cash reconciliation before closing drawer."
+                />
+              </div>
+            </div>
+          </div>
+          <div
+            class="notion-block-row"
+            data-drag-over="false"
+            data-dragging="false"
+            data-type="bullet"
+          >
+            <div
+              class="notion-block-gutter"
+            >
+              <button
+                aria-label="Add block below"
+                class="notion-gutter-btn notion-gutter-btn--add"
+                title="إضافة سطر"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-plus"
+                  fill="none"
+                  height="14"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="14"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M5 12h14"
+                  />
+                  <path
+                    d="M12 5v14"
+                  />
+                </svg>
+              </button>
+              <button
+                aria-label="Drag to move"
+                class="notion-gutter-btn notion-gutter-btn--drag"
+                draggable="true"
+                title="سحب للترتيب"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-grip-vertical"
+                  fill="none"
+                  height="14"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="14"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <circle
+                    cx="9"
+                    cy="12"
+                    r="1"
+                  />
+                  <circle
+                    cx="9"
+                    cy="5"
+                    r="1"
+                  />
+                  <circle
+                    cx="9"
+                    cy="19"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="12"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="5"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="19"
+                    r="1"
+                  />
+                </svg>
+              </button>
+            </div>
+            <div
+              class="notion-block-body"
+            >
+              <div
+                class="notion-bullet-wrap"
+              >
+                <span
+                  class="notion-bullet-dot"
+                />
+                <input
+                  class="notion-bullet-input"
+                  placeholder="عنصر قائمة..."
+                  value="Review low stock items and contact suppliers for reorders."
+                />
+              </div>
+            </div>
+          </div>
+          <div
+            class="notion-block-row"
+            data-drag-over="false"
+            data-dragging="false"
+            data-type="divider"
+          >
+            <div
+              class="notion-block-gutter"
+            >
+              <button
+                aria-label="Add block below"
+                class="notion-gutter-btn notion-gutter-btn--add"
+                title="إضافة سطر"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-plus"
+                  fill="none"
+                  height="14"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="14"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M5 12h14"
+                  />
+                  <path
+                    d="M12 5v14"
+                  />
+                </svg>
+              </button>
+              <button
+                aria-label="Drag to move"
+                class="notion-gutter-btn notion-gutter-btn--drag"
+                draggable="true"
+                title="سحب للترتيب"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-grip-vertical"
+                  fill="none"
+                  height="14"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="14"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <circle
+                    cx="9"
+                    cy="12"
+                    r="1"
+                  />
+                  <circle
+                    cx="9"
+                    cy="5"
+                    r="1"
+                  />
+                  <circle
+                    cx="9"
+                    cy="19"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="12"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="5"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="19"
+                    r="1"
+                  />
+                </svg>
+              </button>
+            </div>
+            <div
+              class="notion-block-body"
+            >
+              <div
+                class="notion-divider-wrap"
+              >
+                <hr
+                  class="notion-divider"
+                />
+              </div>
+            </div>
+          </div>
+          <div
+            class="notion-block-row"
+            data-drag-over="false"
+            data-dragging="false"
+            data-type="database-view"
+          >
+            <div
+              class="notion-block-gutter"
+            >
+              <button
+                aria-label="Add block below"
+                class="notion-gutter-btn notion-gutter-btn--add"
+                title="إضافة سطر"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-plus"
+                  fill="none"
+                  height="14"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="14"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M5 12h14"
+                  />
+                  <path
+                    d="M12 5v14"
+                  />
+                </svg>
+              </button>
+              <button
+                aria-label="Drag to move"
+                class="notion-gutter-btn notion-gutter-btn--drag"
+                draggable="true"
+                title="سحب للترتيب"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-grip-vertical"
+                  fill="none"
+                  height="14"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="14"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <circle
+                    cx="9"
+                    cy="12"
+                    r="1"
+                  />
+                  <circle
+                    cx="9"
+                    cy="5"
+                    r="1"
+                  />
+                  <circle
+                    cx="9"
+                    cy="19"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="12"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="5"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="19"
+                    r="1"
+                  />
+                </svg>
+              </button>
+            </div>
+            <div
+              class="notion-block-body"
+            >
+              <div
+                class="notion-embedded-db-card"
+              >
+                <div
+                  class="notion-embedded-db-header"
+                >
+                  <div
+                    class="notion-embedded-db-title"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      class="lucide lucide-database"
+                      fill="none"
+                      height="16"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      width="16"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <ellipse
+                        cx="12"
+                        cy="5"
+                        rx="9"
+                        ry="3"
+                      />
+                      <path
+                        d="M3 5V19A9 3 0 0 0 21 19V5"
+                      />
+                      <path
+                        d="M3 12A9 3 0 0 0 21 12"
+                      />
+                    </svg>
+                    <span>
+                      المطابقة اليومية
+                    </span>
+                  </div>
+                  <div
+                    class="notion-embedded-db-actions"
+                  >
+                    <select
+                      aria-label="Switch Database"
+                      class="notion-db-switch-select"
+                    >
+                      <option
+                        value="items"
+                      >
+                        الأصناف
+                      </option>
+                      <option
+                        value="people"
+                      >
+                        الأشخاص
+                      </option>
+                      <option
+                        value="transactions"
+                      >
+                        المعاملات
+                      </option>
+                      <option
+                        value="accounts"
+                      >
+                        الحسابات
+                      </option>
+                      <option
+                        value="reconciliation"
+                      >
+                        المطابقة
+                      </option>
+                    </select>
+                    <button
+                      aria-label="حذف العرض"
+                      class="notion-embedded-db-delete-btn"
+                      type="button"
+                    >
+                      <svg
+                        aria-hidden="true"
+                        class="lucide lucide-trash2 lucide-trash-2"
+                        fill="none"
+                        height="14"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        viewBox="0 0 24 24"
+                        width="14"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          d="M10 11v6"
+                        />
+                        <path
+                          d="M14 11v6"
+                        />
+                        <path
+                          d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"
+                        />
+                        <path
+                          d="M3 6h18"
+                        />
+                        <path
+                          d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <div
+                  class="notion-embedded-db-content"
+                >
+                  <div
+                    class="reconciliation-workspace"
+                  >
+                    <div
+                      class="reconciliation-toolbar"
+                    >
+                      <div>
+                        <h2>
+                          مطابقة الخزينة اليومية
+                        </h2>
+                        <p
+                          class="step-subtitle"
+                        >
+                          نقدية البداية + المقبوضات والمبيعات - المصروفات = النقدية المتوقعة. طابق النقدية الفعلية بعد الجرد.
+                        </p>
+                      </div>
+                      <button
+                        class="button button--primary"
+                        type="button"
+                      >
+                        <span
+                          class="button__icon"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class="lucide lucide-lock-open"
+                            fill="none"
+                            height="16"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            viewBox="0 0 24 24"
+                            width="16"
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <rect
+                              height="11"
+                              rx="2"
+                              ry="2"
+                              width="18"
+                              x="3"
+                              y="11"
+                            />
+                            <path
+                              d="M7 11V7a5 5 0 0 1 9.9-1"
+                            />
+                          </svg>
+                        </span>
+                        <span
+                          class="button__label"
+                        >
+                          بدء اليوم / فتح الخزينة
+                        </span>
+                      </button>
+                    </div>
+                    <section
+                      aria-busy="false"
+                      class="active-drawer-card"
+                    >
+                      <div
+                        class="active-drawer-head"
+                      >
+                        <div
+                          class="drawer-status-pill"
+                          data-open="false"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class="lucide lucide-lock"
+                            fill="none"
+                            height="16"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            viewBox="0 0 24 24"
+                            width="16"
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <rect
+                              height="11"
+                              rx="2"
+                              ry="2"
+                              width="18"
+                              x="3"
+                              y="11"
+                            />
+                            <path
+                              d="M7 11V7a5 5 0 0 1 10 0v4"
+                            />
+                          </svg>
+                          <strong>
+                            مغلقة
+                          </strong>
+                        </div>
+                      </div>
+                      <div
+                        class="drawer-closed-banner"
+                      >
+                        <p>
+                          ابدأ اليوم بتأكيد رصيد الخزينة الافتتاحي ومتابعة العمليات.
+                        </p>
+                        <button
+                          class="button button--primary"
+                          type="button"
+                        >
+                          <span
+                            class="button__icon"
+                          >
+                            <svg
+                              aria-hidden="true"
+                              class="lucide lucide-plus"
+                              fill="none"
+                              height="16"
+                              stroke="currentColor"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              stroke-width="2"
+                              viewBox="0 0 24 24"
+                              width="16"
+                              xmlns="http://www.w3.org/2000/svg"
+                            >
+                              <path
+                                d="M5 12h14"
+                              />
+                              <path
+                                d="M12 5v14"
+                              />
+                            </svg>
+                          </span>
+                          <span
+                            class="button__label"
+                          >
+                            بدء اليوم / فتح الخزينة
+                          </span>
+                        </button>
+                      </div>
+                    </section>
+                    <section
+                      class="reconciliation-history-section"
+                    >
+                      <div
+                        class="section-title"
+                      >
+                        <svg
+                          aria-hidden="true"
+                          class="lucide lucide-rotate-ccw-clock"
+                          fill="none"
+                          height="18"
+                          stroke="currentColor"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          viewBox="0 0 24 24"
+                          width="18"
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <path
+                            d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"
+                          />
+                          <path
+                            d="M3 3v5h5"
+                          />
+                          <path
+                            d="M12 7v5l4 2"
+                          />
+                        </svg>
+                        <h3>
+                          سجل المطابقات اليومية
+                        </h3>
+                      </div>
+                      <div
+                        class="object-empty"
+                      >
+                        <svg
+                          aria-hidden="true"
+                          class="lucide lucide-scale"
+                          fill="none"
+                          height="24"
+                          stroke="currentColor"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          viewBox="0 0 24 24"
+                          width="24"
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <path
+                            d="M12 3v18"
+                          />
+                          <path
+                            d="m19 8 3 8a5 5 0 0 1-6 0zV7"
+                          />
+                          <path
+                            d="M3 7h1a17 17 0 0 0 8-2 17 17 0 0 0 8 2h1"
+                          />
+                          <path
+                            d="m5 8 3 8a5 5 0 0 1-6 0zV7"
+                          />
+                          <path
+                            d="M7 21h10"
+                          />
+                        </svg>
+                        <p>
+                          لا توجد جلسات مطابقة سابقة.
+                        </p>
+                      </div>
+                    </section>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div
+            class="notion-canvas-bottom-click-target"
+          />
         </div>
-      </section>
+      </div>
     </div>
   </main>
 </div>

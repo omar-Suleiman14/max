@@ -2,8 +2,10 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   Coins,
+  ContactRound,
   History,
   Landmark,
+  Package,
   Plus,
   Receipt,
   RotateCcw,
@@ -14,7 +16,7 @@ import {
   Wallet,
   X,
 } from 'lucide-react';
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 
 import type { AccountDefinition } from '../../shared/account-contract';
 import type { ConfigurableRecord } from '../../shared/object-contract';
@@ -313,8 +315,10 @@ export function TransactionsWorkspace({ createRequest, locale }: TransactionsWor
     void load();
   }, [load]);
 
+  const lastHandledCreateRef = useRef(createRequest);
   useEffect(() => {
-    if (createRequest > 0) {
+    if (createRequest > lastHandledCreateRef.current) {
+      lastHandledCreateRef.current = createRequest;
       setEditorOpen(true);
     }
   }, [createRequest]);
@@ -479,8 +483,16 @@ export function TransactionsWorkspace({ createRequest, locale }: TransactionsWor
                     <div>
                       {tx.note && <strong className="transaction-card__note">{tx.note}</strong>}
                       <div className="transaction-card__tags">
-                        {tx.personLabel && <span className="tag">👤 {tx.personLabel}</span>}
-                        {tx.itemLabel && <span className="tag">📦 {tx.itemLabel}</span>}
+                        {tx.personLabel && (
+                          <span className="tag">
+                            <ContactRound aria-hidden="true" size={12} strokeWidth={1.8} /> {tx.personLabel}
+                          </span>
+                        )}
+                        {tx.itemLabel && (
+                          <span className="tag">
+                            <Package aria-hidden="true" size={12} strokeWidth={1.8} /> {tx.itemLabel}
+                          </span>
+                        )}
                       </div>
                     </div>
 

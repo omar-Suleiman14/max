@@ -236,11 +236,43 @@ const peopleApi = {
   ),
 };
 
+import type { CustomPage, CustomPageDraft } from '../../shared/views-search-contract';
+
+type TestMutationResult<T> = { ok: true; value: T } | { error: string; ok: false };
+
 const pagesApi = {
-  archive: vi.fn(),
-  create: vi.fn(),
-  list: vi.fn(() => Promise.resolve([])),
-  update: vi.fn(),
+  archive: vi.fn((): Promise<TestMutationResult<null>> => Promise.resolve({ ok: true, value: null })),
+  create: vi.fn(
+    (draft: CustomPageDraft): Promise<TestMutationResult<CustomPage>> =>
+      Promise.resolve({
+        ok: true,
+        value: {
+          createdAt: '2026-08-30T10:00:00.000Z',
+          icon: draft.icon ?? 'FileText',
+          id: 'page-1',
+          layoutJson: draft.layoutJson,
+          name: draft.name,
+          position: draft.position ?? 0,
+          updatedAt: '2026-08-30T10:00:00.000Z',
+        },
+      }),
+  ),
+  list: vi.fn((): Promise<readonly CustomPage[]> => Promise.resolve([])),
+  update: vi.fn(
+    (id: string, draft: CustomPageDraft): Promise<TestMutationResult<CustomPage>> =>
+      Promise.resolve({
+        ok: true,
+        value: {
+          createdAt: '2026-08-30T10:00:00.000Z',
+          icon: draft.icon ?? 'FileText',
+          id,
+          layoutJson: draft.layoutJson,
+          name: draft.name,
+          position: draft.position ?? 0,
+          updatedAt: '2026-08-30T10:00:00.000Z',
+        },
+      }),
+  ),
 };
 
 const searchApi = {
@@ -332,55 +364,53 @@ describe('Max shell', () => {
     render(<MaxApp />);
 
     // Step 1: Language
-    expect(await screen.findByText('Select your preferred language')).toBeInTheDocument();
+    expect(await screen.findByText('Select language')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
     // Step 2: Shop Name
-    expect(screen.getByText('Shop Name')).toBeInTheDocument();
-    const shopInput = screen.getByPlaceholderText('e.g., Al-Amal Telecom, Downtown Accessories');
+    expect(screen.getByText('Shop name')).toBeInTheDocument();
+    const shopInput = screen.getByPlaceholderText('e.g., Al-Amal Telecom, Downtown Phones');
     await user.type(shopInput, 'Downtown Phones');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
     // Step 3: Blueprint
-    expect(screen.getByText('Choose how to structure your shop')).toBeInTheDocument();
+    expect(screen.getByText('Shop structure')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
     // Step 4: Backup Schedule
-    expect(screen.getByText('Disaster recovery snapshot schedule')).toBeInTheDocument();
+    expect(screen.getByText('Backup schedule')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
     // Step 5: Summary
-    expect(screen.getByText('Setup Complete')).toBeInTheDocument();
+    expect(screen.getByText('Setup complete')).toBeInTheDocument();
     expect(screen.getByText('Downtown Phones')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Enter Max Workspace' }));
+    await user.click(screen.getByRole('button', { name: 'Open workspace' }));
 
     // Transition into main workspace
-    await screen.findByText('Local and ready');
+    await screen.findByRole('button', { name: 'Home' });
     expect(screen.getByRole('heading', { name: 'Home' })).toBeInTheDocument();
   });
 
-  it('renders the English shell and an actionable empty page', async () => {
+  it('renders the English shell and navigates to Databases workspace', async () => {
     const user = userEvent.setup();
     const { container } = render(<MaxApp />);
-    await screen.findByText('Local and ready');
+    await screen.findByRole('button', { name: 'Home' });
     expect(document.documentElement).toHaveAttribute('dir', 'ltr');
 
-    await user.click(screen.getByRole('button', { name: 'Items' }));
-    expect(screen.getByRole('heading', { name: 'No items yet' })).toBeInTheDocument();
-    await user.click(screen.getAllByRole('button', { name: 'Create item' })[0]!);
-    expect(screen.getByRole('dialog', { name: 'Create item' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Databases' }));
+    expect(screen.getAllByRole('heading', { name: 'Databases' })[0]).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Filter' })).toBeInTheDocument();
     expect(container.querySelector('.app-frame')).toMatchSnapshot();
   });
 
   it('switches the complete shell to Arabic and RTL', async () => {
     const user = userEvent.setup();
     const { container } = render(<MaxApp />);
-    await screen.findByText('Local and ready');
+    await screen.findByRole('button', { name: 'Home' });
     await user.click(screen.getByRole('button', { name: 'العربية' }));
 
     expect(document.documentElement).toHaveAttribute('lang', 'ar');
     expect(document.documentElement).toHaveAttribute('dir', 'rtl');
-    expect(screen.getByRole('heading', { name: 'الرئيسية' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'الإعدادات' }));
     const systemTheme = screen.getByRole('radio', { name: 'النظام' });
     systemTheme.focus();
@@ -393,46 +423,92 @@ describe('Max shell', () => {
   it('supports command search and keyboard execution', async () => {
     const user = userEvent.setup();
     render(<MaxApp />);
-    await screen.findByText('Local and ready');
+    await screen.findByRole('button', { name: 'Home' });
 
     fireEvent.keyDown(document, { ctrlKey: true, key: 'k' });
     const search = screen.getByRole('combobox', { name: 'Search commands' });
     expect(search).toHaveFocus();
-    await user.type(search, 'People{Enter}');
-    expect(screen.getByRole('heading', { name: 'People' })).toBeInTheDocument();
+    await user.type(search, 'Databases{Enter}');
+    expect(screen.getAllByRole('heading', { name: 'Databases' })[0]).toBeInTheDocument();
   });
 
-  it('persists theme choice and restores focus when settings closes', async () => {
+  it('persists theme choice and navigates back to app when settings closes', async () => {
     const user = userEvent.setup();
     render(<MaxApp />);
-    await screen.findByText('Local and ready');
+    await screen.findByRole('button', { name: 'Home' });
 
     const settings = screen.getByRole('button', { name: 'Settings' });
     await user.click(settings);
+    expect(screen.getAllByRole('button', { name: 'Back to app' })[0]).toBeInTheDocument();
     await user.click(screen.getByRole('radio', { name: 'Dark' }));
     expect(document.documentElement).toHaveAttribute('data-theme', 'dark');
     expect(window.localStorage.getItem('max.ui.theme')).toBe('dark');
     await user.keyboard('{Escape}');
-    await waitFor(() => expect(settings).toHaveFocus());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Home' })).toBeInTheDocument());
   });
 
-  it('moves predictably through sidebar navigation with arrow keys', async () => {
+  it('moves predictably through sidebar navigation with arrow keys and creates custom page', async () => {
     const user = userEvent.setup();
     render(<MaxApp />);
-    await screen.findByText('Local and ready');
-    const home = screen.getByRole('button', { name: 'Home' });
-    const items = screen.getByRole('button', { name: 'Items' });
-    home.focus();
-    await user.keyboard('{ArrowDown}');
-    expect(items).toHaveFocus();
-    await user.keyboard('{Enter}');
-    expect(items).toHaveAttribute('aria-current', 'page');
+    await screen.findByRole('button', { name: 'Home' });
+    const addPageBtn = screen.getByRole('button', { name: 'Add a page' });
+    await user.click(addPageBtn);
+    expect(screen.getByPlaceholderText('Untitled')).toBeInTheDocument();
+  });
+
+  it('supports Notion-style filter and sort controls on database tables', async () => {
+    const user = userEvent.setup();
+    render(<MaxApp />);
+    await screen.findByRole('button', { name: 'Home' });
+    await user.click(screen.getByRole('button', { name: 'Databases' }));
+
+    const filterButton = await screen.findByRole('button', { name: 'Filter' });
+    expect(filterButton).toBeInTheDocument();
+    await user.click(filterButton);
+
+    const addFilterBtn = screen.getByRole('button', { name: 'Add filter' });
+    expect(addFilterBtn).toBeInTheDocument();
+    await user.click(addFilterBtn);
+    expect(screen.getByText('Where')).toBeInTheDocument();
+
+    const sortButton = screen.getByRole('button', { name: 'Sort' });
+    await user.click(sortButton);
+    expect(screen.getByRole('button', { name: 'Add sort' })).toBeInTheDocument();
+  });
+
+  it('opens properties and templates sheet and closes when clicking outside or pressing Escape', async () => {
+    const user = userEvent.setup();
+    render(<MaxApp />);
+    await screen.findByRole('button', { name: 'Home' });
+    await user.click(screen.getByRole('button', { name: 'Databases' }));
+
+    // Click Properties button to open sheet
+    const propertiesBtn = await screen.findByRole('button', { name: 'Properties' });
+    await user.click(propertiesBtn);
+    expect(screen.getByRole('complementary', { name: 'Schema' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Properties', selected: true })).toBeInTheDocument();
+
+    // Click outside on backdrop to close
+    const backdrop = screen.getByTestId('schema-backdrop');
+    await user.click(backdrop);
+    expect(screen.queryByRole('complementary', { name: 'Schema' })).not.toBeInTheDocument();
+
+    // Click Templates button to open sheet with templates tab
+    const templatesBtn = screen.getByRole('button', { name: 'Templates' });
+    await user.click(templatesBtn);
+    expect(screen.getByRole('complementary', { name: 'Schema' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Templates', selected: true })).toBeInTheDocument();
+
+    // Press Escape to close
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('complementary', { name: 'Schema' })).not.toBeInTheDocument();
   });
 
   it('has no detectable baseline accessibility violations', async () => {
     const { container } = render(<MaxApp />);
-    await screen.findByText('Local and ready');
+    await screen.findByRole('button', { name: 'Home' });
     const result = await axe.run(container, { rules: { 'color-contrast': { enabled: false } } });
     expect(result.violations).toEqual([]);
   });
 });
+

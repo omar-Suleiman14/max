@@ -579,6 +579,10 @@ export function registerIpcHandlers({
       return null;
     });
   });
+  ipcMain.handle(IPC_CHANNELS.transactionSummary, (event) => {
+    trust(event);
+    return database.transactions.getLedgerSummary();
+  });
   // Quick Entry
   ipcMain.handle(IPC_CHANNELS.quickEntryGetSuggestion, (event, itemId: unknown, templateId: unknown) => {
     trust(event);
