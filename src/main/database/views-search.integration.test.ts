@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { DatabaseService } from './database-service';
@@ -124,5 +127,43 @@ describe('ViewsPagesRepository & SearchService', () => {
     const r4 = db.search.query('s24 ultra');
     expect(r4.length).toBeGreaterThanOrEqual(1);
     expect(r4[0]?.kind).toBe('transaction');
+  });
+
+  it('updates the persistent index incrementally when configurable values change or records are archived', () => {
+    const db = service();
+    const sku = db.objects.createProperty({
+      name: 'SKU',
+      objectKind: 'item',
+      rules: { choices: [], digitsOnly: false, required: false, unique: true },
+      type: 'text',
+    });
+    const item = db.objects.createRecord({ label: 'Travel Charger', objectKind: 'item', values: { [sku.id]: 'FAST-CHARGE-65W' } });
+
+    expect(db.search.query('fast-charge')[0]?.id).toBe(item.id);
+    db.objects.updateRecord(item.id, { label: 'Travel Charger', objectKind: 'item', values: { [sku.id]: 'GAN-CHARGE-90W' } });
+    expect(db.search.query('fast-charge')).toEqual([]);
+    expect(db.search.query('gan-charge')[0]?.id).toBe(item.id);
+
+    db.objects.archiveRecord(item.id);
+    expect(db.search.query('gan-charge')).toEqual([]);
+  });
+
+  it('keeps indexed documents searchable across database restarts', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'max-search-index-'));
+    const filename = join(directory, 'max.sqlite');
+    try {
+      const first = new DatabaseService(filename);
+      first.initialize();
+      const account = first.accounts.createAccount({ accountType: 'wallet', initialBalance: 100, name: 'Persistent Wallet' });
+      expect(first.search.query('persistent')[0]?.id).toBe(account.id);
+      first.close();
+
+      const second = new DatabaseService(filename);
+      second.initialize();
+      expect(second.search.query('persistent')[0]?.id).toBe(account.id);
+      second.close();
+    } finally {
+      rmSync(directory, { force: true, recursive: true });
+    }
   });
 });

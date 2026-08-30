@@ -3,7 +3,7 @@
 import '@testing-library/jest-dom/vitest';
 
 import axe from 'axe-core';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -16,6 +16,8 @@ const getHealth = vi.fn(() =>
     runtime: { arch: 'x64', platform: 'windows' as const },
   }),
 );
+const resetWorkspace = vi.fn(() => Promise.resolve({ ok: true as const, value: null }));
+const scrollIntoView = vi.fn();
 
 const objectApi = {
   archiveProperty: vi.fn(),
@@ -23,8 +25,9 @@ const objectApi = {
   createProperty: vi.fn(),
   createRecord: vi.fn(),
   listAudit: vi.fn(() => Promise.resolve([])),
-  listProperties: vi.fn(() => Promise.resolve([])),
-  listRecords: vi.fn(() => Promise.resolve([])),
+  listProperties: vi.fn<() => Promise<readonly PropertyDefinition[]>>(() => Promise.resolve([])),
+  listRecords: vi.fn<() => Promise<readonly ConfigurableRecord[]>>(() => Promise.resolve([])),
+  reorderRecords: vi.fn(() => Promise.resolve({ ok: true as const, value: null })),
   updateProperty: vi.fn(),
   updateRecord: vi.fn(),
 };
@@ -50,7 +53,9 @@ const blueprintApi = {
 };
 
 import type { CompleteOnboardingDraft, ShopMetadata } from '../../shared/blueprint-contract';
-import type { QuickEntryDraft } from '../../shared/quick-entry-contract';
+import type { QuickEntryDraft, QuickEntryPriceSuggestion } from '../../shared/quick-entry-contract';
+import type { AccountDefinition } from '../../shared/account-contract';
+import type { ConfigurableRecord, PropertyDefinition, PropertyDraft } from '../../shared/object-contract';
 
 let shopMetadataState: ShopMetadata = {
   backupSchedule: 'daily',
@@ -72,6 +77,10 @@ const shopApi = {
     return Promise.resolve({ ok: true as const, value: shopMetadataState });
   }),
   getMetadata: vi.fn(() => Promise.resolve(shopMetadataState)),
+  seedDemoData: vi.fn(() => Promise.resolve({
+    ok: true as const,
+    value: { accounts: 3, items: 3, pages: 2, people: 3, transactions: 7 },
+  })),
   updateMetadata: vi.fn((patch: Partial<ShopMetadata>) => {
     shopMetadataState = { ...shopMetadataState, ...patch };
     return Promise.resolve({ ok: true as const, value: shopMetadataState });
@@ -93,7 +102,7 @@ const accountsApi = {
       },
     }),
   ),
-  list: vi.fn(() => Promise.resolve([])),
+  list: vi.fn<() => Promise<readonly AccountDefinition[]>>(() => Promise.resolve([])),
   update: vi.fn((id: string, draft: { accountType: 'cash'; initialBalance: number; name: string }) =>
     Promise.resolve({
       ok: true as const,
@@ -176,7 +185,7 @@ const transactionsApi = {
 };
 
 const quickEntryApi = {
-  getSuggestion: vi.fn(() => Promise.resolve({ amount: null, source: 'none' as const })),
+  getSuggestion: vi.fn<() => Promise<QuickEntryPriceSuggestion>>(() => Promise.resolve({ amount: null, source: 'none' as const })),
   submit: vi.fn((draft: QuickEntryDraft) =>
     Promise.resolve({
       ok: true as const,
@@ -295,7 +304,7 @@ const reconciliationApi = {
 };
 
 const backupsApi = {
-  create: vi.fn(),
+  create: vi.fn(() => Promise.resolve({ ok: true as const, value: { checksum: 'safe', createdAt: '2026-08-30', filename: 'pre-delete.maxbak', filePath: 'pre-delete.maxbak', id: 'backup-safe', schemaVersion: 6, sizeBytes: 1, trigger: 'pre-delete' as const } })),
   list: vi.fn(() => Promise.resolve([])),
   restore: vi.fn(),
   verify: vi.fn(() => Promise.resolve({ checksumMatch: true, sqliteIntegrityPassed: true, valid: true })),
@@ -324,6 +333,10 @@ beforeEach(() => {
       removeEventListener: vi.fn(),
     })),
   });
+  Object.defineProperty(Element.prototype, 'scrollIntoView', {
+    configurable: true,
+    value: scrollIntoView,
+  });
   Object.defineProperty(window, 'maxApi', {
     configurable: true,
     value: {
@@ -337,7 +350,7 @@ beforeEach(() => {
       reconciliation: reconciliationApi,
       search: searchApi,
       shop: shopApi,
-      system: { getHealth },
+      system: { getHealth, resetWorkspace },
       templates: templateApi,
       transactions: transactionsApi,
       views: viewsApi,
@@ -346,6 +359,7 @@ beforeEach(() => {
   getHealth.mockClear();
   shopApi.getMetadata.mockClear();
   shopApi.completeOnboarding.mockClear();
+  shopApi.seedDemoData.mockClear();
   accountsApi.list.mockClear();
   transactionsApi.list.mockClear();
   quickEntryApi.submit.mockClear();
@@ -353,6 +367,13 @@ beforeEach(() => {
   reconciliationApi.getCurrentSession.mockClear();
   reconciliationApi.listSessions.mockClear();
   backupsApi.list.mockClear();
+  backupsApi.create.mockClear();
+  pagesApi.archive.mockClear();
+  pagesApi.create.mockClear();
+  pagesApi.list.mockClear();
+  pagesApi.update.mockClear();
+  resetWorkspace.mockClear();
+  scrollIntoView.mockClear();
 });
 
 afterEach(() => cleanup());
@@ -388,7 +409,7 @@ describe('Max shell', () => {
 
     // Transition into main workspace
     await screen.findByRole('button', { name: 'Home' });
-    expect(screen.getByRole('heading', { name: 'Home' })).toBeInTheDocument();
+    expect(screen.getByRole('main', { name: 'Home' })).toBeInTheDocument();
   });
 
   it('renders the English shell and navigates to Databases workspace', async () => {
@@ -420,16 +441,18 @@ describe('Max shell', () => {
     expect(container.querySelector('.app-frame')).toMatchSnapshot();
   });
 
-  it('supports command search and keyboard execution', async () => {
+  it('leaves Ctrl+K unbound and opens universal data search with Ctrl+F', async () => {
     const user = userEvent.setup();
     render(<MaxApp />);
     await screen.findByRole('button', { name: 'Home' });
 
     fireEvent.keyDown(document, { ctrlKey: true, key: 'k' });
-    const search = screen.getByRole('combobox', { name: 'Search commands' });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    fireEvent.keyDown(document, { ctrlKey: true, key: 'f' });
+    const search = screen.getByRole('searchbox', { name: 'Universal Search' });
     expect(search).toHaveFocus();
-    await user.type(search, 'Databases{Enter}');
-    expect(screen.getAllByRole('heading', { name: 'Databases' })[0]).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(search).not.toBeInTheDocument();
   });
 
   it('persists theme choice and navigates back to app when settings closes', async () => {
@@ -440,6 +463,14 @@ describe('Max shell', () => {
     const settings = screen.getByRole('button', { name: 'Settings' });
     await user.click(settings);
     expect(screen.getAllByRole('button', { name: 'Back to app' })[0]).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Settings sections' })).toBeInTheDocument();
+    const appearanceSection = screen.getByRole('button', { name: 'Appearance' });
+    await user.click(appearanceSection);
+    expect(appearanceSection).toHaveAttribute('aria-current', 'page');
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
+    await user.click(screen.getByRole('button', { name: 'Add demo data' }));
+    await waitFor(() => expect(shopApi.seedDemoData).toHaveBeenCalledWith('en'));
+    expect(screen.getByRole('status')).toHaveTextContent('Demo data added.');
     await user.click(screen.getByRole('radio', { name: 'Dark' }));
     expect(document.documentElement).toHaveAttribute('data-theme', 'dark');
     expect(window.localStorage.getItem('max.ui.theme')).toBe('dark');
@@ -454,6 +485,46 @@ describe('Max shell', () => {
     const addPageBtn = screen.getByRole('button', { name: 'Add a page' });
     await user.click(addPageBtn);
     expect(screen.getByPlaceholderText('Untitled')).toBeInTheDocument();
+  });
+
+  it('shows favorites, duplicates independent pages, and omits offline copy links', async () => {
+    pagesApi.list.mockResolvedValueOnce([{
+      createdAt: '2026-08-30T10:00:00.000Z',
+      icon: 'lucide:FileText',
+      id: 'source-page',
+      layoutJson: JSON.stringify({ blocks: [{ content: 'Client brief', id: 'source-block', type: 'text' }], favorite: true, wiki: false }),
+      name: 'Client notes',
+      position: 0,
+      updatedAt: '2026-08-30T10:00:00.000Z',
+    }]);
+    const user = userEvent.setup();
+    render(<MaxApp />);
+
+    const favorites = await screen.findByRole('navigation', { name: 'Favorites' });
+    expect(within(favorites).getByRole('button', { name: 'Client notes' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Page settings' }));
+    expect(screen.queryByRole('menuitem', { name: 'Copy link' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('menuitem', { name: 'Duplicate' }));
+
+    await waitFor(() => expect(pagesApi.update).toHaveBeenCalled());
+    const duplicateCall = pagesApi.update.mock.calls.find(([id]) => id === 'page-1');
+    const duplicatedLayout = JSON.parse(duplicateCall?.[1].layoutJson ?? '{}') as { blocks?: readonly { id: string }[] };
+    expect(duplicatedLayout.blocks?.[0]?.id).not.toBe('source-block');
+    expect(screen.getByRole('main', { name: 'Client notes copy' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Change icon or emoji' })).toHaveLength(1);
+    expect(screen.queryByRole('heading', { name: 'Client notes copy' })).not.toBeInTheDocument();
+  });
+
+  it('resizes the app sidebar with an accessible persistent handle', async () => {
+    const user = userEvent.setup();
+    render(<MaxApp />);
+    await screen.findByRole('button', { name: 'Home' });
+    const handle = screen.getByRole('separator', { name: 'Resize sidebar' });
+    expect(handle).toHaveAttribute('aria-valuenow', '238');
+    handle.focus();
+    await user.keyboard('{ArrowRight}');
+    expect(handle).toHaveAttribute('aria-valuenow', '250');
+    await waitFor(() => expect(window.localStorage.getItem('max.ui.sidebar-width')).toBe('250'));
   });
 
   it('supports Notion-style filter and sort controls on database tables', async () => {
@@ -476,6 +547,95 @@ describe('Max shell', () => {
     expect(screen.getByRole('button', { name: 'Add sort' })).toBeInTheDocument();
   });
 
+  it('opens the complete transaction chooser with Ctrl+S and creates a database row inline', async () => {
+    const user = userEvent.setup();
+    objectApi.createRecord.mockResolvedValueOnce({
+      ok: true,
+      value: {
+        createdAt: '2026-08-30',
+        id: 'item-inline',
+        label: 'iPhone 15',
+        objectKind: 'item',
+        updatedAt: '2026-08-30',
+        values: {},
+      },
+    });
+    render(<MaxApp />);
+    await screen.findByRole('button', { name: 'Home' });
+
+    await user.keyboard('{Control>}s{/Control}');
+    expect(await screen.findByRole('heading', { name: 'What do you want to record?' })).toBeInTheDocument();
+    for (const choice of ['Quick sale', 'Sale', 'Purchase', 'Expense', 'Income', 'Account transfer', 'Adjustment']) {
+      expect(screen.getByRole('button', { name: new RegExp(`^${choice}`) })).toBeInTheDocument();
+    }
+    await user.click(screen.getByRole('button', { name: /^Quick sale/ }));
+    expect(await screen.findByRole('heading', { name: 'Quick Sale Entry' })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    await user.click(screen.getByRole('button', { name: 'Databases' }));
+    await user.click(await screen.findByRole('button', { name: 'New' }));
+    await user.type(screen.getByRole('textbox', { name: 'New item name' }), 'iPhone 15{Enter}');
+
+    await waitFor(() => expect(objectApi.createRecord).toHaveBeenCalledWith({ label: 'iPhone 15', objectKind: 'item', values: {} }));
+  });
+
+  it('prefills a selected sale item note and suggested amount', async () => {
+    const user = userEvent.setup();
+    const item = { createdAt: '2026-08-30', id: 'priced-item', label: 'Screen Protector', objectKind: 'item' as const, updatedAt: '2026-08-30', values: {} };
+    objectApi.listRecords.mockResolvedValueOnce([item]).mockResolvedValueOnce([]);
+    accountsApi.list.mockResolvedValueOnce([{ accountType: 'cash', balance: 0, createdAt: '2026-08-30', id: 'cash', initialBalance: 0, name: 'Cash', position: 0, updatedAt: '2026-08-30' }]);
+    quickEntryApi.getSuggestion.mockResolvedValueOnce({ amount: 75, source: 'item-price' as const });
+    render(<MaxApp />);
+    await screen.findByRole('button', { name: 'Home' });
+    await user.keyboard('{Control>}s{/Control}');
+    await user.click(screen.getByRole('button', { name: /^Quick sale/ }));
+    await user.selectOptions(await screen.findByLabelText('Select item or enter note'), 'priced-item');
+
+    expect(screen.getByPlaceholderText('e.g., Screen Protector + Fitting')).toHaveValue('Screen Protector');
+    await waitFor(() => expect(screen.getByPlaceholderText('0.00')).toHaveValue(75));
+  });
+
+  it('edits a select cell and persists a newly created colored option', async () => {
+    const user = userEvent.setup();
+    const condition = {
+      createdAt: '2026-08-30', id: 'condition', name: 'Condition', objectKind: 'item' as const, position: 0,
+      rules: { choices: ['Brand New'], digitsOnly: false, required: false, unique: false },
+      type: 'select' as const, updatedAt: '2026-08-30',
+    };
+    const record = { createdAt: '2026-08-30', id: 'phone', label: 'iPhone', objectKind: 'item' as const, updatedAt: '2026-08-30', values: { condition: 'Brand New' } };
+    objectApi.listProperties.mockResolvedValueOnce([condition]);
+    objectApi.listRecords.mockResolvedValueOnce([record]).mockResolvedValueOnce([record]).mockResolvedValueOnce([]);
+    objectApi.updateProperty.mockResolvedValueOnce({ ok: true, value: { ...condition, rules: { ...condition.rules, choices: ['Brand New', 'Used'] } } });
+    objectApi.updateRecord.mockResolvedValueOnce({ ok: true, value: { ...record, values: { condition: 'Used' } } });
+    render(<MaxApp />);
+    await screen.findByRole('button', { name: 'Home' });
+    await user.click(screen.getByRole('button', { name: 'Databases' }));
+
+    await user.click(await screen.findByRole('button', { name: 'Brand New' }));
+    const optionInput = screen.getByPlaceholderText('Search or create an option');
+    await user.clear(optionInput);
+    await user.type(optionInput, 'Used{Enter}');
+
+    await waitFor(() => expect(objectApi.updateProperty).toHaveBeenCalled());
+    const propertyUpdate = objectApi.updateProperty.mock.calls.at(-1) as [string, PropertyDraft] | undefined;
+    expect(propertyUpdate?.[0]).toBe('condition');
+    expect(propertyUpdate?.[1].rules.choices).toEqual(['Brand New', 'Used']);
+    expect(objectApi.updateRecord).toHaveBeenCalledWith('phone', { label: 'iPhone', objectKind: 'item', values: { condition: 'Used' } });
+  });
+
+  it('creates a safety backup before deleting the workspace', async () => {
+    const user = userEvent.setup();
+    render(<MaxApp />);
+    await screen.findByRole('button', { name: 'Home' });
+    await user.click(screen.getByRole('button', { name: 'Settings' }));
+    await user.type(await screen.findByLabelText('Type "Test Shop" to confirm'), 'Test Shop');
+    await user.click(screen.getByRole('button', { name: 'Delete workspace' }));
+
+    await waitFor(() => expect(resetWorkspace).toHaveBeenCalledOnce());
+    expect(backupsApi.create).toHaveBeenCalledWith('pre-delete');
+    expect(backupsApi.create.mock.invocationCallOrder[0]).toBeLessThan(resetWorkspace.mock.invocationCallOrder[0] ?? Infinity);
+    expect(await screen.findByText('Select language')).toBeInTheDocument();
+  });
+
   it('opens properties and templates sheet and closes when clicking outside or pressing Escape', async () => {
     const user = userEvent.setup();
     render(<MaxApp />);
@@ -483,7 +643,7 @@ describe('Max shell', () => {
     await user.click(screen.getByRole('button', { name: 'Databases' }));
 
     // Click Properties button to open sheet
-    const propertiesBtn = await screen.findByRole('button', { name: 'Properties' });
+    const propertiesBtn = await screen.findByRole('button', { name: 'Database properties' });
     await user.click(propertiesBtn);
     expect(screen.getByRole('complementary', { name: 'Schema' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Properties', selected: true })).toBeInTheDocument();
@@ -511,4 +671,3 @@ describe('Max shell', () => {
     expect(result.violations).toEqual([]);
   });
 });
-

@@ -1,4 +1,3 @@
-import { Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 import type { CustomPage } from '../app/app-types';
@@ -10,7 +9,6 @@ import { PageIconRenderer } from '../ui/page-icon-renderer';
 type CustomPageViewProps = Readonly<{
   isHome?: boolean;
   locale: Locale;
-  onDeletePage?: (id: string) => void;
   onUpdatePage: (id: string, update: Partial<Omit<CustomPage, 'createdAt' | 'id'>>) => void;
   page: CustomPage;
 }>;
@@ -18,7 +16,6 @@ type CustomPageViewProps = Readonly<{
 export function CustomPageView({
   isHome = false,
   locale,
-  onDeletePage,
   onUpdatePage,
   page,
 }: CustomPageViewProps) {
@@ -84,17 +81,6 @@ export function CustomPageView({
             value={page.title}
           />
 
-          {!isHome && onDeletePage && (
-            <button
-              aria-label={locale === 'ar' ? 'حذف الصفحة' : 'Delete page'}
-              className="custom-page-delete-btn"
-              onClick={() => onDeletePage(page.id)}
-              title={locale === 'ar' ? 'حذف الصفحة' : 'Delete page'}
-              type="button"
-            >
-              <Trash2 size={16} />
-            </button>
-          )}
         </div>
       </div>
 

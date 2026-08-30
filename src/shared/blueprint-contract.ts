@@ -51,6 +51,7 @@ export type ShopMetadata = Readonly<{
 export type CompleteOnboardingDraft = Readonly<{
   backupSchedule: BackupSchedule;
   blueprint?: Blueprint;
+  includeDemoData?: boolean;
   locale: 'ar' | 'en';
   shopName: string;
 }>;

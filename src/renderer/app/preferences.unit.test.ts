@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { readLocale, readSidebarCollapsed, readTheme, resolveTheme } from './preferences';
+import { readLocale, readSidebarCollapsed, readSidebarWidth, readTheme, resolveTheme } from './preferences';
 
 function storageWith(values: Readonly<Record<string, string>>): Storage {
   return {
@@ -19,6 +19,13 @@ describe('shell preferences', () => {
     expect(readLocale(storage)).toBe('en');
     expect(readTheme(storage)).toBe('system');
     expect(readSidebarCollapsed(storage)).toBe(false);
+    expect(readSidebarWidth(storage)).toBe(238);
+  });
+
+  it('clamps a persisted sidebar width to usable bounds', () => {
+    expect(readSidebarWidth(storageWith({ 'max.ui.sidebar-width': '312' }))).toBe(312);
+    expect(readSidebarWidth(storageWith({ 'max.ui.sidebar-width': '50' }))).toBe(180);
+    expect(readSidebarWidth(storageWith({ 'max.ui.sidebar-width': '900' }))).toBe(420);
   });
 
   it('resolves system appearance without changing the stored preference', () => {

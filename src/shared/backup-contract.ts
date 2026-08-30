@@ -1,4 +1,4 @@
-export type BackupTrigger = 'daily' | 'manual' | 'pre-restore' | 'weekly';
+export type BackupTrigger = 'daily' | 'manual' | 'pre-delete' | 'pre-restore' | 'weekly';
 
 export type BackupMetadata = Readonly<{
   checksum: string;

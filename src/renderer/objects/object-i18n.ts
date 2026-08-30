@@ -70,15 +70,15 @@ const copy = {
     choices: 'الخيارات المسموح بها',
     choicesHint: 'خيار واحد في كل سطر',
     close: 'إغلاق',
-    createItem: 'إنشاء عنصر',
+    createItem: 'إضافة صنف',
     createPerson: 'إضافة شخص',
     digitsOnly: 'أرقام فقط',
     edit: 'تعديل',
-    editItem: 'تعديل العنصر',
+    editItem: 'تعديل الصنف',
     editPerson: 'تعديل الشخص',
     editProperty: 'تعديل الخاصية',
     emptyBody: 'أضف أول سجل، أو جهّز الحقول التي تريد ظهورها في قاعدة البيانات.',
-    emptyItems: 'لا توجد عناصر بعد',
+    emptyItems: 'لا توجد أصناف بعد',
     emptyPeople: 'لا يوجد أشخاص بعد',
     errorInvalid: 'راجع القيمة المدخلة وقواعد الخاصية.',
     errorNotFound: 'هذا السجل أو الخاصية لم يعد متاحًا.',
@@ -87,7 +87,7 @@ const copy = {
     errorSchema: 'لا يمكن تطبيق هذا التغيير على السجلات الموجودة.',
     errorUnique: 'يجب ألا تتكرر هذه القيمة.',
     label: 'الاسم',
-    labelHintItem: 'اكتب اسمًا واضحًا للعنصر',
+    labelHintItem: 'اكتب اسمًا واضحًا للصنف',
     labelHintPerson: 'اكتب اسم الشخص',
     maximum: 'الحد الأقصى',
     maximumLength: 'أقصى طول',
@@ -126,7 +126,7 @@ export function propertyTypeLabel(locale: Locale, type: PropertyType): string {
 }
 
 export function objectKindLabel(locale: Locale, kind: ObjectKind): string {
-  if (locale === 'ar') return kind === 'item' ? 'عنصر' : 'شخص';
+  if (locale === 'ar') return kind === 'item' ? 'صنف' : 'شخص';
   return kind === 'item' ? 'Item' : 'Person';
 }
 

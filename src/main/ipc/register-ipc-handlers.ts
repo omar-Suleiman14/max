@@ -115,6 +115,7 @@ function parsePropertyDraft(value: unknown): PropertyDraft {
     rules: {
       choices: rules.choices,
       digitsOnly: rules.digitsOnly,
+      exactDigits: optionalLength(rules.exactDigits, 'Number of digits'),
       maximum: optionalNumber(rules.maximum, 'Maximum'),
       maximumLength: optionalLength(rules.maximumLength, 'Maximum length'),
       minimum: optionalNumber(rules.minimum, 'Minimum'),
@@ -143,7 +144,10 @@ function parseRecordDraft(value: unknown): ConfigurableRecordDraft {
     }
     values[propertyId] = propertyValue as PropertyValue;
   }
-  return { label: value.label, objectKind: parseObjectKind(value.objectKind), values };
+  if (value.templateId !== undefined && (typeof value.templateId !== 'string' || value.templateId.length < 1 || value.templateId.length > 120)) {
+    throw new ObjectDomainError('invalid-input', 'The record contains an invalid template identifier.');
+  }
+  return { label: value.label, objectKind: parseObjectKind(value.objectKind), templateId: value.templateId, values };
 }
 
 function parseTemplateDraft(value: unknown): TemplateDraft {
@@ -187,6 +191,7 @@ function parseCompleteOnboardingDraft(value: unknown): CompleteOnboardingDraft {
   return {
     backupSchedule: value.backupSchedule as CompleteOnboardingDraft['backupSchedule'],
     blueprint: value.blueprint as Blueprint | undefined,
+    includeDemoData: value.includeDemoData === true,
     locale: value.locale,
     shopName: value.shopName,
   };
@@ -461,6 +466,16 @@ export function registerIpcHandlers({
     trust(event);
     return mutation(() => database.objects.updateRecord(parseId(id), parseRecordDraft(draft)));
   });
+  ipcMain.handle(IPC_CHANNELS.objectRecordReorder, (event, objectKind: unknown, orderedIds: unknown) => {
+    trust(event);
+    return mutation(() => {
+      if (!Array.isArray(orderedIds) || orderedIds.some((id) => typeof id !== 'string')) {
+        throw new ObjectDomainError('invalid-input', 'A valid record order is required.');
+      }
+      database.objects.reorderRecords(parseObjectKind(objectKind), orderedIds);
+      return null;
+    });
+  });
   ipcMain.handle(IPC_CHANNELS.objectRecordArchive, (event, id: unknown) => {
     trust(event);
     return mutation(() => {
@@ -513,6 +528,13 @@ export function registerIpcHandlers({
     trust(event);
     return database.shopMetadata.getMetadata();
   });
+  ipcMain.handle(IPC_CHANNELS.shopSeedDemoData, (event, locale: unknown) => {
+    trust(event);
+    if (locale !== 'ar' && locale !== 'en') {
+      throw new ObjectDomainError('invalid-input', 'A valid locale (ar or en) is required.');
+    }
+    return mutation(() => database.seedDemoData(locale));
+  });
   ipcMain.handle(IPC_CHANNELS.shopUpdateMetadata, (event, patch: unknown) => {
     trust(event);
     return mutation(() => database.shopMetadata.updateMetadata(patch as Partial<ShopMetadata>));
@@ -521,10 +543,7 @@ export function registerIpcHandlers({
     trust(event);
     return mutation(() => {
       const parsed = parseCompleteOnboardingDraft(draft);
-      if (parsed.blueprint) {
-        database.blueprints.importBlueprint(parsed.blueprint);
-      }
-      return database.shopMetadata.completeOnboarding(parsed);
+      return database.completeOnboarding(parsed);
     });
   });
 
@@ -689,8 +708,8 @@ export function registerIpcHandlers({
     trust(event);
     return mutation(() =>
       database.backups.createBackup(
-        typeof trigger === 'string' && ['daily', 'manual', 'pre-restore', 'weekly'].includes(trigger)
-          ? (trigger as 'daily' | 'manual' | 'pre-restore' | 'weekly')
+        typeof trigger === 'string' && ['daily', 'manual', 'pre-delete', 'pre-restore', 'weekly'].includes(trigger)
+          ? (trigger as 'daily' | 'manual' | 'pre-delete' | 'pre-restore' | 'weekly')
           : 'manual',
       ),
     );
@@ -706,6 +725,13 @@ export function registerIpcHandlers({
   ipcMain.handle(IPC_CHANNELS.backupRestore, (event, backupIdOrPath: unknown) => {
     trust(event);
     return mutation(() => database.backups.restoreBackup(parseId(backupIdOrPath)));
+  });
+  ipcMain.handle(IPC_CHANNELS.systemResetWorkspace, (event) => {
+    trust(event);
+    return mutation(() => {
+      database.resetWorkspace();
+      return null;
+    });
   });
 }
 

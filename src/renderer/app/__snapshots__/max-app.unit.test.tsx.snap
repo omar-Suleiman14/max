@@ -54,11 +54,11 @@ exports[`Max shell > renders the English shell and navigates to Databases worksp
           />
         </svg>
         <span>
-          Search commands
+          Search data
         </span>
         <kbd>
           Ctrl
-           K
+           F
         </kbd>
       </button>
       <button
@@ -89,65 +89,19 @@ exports[`Max shell > renders the English shell and navigates to Databases worksp
         <span
           class="button__label"
         >
-          Quick sale
+          New transaction
         </span>
       </button>
     </div>
   </header>
   <main
-    aria-labelledby="page-title"
+    aria-label="Databases"
     class="content"
+    data-custom-page="false"
     data-page="databases"
     id="main-content"
     tabindex="-1"
   >
-    <header
-      class="page-header"
-    >
-      <div
-        aria-hidden="true"
-        class="page-header__icon"
-      >
-        <svg
-          aria-hidden="true"
-          class="lucide lucide-database"
-          fill="none"
-          height="28"
-          stroke="currentColor"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="1.7"
-          viewBox="0 0 24 24"
-          width="28"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <ellipse
-            cx="12"
-            cy="5"
-            rx="9"
-            ry="3"
-          />
-          <path
-            d="M3 5V19A9 3 0 0 0 21 19V5"
-          />
-          <path
-            d="M3 12A9 3 0 0 0 21 12"
-          />
-        </svg>
-      </div>
-      <div
-        class="page-header__copy"
-      >
-        <h1
-          id="page-title"
-        >
-          Databases
-        </h1>
-        <p>
-          All shop databases, inventory, contacts, and balances in one place.
-        </p>
-      </div>
-    </header>
     <div
       class="databases-workspace"
     >
@@ -396,172 +350,6 @@ exports[`Max shell > renders the English shell and navigates to Databases worksp
           class="object-workspace"
         >
           <div
-            class="object-toolbar"
-          >
-            <div>
-              <strong>
-                0
-                 
-                records
-              </strong>
-              <span>
-                <button
-                  class="toolbar-text-link"
-                  type="button"
-                >
-                  0
-                   
-                  properties
-                </button>
-                 · 
-                <button
-                  class="toolbar-text-link"
-                  type="button"
-                >
-                  0
-                   
-                  templates
-                </button>
-              </span>
-            </div>
-            <div
-              class="object-toolbar__actions"
-            >
-              <button
-                class="button button--ghost"
-                type="button"
-              >
-                <span
-                  class="button__icon"
-                >
-                  <svg
-                    aria-hidden="true"
-                    class="lucide lucide-sliders-horizontal"
-                    fill="none"
-                    height="16"
-                    stroke="currentColor"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    viewBox="0 0 24 24"
-                    width="16"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path
-                      d="M10 5H3"
-                    />
-                    <path
-                      d="M12 19H3"
-                    />
-                    <path
-                      d="M14 3v4"
-                    />
-                    <path
-                      d="M16 17v4"
-                    />
-                    <path
-                      d="M21 12h-9"
-                    />
-                    <path
-                      d="M21 19h-5"
-                    />
-                    <path
-                      d="M21 5h-7"
-                    />
-                    <path
-                      d="M8 10v4"
-                    />
-                    <path
-                      d="M8 12H3"
-                    />
-                  </svg>
-                </span>
-                <span
-                  class="button__label"
-                >
-                  Properties
-                </span>
-              </button>
-              <button
-                class="button button--ghost"
-                type="button"
-              >
-                <span
-                  class="button__icon"
-                >
-                  <svg
-                    aria-hidden="true"
-                    class="lucide lucide-file-text"
-                    fill="none"
-                    height="16"
-                    stroke="currentColor"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    viewBox="0 0 24 24"
-                    width="16"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path
-                      d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
-                    />
-                    <path
-                      d="M14 2v5a1 1 0 0 0 1 1h5"
-                    />
-                    <path
-                      d="M10 9H8"
-                    />
-                    <path
-                      d="M16 13H8"
-                    />
-                    <path
-                      d="M16 17H8"
-                    />
-                  </svg>
-                </span>
-                <span
-                  class="button__label"
-                >
-                  Templates
-                </span>
-              </button>
-              <button
-                class="button button--primary"
-                type="button"
-              >
-                <span
-                  class="button__icon"
-                >
-                  <svg
-                    aria-hidden="true"
-                    class="lucide lucide-plus"
-                    fill="none"
-                    height="17"
-                    stroke="currentColor"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    viewBox="0 0 24 24"
-                    width="17"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path
-                      d="M5 12h14"
-                    />
-                    <path
-                      d="M12 5v14"
-                    />
-                  </svg>
-                </span>
-                <span
-                  class="button__label"
-                >
-                  Create item
-                </span>
-              </button>
-            </div>
-          </div>
-          <div
             class="object-layout"
           >
             <div
@@ -574,45 +362,72 @@ exports[`Max shell > renders the English shell and navigates to Databases worksp
                 <div
                   class="notion-view-bar__tabs"
                 >
-                  <button
-                    class="notion-view-tab"
-                    data-active="true"
-                    type="button"
+                  <div
+                    class="notion-view-tab-wrapper"
                   >
-                    <svg
-                      aria-hidden="true"
-                      class="lucide lucide-table-properties"
-                      fill="none"
-                      height="14"
-                      stroke="currentColor"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      viewBox="0 0 24 24"
-                      width="14"
-                      xmlns="http://www.w3.org/2000/svg"
+                    <button
+                      class="notion-view-tab"
+                      data-active="true"
+                      type="button"
                     >
-                      <path
-                        d="M15 3v18"
-                      />
-                      <rect
-                        height="18"
-                        rx="2"
-                        width="18"
-                        x="3"
-                        y="3"
-                      />
-                      <path
-                        d="M21 9H3"
-                      />
-                      <path
-                        d="M21 15H3"
-                      />
-                    </svg>
-                    <span>
-                      Default view
-                    </span>
-                  </button>
+                      <svg
+                        aria-hidden="true"
+                        class="lucide lucide-table-properties"
+                        fill="none"
+                        height="14"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        viewBox="0 0 24 24"
+                        width="14"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          d="M15 3v18"
+                        />
+                        <rect
+                          height="18"
+                          rx="2"
+                          width="18"
+                          x="3"
+                          y="3"
+                        />
+                        <path
+                          d="M21 9H3"
+                        />
+                        <path
+                          d="M21 15H3"
+                        />
+                      </svg>
+                      <span>
+                        Default view
+                      </span>
+                    </button>
+                    <button
+                      aria-label="View options"
+                      class="notion-view-tab-menu"
+                      type="button"
+                    >
+                      <svg
+                        aria-hidden="true"
+                        class="lucide lucide-chevron-down"
+                        fill="none"
+                        height="12"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        viewBox="0 0 24 24"
+                        width="12"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          d="m6 9 6 6 6-6"
+                        />
+                      </svg>
+                    </button>
+                  </div>
                   <button
                     aria-label="Save view"
                     class="notion-view-tab-add"
@@ -644,40 +459,6 @@ exports[`Max shell > renders the English shell and navigates to Databases worksp
                 <div
                   class="notion-view-bar__actions"
                 >
-                  <button
-                    aria-expanded="false"
-                    class="notion-db-tool-btn"
-                    data-active="false"
-                    title="Group by"
-                    type="button"
-                  >
-                    <svg
-                      aria-hidden="true"
-                      class="lucide lucide-layers"
-                      fill="none"
-                      height="14"
-                      stroke="currentColor"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      viewBox="0 0 24 24"
-                      width="14"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <path
-                        d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"
-                      />
-                      <path
-                        d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"
-                      />
-                      <path
-                        d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"
-                      />
-                    </svg>
-                    <span>
-                      Group by
-                    </span>
-                  </button>
                   <button
                     aria-expanded="false"
                     class="notion-db-tool-btn"
@@ -794,6 +575,44 @@ exports[`Max shell > renders the English shell and navigates to Databases worksp
                       Properties
                     </span>
                   </button>
+                  <button
+                    class="notion-db-tool-btn"
+                    title="Templates"
+                    type="button"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      class="lucide lucide-file-text"
+                      fill="none"
+                      height="14"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      width="14"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+                      />
+                      <path
+                        d="M14 2v5a1 1 0 0 0 1 1h5"
+                      />
+                      <path
+                        d="M10 9H8"
+                      />
+                      <path
+                        d="M16 13H8"
+                      />
+                      <path
+                        d="M16 17H8"
+                      />
+                    </svg>
+                    <span>
+                      Templates
+                    </span>
+                  </button>
                   <div
                     class="notion-db-new-split-btn"
                   >
@@ -830,13 +649,6 @@ exports[`Max shell > renders the English shell and navigates to Databases worksp
                     </button>
                   </div>
                 </div>
-              </div>
-              <div
-                class="notion-editor-canvas"
-              >
-                <div
-                  class="notion-canvas-bottom-click-target"
-                />
               </div>
               <div
                 class="object-empty"
@@ -945,11 +757,11 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
           />
         </svg>
         <span>
-          بحث في الأوامر
+          ابحث في البيانات
         </span>
         <kbd>
           Ctrl
-           K
+           F
         </kbd>
       </button>
       <button
@@ -980,59 +792,19 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
         <span
           class="button__label"
         >
-          بيع سريع
+          معاملة جديدة
         </span>
       </button>
     </div>
   </header>
   <main
-    aria-labelledby="page-title"
+    aria-label="الرئيسية"
     class="content"
+    data-custom-page="false"
     data-page="home"
     id="main-content"
     tabindex="-1"
   >
-    <header
-      class="page-header"
-    >
-      <div
-        aria-hidden="true"
-        class="page-header__icon"
-      >
-        <svg
-          aria-hidden="true"
-          class="lucide lucide-house"
-          fill="none"
-          height="28"
-          stroke="currentColor"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="1.7"
-          viewBox="0 0 24 24"
-          width="28"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <path
-            d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"
-          />
-          <path
-            d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
-          />
-        </svg>
-      </div>
-      <div
-        class="page-header__copy"
-      >
-        <h1
-          id="page-title"
-        >
-          الرئيسية
-        </h1>
-        <p>
-          نظرة عامة وآخر العمليات المسجلة.
-        </p>
-      </div>
-    </header>
     <div
       class="custom-page-view"
     >
@@ -1123,7 +895,7 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
                 </svg>
               </button>
               <button
-                aria-label="Drag to move"
+                aria-label="خيارات السطر"
                 class="notion-gutter-btn notion-gutter-btn--drag"
                 draggable="true"
                 title="سحب للترتيب"
@@ -1222,7 +994,7 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
                 </svg>
               </button>
               <button
-                aria-label="Drag to move"
+                aria-label="خيارات السطر"
                 class="notion-gutter-btn notion-gutter-btn--drag"
                 draggable="true"
                 title="سحب للترتيب"
@@ -1332,7 +1104,7 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
                 </svg>
               </button>
               <button
-                aria-label="Drag to move"
+                aria-label="خيارات السطر"
                 class="notion-gutter-btn notion-gutter-btn--drag"
                 draggable="true"
                 title="سحب للترتيب"
@@ -1433,7 +1205,7 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
                 </svg>
               </button>
               <button
-                aria-label="Drag to move"
+                aria-label="خيارات السطر"
                 class="notion-gutter-btn notion-gutter-btn--drag"
                 draggable="true"
                 title="سحب للترتيب"
@@ -1532,7 +1304,7 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
                 </svg>
               </button>
               <button
-                aria-label="Drag to move"
+                aria-label="خيارات السطر"
                 class="notion-gutter-btn notion-gutter-btn--drag"
                 draggable="true"
                 title="سحب للترتيب"
@@ -1638,7 +1410,7 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
                 </svg>
               </button>
               <button
-                aria-label="Drag to move"
+                aria-label="خيارات السطر"
                 class="notion-gutter-btn notion-gutter-btn--drag"
                 draggable="true"
                 title="سحب للترتيب"
@@ -1744,7 +1516,7 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
                 </svg>
               </button>
               <button
-                aria-label="Drag to move"
+                aria-label="خيارات السطر"
                 class="notion-gutter-btn notion-gutter-btn--drag"
                 draggable="true"
                 title="سحب للترتيب"
@@ -1845,7 +1617,7 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
                 </svg>
               </button>
               <button
-                aria-label="Drag to move"
+                aria-label="خيارات السطر"
                 class="notion-gutter-btn notion-gutter-btn--drag"
                 draggable="true"
                 title="سحب للترتيب"
@@ -1903,112 +1675,6 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
               <div
                 class="notion-embedded-db-card"
               >
-                <div
-                  class="notion-embedded-db-header"
-                >
-                  <div
-                    class="notion-embedded-db-title"
-                  >
-                    <svg
-                      aria-hidden="true"
-                      class="lucide lucide-database"
-                      fill="none"
-                      height="16"
-                      stroke="currentColor"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      viewBox="0 0 24 24"
-                      width="16"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <ellipse
-                        cx="12"
-                        cy="5"
-                        rx="9"
-                        ry="3"
-                      />
-                      <path
-                        d="M3 5V19A9 3 0 0 0 21 19V5"
-                      />
-                      <path
-                        d="M3 12A9 3 0 0 0 21 12"
-                      />
-                    </svg>
-                    <span>
-                      المطابقة اليومية
-                    </span>
-                  </div>
-                  <div
-                    class="notion-embedded-db-actions"
-                  >
-                    <select
-                      aria-label="Switch Database"
-                      class="notion-db-switch-select"
-                    >
-                      <option
-                        value="items"
-                      >
-                        الأصناف
-                      </option>
-                      <option
-                        value="people"
-                      >
-                        الأشخاص
-                      </option>
-                      <option
-                        value="transactions"
-                      >
-                        المعاملات
-                      </option>
-                      <option
-                        value="accounts"
-                      >
-                        الحسابات
-                      </option>
-                      <option
-                        value="reconciliation"
-                      >
-                        المطابقة
-                      </option>
-                    </select>
-                    <button
-                      aria-label="حذف العرض"
-                      class="notion-embedded-db-delete-btn"
-                      type="button"
-                    >
-                      <svg
-                        aria-hidden="true"
-                        class="lucide lucide-trash2 lucide-trash-2"
-                        fill="none"
-                        height="14"
-                        stroke="currentColor"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        viewBox="0 0 24 24"
-                        width="14"
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <path
-                          d="M10 11v6"
-                        />
-                        <path
-                          d="M14 11v6"
-                        />
-                        <path
-                          d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"
-                        />
-                        <path
-                          d="M3 6h18"
-                        />
-                        <path
-                          d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
-                        />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
                 <div
                   class="notion-embedded-db-content"
                 >

@@ -1,8 +1,10 @@
 import { DatabaseSync } from 'node:sqlite';
 
-import type { DatabaseHealth } from '../../shared/ipc-contract';
+import type { DatabaseHealth, DemoSeedSummary } from '../../shared/ipc-contract';
+import type { CompleteOnboardingDraft, ShopMetadata } from '../../shared/blueprint-contract';
 import { AccountRepository } from './account-repository';
 import { BlueprintService } from './blueprint-service';
+import { DemoDataService } from './demo-data-service';
 import { migrations, type Migration } from './migrations';
 import { ObjectRepository } from './object-repository';
 import { ShopMetadataRepository } from './shop-metadata-repository';
@@ -21,7 +23,7 @@ import { BackupService } from './backup-service';
 import { PersonDebtService } from './person-debt-service';
 import { QuickEntryService } from './quick-entry-service';
 import { ReconciliationRepository } from './reconciliation-repository';
-import { SearchService } from './search-service';
+import { normalizeSearchText, SearchService } from './search-service';
 import { ViewsPagesRepository } from './views-pages-repository';
 
 export class DatabaseService {
@@ -29,6 +31,7 @@ export class DatabaseService {
   readonly accounts: AccountRepository;
   readonly backups: BackupService;
   readonly blueprints: BlueprintService;
+  readonly demoData: DemoDataService;
   readonly objects: ObjectRepository;
   readonly personDebt: PersonDebtService;
   readonly quickEntry: QuickEntryService;
@@ -49,6 +52,14 @@ export class DatabaseService {
       enableForeignKeyConstraints: true,
       timeout: 5_000,
     });
+    this.#database.function('max_search_normalize', { deterministic: true }, (value: unknown) => {
+      const text = typeof value === 'string'
+        ? value
+        : typeof value === 'number' || typeof value === 'bigint'
+          ? value.toString()
+          : '';
+      return normalizeSearchText(text);
+    });
     this.backups = new BackupService(filename);
     this.accounts = new AccountRepository(this.#database);
     this.transactions = new TransactionRepository(this.#database);
@@ -65,6 +76,14 @@ export class DatabaseService {
       this.objects,
       this.templates,
       this.shopMetadata,
+    );
+    this.demoData = new DemoDataService(
+      this.#database,
+      this.accounts,
+      this.objects,
+      this.templates,
+      this.transactions,
+      this.viewsPages,
     );
 
     if (filename !== ':memory:') {
@@ -125,6 +144,51 @@ export class DatabaseService {
   close(): void {
     if (this.#database.isOpen) {
       this.#database.close();
+    }
+  }
+
+  resetWorkspace(): void {
+    this.#assertInitialized();
+    const tables = [
+      'shop_money_movements', 'shop_daily_sessions', 'shop_transactions', 'shop_accounts',
+      'object_property_values', 'object_audit_log', 'object_records', 'shop_templates',
+      'object_properties', 'shop_saved_views', 'shop_custom_pages', 'app_metadata',
+    ];
+    this.#database.exec('BEGIN IMMEDIATE;');
+    try {
+      for (const table of tables) this.#database.exec(`DELETE FROM ${table};`);
+      this.#database.exec('COMMIT;');
+    } catch (error) {
+      if (this.#database.isTransaction) this.#database.exec('ROLLBACK;');
+      throw error;
+    }
+  }
+
+  completeOnboarding(draft: CompleteOnboardingDraft): ShopMetadata {
+    this.#assertInitialized();
+    this.#database.exec('BEGIN IMMEDIATE;');
+    try {
+      if (draft.blueprint) this.blueprints.importBlueprint(draft.blueprint);
+      if (draft.includeDemoData) this.demoData.seed(draft.locale);
+      const metadata = this.shopMetadata.completeOnboarding(draft);
+      this.#database.exec('COMMIT;');
+      return metadata;
+    } catch (error) {
+      if (this.#database.isTransaction) this.#database.exec('ROLLBACK;');
+      throw error;
+    }
+  }
+
+  seedDemoData(locale: 'ar' | 'en'): DemoSeedSummary {
+    this.#assertInitialized();
+    this.#database.exec('BEGIN IMMEDIATE;');
+    try {
+      const summary = this.demoData.seed(locale);
+      this.#database.exec('COMMIT;');
+      return summary;
+    } catch (error) {
+      if (this.#database.isTransaction) this.#database.exec('ROLLBACK;');
+      throw error;
     }
   }
 

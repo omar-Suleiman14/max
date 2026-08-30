@@ -18,12 +18,14 @@ import { onboardingCopy } from './onboarding-i18n';
 
 type OnboardingProps = Readonly<{
   initialLocale: Locale;
-  onComplete: (shopName: string, locale: Locale, backupSchedule: BackupSchedule, blueprint?: Blueprint) => Promise<void>;
+  onComplete: (shopName: string, locale: Locale, backupSchedule: BackupSchedule, blueprint?: Blueprint, includeDemoData?: boolean) => Promise<void>;
+  onClose?: () => void;
+  preview?: boolean;
 }>;
 
 type BlueprintOption = 'blank' | 'custom' | 'phone';
 
-export function Onboarding({ initialLocale, onComplete }: OnboardingProps) {
+export function Onboarding({ initialLocale, onClose, onComplete, preview = false }: OnboardingProps) {
   const [step, setStep] = useState(1);
   const [locale, setLocale] = useState<Locale>(initialLocale);
   const [shopName, setShopName] = useState('');
@@ -31,6 +33,7 @@ export function Onboarding({ initialLocale, onComplete }: OnboardingProps) {
   const [customBlueprint, setCustomBlueprint] = useState<Blueprint>();
   const [customFileError, setCustomFileError] = useState<string>();
   const [backupSchedule, setBackupSchedule] = useState<BackupSchedule>('daily');
+  const [includeDemoData, setIncludeDemoData] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
   function handleLanguageChange(nextLocale: Locale) {
@@ -69,7 +72,7 @@ export function Onboarding({ initialLocale, onComplete }: OnboardingProps) {
     event.preventDefault();
     setSubmitting(true);
     try {
-      await onComplete(shopName.trim() || 'My Shop', locale, backupSchedule, selectedBlueprint);
+      await onComplete(shopName.trim() || 'My Shop', locale, backupSchedule, selectedBlueprint, blueprintChoice === 'phone' && includeDemoData);
     } finally {
       setSubmitting(false);
     }
@@ -98,6 +101,7 @@ export function Onboarding({ initialLocale, onComplete }: OnboardingProps) {
               />
             ))}
           </div>
+          {preview && onClose && <Button onClick={onClose}>{locale === 'ar' ? 'إغلاق المعاينة' : 'Close preview'}</Button>}
         </header>
 
         <main className="onboarding-card__body">
@@ -223,6 +227,23 @@ export function Onboarding({ initialLocale, onComplete }: OnboardingProps) {
                 </button>
               </div>
 
+              {blueprintChoice === 'phone' && (
+                <button
+                  aria-checked={includeDemoData}
+                  className="choice-card choice-card--row onboarding-demo-toggle"
+                  data-selected={includeDemoData}
+                  onClick={() => setIncludeDemoData((enabled) => !enabled)}
+                  role="checkbox"
+                  type="button"
+                >
+                  <div className="choice-card__icon"><Sparkles aria-hidden="true" size={22} /></div>
+                  <div>
+                    <strong className="choice-card__title">{locale === 'ar' ? 'إضافة بيانات تجريبية' : 'Add demo workspace data'}</strong>
+                    <p className="choice-card__desc">{locale === 'ar' ? 'حسابات وأصناف وأشخاص ومعاملات وصفحات جاهزة للاستكشاف.' : 'Prefill accounts, items, people, transactions, views, and custom pages.'}</p>
+                  </div>
+                </button>
+              )}
+
               {blueprintChoice === 'custom' && (
                 <div className="custom-blueprint-upload">
                   <label className="button button--secondary">
@@ -322,6 +343,12 @@ export function Onboarding({ initialLocale, onComplete }: OnboardingProps) {
                       <CheckCircle2 aria-hidden="true" size={16} />
                       <span>{selectedBlueprint.properties.item.length} {onboardingCopy(locale, 'assembledItemCount')}</span>
                     </div>
+                    {includeDemoData && (
+                      <div className="assembly-badge">
+                        <Sparkles aria-hidden="true" size={16} />
+                        <span>{locale === 'ar' ? 'بيانات وصفحات تجريبية جاهزة' : 'Demo data and custom pages ready'}</span>
+                      </div>
+                    )}
                     <div className="assembly-badge">
                       <CheckCircle2 aria-hidden="true" size={16} />
                       <span>{selectedBlueprint.properties.person.length} {onboardingCopy(locale, 'assembledPersonCount')}</span>

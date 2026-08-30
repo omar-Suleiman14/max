@@ -27,6 +27,7 @@ import type {
   TransactionDraft,
   TransactionRecord,
   TransactionType,
+  TransferDraft,
 } from '../../shared/transaction-contract';
 import type { Locale } from '../app/i18n';
 import { Button } from '../ui/button';
@@ -36,6 +37,8 @@ import { transactionsCopy } from './transactions-i18n';
 type TransactionsWorkspaceProps = Readonly<{
   createRequest: number;
   locale: Locale;
+  refreshRequest?: number;
+  requestedCreateType?: Exclude<TransactionType, 'reversal'>;
 }>;
 
 function typeBadge(type: TransactionType, locale: Locale) {
@@ -52,6 +55,8 @@ function typeBadge(type: TransactionType, locale: Locale) {
       return <span className="badge badge--info">{transactionsCopy(locale, 'transfer')}</span>;
     case 'reversal':
       return <span className="badge badge--purple">{transactionsCopy(locale, 'reversal')}</span>;
+    case 'adjustment':
+      return <span className="badge badge--purple">{transactionsCopy(locale, 'adjustment')}</span>;
     default:
       return <span className="badge">{type}</span>;
   }
@@ -73,6 +78,7 @@ function statusBadge(status: PaymentStatus, reversed: boolean, locale: Locale) {
 
 function TransactionEditor({
   accounts,
+  initialType,
   items,
   locale,
   onClose,
@@ -80,13 +86,14 @@ function TransactionEditor({
   people,
 }: Readonly<{
   accounts: readonly AccountDefinition[];
+  initialType?: Exclude<TransactionType, 'reversal' | 'transfer'>;
   items: readonly ConfigurableRecord[];
   locale: Locale;
   onClose: () => void;
   onSave: (draft: TransactionDraft) => Promise<string | undefined>;
   people: readonly ConfigurableRecord[];
 }>) {
-  const [transactionType, setTransactionType] = useState<TransactionType>('sale');
+  const [transactionType, setTransactionType] = useState<Exclude<TransactionType, 'reversal' | 'transfer'>>(initialType ?? 'sale');
   const [totalAmount, setTotalAmount] = useState('');
   const [paidAmount, setPaidAmount] = useState('');
   const [selectedAccountId, setSelectedAccountId] = useState(accounts[0]?.id ?? '');
@@ -95,6 +102,7 @@ function TransactionEditor({
   const [note, setNote] = useState('');
   const [error, setError] = useState<string>();
   const [saving, setSaving] = useState(false);
+  const [adjustmentMovementType, setAdjustmentMovementType] = useState<MovementType>('inflow');
 
   // Auto-sync paid amount with total amount unless user modifies it
   function handleTotalChange(val: string) {
@@ -133,8 +141,11 @@ function TransactionEditor({
         setSaving(false);
         return;
       }
-      const movementType: MovementType =
-        transactionType === 'sale' || transactionType === 'income' ? 'inflow' : 'outflow';
+      const movementType: MovementType = transactionType === 'adjustment'
+        ? adjustmentMovementType
+        : transactionType === 'sale' || transactionType === 'income'
+          ? 'inflow'
+          : 'outflow';
       movements.push({
         accountId: selectedAccountId,
         amount: paid,
@@ -176,13 +187,24 @@ function TransactionEditor({
 
         <label className="field">
           <span>{transactionsCopy(locale, 'transactionType')}</span>
-          <select onChange={(e) => setTransactionType(e.target.value as TransactionType)} value={transactionType}>
+          <select onChange={(e) => setTransactionType(e.target.value as Exclude<TransactionType, 'reversal' | 'transfer'>)} value={transactionType}>
             <option value="sale">{transactionsCopy(locale, 'sale')}</option>
             <option value="expense">{transactionsCopy(locale, 'expense')}</option>
             <option value="purchase">{transactionsCopy(locale, 'purchase')}</option>
             <option value="income">{transactionsCopy(locale, 'income')}</option>
+            <option value="adjustment">{transactionsCopy(locale, 'adjustment')}</option>
           </select>
         </label>
+
+        {transactionType === 'adjustment' && (
+          <label className="field">
+            <span>{locale === 'ar' ? 'اتجاه التسوية' : 'Adjustment direction'}</span>
+            <select onChange={(event) => setAdjustmentMovementType(event.target.value as MovementType)} value={adjustmentMovementType}>
+              <option value="inflow">{locale === 'ar' ? 'زيادة رصيد الحساب' : 'Increase account balance'}</option>
+              <option value="outflow">{locale === 'ar' ? 'خفض رصيد الحساب' : 'Decrease account balance'}</option>
+            </select>
+          </label>
+        )}
 
         <div className="field-pair">
           <label className="field">
@@ -276,7 +298,49 @@ function TransactionEditor({
   );
 }
 
-export function TransactionsWorkspace({ createRequest, locale }: TransactionsWorkspaceProps) {
+function TransferEditor({ accounts, locale, onClose, onSave }: Readonly<{
+  accounts: readonly AccountDefinition[];
+  locale: Locale;
+  onClose: () => void;
+  onSave: (draft: TransferDraft) => Promise<string | undefined>;
+}>) {
+  const [fromAccountId, setFromAccountId] = useState(accounts[0]?.id ?? '');
+  const [toAccountId, setToAccountId] = useState(accounts[1]?.id ?? '');
+  const [amount, setAmount] = useState('');
+  const [note, setNote] = useState('');
+  const [error, setError] = useState<string>();
+  const [saving, setSaving] = useState(false);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    const nextError = await onSave({ amount: Number(amount), fromAccountId, note: note.trim() || undefined, toAccountId });
+    setError(nextError);
+    setSaving(false);
+  }
+
+  return (
+    <FocusedOverlay className="object-dialog" labelId="transfer-dialog-title" onClose={onClose}>
+      <header className="dialog-header">
+        <div><p className="eyebrow">MAX · {transactionsCopy(locale, 'transaction')}</p><h2 id="transfer-dialog-title">{locale === 'ar' ? 'تحويل بين الحسابات' : 'Account transfer'}</h2></div>
+        <button aria-label={transactionsCopy(locale, 'cancel')} className="icon-button" onClick={onClose} type="button"><X aria-hidden="true" size={19} /></button>
+      </header>
+      <form className="object-form" onSubmit={(event) => void submit(event)}>
+        {accounts.length < 2 && <p className="form-error" role="alert">{locale === 'ar' ? 'أنشئ حسابين على الأقل لإجراء تحويل.' : 'Create at least two accounts to make a transfer.'}</p>}
+        {error && <p className="form-error" role="alert">{error}</p>}
+        <div className="field-pair">
+          <label className="field"><span>{locale === 'ar' ? 'من حساب' : 'From account'}</span><select onChange={(event) => setFromAccountId(event.target.value)} value={fromAccountId}>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name} ({account.balance.toFixed(2)})</option>)}</select></label>
+          <label className="field"><span>{locale === 'ar' ? 'إلى حساب' : 'To account'}</span><select onChange={(event) => setToAccountId(event.target.value)} value={toAccountId}>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name} ({account.balance.toFixed(2)})</option>)}</select></label>
+        </div>
+        <label className="field"><span>{transactionsCopy(locale, 'totalAmount')}</span><input data-autofocus="true" min="0.01" onChange={(event) => setAmount(event.target.value)} placeholder="0.00" required step="0.01" type="number" value={amount} /></label>
+        <label className="field"><span>{transactionsCopy(locale, 'note')}</span><input onChange={(event) => setNote(event.target.value)} placeholder={locale === 'ar' ? 'مثال: تحويل من الخزنة إلى البنك' : 'e.g., Cash drawer deposit to bank'} value={note} /></label>
+        <footer className="form-footer"><Button onClick={onClose}>{transactionsCopy(locale, 'cancel')}</Button><Button disabled={saving || accounts.length < 2} type="submit" variant="primary">{locale === 'ar' ? 'تسجيل التحويل' : 'Record transfer'}</Button></footer>
+      </form>
+    </FocusedOverlay>
+  );
+}
+
+export function TransactionsWorkspace({ createRequest, locale, refreshRequest = 0, requestedCreateType }: TransactionsWorkspaceProps) {
   const [transactions, setTransactions] = useState<readonly TransactionRecord[]>([]);
   const [summary, setSummary] = useState<LedgerSummary>();
   const [accounts, setAccounts] = useState<readonly AccountDefinition[]>([]);
@@ -284,6 +348,8 @@ export function TransactionsWorkspace({ createRequest, locale }: TransactionsWor
   const [items, setItems] = useState<readonly ConfigurableRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [editorInitialType, setEditorInitialType] = useState<Exclude<TransactionType, 'reversal' | 'transfer'>>('sale');
+  const [transferOpen, setTransferOpen] = useState(false);
   const [reversalTarget, setReversalTarget] = useState<TransactionRecord>();
   const [reversalReason, setReversalReason] = useState('');
   const [detailTarget, setDetailTarget] = useState<TransactionRecord>();
@@ -313,20 +379,35 @@ export function TransactionsWorkspace({ createRequest, locale }: TransactionsWor
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, refreshRequest]);
 
   const lastHandledCreateRef = useRef(createRequest);
   useEffect(() => {
     if (createRequest > lastHandledCreateRef.current) {
       lastHandledCreateRef.current = createRequest;
-      setEditorOpen(true);
+      if (requestedCreateType === 'transfer') {
+        setTransferOpen(true);
+      } else {
+        setEditorInitialType(requestedCreateType ?? 'sale');
+        setEditorOpen(true);
+      }
     }
-  }, [createRequest]);
+  }, [createRequest, requestedCreateType]);
 
   async function handleSaveTransaction(draft: TransactionDraft): Promise<string | undefined> {
     const res = await window.maxApi.transactions.create(draft);
     if (res.ok) {
       setEditorOpen(false);
+      await load();
+      return undefined;
+    }
+    return res.error.message;
+  }
+
+  async function handleSaveTransfer(draft: TransferDraft): Promise<string | undefined> {
+    const res = await window.maxApi.transactions.createTransfer(draft);
+    if (res.ok) {
+      setTransferOpen(false);
       await load();
       return undefined;
     }
@@ -429,7 +510,7 @@ export function TransactionsWorkspace({ createRequest, locale }: TransactionsWor
         </div>
         <Button
           icon={<Plus aria-hidden="true" size={17} />}
-          onClick={() => setEditorOpen(true)}
+          onClick={() => { setEditorInitialType('sale'); setEditorOpen(true); }}
           variant="primary"
         >
           {transactionsCopy(locale, 'createTransaction')}
@@ -450,7 +531,7 @@ export function TransactionsWorkspace({ createRequest, locale }: TransactionsWor
             </div>
             <h2>{transactionsCopy(locale, 'emptyTransactions')}</h2>
             <p>{transactionsCopy(locale, 'emptyTransactionsBody')}</p>
-            <Button onClick={() => setEditorOpen(true)} variant="primary">
+            <Button onClick={() => { setEditorInitialType('sale'); setEditorOpen(true); }} variant="primary">
               {transactionsCopy(locale, 'createTransaction')}
             </Button>
           </div>
@@ -568,12 +649,17 @@ export function TransactionsWorkspace({ createRequest, locale }: TransactionsWor
       {editorOpen && (
         <TransactionEditor
           accounts={accounts}
+          initialType={editorInitialType}
           items={items}
           locale={locale}
           onClose={() => setEditorOpen(false)}
           onSave={handleSaveTransaction}
           people={people}
         />
+      )}
+
+      {transferOpen && (
+        <TransferEditor accounts={accounts} locale={locale} onClose={() => setTransferOpen(false)} onSave={handleSaveTransfer} />
       )}
 
       {/* REVERSAL CONFIRM DIALOG */}

@@ -6,6 +6,7 @@ export type EffectiveTheme = Exclude<ThemePreference, 'system'>;
 export const preferenceKeys = {
   locale: 'max.ui.locale',
   sidebarCollapsed: 'max.ui.sidebar-collapsed',
+  sidebarWidth: 'max.ui.sidebar-width',
   theme: 'max.ui.theme',
 } as const;
 
@@ -29,6 +30,13 @@ export function readTheme(storage: Storage): ThemePreference {
 
 export function readSidebarCollapsed(storage: Storage): boolean {
   return storage.getItem(preferenceKeys.sidebarCollapsed) === 'true';
+}
+
+export function readSidebarWidth(storage: Storage): number {
+  const raw = storage.getItem(preferenceKeys.sidebarWidth);
+  if (raw === null) return 238;
+  const persisted = Number(raw);
+  return Number.isFinite(persisted) ? Math.min(420, Math.max(180, persisted)) : 238;
 }
 
 export function resolveTheme(preference: ThemePreference, systemUsesDark: boolean): EffectiveTheme {

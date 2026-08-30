@@ -23,10 +23,24 @@ describe('DatabaseService', () => {
     service.initialize();
 
     expect(service.getHealth()).toEqual({
-      migrationCount: 6,
-      schemaVersion: 6,
+      migrationCount: 9,
+      schemaVersion: 9,
       status: 'ready',
     });
+    service.close();
+  });
+
+  it('clears workspace data while preserving the migration history', () => {
+    const service = new DatabaseService(':memory:');
+    service.initialize();
+    service.shopMetadata.completeOnboarding({ backupSchedule: 'daily', locale: 'en', shopName: 'Reset me' });
+    service.objects.createRecord({ label: 'Phone', objectKind: 'item', values: {} });
+
+    service.resetWorkspace();
+
+    expect(service.objects.listRecords('item')).toEqual([]);
+    expect(service.shopMetadata.getMetadata().onboardingCompleted).toBe(false);
+    expect(service.getHealth().schemaVersion).toBe(9);
     service.close();
   });
 
@@ -42,7 +56,7 @@ describe('DatabaseService', () => {
 
     const second = new DatabaseService(filename);
     second.initialize();
-    expect(second.getHealth().migrationCount).toBe(6);
+    expect(second.getHealth().migrationCount).toBe(9);
     second.close();
 
     const inspection = new DatabaseSync(filename, { readOnly: true });
@@ -83,11 +97,11 @@ describe('DatabaseService', () => {
     const future = new DatabaseSync(filename);
     future
       .prepare('INSERT INTO system_migrations (id, name, applied_at) VALUES (?, ?, ?)')
-      .run(7, 'future_schema', new Date().toISOString());
+      .run(10, 'future_schema', new Date().toISOString());
     future.close();
 
     const reopened = new DatabaseService(filename);
-    expect(() => reopened.initialize()).toThrow('Database schema 7 is newer than this Max build.');
+    expect(() => reopened.initialize()).toThrow('Database schema 10 is newer than this Max build.');
     reopened.close();
   });
 
@@ -114,7 +128,7 @@ describe('DatabaseService', () => {
 
     const upgraded = new DatabaseService(filename);
     upgraded.initialize();
-    expect(upgraded.getHealth().schemaVersion).toBe(6);
+    expect(upgraded.getHealth().schemaVersion).toBe(9);
     upgraded.close();
 
     const inspection = new DatabaseSync(filename, { readOnly: true });

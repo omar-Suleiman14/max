@@ -55,6 +55,8 @@ const maxApi: MaxApi = Object.freeze({
       ipcRenderer.invoke(IPC_CHANNELS.objectPropertyList, objectKind) as ReturnType<MaxApi['objects']['listProperties']>,
     listRecords: (objectKind: ObjectKind) =>
       ipcRenderer.invoke(IPC_CHANNELS.objectRecordList, objectKind) as ReturnType<MaxApi['objects']['listRecords']>,
+    reorderRecords: (objectKind: ObjectKind, orderedIds: readonly string[]) =>
+      ipcRenderer.invoke(IPC_CHANNELS.objectRecordReorder, objectKind, orderedIds) as ReturnType<MaxApi['objects']['reorderRecords']>,
     updateProperty: (id: string, draft: PropertyDraft) =>
       ipcRenderer.invoke(IPC_CHANNELS.objectPropertyUpdate, id, draft) as ReturnType<MaxApi['objects']['updateProperty']>,
     updateRecord: (id: string, draft: ConfigurableRecordDraft) =>
@@ -105,12 +107,16 @@ const maxApi: MaxApi = Object.freeze({
       ipcRenderer.invoke(IPC_CHANNELS.shopCompleteOnboarding, draft) as ReturnType<MaxApi['shop']['completeOnboarding']>,
     getMetadata: () =>
       ipcRenderer.invoke(IPC_CHANNELS.shopGetMetadata) as ReturnType<MaxApi['shop']['getMetadata']>,
+    seedDemoData: (locale: 'ar' | 'en') =>
+      ipcRenderer.invoke(IPC_CHANNELS.shopSeedDemoData, locale) as ReturnType<MaxApi['shop']['seedDemoData']>,
     updateMetadata: (patch: Partial<ShopMetadata>) =>
       ipcRenderer.invoke(IPC_CHANNELS.shopUpdateMetadata, patch) as ReturnType<MaxApi['shop']['updateMetadata']>,
   }),
   system: Object.freeze({
     getHealth: () =>
       ipcRenderer.invoke(IPC_CHANNELS.systemHealth) as Promise<Awaited<ReturnType<MaxApi['system']['getHealth']>>>,
+    resetWorkspace: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.systemResetWorkspace) as ReturnType<MaxApi['system']['resetWorkspace']>,
   }),
   templates: Object.freeze({
     archive: (id: string) =>

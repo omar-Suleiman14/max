@@ -18,6 +18,7 @@ export type PropertyValue = string | number | boolean;
 export type PropertyRules = Readonly<{
   choices: readonly string[];
   digitsOnly: boolean;
+  exactDigits?: number;
   maximum?: number;
   maximumLength?: number;
   minimum?: number;
@@ -44,12 +45,14 @@ export type PropertyDefinition = PropertyDraft & Readonly<{
 export type ConfigurableRecordDraft = Readonly<{
   label: string;
   objectKind: ObjectKind;
+  templateId?: string;
   values: Readonly<Record<string, PropertyValue>>;
 }>;
 
 export type ConfigurableRecord = ConfigurableRecordDraft & Readonly<{
   createdAt: string;
   id: string;
+  position?: number;
   updatedAt: string;
 }>;
 
@@ -80,4 +83,3 @@ export type AuditEntry = Readonly<{
   id: number;
   snapshot: unknown;
 }>;
-

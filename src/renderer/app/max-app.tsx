@@ -1,6 +1,5 @@
 import {
   CircleDollarSign,
-  Command as CommandIcon,
   ContactRound,
   Database,
   FileText,
@@ -23,20 +22,21 @@ import { DatabasesWorkspace } from '../databases/databases-workspace';
 import { Onboarding } from '../onboarding/onboarding';
 import { CustomPageView } from '../pages/custom-page-view';
 import {
-  createCustomPage,
-  deleteCustomPage,
   loadCustomPages,
   loadHomePage,
-  saveCustomPages,
   saveHomePage,
-  updateCustomPage,
+  archivePersistentCustomPage,
+  createPersistentCustomPage,
+  loadPersistentCustomPages,
+  updatePersistentCustomPage,
 } from '../pages/pages-store';
-import type { AppPage, CustomPage, EngineStatus } from './app-types';
+import type { AppPage, CustomPage, EngineStatus, SettingsSectionId } from './app-types';
 import { localeDirection, type Locale, type TranslationKey, translate } from './i18n';
 import {
   preferenceKeys,
   readLocale,
   readSidebarCollapsed,
+  readSidebarWidth,
   readTheme,
   resolveTheme,
   type ThemePreference,
@@ -52,6 +52,8 @@ import { UniversalSearchDialog } from '../search/universal-search-dialog';
 import { QuickEntryDialog } from '../quick-entry/quick-entry-dialog';
 import { UndoToast } from '../ui/undo-toast';
 import { TransactionsWorkspace } from '../transactions/transactions-workspace';
+import { TransactionChooser, type TransactionChoice } from '../transactions/transaction-chooser';
+import type { TransactionType } from '../../shared/transaction-contract';
 import { ObjectWorkspace } from '../objects/object-workspace';
 
 const pageLabels: Record<string, TranslationKey> = {
@@ -96,13 +98,18 @@ export function MaxApp() {
   const [theme, setTheme] = useState<ThemePreference>(() => readTheme(window.localStorage));
   const [systemUsesDark, setSystemUsesDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => readSidebarCollapsed(window.localStorage));
+  const [sidebarWidth, setSidebarWidth] = useState(() => readSidebarWidth(window.localStorage));
+  const [settingsSection, setSettingsSection] = useState<SettingsSectionId>('settings-general');
   const [page, setPage] = useState<AppPage>('home');
-  const [customPages, setCustomPages] = useState<readonly CustomPage[]>(() => loadCustomPages());
-  const [homePage, setHomePage] = useState<CustomPage>(() => loadHomePage());
+  const [customPages, setCustomPages] = useState<readonly CustomPage[]>([]);
+  const [homePage, setHomePage] = useState<CustomPage>(() => loadHomePage(locale));
   const [commandOpen, setCommandOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [blueprintModalTab, setBlueprintModalTab] = useState<'export' | 'import'>();
   const [quickEntryOpen, setQuickEntryOpen] = useState(false);
+  const [transactionChooserOpen, setTransactionChooserOpen] = useState(false);
+  const [transactionCreateType, setTransactionCreateType] = useState<Exclude<TransactionType, 'reversal'>>('sale');
+  const [dataRevision, setDataRevision] = useState(0);
   const [recentTxForUndo, setRecentTxForUndo] = useState<TransactionRecord>();
   const [objectCreateRequest, setObjectCreateRequest] = useState(0);
   const [requestedSavedViewId, setRequestedSavedViewId] = useState<string>();
@@ -111,6 +118,7 @@ export function MaxApp() {
   const [engineNoticeVisible, setEngineNoticeVisible] = useState(false);
   const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(null);
   const [shopName, setShopName] = useState('');
+  const [onboardingPreview, setOnboardingPreview] = useState(false);
 
   const effectiveTheme = resolveTheme(theme, systemUsesDark);
 
@@ -135,6 +143,10 @@ export function MaxApp() {
   useEffect(() => {
     window.localStorage.setItem(preferenceKeys.sidebarCollapsed, String(sidebarCollapsed));
   }, [sidebarCollapsed]);
+
+  useEffect(() => {
+    window.localStorage.setItem(preferenceKeys.sidebarWidth, String(Math.round(sidebarWidth)));
+  }, [sidebarWidth]);
 
   useEffect(() => {
     let active = true;
@@ -170,6 +182,12 @@ export function MaxApp() {
         }
       });
 
+    void loadPersistentCustomPages().then((pages) => {
+      if (active) setCustomPages(pages);
+    }).catch(() => {
+      if (active) setCustomPages(loadCustomPages());
+    });
+
     return () => {
       active = false;
     };
@@ -177,16 +195,12 @@ export function MaxApp() {
 
   useEffect(() => {
     function handleGlobalKeyDown(event: globalThis.KeyboardEvent) {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === 'k') {
-        event.preventDefault();
-        setBlueprintModalTab(undefined);
-        setCommandOpen(true);
-      } else if ((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === 'f') {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === 'f') {
         event.preventDefault();
         setSearchOpen(true);
-      } else if ((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === 'e') {
+      } else if ((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === 's') {
         event.preventDefault();
-        setQuickEntryOpen(true);
+        setTransactionChooserOpen(true);
       } else if (event.key === '/' && !isEditingTarget(event.target)) {
         event.preventDefault();
         setSearchOpen(true);
@@ -203,20 +217,55 @@ export function MaxApp() {
     setObjectCreateRequest(0);
   }
 
-  const handleAddCustomPage = useCallback(() => {
-    const newPage = createCustomPage('', 'lucide:FileText');
-    setCustomPages(loadCustomPages());
+  function handleTransactionChoice(choice: TransactionChoice) {
+    setTransactionChooserOpen(false);
+    if (choice === 'quick-sale') {
+      setQuickEntryOpen(true);
+      return;
+    }
+    navigate('transactions');
+    setTransactionCreateType(choice);
+    setObjectCreateRequest((request) => request + 1);
+  }
+
+  const handleAddCustomPage = useCallback(async () => {
+    const newPage = await createPersistentCustomPage(locale === 'ar' ? 'بدون عنوان' : 'Untitled', 'lucide:FileText', customPages.length);
+    if (!newPage) return;
+    setCustomPages((pages) => [...pages, newPage]);
     navigate(newPage.id);
-  }, []);
+  }, [customPages.length, locale]);
+
+  async function handleDuplicateCustomPage(id: string) {
+    const source = customPages.find((candidate) => candidate.id === id);
+    if (!source) return;
+    const sourceTitle = source.title.trim() || translate(locale, 'untitledPage');
+    const copyTitle = locale === 'ar' ? `نسخة من ${sourceTitle}` : `${sourceTitle} copy`;
+    const copy = await createPersistentCustomPage(copyTitle, source.icon, customPages.length);
+    if (!copy) return;
+    const hydratedCopy = {
+      ...copy,
+      blocks: source.blocks.map((block) => ({ ...block, id: `block_${crypto.randomUUID()}` })),
+      favorite: false,
+      wiki: source.wiki,
+    };
+    await updatePersistentCustomPage(hydratedCopy, customPages.length);
+    setCustomPages((pages) => [...pages, hydratedCopy]);
+    navigate(copy.id);
+  }
 
   function handleUpdateCustomPage(id: string, update: Partial<Omit<CustomPage, 'createdAt' | 'id'>>) {
-    updateCustomPage(id, update);
-    setCustomPages(loadCustomPages());
+    setCustomPages((pages) => pages.map((candidate, position) => {
+      if (candidate.id !== id) return candidate;
+      const updated = { ...candidate, ...update, updatedAt: new Date().toISOString() };
+      void updatePersistentCustomPage(updated, position);
+      return updated;
+    }));
   }
 
   function handleDeleteCustomPage(id: string) {
-    deleteCustomPage(id);
-    setCustomPages(loadCustomPages());
+    const target = customPages.find((candidate) => candidate.id === id);
+    if (target) void archivePersistentCustomPage(target);
+    setCustomPages((pages) => pages.filter((candidate) => candidate.id !== id));
     if (page === id) {
       navigate('home');
     }
@@ -236,17 +285,21 @@ export function MaxApp() {
     nextLocale: Locale,
     backupSchedule: BackupSchedule,
     blueprint?: Blueprint,
+    includeDemoData?: boolean,
   ) {
     const res = await window.maxApi.shop.completeOnboarding({
       backupSchedule,
       blueprint,
+      includeDemoData,
       locale: nextLocale,
       shopName: nextShopName,
     });
     if (res.ok) {
       setShopName(res.value.shopName);
       setLocale(res.value.locale);
+      setHomePage(loadHomePage(res.value.locale));
       setOnboardingCompleted(true);
+      void loadPersistentCustomPages().then(setCustomPages);
     }
   }
 
@@ -279,7 +332,7 @@ export function MaxApp() {
         id: 'add-page',
         keywords: ['add', 'page', 'new', 'صفحة', 'جديدة', 'إضافة'],
         label: translate(locale, 'addPage'),
-        run: handleAddCustomPage,
+        run: () => void handleAddCustomPage(),
       },
       {
         id: 'open-settings',
@@ -290,7 +343,7 @@ export function MaxApp() {
       {
         id: 'quick-sale-entry',
         keywords: ['quick', 'sale', 'fast', 'بيع', 'سريع', 'تسجيل'],
-        label: locale === 'ar' ? 'تسجيل بيع سريع (Ctrl+E)' : 'Quick Sale Entry (Ctrl+E)',
+        label: locale === 'ar' ? 'تسجيل بيع سريع (Ctrl+S)' : 'Quick Sale Entry (Ctrl+S)',
         run: () => setQuickEntryOpen(true),
       },
       {
@@ -324,7 +377,11 @@ export function MaxApp() {
     return <Onboarding initialLocale={locale} onComplete={handleCompleteOnboarding} />;
   }
 
-  const isCustomPage = page.startsWith('page_');
+  if (onboardingPreview) {
+    return <Onboarding initialLocale={locale} onClose={() => setOnboardingPreview(false)} onComplete={() => { setOnboardingPreview(false); return Promise.resolve(); }} preview />;
+  }
+
+  const isCustomPage = customPages.some((candidate) => candidate.id === page);
   const activeCustomPage = isCustomPage ? customPages.find((p) => p.id === page) : undefined;
 
   const pageLabel = page === 'home'
@@ -336,6 +393,17 @@ export function MaxApp() {
         : page;
 
   const PageIcon: LucideIcon = (!isCustomPage && page in pageIcons && pageIcons[page]) ? pageIcons[page] : FileText;
+  const showPageHeader = !isCustomPage && !['databases', 'home', 'settings'].includes(page);
+
+  function navigateSettingsSection(section: SettingsSectionId) {
+    setSettingsSection(section);
+    const target = document.getElementById(section);
+    target?.scrollIntoView({
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+      block: 'start',
+    });
+    target?.focus({ preventScroll: true });
+  }
 
   return (
     <div className="app-shell" data-app-ready={engineStatus === 'ready' ? 'true' : undefined}>
@@ -347,11 +415,17 @@ export function MaxApp() {
         customPages={customPages}
         homePage={homePage}
         locale={locale}
-        onAddCustomPage={handleAddCustomPage}
+        onAddCustomPage={() => void handleAddCustomPage()}
         onChangeLocale={() => setLocale(locale === 'en' ? 'ar' : 'en')}
         onCollapse={() => setSidebarCollapsed((collapsed) => !collapsed)}
+        onDeletePage={handleDeleteCustomPage}
+        onDuplicatePage={(id) => void handleDuplicateCustomPage(id)}
         onNavigate={navigate}
         onOpenSettings={() => navigate('settings')}
+        onRenamePage={(id, title) => handleUpdateCustomPage(id, { title })}
+        onResize={setSidebarWidth}
+        onSettingsSectionChange={navigateSettingsSection}
+        onToggleFavorite={(id, favorite) => handleUpdateCustomPage(id, { favorite })}
         onReorderPages={(reordered) => {
           const newHome = reordered.find((p) => p.id === 'home');
           if (newHome) {
@@ -360,9 +434,11 @@ export function MaxApp() {
           }
           const otherPages = reordered.filter((p) => p.id !== 'home');
           setCustomPages(otherPages);
-          saveCustomPages(otherPages);
+          otherPages.forEach((candidate, position) => void updatePersistentCustomPage(candidate, position));
         }}
         page={page}
+        settingsSection={settingsSection}
+        width={sidebarWidth}
       />
 
       <div className="app-frame">
@@ -373,24 +449,24 @@ export function MaxApp() {
             <bdi><strong>{pageLabel}</strong></bdi>
           </div>
           <div className="topbar__actions">
-            <button className="command-trigger" onClick={() => setCommandOpen(true)} type="button">
+            <button className="command-trigger" onClick={() => setSearchOpen(true)} type="button">
               <Search aria-hidden="true" size={17} />
-              <span>{translate(locale, 'commandSearch')}</span>
-              <kbd>{runtimePlatform === 'macos' ? <CommandIcon aria-hidden="true" size={12} /> : 'Ctrl'} K</kbd>
+              <span>{locale === 'ar' ? 'ابحث في البيانات' : 'Search data'}</span>
+              <kbd>{runtimePlatform === 'macos' ? '⌘' : 'Ctrl'} F</kbd>
             </button>
             <Button
               className="quick-entry-trigger"
               icon={<Zap aria-hidden="true" size={16} />}
-              onClick={() => setQuickEntryOpen(true)}
+              onClick={() => setTransactionChooserOpen(true)}
               variant="ghost"
             >
-              {locale === 'ar' ? 'بيع سريع' : 'Quick sale'}
+              {locale === 'ar' ? 'معاملة جديدة' : 'New transaction'}
             </Button>
           </div>
         </header>
 
-        <main aria-labelledby="page-title" className="content" data-page={page} id="main-content" tabIndex={-1}>
-          <header className="page-header">
+        <main aria-label={showPageHeader ? undefined : pageLabel} aria-labelledby={showPageHeader ? 'page-title' : undefined} className="content" data-custom-page={isCustomPage} data-page={page} id="main-content" tabIndex={-1}>
+          {showPageHeader && <header className="page-header">
             <div className="page-header__icon" aria-hidden="true">
               <PageIcon size={28} strokeWidth={1.7} />
             </div>
@@ -400,7 +476,7 @@ export function MaxApp() {
                 <p>{translate(locale, pageSubtitles[page])}</p>
               )}
             </div>
-          </header>
+          </header>}
 
           {page === 'home' ? (
             <CustomPageView
@@ -413,7 +489,6 @@ export function MaxApp() {
             <CustomPageView
               key={activeCustomPage.id}
               locale={locale}
-              onDeletePage={handleDeleteCustomPage}
               onUpdatePage={handleUpdateCustomPage}
               page={activeCustomPage}
             />
@@ -426,7 +501,19 @@ export function MaxApp() {
               onBackToApp={() => navigate('home')}
               onChangeLocale={setLocale}
               onChangeTheme={setTheme}
+              onDemoDataSeeded={() => {
+                setDataRevision((revision) => revision + 1);
+                void loadPersistentCustomPages().then(setCustomPages);
+              }}
               onResetAppearance={() => setTheme('system')}
+              onSectionChange={setSettingsSection}
+              onShowOnboarding={() => setOnboardingPreview(true)}
+              onWorkspaceDeleted={() => {
+                setCustomPages([]);
+                setHomePage(loadHomePage(locale));
+                setShopName('');
+                setOnboardingCompleted(false);
+              }}
               theme={theme}
             />
           ) : page === 'items' || page === 'people' ? (
@@ -442,12 +529,15 @@ export function MaxApp() {
               createRequest={objectCreateRequest}
               key="accounts"
               locale={locale}
+              refreshRequest={dataRevision}
             />
           ) : page === 'transactions' ? (
             <TransactionsWorkspace
               createRequest={objectCreateRequest}
               key="transactions"
               locale={locale}
+              refreshRequest={dataRevision}
+              requestedCreateType={transactionCreateType}
             />
           ) : page === 'reconciliation' ? (
             <ReconciliationWorkspace key="reconciliation" locale={locale} />
@@ -473,6 +563,7 @@ export function MaxApp() {
             else if (res.kind === 'person') navigate('people');
             else if (res.kind === 'account') navigate('accounts');
             else if (res.kind === 'transaction') navigate('transactions');
+            else if (res.kind === 'page') navigate(res.id);
           }}
         />
       )}
@@ -486,6 +577,9 @@ export function MaxApp() {
           }}
         />
       )}
+      {transactionChooserOpen && (
+        <TransactionChooser locale={locale} onChoose={handleTransactionChoice} onClose={() => setTransactionChooserOpen(false)} />
+      )}
       {quickEntryOpen && (
         <QuickEntryDialog
           locale={locale}
@@ -493,7 +587,7 @@ export function MaxApp() {
           onSuccess={(tx) => {
             setRecentTxForUndo(tx);
             if (page === 'transactions' || page === 'accounts') {
-              setObjectCreateRequest((r) => r + 1);
+              setDataRevision((revision) => revision + 1);
             }
           }}
         />
@@ -505,7 +599,7 @@ export function MaxApp() {
           onUndo={async (id) => {
             await window.maxApi.transactions.undo(id);
             if (page === 'transactions' || page === 'accounts') {
-              setObjectCreateRequest((r) => r + 1);
+              setDataRevision((revision) => revision + 1);
             }
           }}
           transaction={recentTxForUndo}

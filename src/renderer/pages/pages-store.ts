@@ -1,7 +1,88 @@
 import type { CustomPage } from '../app/app-types';
 import type { NotionBlock } from '../ui/notion-block-editor';
+import type { CustomPage as DatabaseCustomPage } from '../../shared/views-search-contract';
 
 const CUSTOM_PAGES_KEY = 'max:custom_pages';
+const TRASHED_PAGES_KEY = 'max:trashed_pages';
+
+function fromDatabasePage(page: DatabaseCustomPage): CustomPage {
+  let layout: { blocks?: readonly NotionBlock[]; favorite?: boolean; wiki?: boolean } = {};
+  try {
+    layout = JSON.parse(page.layoutJson) as typeof layout;
+  } catch {
+    // A damaged layout remains recoverable as an empty page.
+  }
+  return {
+    blocks: Array.isArray(layout.blocks) ? layout.blocks : [],
+    createdAt: page.createdAt,
+    favorite: layout.favorite,
+    icon: page.icon ?? 'lucide:FileText',
+    id: page.id,
+    title: page.name,
+    updatedAt: page.updatedAt,
+    wiki: layout.wiki,
+  };
+}
+
+function toDatabaseDraft(page: CustomPage, position: number) {
+  return {
+    icon: page.icon,
+    layoutJson: JSON.stringify({ blocks: page.blocks, favorite: page.favorite ?? false, wiki: page.wiki ?? false }),
+    name: page.title.trim() || 'Untitled',
+    position,
+  };
+}
+
+export async function loadPersistentCustomPages(): Promise<readonly CustomPage[]> {
+  return (await window.maxApi.pages.list()).map(fromDatabasePage);
+}
+
+export async function createPersistentCustomPage(title = 'Untitled', icon = 'lucide:FileText', position = 0): Promise<CustomPage | undefined> {
+  const blocks: readonly NotionBlock[] = [{ content: '', id: `block_${crypto.randomUUID()}`, type: 'text' }];
+  const result = await window.maxApi.pages.create({
+    icon,
+    layoutJson: JSON.stringify({ blocks, favorite: false, wiki: false }),
+    name: title.trim() || 'Untitled',
+    position,
+  });
+  return result.ok ? fromDatabasePage(result.value) : undefined;
+}
+
+export async function updatePersistentCustomPage(page: CustomPage, position: number): Promise<void> {
+  await window.maxApi.pages.update(page.id, toDatabaseDraft(page, position));
+}
+
+export async function archivePersistentCustomPage(page: CustomPage): Promise<void> {
+  try {
+    const trash = loadTrashedPages();
+    window.localStorage.setItem(TRASHED_PAGES_KEY, JSON.stringify([...trash, page]));
+  } catch {
+    // Archiving in SQLite is authoritative even if the optional local trash hint fails.
+  }
+  await window.maxApi.pages.archive(page.id);
+}
+
+export function loadTrashedPages(): readonly CustomPage[] {
+  try {
+    const raw = window.localStorage.getItem(TRASHED_PAGES_KEY);
+    const parsed = raw ? JSON.parse(raw) as unknown : [];
+    return Array.isArray(parsed) ? parsed as readonly CustomPage[] : [];
+  } catch {
+    return [];
+  }
+}
+
+export function restoreTrashedPage(id: string): void {
+  const trash = loadTrashedPages();
+  const page = trash.find((candidate) => candidate.id === id);
+  if (!page) return;
+  saveCustomPages([...loadCustomPages(), { ...page, updatedAt: new Date().toISOString() }]);
+  window.localStorage.setItem(TRASHED_PAGES_KEY, JSON.stringify(trash.filter((candidate) => candidate.id !== id)));
+}
+
+export function emptyPageTrash(): void {
+  window.localStorage.removeItem(TRASHED_PAGES_KEY);
+}
 
 export const defaultHomeBlocks: readonly NotionBlock[] = [
   {
@@ -44,6 +125,17 @@ export const defaultHomeBlocks: readonly NotionBlock[] = [
     id: 'block_db_items',
     type: 'database-view',
   },
+];
+
+const defaultHomeBlocksArabic: readonly NotionBlock[] = [
+  { content: 'نظرة عامة على المتجر', id: 'block_welcome_h1', type: 'h1' },
+  { content: 'هذه مساحتك اليومية في ماكس. أضف ملاحظاتك أو أدرج جدولًا مباشرًا باستخدام الأمر /.', id: 'block_welcome_callout', type: 'callout' },
+  { content: '', id: 'block_divider_1', type: 'divider' },
+  { content: 'أولويات اليوم', id: 'block_notes_h2', type: 'h2' },
+  { content: 'راجِع رصيد الخزينة قبل الإغلاق.', id: 'block_note_1', type: 'bullet' },
+  { content: 'تابِع الأصناف قليلة المخزون وطلبات الموردين.', id: 'block_note_2', type: 'bullet' },
+  { content: '', id: 'block_divider_2', type: 'divider' },
+  { content: 'items', id: 'block_db_items', type: 'database-view' },
 ];
 
 export function loadCustomPages(): readonly CustomPage[] {
@@ -89,6 +181,22 @@ export function createCustomPage(title = '', icon = 'lucide:FileText'): CustomPa
   return newPage;
 }
 
+export function duplicateCustomPage(page: CustomPage): CustomPage {
+  const copy: CustomPage = {
+    ...page,
+    blocks: page.blocks.map((block) => ({
+      ...block,
+      id: 'block_' + Math.random().toString(36).substring(2, 9),
+    })),
+    createdAt: new Date().toISOString(),
+    id: 'page_' + Math.random().toString(36).substring(2, 9),
+    title: page.title ? `${page.title} copy` : '',
+    updatedAt: new Date().toISOString(),
+  };
+  saveCustomPages([...loadCustomPages(), copy]);
+  return copy;
+}
+
 export function updateCustomPage(id: string, update: Partial<Omit<CustomPage, 'id' | 'createdAt'>>): CustomPage | undefined {
   const current = loadCustomPages();
   let updatedPage: CustomPage | undefined;
@@ -112,6 +220,16 @@ export function updateCustomPage(id: string, update: Partial<Omit<CustomPage, 'i
 
 export function deleteCustomPage(id: string): void {
   const current = loadCustomPages();
+  const deleted = current.find((page) => page.id === id);
+  if (deleted) {
+    try {
+      const raw = window.localStorage.getItem(TRASHED_PAGES_KEY);
+      const trash = raw ? JSON.parse(raw) as readonly CustomPage[] : [];
+      window.localStorage.setItem(TRASHED_PAGES_KEY, JSON.stringify([...trash, deleted]));
+    } catch {
+      // The active workspace still remains usable if local recovery storage is unavailable.
+    }
+  }
   saveCustomPages(current.filter((p) => p.id !== id));
 }
 
@@ -119,8 +237,8 @@ export function deleteCustomPage(id: string): void {
 const HOME_PAGE_BLOCKS_KEY = 'max:home_page_blocks';
 const HOME_PAGE_META_KEY = 'max:home_page_meta';
 
-export function loadHomePage(): CustomPage {
-  let blocks = defaultHomeBlocks;
+export function loadHomePage(locale: 'ar' | 'en' = 'en'): CustomPage {
+  let blocks = locale === 'ar' ? defaultHomeBlocksArabic : defaultHomeBlocks;
   let title = '';
   let icon = 'lucide:Home';
 

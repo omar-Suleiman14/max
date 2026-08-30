@@ -21,6 +21,7 @@ import { accountsCopy } from './accounts-i18n';
 type AccountsWorkspaceProps = Readonly<{
   createRequest: number;
   locale: Locale;
+  refreshRequest?: number;
 }>;
 
 function typeIcon(type: AccountType) {
@@ -262,7 +263,7 @@ function TransferDialog({
   );
 }
 
-export function AccountsWorkspace({ createRequest, locale }: AccountsWorkspaceProps) {
+export function AccountsWorkspace({ createRequest, locale, refreshRequest = 0 }: AccountsWorkspaceProps) {
   const [accounts, setAccounts] = useState<readonly AccountDefinition[]>([]);
   const [loading, setLoading] = useState(true);
   const [accountEditor, setAccountEditor] = useState<AccountDefinition | 'new'>();
@@ -284,7 +285,7 @@ export function AccountsWorkspace({ createRequest, locale }: AccountsWorkspacePr
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, refreshRequest]);
 
   const lastHandledCreateRef = useRef(createRequest);
   useEffect(() => {

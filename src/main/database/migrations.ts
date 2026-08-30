@@ -314,4 +314,238 @@ export const migrations: readonly Migration[] = [
       `);
     },
   },
+  {
+    id: 7,
+    name: 'record_template_origin',
+    up(database) {
+      database.exec(`
+        ALTER TABLE object_records
+          ADD COLUMN template_id TEXT REFERENCES shop_templates(id) ON DELETE SET NULL;
+
+        CREATE INDEX object_records_template
+          ON object_records (template_id);
+      `);
+    },
+  },
+  {
+    id: 8,
+    name: 'persistent_incremental_search_index',
+    up(database) {
+      database.exec(`
+        CREATE VIRTUAL TABLE search_index USING fts5(
+          entity_id UNINDEXED,
+          kind UNINDEXED,
+          display_title UNINDEXED,
+          display_subtitle UNINDEXED,
+          display_metadata UNINDEXED,
+          search_text,
+          tokenize = 'unicode61 remove_diacritics 2'
+        );
+
+        CREATE TRIGGER search_records_insert AFTER INSERT ON object_records BEGIN
+          INSERT INTO search_index (entity_id, kind, display_title, display_subtitle, display_metadata, search_text)
+          SELECT NEW.id, NEW.object_kind, NEW.label,
+            CASE NEW.object_kind WHEN 'person' THEN 'Customer · ' ELSE 'Product · ' END || NEW.label,
+            CASE NEW.object_kind WHEN 'person' THEN 'Customer / Person' ELSE 'Catalog Item' END,
+            max_search_normalize(NEW.id || ' ' || NEW.label || ' ' || COALESCE((
+              SELECT GROUP_CONCAT(value_json, ' ') FROM object_property_values
+              WHERE record_id = NEW.id AND active = 1
+            ), ''))
+          WHERE NEW.archived_at IS NULL;
+        END;
+
+        CREATE TRIGGER search_records_update AFTER UPDATE ON object_records BEGIN
+          DELETE FROM search_index WHERE entity_id = OLD.id AND kind = OLD.object_kind;
+          INSERT INTO search_index (entity_id, kind, display_title, display_subtitle, display_metadata, search_text)
+          SELECT NEW.id, NEW.object_kind, NEW.label,
+            CASE NEW.object_kind WHEN 'person' THEN 'Customer · ' ELSE 'Product · ' END || NEW.label,
+            CASE NEW.object_kind WHEN 'person' THEN 'Customer / Person' ELSE 'Catalog Item' END,
+            max_search_normalize(NEW.id || ' ' || NEW.label || ' ' || COALESCE((
+              SELECT GROUP_CONCAT(value_json, ' ') FROM object_property_values
+              WHERE record_id = NEW.id AND active = 1
+            ), ''))
+          WHERE NEW.archived_at IS NULL;
+        END;
+
+        CREATE TRIGGER search_records_delete AFTER DELETE ON object_records BEGIN
+          DELETE FROM search_index WHERE entity_id = OLD.id AND kind = OLD.object_kind;
+        END;
+
+        CREATE TRIGGER search_values_insert AFTER INSERT ON object_property_values BEGIN
+          DELETE FROM search_index WHERE entity_id = NEW.record_id AND kind IN ('item', 'person');
+          INSERT INTO search_index (entity_id, kind, display_title, display_subtitle, display_metadata, search_text)
+          SELECT r.id, r.object_kind, r.label,
+            CASE r.object_kind WHEN 'person' THEN 'Customer · ' ELSE 'Product · ' END || r.label,
+            CASE r.object_kind WHEN 'person' THEN 'Customer / Person' ELSE 'Catalog Item' END,
+            max_search_normalize(r.id || ' ' || r.label || ' ' || COALESCE((
+              SELECT GROUP_CONCAT(value_json, ' ') FROM object_property_values
+              WHERE record_id = r.id AND active = 1
+            ), ''))
+          FROM object_records r WHERE r.id = NEW.record_id AND r.archived_at IS NULL;
+        END;
+
+        CREATE TRIGGER search_values_update AFTER UPDATE ON object_property_values BEGIN
+          DELETE FROM search_index WHERE entity_id = NEW.record_id AND kind IN ('item', 'person');
+          INSERT INTO search_index (entity_id, kind, display_title, display_subtitle, display_metadata, search_text)
+          SELECT r.id, r.object_kind, r.label,
+            CASE r.object_kind WHEN 'person' THEN 'Customer · ' ELSE 'Product · ' END || r.label,
+            CASE r.object_kind WHEN 'person' THEN 'Customer / Person' ELSE 'Catalog Item' END,
+            max_search_normalize(r.id || ' ' || r.label || ' ' || COALESCE((
+              SELECT GROUP_CONCAT(value_json, ' ') FROM object_property_values
+              WHERE record_id = r.id AND active = 1
+            ), ''))
+          FROM object_records r WHERE r.id = NEW.record_id AND r.archived_at IS NULL;
+        END;
+
+        CREATE TRIGGER search_values_delete AFTER DELETE ON object_property_values BEGIN
+          DELETE FROM search_index WHERE entity_id = OLD.record_id AND kind IN ('item', 'person');
+          INSERT INTO search_index (entity_id, kind, display_title, display_subtitle, display_metadata, search_text)
+          SELECT r.id, r.object_kind, r.label,
+            CASE r.object_kind WHEN 'person' THEN 'Customer · ' ELSE 'Product · ' END || r.label,
+            CASE r.object_kind WHEN 'person' THEN 'Customer / Person' ELSE 'Catalog Item' END,
+            max_search_normalize(r.id || ' ' || r.label || ' ' || COALESCE((
+              SELECT GROUP_CONCAT(value_json, ' ') FROM object_property_values
+              WHERE record_id = r.id AND active = 1
+            ), ''))
+          FROM object_records r WHERE r.id = OLD.record_id AND r.archived_at IS NULL;
+        END;
+
+        CREATE TRIGGER search_accounts_insert AFTER INSERT ON shop_accounts BEGIN
+          INSERT INTO search_index VALUES (
+            NEW.id, 'account', NEW.name, upper(NEW.account_type) || ' account',
+            'Account · ' || NEW.account_type,
+            max_search_normalize(NEW.id || ' ' || NEW.name || ' ' || NEW.account_type)
+          );
+        END;
+
+        CREATE TRIGGER search_accounts_update AFTER UPDATE ON shop_accounts BEGIN
+          DELETE FROM search_index WHERE entity_id = OLD.id AND kind = 'account';
+          INSERT INTO search_index
+          SELECT NEW.id, 'account', NEW.name, upper(NEW.account_type) || ' account',
+            'Account · ' || NEW.account_type,
+            max_search_normalize(NEW.id || ' ' || NEW.name || ' ' || NEW.account_type)
+          WHERE NEW.archived_at IS NULL;
+        END;
+
+        CREATE TRIGGER search_accounts_delete AFTER DELETE ON shop_accounts BEGIN
+          DELETE FROM search_index WHERE entity_id = OLD.id AND kind = 'account';
+        END;
+
+        CREATE TRIGGER search_transactions_insert AFTER INSERT ON shop_transactions BEGIN
+          INSERT INTO search_index VALUES (
+            NEW.id, 'transaction', COALESCE(NEW.note, 'Transaction #' || substr(NEW.id, 1, 8)),
+            upper(NEW.transaction_type) || ' · ' || printf('%.2f', NEW.total_amount) || ' (' || NEW.payment_status || ')',
+            'Transaction · ' || NEW.payment_status,
+            max_search_normalize(NEW.id || ' ' || NEW.transaction_type || ' ' || NEW.payment_status || ' ' ||
+              printf('%.2f', NEW.total_amount) || ' ' || COALESCE(NEW.note, ''))
+          );
+        END;
+
+        CREATE TRIGGER search_transactions_update AFTER UPDATE ON shop_transactions BEGIN
+          DELETE FROM search_index WHERE entity_id = OLD.id AND kind = 'transaction';
+          INSERT INTO search_index
+          SELECT NEW.id, 'transaction', COALESCE(NEW.note, 'Transaction #' || substr(NEW.id, 1, 8)),
+            upper(NEW.transaction_type) || ' · ' || printf('%.2f', NEW.total_amount) || ' (' || NEW.payment_status || ')',
+            'Transaction · ' || NEW.payment_status,
+            max_search_normalize(NEW.id || ' ' || NEW.transaction_type || ' ' || NEW.payment_status || ' ' ||
+              printf('%.2f', NEW.total_amount) || ' ' || COALESCE(NEW.note, ''))
+          WHERE NEW.archived_at IS NULL;
+        END;
+
+        CREATE TRIGGER search_transactions_delete AFTER DELETE ON shop_transactions BEGIN
+          DELETE FROM search_index WHERE entity_id = OLD.id AND kind = 'transaction';
+        END;
+
+        CREATE TRIGGER search_views_insert AFTER INSERT ON shop_saved_views BEGIN
+          INSERT INTO search_index VALUES (
+            NEW.id, 'view', NEW.name, 'Saved View for ' || NEW.target_kind,
+            'Saved View · ' || NEW.target_kind,
+            max_search_normalize(NEW.id || ' ' || NEW.name || ' ' || NEW.target_kind)
+          );
+        END;
+
+        CREATE TRIGGER search_views_update AFTER UPDATE ON shop_saved_views BEGIN
+          DELETE FROM search_index WHERE entity_id = OLD.id AND kind = 'view';
+          INSERT INTO search_index
+          SELECT NEW.id, 'view', NEW.name, 'Saved View for ' || NEW.target_kind,
+            'Saved View · ' || NEW.target_kind,
+            max_search_normalize(NEW.id || ' ' || NEW.name || ' ' || NEW.target_kind)
+          WHERE NEW.archived_at IS NULL;
+        END;
+
+        CREATE TRIGGER search_views_delete AFTER DELETE ON shop_saved_views BEGIN
+          DELETE FROM search_index WHERE entity_id = OLD.id AND kind = 'view';
+        END;
+
+        CREATE TRIGGER search_pages_insert AFTER INSERT ON shop_custom_pages BEGIN
+          INSERT INTO search_index VALUES (
+            NEW.id, 'page', NEW.name, 'Dashboard / Page', 'Custom Page',
+            max_search_normalize(NEW.id || ' ' || NEW.name)
+          );
+        END;
+
+        CREATE TRIGGER search_pages_update AFTER UPDATE ON shop_custom_pages BEGIN
+          DELETE FROM search_index WHERE entity_id = OLD.id AND kind = 'page';
+          INSERT INTO search_index
+          SELECT NEW.id, 'page', NEW.name, 'Dashboard / Page', 'Custom Page',
+            max_search_normalize(NEW.id || ' ' || NEW.name)
+          WHERE NEW.archived_at IS NULL;
+        END;
+
+        CREATE TRIGGER search_pages_delete AFTER DELETE ON shop_custom_pages BEGIN
+          DELETE FROM search_index WHERE entity_id = OLD.id AND kind = 'page';
+        END;
+
+        INSERT INTO search_index
+        SELECT r.id, r.object_kind, r.label,
+          CASE r.object_kind WHEN 'person' THEN 'Customer · ' ELSE 'Product · ' END || r.label,
+          CASE r.object_kind WHEN 'person' THEN 'Customer / Person' ELSE 'Catalog Item' END,
+          max_search_normalize(r.id || ' ' || r.label || ' ' || COALESCE((
+            SELECT GROUP_CONCAT(value_json, ' ') FROM object_property_values
+            WHERE record_id = r.id AND active = 1
+          ), ''))
+        FROM object_records r WHERE r.archived_at IS NULL;
+
+        INSERT INTO search_index
+        SELECT id, 'account', name, upper(account_type) || ' account', 'Account · ' || account_type,
+          max_search_normalize(id || ' ' || name || ' ' || account_type)
+        FROM shop_accounts WHERE archived_at IS NULL;
+
+        INSERT INTO search_index
+        SELECT id, 'transaction', COALESCE(note, 'Transaction #' || substr(id, 1, 8)),
+          upper(transaction_type) || ' · ' || printf('%.2f', total_amount) || ' (' || payment_status || ')',
+          'Transaction · ' || payment_status,
+          max_search_normalize(id || ' ' || transaction_type || ' ' || payment_status || ' ' ||
+            printf('%.2f', total_amount) || ' ' || COALESCE(note, ''))
+        FROM shop_transactions WHERE archived_at IS NULL;
+
+        INSERT INTO search_index
+        SELECT id, 'view', name, 'Saved View for ' || target_kind, 'Saved View · ' || target_kind,
+          max_search_normalize(id || ' ' || name || ' ' || target_kind)
+        FROM shop_saved_views WHERE archived_at IS NULL;
+
+        INSERT INTO search_index
+        SELECT id, 'page', name, 'Dashboard / Page', 'Custom Page', max_search_normalize(id || ' ' || name)
+        FROM shop_custom_pages WHERE archived_at IS NULL;
+      `);
+    },
+  },
+  {
+    id: 9,
+    name: 'persistent_record_order',
+    up(database) {
+      database.exec(`
+        ALTER TABLE object_records ADD COLUMN position INTEGER NOT NULL DEFAULT 0 CHECK (position >= 0);
+        WITH ranked AS (
+          SELECT id, ROW_NUMBER() OVER (PARTITION BY object_kind ORDER BY label COLLATE NOCASE, id) - 1 AS next_position
+          FROM object_records
+        )
+        UPDATE object_records
+        SET position = (SELECT next_position FROM ranked WHERE ranked.id = object_records.id);
+        CREATE INDEX object_records_kind_position
+          ON object_records (object_kind, position, id)
+          WHERE archived_at IS NULL;
+      `);
+    },
+  },
 ];

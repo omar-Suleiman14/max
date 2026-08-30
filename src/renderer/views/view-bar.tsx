@@ -3,13 +3,13 @@ import {
   Bookmark,
   ChevronDown,
   Filter,
-  Layers,
+  FileText,
   Plus,
   SlidersHorizontal,
   TableProperties,
-  Trash2,
 } from 'lucide-react';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { createPortal } from 'react-dom';
 
 import type {
   SavedView,
@@ -19,22 +19,18 @@ import type {
   ViewTargetKind,
 } from '../../shared/views-search-contract';
 import type { Locale } from '../app/i18n';
-import { Button } from '../ui/button';
-import { FocusedOverlay } from '../ui/focused-overlay';
 import { viewsCopy } from './views-i18n';
 
 type ViewBarProps = Readonly<{
   activeFilterRules: readonly ViewFilterRule[];
-  activeGroupBy?: string;
   activeSortRules: readonly ViewSortRule[];
   filterOpen: boolean;
-  groupByOpen?: boolean;
   locale: Locale;
   onApplyView: (view?: SavedView) => void;
   onCreateRecord?: () => void;
   onOpenProperties?: () => void;
+  onOpenTemplates?: () => void;
   onToggleFilter: () => void;
-  onToggleGroupBy?: () => void;
   onToggleSort: () => void;
   onViewsChanged?: () => void;
   selectedViewId?: string;
@@ -44,16 +40,14 @@ type ViewBarProps = Readonly<{
 
 export function ViewBar({
   activeFilterRules,
-  activeGroupBy,
   activeSortRules,
   filterOpen,
-  groupByOpen,
   locale,
   onApplyView,
   onCreateRecord,
   onOpenProperties,
+  onOpenTemplates,
   onToggleFilter,
-  onToggleGroupBy,
   onToggleSort,
   onViewsChanged,
   selectedViewId,
@@ -65,6 +59,14 @@ export function ViewBar({
   const [viewName, setViewName] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
+  const [viewMenuId, setViewMenuId] = useState<string>();
+  const [viewMenuPosition, setViewMenuPosition] = useState<{ left: number; top: number }>();
+  const [editingViewId, setEditingViewId] = useState<string>();
+  const [editingName, setEditingName] = useState('');
+  const defaultNameKey = `max:default-view-name:${targetKind}`;
+  const [defaultViewName, setDefaultViewName] = useState(
+    () => window.localStorage.getItem(defaultNameKey) || viewsCopy(locale, 'defaultView'),
+  );
 
   const loadViews = useCallback(async () => {
     try {
@@ -82,7 +84,10 @@ export function ViewBar({
   async function handleSaveView(e: FormEvent) {
     e.preventDefault();
     const name = viewName.trim();
-    if (!name) return;
+    if (!name) {
+      setError(locale === 'ar' ? 'اكتب اسمًا لطريقة العرض.' : 'Enter a view name.');
+      return;
+    }
 
     setSaving(true);
     setError(undefined);
@@ -116,22 +121,54 @@ export function ViewBar({
     }
   }
 
+  async function commitViewName(id: string) {
+    const name = editingName.trim();
+    if (!name) return;
+    if (id === 'default') {
+      window.localStorage.setItem(defaultNameKey, name);
+      setDefaultViewName(name);
+    } else {
+      const current = views.find((view) => view.id === id);
+      if (!current) return;
+      await window.maxApi.views.update(id, {
+        filterRules: current.filterRules,
+        groupByPropertyId: current.groupByPropertyId,
+        name,
+        position: current.position,
+        sortRules: current.sortRules,
+        targetKind: current.targetKind,
+      });
+      await loadViews();
+      onViewsChanged?.();
+    }
+    setEditingViewId(undefined);
+    setEditingName('');
+  }
+
   const hasFilterRules = activeFilterRules.length > 0;
   const hasSortRules = activeSortRules.length > 0;
+
+  function toggleViewMenu(id: string, target: HTMLButtonElement) {
+    if (viewMenuId === id) {
+      setViewMenuId(undefined);
+      return;
+    }
+    const rect = target.getBoundingClientRect();
+    setViewMenuPosition({ left: Math.min(rect.left, window.innerWidth - 185), top: rect.bottom + 4 });
+    setViewMenuId(id);
+  }
 
   return (
     <div className="notion-view-bar">
       {/* Left side: View Tabs */}
       <div className="notion-view-bar__tabs">
-        <button
-          className="notion-view-tab"
-          data-active={!selectedViewId}
-          onClick={() => onApplyView(undefined)}
-          type="button"
-        >
-          <TableProperties aria-hidden="true" size={14} />
-          <span>{viewsCopy(locale, 'defaultView')}</span>
-        </button>
+        <div className="notion-view-tab-wrapper">
+          <button className="notion-view-tab" data-active={!selectedViewId} onClick={() => onApplyView(undefined)} onDoubleClick={() => { setEditingViewId('default'); setEditingName(defaultViewName); }} type="button">
+            <TableProperties aria-hidden="true" size={14} />
+            {editingViewId === 'default' ? <input autoFocus className="notion-view-name-input" onBlur={() => void commitViewName('default')} onChange={(event) => setEditingName(event.target.value)} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => { if (event.key === 'Enter') void commitViewName('default'); if (event.key === 'Escape') setEditingViewId(undefined); }} value={editingName} /> : <span>{defaultViewName}</span>}
+          </button>
+          <button aria-label={locale === 'ar' ? 'خيارات العرض' : 'View options'} className="notion-view-tab-menu" onClick={(event) => toggleViewMenu('default', event.currentTarget)} type="button"><ChevronDown size={12} /></button>
+        </div>
 
         {views.map((v) => (
           <div key={v.id} className="notion-view-tab-wrapper">
@@ -142,15 +179,15 @@ export function ViewBar({
               type="button"
             >
               <Bookmark aria-hidden="true" size={13} />
-              <span>{v.name}</span>
+              {editingViewId === v.id ? <input autoFocus className="notion-view-name-input" onBlur={() => void commitViewName(v.id)} onChange={(event) => setEditingName(event.target.value)} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => { if (event.key === 'Enter') void commitViewName(v.id); if (event.key === 'Escape') setEditingViewId(undefined); }} value={editingName} /> : <span>{v.name}</span>}
             </button>
             <button
-              aria-label={`${viewsCopy(locale, 'deleteView')}: ${v.name}`}
-              className="notion-view-tab-delete"
-              onClick={() => void handleDeleteView(v.id)}
+              aria-label={`${locale === 'ar' ? 'خيارات العرض' : 'View options'}: ${v.name}`}
+              className="notion-view-tab-menu"
+              onClick={(event) => toggleViewMenu(v.id, event.currentTarget)}
               type="button"
             >
-              <Trash2 aria-hidden="true" size={12} />
+              <ChevronDown aria-hidden="true" size={12} />
             </button>
           </div>
         ))}
@@ -168,21 +205,6 @@ export function ViewBar({
 
       {/* Right side: Action Tools + Blue New Button */}
       <div className="notion-view-bar__actions">
-        {onToggleGroupBy && (
-          <button
-            aria-expanded={groupByOpen}
-            className="notion-db-tool-btn"
-            data-active={Boolean(activeGroupBy) || groupByOpen}
-            onClick={onToggleGroupBy}
-            title={viewsCopy(locale, 'groupBy')}
-            type="button"
-          >
-            <Layers aria-hidden="true" size={14} />
-            <span>{viewsCopy(locale, 'groupBy')}</span>
-            {activeGroupBy && <span className="notion-db-badge">1</span>}
-          </button>
-        )}
-
         <button
           aria-expanded={filterOpen}
           className="notion-db-tool-btn"
@@ -221,8 +243,11 @@ export function ViewBar({
             <span>{locale === 'ar' ? 'الخصائص' : 'Properties'}</span>
           </button>
         )}
+        {onOpenTemplates && (
+          <button className="notion-db-tool-btn" onClick={onOpenTemplates} title={locale === 'ar' ? 'القوالب' : 'Templates'} type="button"><FileText aria-hidden="true" size={14} /><span>{locale === 'ar' ? 'القوالب' : 'Templates'}</span></button>
+        )}
 
-        {(hasFilterRules || hasSortRules || Boolean(activeGroupBy)) && !selectedViewId && (
+        {(hasFilterRules || hasSortRules) && !selectedViewId && (
           <button
             className="notion-db-save-btn"
             onClick={() => setSaveModalOpen(true)}
@@ -255,46 +280,32 @@ export function ViewBar({
       </div>
 
       {saveModalOpen && (
-        <FocusedOverlay
-          labelId="view-dialog-title"
-          onClose={() => setSaveModalOpen(false)}
-        >
-          <div
-            aria-labelledby="view-dialog-title"
-            aria-modal="true"
-            className="dialog"
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-          >
-            <h2 id="view-dialog-title">{viewsCopy(locale, 'createView')}</h2>
-            <form className="dialog__body" onSubmit={(e) => void handleSaveView(e)}>
+        <div aria-labelledby="view-dialog-title" className="notion-save-view-popover" role="dialog">
+            <form onSubmit={(e) => void handleSaveView(e)}>
+              <label htmlFor="view-name-input" id="view-dialog-title">{viewsCopy(locale, 'createView')}</label>
               {error && (
                 <p className="form-error" role="alert">
                   {error}
                 </p>
               )}
-              <div className="form-field">
-                <label htmlFor="view-name-input">{viewsCopy(locale, 'name')}</label>
-                <input
-                  autoFocus
-                  id="view-name-input"
-                  onChange={(e) => setViewName(e.target.value)}
-                  placeholder={viewsCopy(locale, 'name')}
-                  required
-                  value={viewName}
-                />
-              </div>
-              <div className="dialog__actions">
-                <Button onClick={() => setSaveModalOpen(false)} type="button" variant="ghost">
-                  {locale === 'ar' ? 'إلغاء' : 'Cancel'}
-                </Button>
-                <Button disabled={saving || !viewName.trim()} type="submit" variant="primary">
-                  {saving ? (locale === 'ar' ? 'جار الحفظ...' : 'Saving...') : viewsCopy(locale, 'save')}
-                </Button>
+              <div className="notion-save-view-popover__row">
+                <input autoFocus id="view-name-input" onChange={(e) => { setViewName(e.target.value); setError(undefined); }} onKeyDown={(e) => { if (e.key === 'Escape') setSaveModalOpen(false); }} placeholder={viewsCopy(locale, 'name')} value={viewName} />
+                <button disabled={saving || !viewName.trim()} type="submit">{saving ? '…' : viewsCopy(locale, 'save')}</button>
               </div>
             </form>
-          </div>
-        </FocusedOverlay>
+        </div>
+      )}
+      {viewMenuId && viewMenuPosition && createPortal(
+        <div className="notion-view-menu notion-view-menu--floating" role="menu" style={viewMenuPosition}>
+          <button onClick={() => {
+            const view = views.find((candidate) => candidate.id === viewMenuId);
+            setEditingName(view?.name ?? defaultViewName);
+            setEditingViewId(viewMenuId);
+            setViewMenuId(undefined);
+          }} role="menuitem" type="button">{locale === 'ar' ? 'إعادة تسمية' : 'Rename'}</button>
+          {viewMenuId !== 'default' && <button className="danger" onClick={() => { const id = viewMenuId; setViewMenuId(undefined); void handleDeleteView(id); }} role="menuitem" type="button">{viewsCopy(locale, 'deleteView')}</button>}
+        </div>,
+        document.body,
       )}
     </div>
   );

@@ -128,6 +128,8 @@ export function QuickEntryDialog({ locale, onClose, onSuccess }: QuickEntryDialo
 
   function handleItemSelect(id: string) {
     setSelectedItemId(id);
+    const item = items.find((candidate) => candidate.id === id);
+    setCustomNote(item?.label ?? '');
     void updateItemSuggestion(id);
     setTimeout(() => amountInputRef.current?.focus(), 50);
   }
@@ -249,16 +251,10 @@ export function QuickEntryDialog({ locale, onClose, onSuccess }: QuickEntryDialo
               </select>
             </label>
 
-            {!selectedItemId && (
-              <label className="field">
-                <span>{quickEntryCopy(locale, 'note')}</span>
-                <input
-                  onChange={(e) => setCustomNote(e.target.value)}
-                  placeholder="e.g., Screen Protector + Fitting"
-                  value={customNote}
-                />
-              </label>
-            )}
+            <label className="field">
+              <span>{quickEntryCopy(locale, 'note')}</span>
+              <input onChange={(e) => setCustomNote(e.target.value)} placeholder="e.g., Screen Protector + Fitting" value={customNote} />
+            </label>
           </div>
         </div>
 

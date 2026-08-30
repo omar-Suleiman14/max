@@ -14,8 +14,8 @@ import {
   X,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { NotionBlockEditor, type NotionBlock } from '../ui/notion-block-editor';
 
 import type { PersonBalanceSummary } from '../../shared/person-debt-contract';
 import type { SavedView, ViewFilterRule, ViewSortRule } from '../../shared/views-search-contract';
@@ -124,6 +124,126 @@ function renderCellValue(
   return String(value);
 }
 
+function EditableDatabaseCell({
+  locale,
+  onChange,
+  property,
+  relatedRecords,
+  value,
+}: Readonly<{
+  locale: Locale;
+  onChange: (value: PropertyValue | undefined, newChoice?: string) => Promise<void>;
+  property: PropertyDefinition;
+  relatedRecords: readonly ConfigurableRecord[];
+  value: PropertyValue | undefined;
+}>) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(value === undefined ? '' : String(value));
+  const [saving, setSaving] = useState(false);
+  const [popoverPosition, setPopoverPosition] = useState<{ left: number; top: number }>();
+
+  async function commit(nextValue: PropertyValue | undefined, newChoice?: string) {
+    setSaving(true);
+    await onChange(nextValue, newChoice);
+    setSaving(false);
+    setOpen(false);
+  }
+
+  if (property.type === 'checkbox') {
+    return (
+      <button className="database-cell-button" disabled={saving} onClick={() => void commit(!value)} type="button">
+        {renderCellValue(value ?? false, property, relatedRecords)}
+      </button>
+    );
+  }
+
+  if (open && (property.type === 'select' || property.type === 'status')) {
+    const normalized = draft.trim();
+    const isNew = normalized.length > 0 && !property.rules.choices.some((choice) => choice.toLocaleLowerCase() === normalized.toLocaleLowerCase());
+    return createPortal(
+      <div className="database-cell-popover database-cell-popover--floating" style={popoverPosition}>
+        <input autoFocus onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape') setOpen(false); if (event.key === 'Enter' && isNew) void commit(normalized, normalized); }} placeholder={locale === 'ar' ? 'ابحث أو أنشئ خيارًا' : 'Search or create an option'} value={draft} />
+        <div className="database-cell-options">
+          {property.rules.choices.filter((choice) => choice.toLocaleLowerCase().includes(draft.toLocaleLowerCase())).map((choice, index) => (
+            <button key={choice} onClick={() => void commit(choice)} type="button"><span className={`database-cell-pill database-cell-pill--${pillColor(index)}`}>{choice}</span></button>
+          ))}
+          {isNew && <button className="database-create-option" onClick={() => void commit(normalized, normalized)} type="button"><Plus size={13} />{locale === 'ar' ? `إنشاء "${normalized}"` : `Create "${normalized}"`}<span className={`database-cell-pill database-cell-pill--${pillColor(property.rules.choices.length)}`}>{normalized}</span></button>}
+        </div>
+      </div>,
+      document.body,
+    );
+  }
+
+  if (open && property.type === 'relation') {
+    const choices = relatedRecords.filter((record) => record.objectKind === property.rules.relationTarget);
+    return <select autoFocus className="database-inline-input" onBlur={() => setOpen(false)} onChange={(event) => void commit(event.target.value || undefined)} value={draft}><option value="">—</option>{choices.map((record) => <option key={record.id} value={record.id}>{record.label}</option>)}</select>;
+  }
+
+  if (open) {
+    const type = property.type === 'date' ? 'date' : property.type === 'number' || property.type === 'money' ? 'number' : 'text';
+    return <input autoFocus className="database-inline-input" onBlur={() => void commit(draft === '' ? undefined : type === 'number' ? Number(draft) : draft)} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); if (event.key === 'Escape') setOpen(false); }} step={property.type === 'money' ? '0.01' : undefined} type={type} value={draft} />;
+  }
+
+  return <button className="database-cell-button" onClick={(event) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    setPopoverPosition({ left: Math.min(rect.left, window.innerWidth - 272), top: rect.bottom + 2 });
+    setDraft(value === undefined ? '' : String(value));
+    setOpen(true);
+  }} type="button">{renderCellValue(value, property, relatedRecords)}</button>;
+}
+
+function InlinePropertyInput({ locale, onChange, onCommit, property, relatedRecords, value }: Readonly<{
+  locale: Locale;
+  onChange: (value: PropertyValue | undefined) => void;
+  onCommit: () => void;
+  property: PropertyDefinition;
+  relatedRecords: readonly ConfigurableRecord[];
+  value: PropertyValue | undefined;
+}>) {
+  const commonKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      onCommit();
+    }
+  };
+  if (property.type === 'checkbox') {
+    return <input aria-label={property.name} checked={Boolean(value)} className="database-inline-checkbox" data-inline-property="true" onChange={(event) => onChange(event.target.checked)} type="checkbox" />;
+  }
+  if (property.type === 'select' || property.type === 'status') {
+    return (
+      <select aria-label={property.name} className="database-inline-input" data-inline-property="true" onChange={(event) => onChange(event.target.value || undefined)} onKeyDown={commonKeyDown} required={property.rules.required} value={typeof value === 'string' ? value : ''}>
+        <option value="">{locale === 'ar' ? 'اختر…' : 'Select…'}</option>
+        {property.rules.choices.map((choice) => <option key={choice} value={choice}>{choice}</option>)}
+      </select>
+    );
+  }
+  if (property.type === 'relation') {
+    const options = relatedRecords.filter((record) => record.objectKind === property.rules.relationTarget);
+    return (
+      <select aria-label={property.name} className="database-inline-input" data-inline-property="true" onChange={(event) => onChange(event.target.value || undefined)} onKeyDown={commonKeyDown} required={property.rules.required} value={typeof value === 'string' ? value : ''}>
+        <option value="">{locale === 'ar' ? 'اختر…' : 'Select…'}</option>
+        {options.map((record) => <option key={record.id} value={record.id}>{record.label}</option>)}
+      </select>
+    );
+  }
+  const numeric = property.type === 'money' || property.type === 'number';
+  return (
+    <input
+      aria-label={property.name}
+      className="database-inline-input"
+      data-inline-property="true"
+      min={numeric ? property.rules.minimum : undefined}
+      onChange={(event) => onChange(event.target.value === '' ? undefined : numeric ? Number(event.target.value) : event.target.value)}
+      onKeyDown={commonKeyDown}
+      placeholder={property.rules.required ? (locale === 'ar' ? 'مطلوب' : 'Required') : '—'}
+      required={property.rules.required}
+      step={property.type === 'money' ? '0.01' : undefined}
+      type={property.type === 'date' ? 'date' : numeric ? 'number' : 'text'}
+      value={value === undefined ? '' : String(value)}
+    />
+  );
+}
+
 function recordFieldValue(record: ConfigurableRecord, field: string): PropertyValue | undefined {
   return field === 'label' ? record.label : record.values[field];
 }
@@ -183,6 +303,7 @@ function PropertyEditor({
   const [required, setRequired] = useState(initial?.rules.required ?? false);
   const [unique, setUnique] = useState(initial?.rules.unique ?? false);
   const [digitsOnly, setDigitsOnly] = useState(initial?.rules.digitsOnly ?? false);
+  const [exactDigits, setExactDigits] = useState(initial?.rules.exactDigits?.toString() ?? '');
   const [minimum, setMinimum] = useState(initial?.rules.minimum?.toString() ?? '');
   const [maximum, setMaximum] = useState(initial?.rules.maximum?.toString() ?? '');
   const [minimumLength, setMinimumLength] = useState(initial?.rules.minimumLength?.toString() ?? '');
@@ -202,6 +323,7 @@ function PropertyEditor({
       rules: {
         choices: choices.split('\n'),
         digitsOnly,
+        exactDigits: numberOrUndefined(exactDigits),
         maximum: numberOrUndefined(maximum),
         maximumLength: numberOrUndefined(maximumLength),
         minimum: numberOrUndefined(minimum),
@@ -273,7 +395,11 @@ function PropertyEditor({
           </div>
         )}
         {type === 'text' && (
-          <div className="field-pair">
+          <div className="field-pair field-pair--three">
+            <label className="field">
+              <span>{locale === 'ar' ? 'عدد الأرقام' : 'Number of digits'}</span>
+              <input min="1" onChange={(event) => setExactDigits(event.target.value)} step="1" type="number" value={exactDigits} />
+            </label>
             <label className="field">
               <span>{objectCopy(locale, 'minimumLength')}</span>
               <input min="0" onChange={(event) => setMinimumLength(event.target.value)} step="1" type="number" value={minimumLength} />
@@ -405,7 +531,7 @@ function RecordEditor({
   const progressiveProps = orderedProperties.filter((p) => progressiveSet.has(p.id));
 
   return (
-    <FocusedOverlay className="object-dialog" labelId="record-dialog-title" onClose={onClose}>
+    <FocusedOverlay className={initial ? 'object-dialog object-dialog--peek' : 'object-dialog'} labelId="record-dialog-title" onClose={onClose}>
       <DialogHeader locale={locale} onClose={onClose} title={title} titleId="record-dialog-title" />
       <form className="object-form" onSubmit={(event) => void submit(event)}>
         {error && (
@@ -605,6 +731,10 @@ export function ObjectWorkspace({ createRequest, locale, objectKind, onViewsChan
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const [activeTemplate, setActiveTemplate] = useState<TemplateDefinition>();
   const [recordEditor, setRecordEditor] = useState<ConfigurableRecord | 'new'>();
+  const [inlineCreating, setInlineCreating] = useState(false);
+  const [inlineLabel, setInlineLabel] = useState('');
+  const [inlineValues, setInlineValues] = useState<Record<string, PropertyValue>>({});
+  const [inlineError, setInlineError] = useState<string>();
   const [archiveTarget, setArchiveTarget] = useState<ArchiveTarget>();
   const [auditEntries, setAuditEntries] = useState<readonly AuditEntry[]>();
   const [personBalances, setPersonBalances] = useState<readonly PersonBalanceSummary[]>([]);
@@ -614,44 +744,10 @@ export function ObjectWorkspace({ createRequest, locale, objectKind, onViewsChan
   const [sortRules, setSortRules] = useState<readonly ViewSortRule[]>([]);
   const [filterOpen, setFilterOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
-  const [groupByPropertyId, setGroupByPropertyId] = useState<string | undefined>();
-  const [groupByOpen, setGroupByOpen] = useState(false);
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set());
+  const groupByPropertyId: string | undefined = undefined;
+  const collapsedGroups = new Set<string>();
   const [draggedRecordId, setDraggedRecordId] = useState<string | null>(null);
   const [dragOverRecordId, setDragOverRecordId] = useState<string | null>(null);
-  const [pageBlocks, setPageBlocks] = useState<readonly NotionBlock[]>(() => {
-    try {
-      const raw = window.localStorage.getItem(`max:notion_blocks:${objectKind}`);
-      if (raw) {
-        const parsed = JSON.parse(raw) as unknown;
-        if (Array.isArray(parsed)) return parsed as readonly NotionBlock[];
-      }
-    } catch {
-      // ignore
-    }
-    return [];
-  });
-
-  function handleBlocksChange(nextBlocks: readonly NotionBlock[]) {
-    setPageBlocks(nextBlocks);
-    try {
-      window.localStorage.setItem(`max:notion_blocks:${objectKind}`, JSON.stringify(nextBlocks));
-    } catch {
-      // ignore
-    }
-  }
-
-  function toggleGroupCollapse(groupId: string) {
-    setCollapsedGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(groupId)) {
-        next.delete(groupId);
-      } else {
-        next.add(groupId);
-      }
-      return next;
-    });
-  }
 
   function handleRecordDragStart(id: string) {
     setDraggedRecordId(id);
@@ -664,7 +760,7 @@ export function ObjectWorkspace({ createRequest, locale, objectKind, onViewsChan
     }
   }
 
-  function handleRecordDrop(targetId: string) {
+  async function handleRecordDrop(targetId: string) {
     if (!draggedRecordId || draggedRecordId === targetId) {
       setDraggedRecordId(null);
       setDragOverRecordId(null);
@@ -678,6 +774,8 @@ export function ObjectWorkspace({ createRequest, locale, objectKind, onViewsChan
       if (moved) {
         next.splice(toIdx, 0, moved);
         setRecords(next);
+        const result = await window.maxApi.objects.reorderRecords(objectKind, next.map((record) => record.id));
+        if (!result.ok) await load();
       }
     }
     setDraggedRecordId(null);
@@ -719,7 +817,6 @@ export function ObjectWorkspace({ createRequest, locale, objectKind, onViewsChan
       setActiveView(selected);
       setFilterRules(selected?.filterRules ?? []);
       setSortRules(selected?.sortRules ?? []);
-      setGroupByPropertyId(selected?.groupByPropertyId);
     });
   }, [objectKind, selectedViewId]);
 
@@ -741,7 +838,6 @@ export function ObjectWorkspace({ createRequest, locale, objectKind, onViewsChan
     setActiveView(view);
     setFilterRules(view?.filterRules ?? []);
     setSortRules(view?.sortRules ?? []);
-    setGroupByPropertyId(view?.groupByPropertyId);
   }
 
   function addFilterRule() {
@@ -779,13 +875,12 @@ export function ObjectWorkspace({ createRequest, locale, objectKind, onViewsChan
   }
 
   const startRecordCreation = useCallback(() => {
-    if (templates.length > 0) {
-      setTemplatePickerOpen(true);
-    } else {
-      setActiveTemplate(undefined);
-      setRecordEditor('new');
-    }
-  }, [templates.length]);
+    setActiveTemplate(undefined);
+    setInlineLabel('');
+    setInlineValues({});
+    setInlineError(undefined);
+    setInlineCreating(true);
+  }, []);
 
   const lastHandledCreateRef = useRef(createRequest);
   useEffect(() => {
@@ -828,16 +923,68 @@ export function ObjectWorkspace({ createRequest, locale, objectKind, onViewsChan
   }
 
   async function saveRecord(draft: ConfigurableRecordDraft): Promise<string | undefined> {
+    const recordWithTemplate = {
+      ...draft,
+      templateId: recordEditor === 'new' ? activeTemplate?.id : recordEditor?.templateId,
+    };
     const result =
       recordEditor === 'new'
-        ? await window.maxApi.objects.createRecord(draft)
-        : await window.maxApi.objects.updateRecord(recordEditor?.id ?? '', draft);
+        ? await window.maxApi.objects.createRecord(recordWithTemplate)
+        : await window.maxApi.objects.updateRecord(recordEditor?.id ?? '', recordWithTemplate);
     const message = mutationMessage(locale, result);
     if (!message) {
       setRecordEditor(undefined);
       await load();
     }
     return message;
+  }
+
+  async function createInlineRecord() {
+    const label = inlineLabel.trim();
+    if (!label) {
+      setInlineError(locale === 'ar' ? 'اكتب اسمًا أولًا.' : 'Enter a name first.');
+      return;
+    }
+    const missing = properties.find((property) => property.rules.required && inlineValues[property.id] === undefined);
+    if (missing) {
+      setInlineError(locale === 'ar' ? `الحقل «${missing.name}» مطلوب.` : `${missing.name} is required.`);
+      document.querySelector<HTMLElement>(`[data-inline-property="true"][aria-label="${CSS.escape(missing.name)}"]`)?.focus();
+      return;
+    }
+    setInlineError(undefined);
+    const result = await window.maxApi.objects.createRecord({ label, objectKind, values: inlineValues });
+    if (result.ok) {
+      setInlineLabel('');
+      setInlineValues({});
+      setInlineCreating(false);
+      await load();
+    } else {
+      setInlineError(objectError(locale, result.error.code));
+    }
+  }
+
+  async function updateCell(
+    record: ConfigurableRecord,
+    property: PropertyDefinition,
+    value: PropertyValue | undefined,
+    newChoice?: string,
+  ) {
+    if (newChoice) {
+      const propertyResult = await window.maxApi.objects.updateProperty(property.id, {
+        name: property.name,
+        objectKind: property.objectKind,
+        rules: { ...property.rules, choices: [...property.rules.choices, newChoice] },
+        type: property.type,
+      });
+      if (!propertyResult.ok) {
+        setLoadError(true);
+        return;
+      }
+    }
+    const values = { ...record.values } as Record<string, PropertyValue>;
+    if (value === undefined) delete values[property.id]; else values[property.id] = value;
+    const result = await window.maxApi.objects.updateRecord(record.id, { label: record.label, objectKind, templateId: record.templateId, values });
+    if (result.ok) await load(); else setLoadError(true);
   }
 
   async function archive() {
@@ -866,76 +1013,6 @@ export function ObjectWorkspace({ createRequest, locale, objectKind, onViewsChan
 
   return (
     <section className="object-workspace">
-      <div className="object-toolbar">
-        <div>
-          <strong>
-            {visibleRecords.length} {objectCopy(locale, 'records')}
-          </strong>
-          <span>
-            <button
-              className="toolbar-text-link"
-              onClick={() => {
-                setSchemaTab('properties');
-                setSchemaPanelOpen(true);
-              }}
-              type="button"
-            >
-              {properties.length} {objectCopy(locale, 'properties').toLocaleLowerCase(locale)}
-            </button>
-            {' · '}
-            <button
-              className="toolbar-text-link"
-              onClick={() => {
-                setSchemaTab('templates');
-                setSchemaPanelOpen(true);
-              }}
-              type="button"
-            >
-              {templates.length} {templateCopy(locale, 'templates').toLocaleLowerCase(locale)}
-            </button>
-          </span>
-        </div>
-        <div className="object-toolbar__actions">
-          <Button
-            ref={propertiesBtnRef}
-            icon={<SlidersHorizontal aria-hidden="true" size={16} />}
-            onClick={() => {
-              if (schemaPanelOpen && schemaTab === 'properties') {
-                setSchemaPanelOpen(false);
-              } else {
-                setSchemaTab('properties');
-                setSchemaPanelOpen(true);
-              }
-            }}
-            variant="ghost"
-          >
-            {objectCopy(locale, 'properties')}
-          </Button>
-          <Button
-            ref={templatesBtnRef}
-            icon={<FileText aria-hidden="true" size={16} />}
-            onClick={() => {
-              if (schemaPanelOpen && schemaTab === 'templates') {
-                setSchemaPanelOpen(false);
-              } else {
-                setSchemaTab('templates');
-                setSchemaPanelOpen(true);
-              }
-            }}
-            variant="ghost"
-          >
-            {templateCopy(locale, 'templates')}
-          </Button>
-          <Button
-            icon={<Plus aria-hidden="true" size={17} />}
-            onClick={startRecordCreation}
-            variant="primary"
-          >
-            {objectCopy(locale, objectKind === 'item' ? 'createItem' : 'createPerson')}
-          </Button>
-        </div>
-      </div>
-
       {loadError && (
         <p className="form-error" role="alert">
           {objectCopy(locale, 'unknownError')}
@@ -946,10 +1023,8 @@ export function ObjectWorkspace({ createRequest, locale, objectKind, onViewsChan
         <div className="record-panel" aria-busy={loading}>
           <ViewBar
             activeFilterRules={filterRules}
-            activeGroupBy={groupByPropertyId}
             activeSortRules={sortRules}
             filterOpen={filterOpen}
-            groupByOpen={groupByOpen}
             locale={locale}
             onApplyView={applyView}
             onCreateRecord={startRecordCreation}
@@ -957,8 +1032,11 @@ export function ObjectWorkspace({ createRequest, locale, objectKind, onViewsChan
               setSchemaTab('properties');
               setSchemaPanelOpen(true);
             }}
+            onOpenTemplates={() => {
+              setSchemaTab('templates');
+              setSchemaPanelOpen(true);
+            }}
             onToggleFilter={() => setFilterOpen((o) => !o)}
-            onToggleGroupBy={() => setGroupByOpen((o) => !o)}
             onToggleSort={() => setSortOpen((o) => !o)}
             onViewsChanged={onViewsChanged}
             selectedViewId={activeView?.id}
@@ -966,46 +1044,6 @@ export function ObjectWorkspace({ createRequest, locale, objectKind, onViewsChan
             targetKind={objectKind}
           />
 
-          {groupByOpen && (
-            <div className="notion-group-ribbon">
-              <span className="notion-filter-pill__prefix">{viewsCopy(locale, 'groupBy')}</span>
-              <select
-                aria-label={viewsCopy(locale, 'groupBy')}
-                className="notion-filter-select"
-                onChange={(e) => {
-                  setActiveView(undefined);
-                  setGroupByPropertyId(e.target.value || undefined);
-                }}
-                value={groupByPropertyId ?? ''}
-              >
-                <option value="">{locale === 'ar' ? 'بدون تجميع (جدول واحد)' : 'None (single table)'}</option>
-                {templates.length > 0 && (
-                  <option value="__template__">
-                    {locale === 'ar' ? 'حسب القالب / النوع' : 'By Template / Type'}
-                  </option>
-                )}
-                {properties
-                  .filter((p) => p.type === 'select' || p.type === 'status')
-                  .map((prop) => (
-                    <option key={prop.id} value={prop.id}>
-                      {prop.name}
-                    </option>
-                  ))}
-              </select>
-              {groupByPropertyId && (
-                <button
-                  className="notion-filter-clear-btn"
-                  onClick={() => {
-                    setActiveView(undefined);
-                    setGroupByPropertyId(undefined);
-                  }}
-                  type="button"
-                >
-                  {locale === 'ar' ? 'إلغاء التجميع' : 'Clear grouping'}
-                </button>
-              )}
-            </div>
-          )}
 
           {filterOpen && (
             <div className="notion-filter-ribbon">
@@ -1148,19 +1186,7 @@ export function ObjectWorkspace({ createRequest, locale, objectKind, onViewsChan
             </div>
           )}
 
-          {/* Notion Markdown Notes & Blocks on page */}
-          <NotionBlockEditor
-            blocks={pageBlocks}
-            locale={locale}
-            onChange={handleBlocksChange}
-            placeholder={
-              locale === 'ar'
-                ? 'اكتب ملاحظات أو عناوين في هذه الصفحة...'
-                : 'Write notes, headings, or markdown on this page...'
-            }
-          />
-
-          {!loading && records.length === 0 && (
+          {!loading && records.length === 0 && !inlineCreating && (
             <div className="object-empty">
               <div className="empty-state__icon">
                 <Plus aria-hidden="true" size={25} />
@@ -1175,7 +1201,7 @@ export function ObjectWorkspace({ createRequest, locale, objectKind, onViewsChan
           {records.length > 0 && visibleRecords.length === 0 && (
             <div className="database-no-matches">{viewsCopy(locale, 'noMatches')}</div>
           )}
-          {records.length > 0 && (
+          {(records.length > 0 || inlineCreating) && (
             <div className="database-stacked-groups">
               {(() => {
                 // Compute groups
@@ -1187,23 +1213,15 @@ export function ObjectWorkspace({ createRequest, locale, objectKind, onViewsChan
                 }> = [];
 
                 if (groupByPropertyId === '__template__') {
-                  const assigned = new Set<string>();
                   for (const t of templates) {
-                    const matching = visibleRecords.filter((rec) => {
-                      const keys = Object.keys(t.defaults);
-                      if (keys.length > 0) {
-                        return keys.every((k) => rec.values[k] === t.defaults[k]);
-                      }
-                      return t.fieldOrder.some((k) => rec.values[k] !== undefined);
-                    });
-                    matching.forEach((r) => assigned.add(r.id));
+                    const matching = visibleRecords.filter((rec) => rec.templateId === t.id);
                     groups.push({ id: t.id, label: t.name, records: matching, template: t });
                   }
-                  const unassigned = visibleRecords.filter((r) => !assigned.has(r.id));
+                  const unassigned = visibleRecords.filter((r) => !r.templateId || !templates.some((t) => t.id === r.templateId));
                   if (unassigned.length > 0 || groups.length === 0) {
                     groups.push({
                       id: 'unassigned',
-                      label: locale === 'ar' ? 'أصناف عامة / بدون قالب' : 'General / Other',
+                      label: locale === 'ar' ? 'قالب غير معروف' : 'Unknown template',
                       records: unassigned,
                     });
                   }
@@ -1247,7 +1265,7 @@ export function ObjectWorkspace({ createRequest, locale, objectKind, onViewsChan
                           <button
                             aria-expanded={!isCollapsed}
                             className="database-group-header__toggle"
-                            onClick={() => toggleGroupCollapse(group.id)}
+                            onClick={() => undefined}
                             type="button"
                           >
                             {isCollapsed ? (
@@ -1321,14 +1339,8 @@ export function ObjectWorkspace({ createRequest, locale, objectKind, onViewsChan
                                     key={record.id}
                                     data-drag-over={isDragOver}
                                     data-dragging={isDragging}
-                                    draggable
-                                    onDragEnd={() => {
-                                      setDraggedRecordId(null);
-                                      setDragOverRecordId(null);
-                                    }}
                                     onDragOver={(e) => handleRecordDragOver(e, record.id)}
-                                    onDragStart={() => handleRecordDragStart(record.id)}
-                                    onDrop={() => handleRecordDrop(record.id)}
+                                    onDrop={() => void handleRecordDrop(record.id)}
                                   >
                                     <th scope="row">
                                       <button
@@ -1339,7 +1351,14 @@ export function ObjectWorkspace({ createRequest, locale, objectKind, onViewsChan
                                         }}
                                         type="button"
                                       >
-                                        <span className="database-row-grip" title="Drag to reorder row">
+                                        <span
+                                          className="database-row-grip"
+                                          draggable
+                                          onClick={(event) => event.stopPropagation()}
+                                          onDragEnd={() => { setDraggedRecordId(null); setDragOverRecordId(null); }}
+                                          onDragStart={(event) => { event.stopPropagation(); handleRecordDragStart(record.id); }}
+                                          title={locale === 'ar' ? 'اسحب لإعادة ترتيب الصف' : 'Drag to reorder row'}
+                                        >
                                           <GripVertical aria-hidden="true" size={12} />
                                         </span>
                                         <span className="database-record-name__page-icon">
@@ -1360,7 +1379,13 @@ export function ObjectWorkspace({ createRequest, locale, objectKind, onViewsChan
                                     </th>
                                     {properties.map((property) => (
                                       <td key={property.id}>
-                                        {renderCellValue(record.values[property.id], property, relatedRecords)}
+                                        <EditableDatabaseCell
+                                          locale={locale}
+                                          onChange={(value, newChoice) => updateCell(record, property, value, newChoice)}
+                                          property={property}
+                                          relatedRecords={relatedRecords}
+                                          value={record.values[property.id]}
+                                        />
                                       </td>
                                     ))}
                                     <td>
@@ -1407,6 +1432,43 @@ export function ObjectWorkspace({ createRequest, locale, objectKind, onViewsChan
                                   </tr>
                                 );
                               })}
+                              {inlineCreating && !isGrouped && (
+                                <tr className="database-inline-new-row" data-error={Boolean(inlineError)}>
+                                  <th scope="row">
+                                    <span className="database-record-name__page-icon"><FileText size={14} /></span>
+                                    <input autoFocus aria-label={locale === 'ar' ? (objectKind === 'item' ? 'اسم الصنف الجديد' : 'اسم الشخص الجديد') : (objectKind === 'item' ? 'New item name' : 'New person name')} onChange={(event) => setInlineLabel(event.target.value)} onKeyDown={(event) => {
+                                      if (event.key === 'Escape') setInlineCreating(false);
+                                      if (event.key === 'Enter') {
+                                        event.preventDefault();
+                                        const firstProperty = document.querySelector<HTMLElement>('[data-inline-property="true"]');
+                                        if (properties.length > 0 && firstProperty) firstProperty.focus(); else void createInlineRecord();
+                                      }
+                                    }} placeholder={locale === 'ar' ? 'اسم السجل' : 'Record name'} title={inlineError} value={inlineLabel} />
+                                  </th>
+                                  {properties.map((property) => (
+                                    <td key={property.id}>
+                                      <InlinePropertyInput
+                                        locale={locale}
+                                        onChange={(value) => setInlineValues((current) => {
+                                          const next = { ...current };
+                                          if (value === undefined) delete next[property.id]; else next[property.id] = value;
+                                          return next;
+                                        })}
+                                        onCommit={() => void createInlineRecord()}
+                                        property={property}
+                                        relatedRecords={relatedRecords}
+                                        value={inlineValues[property.id]}
+                                      />
+                                    </td>
+                                  ))}
+                                  <td>
+                                    <div className="database-inline-actions">
+                                      <button aria-label={locale === 'ar' ? 'حفظ السجل' : 'Save record'} className="icon-button" onClick={() => void createInlineRecord()} title={inlineError} type="button"><Check size={15} /></button>
+                                      <button aria-label={locale === 'ar' ? 'إلغاء' : 'Cancel'} className="icon-button" onClick={() => setInlineCreating(false)} type="button"><X size={15} /></button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
                             </tbody>
                           </table>
 
@@ -1438,10 +1500,6 @@ export function ObjectWorkspace({ createRequest, locale, objectKind, onViewsChan
                 });
               })()}
 
-              {/* Overall table footer count */}
-              <div className="database-table-footer">
-                <span className="database-title-bar__count">{visibleRecords.length}</span>
-              </div>
             </div>
           )}
         </div>

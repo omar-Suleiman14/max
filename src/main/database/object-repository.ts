@@ -29,6 +29,8 @@ type RecordRow = Readonly<{
   id: string;
   label: string;
   object_kind: ObjectKind;
+  position: number;
+  template_id: string | null;
   updated_at: string;
 }>;
 
@@ -62,7 +64,11 @@ function normalizeRules(draft: PropertyDraft): PropertyRules {
       ? { maximum: draft.rules.maximum, minimum: draft.rules.minimum }
       : {}),
     ...(draft.type === 'text'
-      ? { maximumLength: draft.rules.maximumLength, minimumLength: draft.rules.minimumLength }
+      ? {
+          exactDigits: draft.rules.exactDigits,
+          maximumLength: draft.rules.maximumLength,
+          minimumLength: draft.rules.minimumLength,
+        }
       : {}),
     ...(draft.type === 'relation' ? { relationTarget: draft.rules.relationTarget } : {}),
   };
@@ -96,6 +102,9 @@ function validatePropertyDraft(draft: PropertyDraft): PropertyDraft {
     if (length !== undefined && (!Number.isInteger(length) || length < 0 || length > 10_000)) {
       throw new ObjectDomainError('invalid-input', 'Length limits must be whole numbers between 0 and 10,000.');
     }
+  }
+  if (rules.exactDigits !== undefined && (!Number.isInteger(rules.exactDigits) || rules.exactDigits < 1 || rules.exactDigits > 10_000)) {
+    throw new ObjectDomainError('invalid-input', 'Number of digits must be a whole number between 1 and 10,000.');
   }
   if (
     rules.minimumLength !== undefined &&
@@ -258,10 +267,10 @@ export class ObjectRepository {
   listRecords(objectKind: ObjectKind): readonly ConfigurableRecord[] {
     const records = this.database
       .prepare(`
-        SELECT id, object_kind, label, created_at, updated_at
+        SELECT id, object_kind, label, template_id, position, created_at, updated_at
         FROM object_records
         WHERE object_kind = ? AND archived_at IS NULL
-        ORDER BY label COLLATE NOCASE, id
+        ORDER BY position, label COLLATE NOCASE, id
       `)
       .all(objectKind) as RecordRow[];
     if (records.length === 0) return [];
@@ -290,6 +299,8 @@ export class ObjectRepository {
       id: record.id,
       label: record.label,
       objectKind: record.object_kind,
+      position: record.position,
+      templateId: record.template_id ?? undefined,
       updatedAt: record.updated_at,
       values: valuesByRecord.get(record.id) ?? {},
     }));
@@ -299,10 +310,11 @@ export class ObjectRepository {
     const draft = this.#validateRecordDraft(input);
     const id = randomUUID();
     const now = new Date().toISOString();
+    const position = (this.database.prepare('SELECT COALESCE(MAX(position), -1) + 1 AS position FROM object_records WHERE object_kind = ? AND archived_at IS NULL').get(draft.objectKind) as { position: number }).position;
     return this.#transaction(() => {
       this.database
-        .prepare('INSERT INTO object_records (id, object_kind, label, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
-        .run(id, draft.objectKind, draft.label, now, now);
+        .prepare('INSERT INTO object_records (id, object_kind, label, template_id, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .run(id, draft.objectKind, draft.label, draft.templateId ?? null, position, now, now);
       this.#writeValues(id, draft, now);
       const record = this.#getRecord(id);
       this.#writeAudit('record', id, 'created', record, now);
@@ -319,7 +331,7 @@ export class ObjectRepository {
 
     const now = new Date().toISOString();
     return this.#transaction(() => {
-      this.database.prepare('UPDATE object_records SET label = ?, updated_at = ? WHERE id = ?').run(draft.label, now, id);
+      this.database.prepare('UPDATE object_records SET label = ?, template_id = ?, updated_at = ? WHERE id = ?').run(draft.label, draft.templateId ?? null, now, id);
       this.database.prepare('UPDATE object_property_values SET active = 0, updated_at = ? WHERE record_id = ?').run(now, id);
       this.#writeValues(id, draft, now);
       const record = this.#getRecord(id);
@@ -335,6 +347,23 @@ export class ObjectRepository {
       this.database.prepare('UPDATE object_records SET archived_at = ?, updated_at = ? WHERE id = ?').run(now, now, id);
       this.database.prepare('UPDATE object_property_values SET active = 0, updated_at = ? WHERE record_id = ?').run(now, id);
       this.#writeAudit('record', id, 'archived', record, now);
+    });
+  }
+
+  reorderRecords(objectKind: ObjectKind, orderedIds: readonly string[]): void {
+    const current = this.listRecords(objectKind);
+    if (orderedIds.length !== current.length || new Set(orderedIds).size !== orderedIds.length) {
+      throw new ObjectDomainError('invalid-input', 'Record order must include every active record exactly once.');
+    }
+    const currentIds = new Set(current.map((record) => record.id));
+    if (orderedIds.some((id) => !currentIds.has(id))) {
+      throw new ObjectDomainError('invalid-input', 'Record order contains an unknown record.');
+    }
+    const now = new Date().toISOString();
+    this.#transaction(() => {
+      const update = this.database.prepare('UPDATE object_records SET position = ?, updated_at = ? WHERE id = ? AND object_kind = ? AND archived_at IS NULL');
+      orderedIds.forEach((id, position) => update.run(position, now, id, objectKind));
+      orderedIds.forEach((id) => this.#writeAudit('record', id, 'updated', this.#getRecord(id), now));
     });
   }
 
@@ -373,7 +402,7 @@ export class ObjectRepository {
   #getRecord(id: string): ConfigurableRecord {
     const row = this.database
       .prepare(`
-        SELECT id, object_kind, label, created_at, updated_at
+        SELECT id, object_kind, label, template_id, position, created_at, updated_at
         FROM object_records WHERE id = ? AND archived_at IS NULL
       `)
       .get(id) as RecordRow | undefined;
@@ -386,6 +415,8 @@ export class ObjectRepository {
       id: row.id,
       label: row.label,
       objectKind: row.object_kind,
+      position: row.position,
+      templateId: row.template_id ?? undefined,
       updatedAt: row.updated_at,
       values: Object.fromEntries(values.map((value) => [value.property_id, JSON.parse(value.value_json) as PropertyValue])),
     };
@@ -395,6 +426,13 @@ export class ObjectRepository {
     const label = input.label.trim();
     if (label.length < 1 || label.length > 120) {
       throw new ObjectDomainError('invalid-input', 'A display name between 1 and 120 characters is required.');
+    }
+
+    if (input.templateId !== undefined) {
+      const template = this.database
+        .prepare('SELECT id FROM shop_templates WHERE id = ? AND object_kind = ?')
+        .get(input.templateId, input.objectKind);
+      if (!template) throw new ObjectDomainError('invalid-input', 'The selected template does not belong to this record type.');
     }
 
     const properties = this.listProperties(input.objectKind);
@@ -415,7 +453,7 @@ export class ObjectRepository {
         values[property.id] = value;
       }
     }
-    return { label, objectKind: input.objectKind, values };
+    return { label, objectKind: input.objectKind, templateId: input.templateId, values };
   }
 
   #validateValue(property: PropertyDefinition, value: PropertyValue | undefined): string | null {
@@ -427,6 +465,9 @@ export class ObjectRepository {
     switch (property.type) {
       case 'text': {
         if (typeof value !== 'string') throw invalidPropertyError(property, 'enter text.');
+        if (property.rules.exactDigits !== undefined && (!/^\d+$/.test(value) || value.length !== property.rules.exactDigits)) {
+          throw invalidPropertyError(property, `use exactly ${property.rules.exactDigits} digits.`);
+        }
         if (property.rules.digitsOnly && !/^\d+$/.test(value)) {
           throw invalidPropertyError(property, 'use digits only.');
         }

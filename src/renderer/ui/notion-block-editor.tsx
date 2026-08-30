@@ -2,7 +2,6 @@ import {
   Check,
   Columns,
   CreditCard,
-  Database,
   FileText,
   GripVertical,
   Heading1,
@@ -16,7 +15,6 @@ import {
   Package,
   Plus,
   ReceiptText,
-  Trash2,
   Users,
   type LucideIcon,
 } from 'lucide-react';
@@ -77,6 +75,8 @@ export function NotionBlockEditor({ blocks, locale, onChange }: NotionBlockEdito
   const [slashIndex, setSlashIndex] = useState(0);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [dragOverEdge, setDragOverEdge] = useState<'after' | 'before'>('before');
+  const [blockMenuId, setBlockMenuId] = useState<string | null>(null);
 
   const inputRefs = useRef<Map<string, HTMLTextAreaElement | HTMLInputElement>>(new Map());
 
@@ -228,23 +228,47 @@ export function NotionBlockEditor({ blocks, locale, onChange }: NotionBlockEdito
         updateBlock(block.id, { type: 'text' });
         return;
       }
+      const cursor = event.currentTarget.selectionStart ?? block.content.length;
+      const before = block.content.slice(0, cursor);
+      const after = block.content.slice(cursor);
       const nextType: BlockType = block.type === 'bullet' ? 'bullet' : block.type === 'todo' ? 'todo' : block.type === 'number' ? 'number' : 'text';
-      insertBlockAfter(block.id, nextType);
+      const newBlock: NotionBlock = { content: after, id: 'block_' + Math.random().toString(36).substring(2, 9), type: nextType };
+      const next = [...blocks];
+      next[index] = { ...block, content: before };
+      next.splice(index + 1, 0, newBlock);
+      onChange(next);
+      focusBlock(newBlock.id, false);
       return;
     }
 
-    // Backspace on empty block: delete and focus previous
-    if (event.key === 'Backspace' && block.content === '') {
+    // Backspace at the start merges with the previous block, matching document editors.
+    if (event.key === 'Backspace' && (event.currentTarget.selectionStart ?? 0) === 0) {
       if (block.type !== 'text') {
         event.preventDefault();
         updateBlock(block.id, { type: 'text' });
         return;
       }
-      if (blocks.length > 1) {
+      const previous = blocks[index - 1];
+      if (previous) {
         event.preventDefault();
-        removeBlock(block.id);
+        const boundary = previous.content.length;
+        const next = blocks.map((candidate) => candidate.id === previous.id ? { ...candidate, content: previous.content + block.content } : candidate).filter((candidate) => candidate.id !== block.id);
+        onChange(next);
+        setTimeout(() => {
+          const target = inputRefs.current.get(previous.id);
+          target?.focus();
+          target?.setSelectionRange(boundary, boundary);
+        }, 20);
         return;
       }
+    }
+
+    if (event.key === 'ArrowUp' && index > 0 && (event.currentTarget.selectionStart ?? 0) === 0) {
+      event.preventDefault();
+      focusBlock(blocks[index - 1]?.id ?? block.id);
+    } else if (event.key === 'ArrowDown' && index < blocks.length - 1 && (event.currentTarget.selectionStart ?? 0) === block.content.length) {
+      event.preventDefault();
+      focusBlock(blocks[index + 1]?.id ?? block.id, false);
     }
 
     // Arrow Up / Down navigation
@@ -500,12 +524,17 @@ export function NotionBlockEditor({ blocks, locale, onChange }: NotionBlockEdito
   });
 
   // Drag-and-drop block reordering
-  function handleDragStart(index: number) {
+  function handleDragStart(event: React.DragEvent, index: number) {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', blocks[index]?.id ?? '');
     setDraggedIndex(index);
   }
 
   function handleDragOver(e: React.DragEvent, index: number) {
     e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const rect = e.currentTarget.getBoundingClientRect();
+    setDragOverEdge(e.clientY >= rect.top + rect.height / 2 ? 'after' : 'before');
     if (dragOverIndex !== index) {
       setDragOverIndex(index);
     }
@@ -520,15 +549,37 @@ export function NotionBlockEditor({ blocks, locale, onChange }: NotionBlockEdito
     const next = [...blocks];
     const [moved] = next.splice(draggedIndex, 1);
     if (moved) {
-      next.splice(targetIndex, 0, moved);
+      const adjustedTarget = draggedIndex < targetIndex ? targetIndex - 1 : targetIndex;
+      const insertAt = Math.max(0, adjustedTarget + (dragOverEdge === 'after' ? 1 : 0));
+      next.splice(insertAt, 0, moved);
       onChange(next);
     }
     setDraggedIndex(null);
     setDragOverIndex(null);
   }
 
+  function moveBlock(index: number, direction: -1 | 1) {
+    const target = index + direction;
+    if (target < 0 || target >= blocks.length) return;
+    const next = [...blocks];
+    const [moved] = next.splice(index, 1);
+    if (!moved) return;
+    next.splice(target, 0, moved);
+    onChange(next);
+    requestAnimationFrame(() => focusBlock(moved.id));
+  }
+
   return (
-    <div className="notion-editor-canvas">
+    <div
+      className="notion-editor-canvas"
+      onClick={(event) => {
+        if (event.target !== event.currentTarget) return;
+        const last = blocks.at(-1);
+        if (!last) insertBlockAfter('', 'text', '');
+        else if (last.type === 'divider' || last.type === 'database-view' || last.type === 'columns') insertBlockAfter(last.id, 'text', '');
+        else focusBlock(last.id);
+      }}
+    >
       {blocks.map((block, index) => {
         const isDragging = draggedIndex === index;
         const isDragOver = dragOverIndex === index;
@@ -540,6 +591,7 @@ export function NotionBlockEditor({ blocks, locale, onChange }: NotionBlockEdito
             className="notion-block-row"
             data-drag-over={isDragOver}
             data-dragging={isDragging}
+            data-drop-edge={isDragOver ? dragOverEdge : undefined}
             data-type={block.type}
             onDragEnd={() => {
               setDraggedIndex(null);
@@ -560,15 +612,30 @@ export function NotionBlockEditor({ blocks, locale, onChange }: NotionBlockEdito
                 <Plus size={14} />
               </button>
               <button
-                aria-label="Drag to move"
+                aria-label={locale === 'ar' ? 'خيارات السطر' : 'Block actions'}
                 className="notion-gutter-btn notion-gutter-btn--drag"
                 draggable
-                onDragStart={() => handleDragStart(index)}
+                onClick={() => setBlockMenuId(blockMenuId === block.id ? null : block.id)}
+                onDragStart={(event) => handleDragStart(event, index)}
+                onKeyDown={(event) => {
+                  if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+                    event.preventDefault();
+                    moveBlock(index, event.key === 'ArrowUp' ? -1 : 1);
+                  }
+                }}
                 title={locale === 'ar' ? 'سحب للترتيب' : 'Drag to reorder'}
                 type="button"
               >
                 <GripVertical size={14} />
               </button>
+              {blockMenuId === block.id && (
+                <div className="notion-block-action-menu" role="menu">
+                  <button onClick={() => { setBlockMenuId(null); updateBlock(block.id, { type: 'text' }); }} role="menuitem" type="button">{locale === 'ar' ? 'نص' : 'Text'}</button>
+                  <button onClick={() => { setBlockMenuId(null); updateBlock(block.id, { type: 'h2' }); }} role="menuitem" type="button">{locale === 'ar' ? 'عنوان' : 'Heading'}</button>
+                  <button onClick={() => { const copy = { ...block, id: 'block_' + Math.random().toString(36).substring(2, 9) }; const next = [...blocks]; next.splice(index + 1, 0, copy); onChange(next); setBlockMenuId(null); }} role="menuitem" type="button">{locale === 'ar' ? 'إنشاء نسخة' : 'Duplicate'}</button>
+                  <button className="danger" onClick={() => { setBlockMenuId(null); removeBlock(block.id); }} role="menuitem" type="button">{locale === 'ar' ? 'حذف' : 'Delete'}</button>
+                </div>
+              )}
             </div>
 
             {/* Block Body */}
@@ -752,51 +819,6 @@ export function NotionBlockEditor({ blocks, locale, onChange }: NotionBlockEdito
               {/* Embedded Live Database View */}
               {block.type === 'database-view' && (
                 <div className="notion-embedded-db-card">
-                  <div className="notion-embedded-db-header">
-                    <div className="notion-embedded-db-title">
-                      <Database size={16} />
-                      <span>
-                        {block.databaseKind === 'items'
-                          ? locale === 'ar' ? 'قاعدة بيانات: الأصناف' : 'Database: Items'
-                          : block.databaseKind === 'people'
-                            ? locale === 'ar' ? 'قاعدة بيانات: الأشخاص' : 'Database: People'
-                            : block.databaseKind === 'transactions'
-                              ? locale === 'ar' ? 'قاعدة بيانات: المعاملات' : 'Database: Transactions'
-                              : block.databaseKind === 'accounts'
-                                ? locale === 'ar' ? 'قاعدة بيانات: الحسابات' : 'Database: Accounts'
-                                : locale === 'ar' ? 'المطابقة اليومية' : 'Daily Reconciliation'}
-                      </span>
-                    </div>
-
-                    <div className="notion-embedded-db-actions">
-                      <select
-                        aria-label="Switch Database"
-                        className="notion-db-switch-select"
-                        onChange={(e) =>
-                          updateBlock(block.id, {
-                            databaseKind: e.target.value as NotionBlock['databaseKind'],
-                          })
-                        }
-                        value={block.databaseKind || 'items'}
-                      >
-                        <option value="items">{locale === 'ar' ? 'الأصناف' : 'Items'}</option>
-                        <option value="people">{locale === 'ar' ? 'الأشخاص' : 'People'}</option>
-                        <option value="transactions">{locale === 'ar' ? 'المعاملات' : 'Transactions'}</option>
-                        <option value="accounts">{locale === 'ar' ? 'الحسابات' : 'Accounts'}</option>
-                        <option value="reconciliation">{locale === 'ar' ? 'المطابقة' : 'Reconciliation'}</option>
-                      </select>
-
-                      <button
-                        aria-label={locale === 'ar' ? 'حذف العرض' : 'Remove view'}
-                        className="notion-embedded-db-delete-btn"
-                        onClick={() => removeBlock(block.id)}
-                        type="button"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </div>
-
                   <div className="notion-embedded-db-content">
                     {block.databaseKind === 'items' ? (
                       <ObjectWorkspace createRequest={0} locale={locale} objectKind="item" />
@@ -817,7 +839,7 @@ export function NotionBlockEditor({ blocks, locale, onChange }: NotionBlockEdito
               {isSlashActive && (
                 <div className="notion-slash-menu" role="menu">
                   <div className="notion-slash-menu__header">
-                    <span>{locale === 'ar' ? 'القوالب والأوامر' : 'BASIC BLOCKS & VIEWS'}</span>
+                    <span>{locale === 'ar' ? 'العناصر والأوامر' : 'BASIC BLOCKS & VIEWS'}</span>
                     <kbd>ESC</kbd>
                   </div>
                   <div className="notion-slash-menu__list">
@@ -861,9 +883,10 @@ export function NotionBlockEditor({ blocks, locale, onChange }: NotionBlockEdito
       <div
         className="notion-canvas-bottom-click-target"
         onClick={() => {
-          if (blocks.length === 0 || blocks[blocks.length - 1]?.content.trim() !== '') {
-            insertBlockAfter(blocks[blocks.length - 1]?.id || '', 'text', '');
-          }
+          const last = blocks.at(-1);
+          if (!last) insertBlockAfter('', 'text', '');
+          else if (last.type === 'divider' || last.type === 'database-view' || last.type === 'columns') insertBlockAfter(last.id, 'text', '');
+          else focusBlock(last.id);
         }}
       />
     </div>

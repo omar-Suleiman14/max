@@ -48,6 +48,7 @@ export const IPC_CHANNELS = {
   objectRecordArchive: 'max:objects:records:archive',
   objectRecordCreate: 'max:objects:records:create',
   objectRecordList: 'max:objects:records:list',
+  objectRecordReorder: 'max:objects:records:reorder',
   objectRecordUpdate: 'max:objects:records:update',
   pageArchive: 'max:pages:archive',
   pageCreate: 'max:pages:create',
@@ -67,8 +68,10 @@ export const IPC_CHANNELS = {
   searchQuery: 'max:search:query',
   shopCompleteOnboarding: 'max:shop:onboarding:complete',
   shopGetMetadata: 'max:shop:metadata:get',
+  shopSeedDemoData: 'max:shop:demo-data:seed',
   shopUpdateMetadata: 'max:shop:metadata:update',
   systemHealth: 'max:system:health',
+  systemResetWorkspace: 'max:system:workspace:reset',
   templateArchive: 'max:templates:archive',
   templateCreate: 'max:templates:create',
   templateList: 'max:templates:list',
@@ -99,6 +102,14 @@ export type SystemHealth = Readonly<{
     arch: string;
     platform: 'linux' | 'macos' | 'windows';
   }>;
+}>;
+
+export type DemoSeedSummary = Readonly<{
+  accounts: number;
+  items: number;
+  pages: number;
+  people: number;
+  transactions: number;
 }>;
 
 import type {
@@ -149,6 +160,7 @@ export type MaxApi = Readonly<{
     listAudit: (entityId: string) => Promise<readonly AuditEntry[]>;
     listProperties: (objectKind: ObjectKind) => Promise<readonly PropertyDefinition[]>;
     listRecords: (objectKind: ObjectKind) => Promise<readonly ConfigurableRecord[]>;
+    reorderRecords: (objectKind: ObjectKind, orderedIds: readonly string[]) => Promise<MutationResult<null>>;
     updateProperty: (id: string, draft: PropertyDraft) => Promise<MutationResult<PropertyDefinition>>;
     updateRecord: (id: string, draft: ConfigurableRecordDraft) => Promise<MutationResult<ConfigurableRecord>>;
   }>;
@@ -181,10 +193,12 @@ export type MaxApi = Readonly<{
   shop: Readonly<{
     completeOnboarding: (draft: CompleteOnboardingDraft) => Promise<MutationResult<ShopMetadata>>;
     getMetadata: () => Promise<ShopMetadata>;
+    seedDemoData: (locale: 'ar' | 'en') => Promise<MutationResult<DemoSeedSummary>>;
     updateMetadata: (patch: Partial<ShopMetadata>) => Promise<MutationResult<ShopMetadata>>;
   }>;
   system: Readonly<{
     getHealth: () => Promise<SystemHealth>;
+    resetWorkspace: () => Promise<MutationResult<null>>;
   }>;
   templates: Readonly<{
     archive: (id: string) => Promise<MutationResult<null>>;

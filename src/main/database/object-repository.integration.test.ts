@@ -293,6 +293,17 @@ describe('uniqueness', () => {
 /* ------------------------------------------------------------------ */
 
 describe('record lifecycle', () => {
+  it('persists explicit table row order', () => {
+    const db = service();
+    const alpha = db.objects.createRecord({ label: 'Alpha', objectKind: 'item', values: {} });
+    const beta = db.objects.createRecord({ label: 'Beta', objectKind: 'item', values: {} });
+    const gamma = db.objects.createRecord({ label: 'Gamma', objectKind: 'item', values: {} });
+
+    db.objects.reorderRecords('item', [gamma.id, alpha.id, beta.id]);
+    expect(db.objects.listRecords('item').map((record) => record.id)).toEqual([gamma.id, alpha.id, beta.id]);
+    expect(() => db.objects.reorderRecords('item', [alpha.id, beta.id])).toThrow('every active record exactly once');
+    db.close();
+  });
   it('creates a record with no custom properties', () => {
     const db = service();
     const record = db.objects.createRecord({ label: 'Simple', objectKind: 'item', values: {} });
@@ -391,6 +402,20 @@ describe('value validation', () => {
     const prop = db.objects.createProperty(draft('Code', 'text', 'item', { digitsOnly: true }));
     const record = db.objects.createRecord({ label: 'Good', objectKind: 'item', values: { [prop.id]: '1234' } });
     expect(record.values[prop.id]).toBe('1234');
+    db.close();
+  });
+
+  it('requires the configured exact number of digits', () => {
+    const db = service();
+    const prop = db.objects.createProperty(draft('IMEI suffix', 'text', 'item', { exactDigits: 4 }));
+    expect(() =>
+      db.objects.createRecord({ label: 'Short', objectKind: 'item', values: { [prop.id]: '123' } }),
+    ).toThrow('exactly 4 digits');
+    expect(() =>
+      db.objects.createRecord({ label: 'Letters', objectKind: 'item', values: { [prop.id]: '12A4' } }),
+    ).toThrow('exactly 4 digits');
+    const record = db.objects.createRecord({ label: 'Good', objectKind: 'item', values: { [prop.id]: '0123' } });
+    expect(record.values[prop.id]).toBe('0123');
     db.close();
   });
 
@@ -495,6 +520,29 @@ describe('value validation', () => {
     expect(() =>
       db.objects.createRecord({ label: 'Bad', objectKind: 'item', values: { [prop.id]: 'Unknown' } }),
     ).toThrow('allowed value');
+    db.close();
+  });
+});
+
+describe('record template origin', () => {
+  it('persists the exact template selected when a record is created and edited', () => {
+    const db = service();
+    const template = db.templates.createTemplate({
+      defaults: {},
+      fieldOrder: [],
+      name: 'Used Phone',
+      objectKind: 'item',
+      progressive: [],
+    });
+    const record = db.objects.createRecord({
+      label: 'Phone',
+      objectKind: 'item',
+      templateId: template.id,
+      values: {},
+    });
+    expect(record.templateId).toBe(template.id);
+    expect(db.objects.updateRecord(record.id, { ...record, label: 'Edited phone' }).templateId).toBe(template.id);
+    expect(db.objects.listRecords('item')[0]?.templateId).toBe(template.id);
     db.close();
   });
 });

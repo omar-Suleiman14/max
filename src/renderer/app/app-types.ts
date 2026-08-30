@@ -17,8 +17,10 @@ export type CustomPage = Readonly<{
   createdAt: string;
   icon: string;
   id: string;
+  favorite?: boolean;
   title: string;
   updatedAt: string;
+  wiki?: boolean;
 }>;
 
 export type NavigationItem = Readonly<{
@@ -28,3 +30,8 @@ export type NavigationItem = Readonly<{
 
 export type EngineStatus = 'checking' | 'ready' | 'unavailable';
 
+export type SettingsSectionId =
+  | 'settings-general'
+  | 'settings-appearance'
+  | 'settings-backup'
+  | 'settings-archive';
