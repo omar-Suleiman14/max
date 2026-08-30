@@ -73,6 +73,12 @@ body,
 #root { min-width: 320px; min-height: 100%; height: 100%; }
 
 body { margin: 0; overflow: hidden; background: var(--canvas); }
+html[lang="ar"] { font-family: Tahoma, "Segoe UI", Arial, sans-serif; }
+html[lang="ar"] body { line-height: 1.5; }
+html[lang="ar"] h1,
+html[lang="ar"] h2,
+html[lang="ar"] h3,
+html[lang="ar"] strong { letter-spacing: 0; }
 
 button,
 input,
@@ -185,6 +191,8 @@ kbd { display: inline-flex; min-width: 23px; min-height: 20px; align-items: cent
 [lang="ar"] .empty-state h2,
 [lang="ar"] .dialog-header h2,
 [lang="ar"] .scope-dialog h2 { letter-spacing: -0.02em; }
+[lang="ar"] .home-hero h2 { font-size: clamp(32px, 4.5vw, 42px); font-weight: 700; line-height: 1.35; }
+[lang="ar"] .page-header h1 { font-weight: 700; line-height: 1.3; }
 .page-header__copy > p { max-width: 620px; margin: 5px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
 
 .home-page { display: grid; max-width: 760px; gap: 38px; margin: 0 auto; }
@@ -264,6 +272,7 @@ kbd { display: inline-flex; min-width: 23px; min-height: 20px; align-items: cent
 .object-workspace { width: min(100%, 980px); margin: 0 auto; }
 .object-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-block-end: 16px; }
 .object-toolbar > div { display: flex; align-items: baseline; gap: 9px; }
+.object-toolbar .object-toolbar__actions { align-items: center; gap: 5px; }
 .object-toolbar strong { font-size: 13px; }
 .object-toolbar span { color: var(--muted); font-size: 11px; }
 .object-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; align-items: start; gap: 28px; }
@@ -288,6 +297,7 @@ kbd { display: inline-flex; min-width: 23px; min-height: 20px; align-items: cent
 .schema-panel { position: sticky; inset-block-start: 0; padding: 0 0 0 20px; border-inline-start: 1px solid var(--line); background: transparent; }
 [dir="rtl"] .schema-panel { padding: 0 20px 0 0; }
 .schema-panel__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.schema-panel__actions { display: flex; align-items: center; gap: 2px; }
 .schema-panel__head .eyebrow { margin-block-end: 4px; }
 .schema-panel h2 { margin: 0; font-size: 16px; letter-spacing: -0.02em; }
 .schema-panel__summary { margin: 9px 0 16px; color: var(--muted); font-size: 10px; line-height: 1.55; }
@@ -593,6 +603,45 @@ kbd { display: inline-flex; min-width: 23px; min-height: 20px; align-items: cent
 /* Shared workspace surfaces: quiet hierarchy, dense rows, and low-chrome controls. */
 .content[data-page="home"] .page-header { display: none; }
 .quick-entry-trigger { color: var(--text-soft); }
+.object-layout { display: block; }
+.database-table-wrapper { width: 100%; overflow: auto; border: 1px solid var(--line); border-radius: 6px; }
+.database-table { width: 100%; min-width: max-content; border-collapse: separate; border-spacing: 0; background: var(--card); font-size: 12px; }
+.database-table th,
+.database-table td { min-width: 150px; height: 37px; padding: 6px 9px; border-block-end: 1px solid var(--line); border-inline-end: 1px solid var(--line); color: var(--text-soft); text-align: start; white-space: nowrap; }
+.database-table tr:last-child th,
+.database-table tr:last-child td { border-block-end: 0; }
+.database-table tr > :last-child { border-inline-end: 0; }
+.database-table thead th { height: 32px; padding: 0; color: var(--muted); background: var(--canvas-subtle); font-size: 10px; font-weight: 500; }
+.database-table tbody tr:hover > * { background: var(--canvas-subtle); }
+.database-table tbody th { color: var(--text); font-weight: 500; }
+.database-table__name-column { width: 240px; min-width: 240px !important; padding: 0 9px !important; }
+.database-table__actions-column { width: 126px; min-width: 126px !important; }
+.database-column-button { display: flex; width: 100%; height: 31px; align-items: center; gap: 7px; padding: 0 9px; border: 0; color: var(--muted); background: transparent; cursor: pointer; text-align: start; }
+.database-column-button:hover { color: var(--text); background: color-mix(in srgb, var(--text) 5%, transparent); }
+.database-column-button span { font-size: 11px; }
+.database-column-button small { margin-inline-start: auto; color: var(--muted-soft); font-size: 9px; }
+.database-record-name { display: flex; max-width: 240px; align-items: center; gap: 7px; padding: 0; border: 0; color: var(--text); background: transparent; cursor: pointer; font-weight: 600; text-align: start; }
+.database-record-name > span { overflow: hidden; text-overflow: ellipsis; }
+.database-record-name:hover > span { text-decoration: underline; text-underline-offset: 2px; }
+.database-record-name .badge { flex: 0 0 auto; }
+.database-cell-empty { color: var(--muted-soft); }
+.database-row-actions { display: flex; align-items: center; justify-content: flex-end; gap: 0; }
+.database-row-actions .icon-button { width: 27px; height: 27px; }
+.schema-panel {
+  position: fixed;
+  z-index: 30;
+  width: min(360px, calc(100vw - 24px));
+  inset-block: 45px 0;
+  inset-inline-end: 0;
+  overflow: auto;
+  padding: 18px;
+  border: 0;
+  border-inline-start: 1px solid var(--line-strong);
+  background: var(--card-raised);
+  box-shadow: var(--shadow-lg);
+  animation: schema-drawer-in 150ms ease-out;
+}
+[dir="rtl"] .schema-panel { padding: 18px; }
 .choice-card,
 .template-picker-card,
 .blueprint-preview-card,
@@ -669,6 +718,9 @@ kbd { display: inline-flex; min-width: 23px; min-height: 20px; align-items: cent
 
 
 @keyframes menu-in { from { opacity: 0; transform: translateY(-5px) scale(0.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes schema-drawer-in { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: translateX(0); } }
+[dir="rtl"] .schema-panel { animation-name: schema-drawer-in-rtl; }
+@keyframes schema-drawer-in-rtl { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: translateX(0); } }
 @keyframes overlay-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes panel-in { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes toast-in { from { opacity: 0; transform: translateY(12px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }

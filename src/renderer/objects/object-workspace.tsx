@@ -481,6 +481,7 @@ export function ObjectWorkspace({ createRequest, locale, objectKind }: ObjectWor
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [schemaTab, setSchemaTab] = useState<'properties' | 'templates'>('properties');
+  const [schemaPanelOpen, setSchemaPanelOpen] = useState(false);
 
   const [propertyEditor, setPropertyEditor] = useState<PropertyDefinition | 'new'>();
   const [templateEditor, setTemplateEditor] = useState<TemplateDefinition | 'new'>();
@@ -617,13 +618,22 @@ export function ObjectWorkspace({ createRequest, locale, objectKind }: ObjectWor
             {templateCopy(locale, 'templates').toLocaleLowerCase(locale)}
           </span>
         </div>
-        <Button
-          icon={<Plus aria-hidden="true" size={17} />}
-          onClick={startRecordCreation}
-          variant="primary"
-        >
-          {objectCopy(locale, objectKind === 'item' ? 'createItem' : 'createPerson')}
-        </Button>
+        <div className="object-toolbar__actions">
+          <Button
+            icon={<SlidersHorizontal aria-hidden="true" size={16} />}
+            onClick={() => setSchemaPanelOpen(true)}
+            variant="ghost"
+          >
+            {objectCopy(locale, 'properties')}
+          </Button>
+          <Button
+            icon={<Plus aria-hidden="true" size={17} />}
+            onClick={startRecordCreation}
+            variant="primary"
+          >
+            {objectCopy(locale, objectKind === 'item' ? 'createItem' : 'createPerson')}
+          </Button>
+        </div>
       </div>
 
       {loadError && (
@@ -654,88 +664,114 @@ export function ObjectWorkspace({ createRequest, locale, objectKind }: ObjectWor
               </Button>
             </div>
           )}
-          <div className="record-grid">
-            {records.map((record) => {
-              const balance = objectKind === 'person' ? personBalances.find((b) => b.personId === record.id) : undefined;
-              return (
-                <article className="record-card" key={record.id}>
-                  <div className="record-card__head">
-                    <div>
-                      <span>{objectKindLabel(locale, objectKind)}</span>
-                      <h2>{record.label}</h2>
-                      {balance && (
-                        <div style={{ marginTop: '4px' }}>
-                          {balance.receivable > 0 ? (
-                            <span className="badge badge--danger">
-                              {peopleDebtCopy(locale, 'owesShop')}: {balance.receivable.toFixed(2)}
-                            </span>
-                          ) : balance.payable > 0 ? (
-                            <span className="badge badge--info">
-                              {peopleDebtCopy(locale, 'shopOwes')}: {balance.payable.toFixed(2)}
-                            </span>
-                          ) : (
-                            <span className="badge badge--success">{peopleDebtCopy(locale, 'allSettled')}</span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                    <div className="record-card__actions">
-                      {objectKind === 'person' && (
+          {records.length > 0 && (
+            <div className="database-table-wrapper">
+              <table className="database-table">
+                <thead>
+                  <tr>
+                    <th className="database-table__name-column" scope="col">
+                      {objectKindLabel(locale, objectKind)}
+                    </th>
+                    {properties.map((property) => (
+                      <th key={property.id} scope="col">
                         <button
-                          aria-label={`${peopleDebtCopy(locale, 'debtStatement')}: ${record.label}`}
-                          className="icon-button"
-                          onClick={() => setSelectedStatementPersonId(record.id)}
+                          className="database-column-button"
+                          onClick={() => setPropertyEditor(property)}
                           type="button"
                         >
-                          <FileText aria-hidden="true" size={16} />
+                          <span>{property.name}</span>
+                          <small>{propertyTypeLabel(locale, property.type)}</small>
                         </button>
-                      )}
-                      <button
-                        aria-label={`${objectCopy(locale, 'auditTitle')}: ${record.label}`}
-                        className="icon-button"
-                        onClick={() => void showAudit(record.id)}
-                        type="button"
-                      >
-                        <Clock3 aria-hidden="true" size={16} />
-                      </button>
-                      <button
-                        aria-label={`${objectCopy(locale, 'edit')}: ${record.label}`}
-                        className="icon-button"
-                        onClick={() => {
-                          setActiveTemplate(undefined);
-                          setRecordEditor(record);
-                        }}
-                        type="button"
-                      >
-                        <Edit3 aria-hidden="true" size={16} />
-                      </button>
-                      <button
-                        aria-label={`${objectCopy(locale, 'archive')}: ${record.label}`}
-                        className="icon-button icon-button--danger"
-                        onClick={() => setArchiveTarget({ id: record.id, kind: 'record', name: record.label })}
-                        type="button"
-                      >
-                        <Archive aria-hidden="true" size={16} />
-                      </button>
-                    </div>
-                  </div>
-                  <dl>
-                    {properties.map((property) =>
-                      record.values[property.id] === undefined ? null : (
-                        <div key={property.id}>
-                          <dt>{property.name}</dt>
-                          <dd>{formatValue(record.values[property.id], property, relatedRecords, locale)}</dd>
-                        </div>
-                      ),
-                    )}
-                  </dl>
-                </article>
-              );
-            })}
-          </div>
+                      </th>
+                    ))}
+                    <th aria-label={locale === 'ar' ? 'الإجراءات' : 'Actions'} className="database-table__actions-column" scope="col" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {records.map((record) => {
+                    const balance = objectKind === 'person' ? personBalances.find((b) => b.personId === record.id) : undefined;
+                    return (
+                      <tr key={record.id}>
+                        <th scope="row">
+                          <button
+                            className="database-record-name"
+                            onClick={() => {
+                              setActiveTemplate(undefined);
+                              setRecordEditor(record);
+                            }}
+                            type="button"
+                          >
+                            <span>{record.label}</span>
+                            {balance && balance.receivable > 0 && (
+                              <small className="badge badge--danger">
+                                {peopleDebtCopy(locale, 'owesShop')}: {balance.receivable.toFixed(2)}
+                              </small>
+                            )}
+                            {balance && balance.payable > 0 && (
+                              <small className="badge badge--info">
+                                {peopleDebtCopy(locale, 'shopOwes')}: {balance.payable.toFixed(2)}
+                              </small>
+                            )}
+                          </button>
+                        </th>
+                        {properties.map((property) => (
+                          <td key={property.id}>
+                            {record.values[property.id] === undefined
+                              ? <span className="database-cell-empty">—</span>
+                              : formatValue(record.values[property.id], property, relatedRecords, locale)}
+                          </td>
+                        ))}
+                        <td>
+                          <div className="database-row-actions">
+                            {objectKind === 'person' && (
+                              <button
+                                aria-label={`${peopleDebtCopy(locale, 'debtStatement')}: ${record.label}`}
+                                className="icon-button"
+                                onClick={() => setSelectedStatementPersonId(record.id)}
+                                type="button"
+                              >
+                                <FileText aria-hidden="true" size={15} />
+                              </button>
+                            )}
+                            <button
+                              aria-label={`${objectCopy(locale, 'auditTitle')}: ${record.label}`}
+                              className="icon-button"
+                              onClick={() => void showAudit(record.id)}
+                              type="button"
+                            >
+                              <Clock3 aria-hidden="true" size={15} />
+                            </button>
+                            <button
+                              aria-label={`${objectCopy(locale, 'edit')}: ${record.label}`}
+                              className="icon-button"
+                              onClick={() => {
+                                setActiveTemplate(undefined);
+                                setRecordEditor(record);
+                              }}
+                              type="button"
+                            >
+                              <Edit3 aria-hidden="true" size={15} />
+                            </button>
+                            <button
+                              aria-label={`${objectCopy(locale, 'archive')}: ${record.label}`}
+                              className="icon-button icon-button--danger"
+                              onClick={() => setArchiveTarget({ id: record.id, kind: 'record', name: record.label })}
+                              type="button"
+                            >
+                              <Archive aria-hidden="true" size={15} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
-        <aside className="schema-panel">
+        {schemaPanelOpen && <aside className="schema-panel">
           <div className="schema-panel__tabs" role="tablist">
             <button
               aria-selected={schemaTab === 'properties'}
@@ -768,14 +804,24 @@ export function ObjectWorkspace({ createRequest, locale, objectKind }: ObjectWor
                   <span className="eyebrow">{objectCopy(locale, 'schema')}</span>
                   <h2>{objectCopy(locale, 'properties')}</h2>
                 </div>
-                <button
-                  aria-label={objectCopy(locale, 'addProperty')}
-                  className="icon-button"
-                  onClick={() => setPropertyEditor('new')}
-                  type="button"
-                >
-                  <Plus aria-hidden="true" size={18} />
-                </button>
+                <div className="schema-panel__actions">
+                  <button
+                    aria-label={objectCopy(locale, 'addProperty')}
+                    className="icon-button"
+                    onClick={() => setPropertyEditor('new')}
+                    type="button"
+                  >
+                    <Plus aria-hidden="true" size={18} />
+                  </button>
+                  <button
+                    aria-label={objectCopy(locale, 'close')}
+                    className="icon-button"
+                    onClick={() => setSchemaPanelOpen(false)}
+                    type="button"
+                  >
+                    <X aria-hidden="true" size={18} />
+                  </button>
+                </div>
               </div>
               <p className="schema-panel__summary">{objectCopy(locale, 'schemaSummary')}</p>
               {properties.length === 0 && (
@@ -873,7 +919,7 @@ export function ObjectWorkspace({ createRequest, locale, objectKind }: ObjectWor
               </div>
             </>
           )}
-        </aside>
+        </aside>}
       </div>
 
       {propertyEditor && (

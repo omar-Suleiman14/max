@@ -225,40 +225,99 @@ exports[`Max shell > renders the English shell and an actionable empty page 1`] 
             templates
           </span>
         </div>
-        <button
-          class="button button--primary"
-          type="button"
+        <div
+          class="object-toolbar__actions"
         >
-          <span
-            class="button__icon"
+          <button
+            class="button button--ghost"
+            type="button"
           >
-            <svg
-              aria-hidden="true"
-              class="lucide lucide-plus"
-              fill="none"
-              height="17"
-              stroke="currentColor"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              viewBox="0 0 24 24"
-              width="17"
-              xmlns="http://www.w3.org/2000/svg"
+            <span
+              class="button__icon"
             >
-              <path
-                d="M5 12h14"
-              />
-              <path
-                d="M12 5v14"
-              />
-            </svg>
-          </span>
-          <span
-            class="button__label"
+              <svg
+                aria-hidden="true"
+                class="lucide lucide-sliders-horizontal"
+                fill="none"
+                height="16"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                width="16"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M10 5H3"
+                />
+                <path
+                  d="M12 19H3"
+                />
+                <path
+                  d="M14 3v4"
+                />
+                <path
+                  d="M16 17v4"
+                />
+                <path
+                  d="M21 12h-9"
+                />
+                <path
+                  d="M21 19h-5"
+                />
+                <path
+                  d="M21 5h-7"
+                />
+                <path
+                  d="M8 10v4"
+                />
+                <path
+                  d="M8 12H3"
+                />
+              </svg>
+            </span>
+            <span
+              class="button__label"
+            >
+              Properties
+            </span>
+          </button>
+          <button
+            class="button button--primary"
+            type="button"
           >
-            Create item
-          </span>
-        </button>
+            <span
+              class="button__icon"
+            >
+              <svg
+                aria-hidden="true"
+                class="lucide lucide-plus"
+                fill="none"
+                height="17"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                width="17"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M5 12h14"
+                />
+                <path
+                  d="M12 5v14"
+                />
+              </svg>
+            </span>
+            <span
+              class="button__label"
+            >
+              Create item
+            </span>
+          </button>
+        </div>
       </div>
       <div
         class="object-layout"
@@ -373,220 +432,7 @@ exports[`Max shell > renders the English shell and an actionable empty page 1`] 
               </span>
             </button>
           </div>
-          <div
-            class="record-grid"
-          />
         </div>
-        <aside
-          class="schema-panel"
-        >
-          <div
-            class="schema-panel__tabs"
-            role="tablist"
-          >
-            <button
-              aria-selected="true"
-              class="schema-tab-button"
-              data-active="true"
-              role="tab"
-              type="button"
-            >
-              <svg
-                aria-hidden="true"
-                class="lucide lucide-sliders-horizontal"
-                fill="none"
-                height="15"
-                stroke="currentColor"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                viewBox="0 0 24 24"
-                width="15"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M10 5H3"
-                />
-                <path
-                  d="M12 19H3"
-                />
-                <path
-                  d="M14 3v4"
-                />
-                <path
-                  d="M16 17v4"
-                />
-                <path
-                  d="M21 12h-9"
-                />
-                <path
-                  d="M21 19h-5"
-                />
-                <path
-                  d="M21 5h-7"
-                />
-                <path
-                  d="M8 10v4"
-                />
-                <path
-                  d="M8 12H3"
-                />
-              </svg>
-              <span>
-                Properties
-              </span>
-            </button>
-            <button
-              aria-selected="false"
-              class="schema-tab-button"
-              data-active="false"
-              role="tab"
-              type="button"
-            >
-              <svg
-                aria-hidden="true"
-                class="lucide lucide-file-text"
-                fill="none"
-                height="15"
-                stroke="currentColor"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                viewBox="0 0 24 24"
-                width="15"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
-                />
-                <path
-                  d="M14 2v5a1 1 0 0 0 1 1h5"
-                />
-                <path
-                  d="M10 9H8"
-                />
-                <path
-                  d="M16 13H8"
-                />
-                <path
-                  d="M16 17H8"
-                />
-              </svg>
-              <span>
-                Templates
-              </span>
-            </button>
-          </div>
-          <div
-            class="schema-panel__head"
-          >
-            <div>
-              <span
-                class="eyebrow"
-              >
-                Schema
-              </span>
-              <h2>
-                Properties
-              </h2>
-            </div>
-            <button
-              aria-label="Add property"
-              class="icon-button"
-              type="button"
-            >
-              <svg
-                aria-hidden="true"
-                class="lucide lucide-plus"
-                fill="none"
-                height="18"
-                stroke="currentColor"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                viewBox="0 0 24 24"
-                width="18"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M5 12h14"
-                />
-                <path
-                  d="M12 5v14"
-                />
-              </svg>
-            </button>
-          </div>
-          <p
-            class="schema-panel__summary"
-          >
-            Configuration is stored as data, never hardcoded shop fields.
-          </p>
-          <div
-            class="schema-empty"
-          >
-            <svg
-              aria-hidden="true"
-              class="lucide lucide-sliders-horizontal"
-              fill="none"
-              height="21"
-              stroke="currentColor"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              viewBox="0 0 24 24"
-              width="21"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                d="M10 5H3"
-              />
-              <path
-                d="M12 19H3"
-              />
-              <path
-                d="M14 3v4"
-              />
-              <path
-                d="M16 17v4"
-              />
-              <path
-                d="M21 12h-9"
-              />
-              <path
-                d="M21 19h-5"
-              />
-              <path
-                d="M21 5h-7"
-              />
-              <path
-                d="M8 10v4"
-              />
-              <path
-                d="M8 12H3"
-              />
-            </svg>
-            <strong>
-              No custom properties
-            </strong>
-            <p>
-              The display name works now. Add only the fields this shop actually needs.
-            </p>
-            <button
-              class="button button--secondary"
-              type="button"
-            >
-              <span
-                class="button__label"
-              >
-                Add property
-              </span>
-            </button>
-          </div>
-          <div
-            class="property-list"
-          />
-        </aside>
       </div>
       <div
         class="overlay"
@@ -883,7 +729,7 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
           الرئيسية
         </h1>
         <p>
-          نقطة بداية هادئة للعمل المهم اليوم.
+          ابدأ بسرعة من أهم أجزاء مساحة عملك.
         </p>
       </div>
     </header>
@@ -927,10 +773,10 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
           </svg>
         </div>
         <h2>
-          متجرُك، بطريقتك
+          كل شغل متجرك في مكان واحد
         </h2>
         <p>
-          يعمل ماكس محليًا ويتشكل حسب إعدادات متجرك.
+          رتّب ماكس على طريقة شغلك، وواصل العمل حتى من دون إنترنت.
         </p>
         <div
           class="home-hero__actions"
@@ -972,7 +818,7 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
             <span
               class="button__label"
             >
-              استكشف العناصر
+              افتح العناصر
             </span>
           </button>
           <button
@@ -1061,7 +907,7 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
               العناصر
             </strong>
             <small>
-              أنشئ عنصرًا باستخدام الخصائص التي يحتاجها هذا المتجر فعلًا فقط.
+              أضف أول عنصر، وسجّل فقط البيانات المهمة لمتجرك.
             </small>
           </span>
           <svg
@@ -1124,7 +970,7 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
               المعاملات
             </strong>
             <small>
-              تبقى المعاملات غير متاحة حتى بناء محرك الأموال المدقق.
+              سجّل أول عملية بيع أو شراء أو تحويل لتظهر هنا.
             </small>
           </span>
           <svg
@@ -1228,7 +1074,7 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
             لوحة المفاتيح
           </strong>
           <p>
-            ينتقل Tab للأمام ويفعّل Enter ويغلق Escape وتتنقل الأسهم داخل القوائم.
+            استخدم Tab للتنقّل، وEnter للتأكيد، وEscape للرجوع.
           </p>
         </div>
       </section>

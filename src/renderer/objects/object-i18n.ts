@@ -77,33 +77,33 @@ const copy = {
     editItem: 'تعديل العنصر',
     editPerson: 'تعديل الشخص',
     editProperty: 'تعديل الخاصية',
-    emptyBody: 'أنشئ أول سجل أو اضبط الخصائص بما يناسب طريقة عمل هذا المتجر.',
+    emptyBody: 'أضف أول سجل، أو جهّز الحقول التي تريد ظهورها في قاعدة البيانات.',
     emptyItems: 'لا توجد عناصر بعد',
     emptyPeople: 'لا يوجد أشخاص بعد',
     errorInvalid: 'راجع القيمة المدخلة وقواعد الخاصية.',
     errorNotFound: 'هذا السجل أو الخاصية لم يعد متاحًا.',
     errorRelation: 'اختر سجلًا مرتبطًا ونشطًا.',
     errorRequired: 'أكمل كل الحقول المطلوبة.',
-    errorSchema: 'يتعارض تغيير المخطط مع السجلات الحالية.',
+    errorSchema: 'لا يمكن تطبيق هذا التغيير على السجلات الموجودة.',
     errorUnique: 'يجب ألا تتكرر هذه القيمة.',
-    label: 'اسم العرض',
-    labelHintItem: 'اسم واضح لهذا العنصر',
-    labelHintPerson: 'اسم واضح لهذا الشخص',
+    label: 'الاسم',
+    labelHintItem: 'اكتب اسمًا واضحًا للعنصر',
+    labelHintPerson: 'اكتب اسم الشخص',
     maximum: 'الحد الأقصى',
     maximumLength: 'أقصى طول',
     minimum: 'الحد الأدنى',
     minimumLength: 'أدنى طول',
-    noProperties: 'لا توجد خصائص مخصصة',
-    noPropertiesBody: 'يمكن استخدام اسم العرض الآن. أضف فقط الحقول التي يحتاجها المتجر فعلًا.',
+    noProperties: 'لا توجد حقول إضافية',
+    noPropertiesBody: 'ابدأ بالاسم فقط، وأضف أي حقول أخرى عندما تحتاجها.',
     optional: 'اختياري',
-    properties: 'الخصائص',
-    propertyName: 'اسم الخاصية',
-    records: 'سجل',
+    properties: 'الحقول',
+    propertyName: 'اسم الحقل',
+    records: 'سجلات',
     relationTarget: 'نوع السجل المرتبط',
     required: 'مطلوب',
     save: 'حفظ',
-    schema: 'المخطط',
-    schemaSummary: 'يُحفظ الإعداد كبيانات، لا كحقول متجر ثابتة.',
+    schema: 'إعداد قاعدة البيانات',
+    schemaSummary: 'أضف الحقول التي تحتاجها، ورتّب بيانات متجرك بطريقتك.',
     type: 'النوع',
     unique: 'فريد',
     unknownError: 'لم يتمكن ماكس من إكمال التغيير. بياناتك الحالية لم تتغير.',
@@ -118,7 +118,7 @@ export function objectCopy(locale: Locale, key: ObjectCopyKey): string {
 
 const typeCopy: Record<Locale, Record<PropertyType, string>> = {
   en: { checkbox: 'Checkbox', date: 'Date', money: 'Money', number: 'Number', relation: 'Relation', select: 'Select', status: 'Status', text: 'Text' },
-  ar: { checkbox: 'مربع اختيار', date: 'تاريخ', money: 'مال', number: 'رقم', relation: 'علاقة', select: 'اختيار', status: 'حالة', text: 'نص' },
+  ar: { checkbox: 'صح أو خطأ', date: 'تاريخ', money: 'مبلغ', number: 'رقم', relation: 'ربط بسجل', select: 'قائمة', status: 'حالة', text: 'نص' },
 };
 
 export function propertyTypeLabel(locale: Locale, type: PropertyType): string {
@@ -142,4 +142,3 @@ const errorCopy: Record<ObjectErrorCode, ObjectCopyKey> = {
 export function objectError(locale: Locale, code: ObjectErrorCode): string {
   return objectCopy(locale, errorCopy[code]);
 }
-
