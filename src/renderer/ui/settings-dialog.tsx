@@ -262,7 +262,7 @@ export function SettingsDialog({
           <Button icon={<RotateCcw aria-hidden="true" size={17} />} onClick={onResetAppearance} variant="consequential">
             {translate(locale, 'preferencesReset')}
           </Button>
-          <Button data-autofocus="true" onClick={onClose} variant="primary">
+          <Button onClick={onClose} variant="primary">
             {translate(locale, 'returnToWorkspace')}
           </Button>
         </footer>

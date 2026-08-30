@@ -5,12 +5,13 @@ import { isTrustedNavigationUrl } from '../security/trusted-sender';
 
 export async function createMainWindow(): Promise<BrowserWindow> {
   const window = new BrowserWindow({
+    autoHideMenuBar: true,
     width: 1180,
     height: 760,
     minWidth: 760,
     minHeight: 520,
     show: false,
-    backgroundColor: '#f4f0e8',
+    backgroundColor: '#ffffff',
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,

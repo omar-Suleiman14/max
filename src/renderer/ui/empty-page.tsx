@@ -1,4 +1,15 @@
-import { CircleDollarSign, ContactRound, Eye, Package, Plus, ReceiptText, Scale, Search } from 'lucide-react';
+import {
+  ArrowRight,
+  CircleDollarSign,
+  ContactRound,
+  Eye,
+  Package,
+  Plus,
+  ReceiptText,
+  Scale,
+  Search,
+  Sparkles,
+} from 'lucide-react';
 
 import type { AppPage } from '../app/app-types';
 import { type Locale, type TranslationKey, translate } from '../app/i18n';
@@ -27,17 +38,12 @@ const pageContent: Record<Exclude<AppPage, 'home'>, Readonly<{
 };
 
 function HomePage({ locale, onNavigate, onOpenCommand }: Pick<EmptyPageProps, 'locale' | 'onNavigate' | 'onOpenCommand'>) {
-  const cards: readonly Readonly<{ body: TranslationKey; title: TranslationKey }>[] = [
-    { body: 'localFirstBody', title: 'localFirst' },
-    { body: 'readyToConfigureBody', title: 'readyToConfigure' },
-    { body: 'speedBody', title: 'speed' },
-  ];
-
   return (
     <div className="home-page">
       <section className="home-hero">
-        <div className="home-hero__glow" aria-hidden="true" />
-        <p className="eyebrow">MAX · LOCAL WORKSPACE</p>
+        <div className="home-page__icon" aria-hidden="true">
+          <Sparkles size={31} strokeWidth={1.55} />
+        </div>
         <h2>{translate(locale, 'homeTitle')}</h2>
         <p>{translate(locale, 'homeBody')}</p>
         <div className="home-hero__actions">
@@ -49,14 +55,32 @@ function HomePage({ locale, onNavigate, onOpenCommand }: Pick<EmptyPageProps, 'l
           </Button>
         </div>
       </section>
-      <section aria-label={translate(locale, 'workspace')} className="principle-grid">
-        {cards.map(({ body, title }, index) => (
-          <article className="principle-card" key={title}>
-            <span className="principle-card__number">0{index + 1}</span>
-            <h3>{translate(locale, title)}</h3>
-            <p>{translate(locale, body)}</p>
-          </article>
-        ))}
+      <section aria-label={translate(locale, 'workspace')} className="workspace-start">
+        <p className="workspace-start__label">{translate(locale, 'workspace')}</p>
+        <button className="workspace-link" onClick={() => onNavigate('items')} type="button">
+          <span className="workspace-link__icon"><Package aria-hidden="true" size={17} /></span>
+          <span>
+            <strong>{translate(locale, 'item')}</strong>
+            <small>{translate(locale, 'itemEmptyBody')}</small>
+          </span>
+          <ArrowRight aria-hidden="true" className="workspace-link__arrow" size={15} />
+        </button>
+        <button className="workspace-link" onClick={() => onNavigate('transactions')} type="button">
+          <span className="workspace-link__icon"><ReceiptText aria-hidden="true" size={17} /></span>
+          <span>
+            <strong>{translate(locale, 'transaction')}</strong>
+            <small>{translate(locale, 'transactionEmptyBody')}</small>
+          </span>
+          <ArrowRight aria-hidden="true" className="workspace-link__arrow" size={15} />
+        </button>
+        <button className="workspace-link" onClick={onOpenCommand} type="button">
+          <span className="workspace-link__icon"><Search aria-hidden="true" size={17} /></span>
+          <span>
+            <strong>{translate(locale, 'openCommand')}</strong>
+            <small>{translate(locale, 'pressCommand')}</small>
+          </span>
+          <ArrowRight aria-hidden="true" className="workspace-link__arrow" size={15} />
+        </button>
       </section>
       <section className="keyboard-note">
         <kbd>Tab</kbd><kbd>Enter</kbd><kbd>Esc</kbd><kbd>↑ ↓</kbd>

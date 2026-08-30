@@ -11,10 +11,13 @@ exports[`Max shell > renders the English shell and an actionable empty page 1`] 
       class="topbar__title"
     >
       <p>
-        Test Shop · 
-        Workspace
-         /
+        Test Shop
       </p>
+      <span
+        aria-hidden="true"
+      >
+        /
+      </span>
       <strong>
         Items
       </strong>
@@ -55,6 +58,37 @@ exports[`Max shell > renders the English shell and an actionable empty page 1`] 
           Ctrl
            K
         </kbd>
+      </button>
+      <button
+        class="button button--ghost quick-entry-trigger"
+        type="button"
+      >
+        <span
+          class="button__icon"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-zap"
+            fill="none"
+            height="16"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="16"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M15.914 4a1.5 1.5 0 00-2.474-1.561l-9 9A1.5 1.5 0 005.5 14h4.002a.5.5 0 01.471.666L8.086 20a1.5 1.5 0 002.475 1.56l9-9A1.5 1.5 0 0018.5 10h-3.997a.5.5 0 01-.472-.667z"
+            />
+          </svg>
+        </span>
+        <span
+          class="button__label"
+        >
+          Quick sale
+        </span>
       </button>
       <div
         class="create-menu"
@@ -118,18 +152,47 @@ exports[`Max shell > renders the English shell and an actionable empty page 1`] 
   <main
     aria-labelledby="page-title"
     class="content"
+    data-page="items"
     id="main-content"
     tabindex="-1"
   >
     <header
       class="page-header"
     >
-      <div>
-        <p
-          class="eyebrow"
+      <div
+        aria-hidden="true"
+        class="page-header__icon"
+      >
+        <svg
+          aria-hidden="true"
+          class="lucide lucide-package"
+          fill="none"
+          height="28"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="1.7"
+          viewBox="0 0 24 24"
+          width="28"
+          xmlns="http://www.w3.org/2000/svg"
         >
-          Workspace
-        </p>
+          <path
+            d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"
+          />
+          <path
+            d="M12 22V12"
+          />
+          <polyline
+            points="3.29 7 12 12 20.71 7"
+          />
+          <path
+            d="m7.5 4.27 9 5.15"
+          />
+        </svg>
+      </div>
+      <div
+        class="page-header__copy"
+      >
         <h1
           id="page-title"
         >
@@ -638,10 +701,13 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
       class="topbar__title"
     >
       <p>
-        Test Shop · 
-        مساحة العمل
-         /
+        Test Shop
       </p>
+      <span
+        aria-hidden="true"
+      >
+        /
+      </span>
       <strong>
         الرئيسية
       </strong>
@@ -682,6 +748,37 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
           Ctrl
            K
         </kbd>
+      </button>
+      <button
+        class="button button--ghost quick-entry-trigger"
+        type="button"
+      >
+        <span
+          class="button__icon"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-zap"
+            fill="none"
+            height="16"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="16"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M15.914 4a1.5 1.5 0 00-2.474-1.561l-9 9A1.5 1.5 0 005.5 14h4.002a.5.5 0 01.471.666L8.086 20a1.5 1.5 0 002.475 1.56l9-9A1.5 1.5 0 0018.5 10h-3.997a.5.5 0 01-.472-.667z"
+            />
+          </svg>
+        </span>
+        <span
+          class="button__label"
+        >
+          بيع سريع
+        </span>
       </button>
       <div
         class="create-menu"
@@ -745,18 +842,41 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
   <main
     aria-labelledby="page-title"
     class="content"
+    data-page="home"
     id="main-content"
     tabindex="-1"
   >
     <header
       class="page-header"
     >
-      <div>
-        <p
-          class="eyebrow"
+      <div
+        aria-hidden="true"
+        class="page-header__icon"
+      >
+        <svg
+          aria-hidden="true"
+          class="lucide lucide-house"
+          fill="none"
+          height="28"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="1.7"
+          viewBox="0 0 24 24"
+          width="28"
+          xmlns="http://www.w3.org/2000/svg"
         >
-          مساحة العمل
-        </p>
+          <path
+            d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"
+          />
+          <path
+            d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
+          />
+        </svg>
+      </div>
+      <div
+        class="page-header__copy"
+      >
         <h1
           id="page-title"
         >
@@ -775,13 +895,37 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
       >
         <div
           aria-hidden="true"
-          class="home-hero__glow"
-        />
-        <p
-          class="eyebrow"
+          class="home-page__icon"
         >
-          MAX · LOCAL WORKSPACE
-        </p>
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-sparkles"
+            fill="none"
+            height="31"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="1.55"
+            viewBox="0 0 24 24"
+            width="31"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"
+            />
+            <path
+              d="M20 2v4"
+            />
+            <path
+              d="M22 4h-4"
+            />
+            <circle
+              cx="4"
+              cy="20"
+              r="2"
+            />
+          </svg>
+        </div>
         <h2>
           متجرُك، بطريقتك
         </h2>
@@ -871,56 +1015,198 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
       </section>
       <section
         aria-label="مساحة العمل"
-        class="principle-grid"
+        class="workspace-start"
       >
-        <article
-          class="principle-card"
+        <p
+          class="workspace-start__label"
+        >
+          مساحة العمل
+        </p>
+        <button
+          class="workspace-link"
+          type="button"
         >
           <span
-            class="principle-card__number"
+            class="workspace-link__icon"
           >
-            0
-            1
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-package"
+              fill="none"
+              height="17"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="17"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"
+              />
+              <path
+                d="M12 22V12"
+              />
+              <polyline
+                points="3.29 7 12 12 20.71 7"
+              />
+              <path
+                d="m7.5 4.27 9 5.15"
+              />
+            </svg>
           </span>
-          <h3>
-            محلي افتراضيًا
-          </h3>
-          <p>
-            تبقى مساحة SQLite هي المرجع وتعمل من دون اتصال بالإنترنت.
-          </p>
-        </article>
-        <article
-          class="principle-card"
+          <span>
+            <strong>
+              العناصر
+            </strong>
+            <small>
+              أنشئ عنصرًا باستخدام الخصائص التي يحتاجها هذا المتجر فعلًا فقط.
+            </small>
+          </span>
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-arrow-right workspace-link__arrow"
+            fill="none"
+            height="15"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="15"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M5 12h14"
+            />
+            <path
+              d="m12 5 7 7-7 7"
+            />
+          </svg>
+        </button>
+        <button
+          class="workspace-link"
+          type="button"
         >
           <span
-            class="principle-card__number"
+            class="workspace-link__icon"
           >
-            0
-            2
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-receipt-text"
+              fill="none"
+              height="17"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="17"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M13 16H8"
+              />
+              <path
+                d="M14 8H8"
+              />
+              <path
+                d="M16 12H8"
+              />
+              <path
+                d="M4 3a1 1 0 0 1 1-1 1.3 1.3 0 0 1 .7.2l.933.6a1.3 1.3 0 0 0 1.4 0l.934-.6a1.3 1.3 0 0 1 1.4 0l.933.6a1.3 1.3 0 0 0 1.4 0l.933-.6a1.3 1.3 0 0 1 1.4 0l.934.6a1.3 1.3 0 0 0 1.4 0l.933-.6A1.3 1.3 0 0 1 19 2a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1 1.3 1.3 0 0 1-.7-.2l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.934.6a1.3 1.3 0 0 1-1.4 0l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-1.4 0l-.934-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-.7.2 1 1 0 0 1-1-1z"
+              />
+            </svg>
           </span>
-          <h3>
-            جاهز للتخصيص
-          </h3>
-          <p>
-            واجهة العمل جاهزة، وبنية المتجر ما زالت منفصلة عن قصد.
-          </p>
-        </article>
-        <article
-          class="principle-card"
+          <span>
+            <strong>
+              المعاملات
+            </strong>
+            <small>
+              تبقى المعاملات غير متاحة حتى بناء محرك الأموال المدقق.
+            </small>
+          </span>
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-arrow-right workspace-link__arrow"
+            fill="none"
+            height="15"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="15"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M5 12h14"
+            />
+            <path
+              d="m12 5 7 7-7 7"
+            />
+          </svg>
+        </button>
+        <button
+          class="workspace-link"
+          type="button"
         >
           <span
-            class="principle-card__number"
+            class="workspace-link__icon"
           >
-            0
-            3
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-search"
+              fill="none"
+              height="17"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="17"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="m21 21-4.34-4.34"
+              />
+              <circle
+                cx="11"
+                cy="11"
+                r="8"
+              />
+            </svg>
           </span>
-          <h3>
-            مصمم للسرعة
-          </h3>
-          <p>
-            مسارات لوحة المفاتيح والإجراءات المركزة متاحة في كل مكان.
-          </p>
-        </article>
+          <span>
+            <strong>
+              افتح قائمة الأوامر
+            </strong>
+            <small>
+              اضغط Ctrl K
+            </small>
+          </span>
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-arrow-right workspace-link__arrow"
+            fill="none"
+            height="15"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="15"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M5 12h14"
+            />
+            <path
+              d="m12 5 7 7-7 7"
+            />
+          </svg>
+        </button>
       </section>
       <section
         class="keyboard-note"

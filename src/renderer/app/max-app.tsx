@@ -1,4 +1,19 @@
-import { ChevronDown, Command as CommandIcon, Plus, Search, X } from 'lucide-react';
+import {
+  ChevronDown,
+  CircleDollarSign,
+  Command as CommandIcon,
+  ContactRound,
+  Home,
+  Package,
+  Plus,
+  ReceiptText,
+  Scale,
+  Search,
+  SlidersHorizontal,
+  X,
+  Zap,
+  type LucideIcon,
+} from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 
 import type { BackupSchedule, Blueprint } from '../../shared/blueprint-contract';
@@ -37,6 +52,16 @@ const pageLabels: Record<AppPage, TranslationKey> = {
   reconciliation: 'reconciliation',
   transactions: 'transaction',
   views: 'view',
+};
+
+const pageIcons: Record<AppPage, LucideIcon> = {
+  accounts: CircleDollarSign,
+  home: Home,
+  items: Package,
+  people: ContactRound,
+  reconciliation: Scale,
+  transactions: ReceiptText,
+  views: SlidersHorizontal,
 };
 
 const pageSubtitles: Record<AppPage, TranslationKey> = {
@@ -299,6 +324,7 @@ export function MaxApp() {
 
   const pageLabel = translate(locale, pageLabels[page]);
   const createLabel = translate(locale, createLabels[page]);
+  const PageIcon = pageIcons[page];
 
   return (
     <div className="app-shell" data-app-ready={engineStatus === 'ready' ? 'true' : undefined}>
@@ -319,10 +345,8 @@ export function MaxApp() {
       <div className="app-frame">
         <header className="topbar">
           <div className="topbar__title">
-            <p>
-              {shopName ? `${shopName} · ` : ''}
-              {translate(locale, 'workspace')} /
-            </p>
+            <p>{shopName || translate(locale, 'workspace')}</p>
+            <span aria-hidden="true">/</span>
             <strong>{pageLabel}</strong>
           </div>
           <div className="topbar__actions">
@@ -331,6 +355,14 @@ export function MaxApp() {
               <span>{translate(locale, 'commandSearch')}</span>
               <kbd>{runtimePlatform === 'macos' ? <CommandIcon aria-hidden="true" size={12} /> : 'Ctrl'} K</kbd>
             </button>
+            <Button
+              className="quick-entry-trigger"
+              icon={<Zap aria-hidden="true" size={16} />}
+              onClick={() => setQuickEntryOpen(true)}
+              variant="ghost"
+            >
+              {locale === 'ar' ? 'بيع سريع' : 'Quick sale'}
+            </Button>
             <div className="create-menu" ref={createMenuRef}>
               <Button
                 ref={createMenuTriggerRef}
@@ -365,10 +397,12 @@ export function MaxApp() {
           </div>
         </header>
 
-        <main aria-labelledby="page-title" className="content" id="main-content" tabIndex={-1}>
+        <main aria-labelledby="page-title" className="content" data-page={page} id="main-content" tabIndex={-1}>
           <header className="page-header">
-            <div>
-              <p className="eyebrow">{translate(locale, 'workspace')}</p>
+            <div className="page-header__icon" aria-hidden="true">
+              <PageIcon size={28} strokeWidth={1.7} />
+            </div>
+            <div className="page-header__copy">
               <h1 id="page-title">{pageLabel}</h1>
               <p>{translate(locale, pageSubtitles[page])}</p>
             </div>
