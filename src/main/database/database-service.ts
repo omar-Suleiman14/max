@@ -8,6 +8,8 @@ import { BlueprintService } from './blueprint-service';
 import { DemoDataService } from './demo-data-service';
 import { migrations, type Migration } from './migrations';
 import { ObjectRepository } from './object-repository';
+import { PricingRepository } from './pricing-repository';
+import { PricingCatalogRepository } from './pricing-catalog-repository';
 import { ShopMetadataRepository } from './shop-metadata-repository';
 import { TemplateRepository } from './template-repository';
 import { TransactionRepository } from './transaction-repository';
@@ -35,6 +37,8 @@ export class DatabaseService {
   readonly demoData: DemoDataService;
   readonly objects: ObjectRepository;
   readonly personDebt: PersonDebtService;
+  readonly pricing: PricingRepository;
+  readonly pricingCatalog: PricingCatalogRepository;
   readonly quickEntry: QuickEntryService;
   readonly reconciliation: ReconciliationRepository;
   readonly search: SearchService;
@@ -66,7 +70,9 @@ export class DatabaseService {
     this.transactions = new TransactionRepository(this.#database);
     this.reconciliation = new ReconciliationRepository(this.#database, this.transactions);
     this.personDebt = new PersonDebtService(this.#database, this.transactions);
-    this.quickEntry = new QuickEntryService(this.#database, this.transactions);
+    this.pricing = new PricingRepository(this.#database);
+    this.pricingCatalog = new PricingCatalogRepository(this.#database);
+    this.quickEntry = new QuickEntryService(this.#database, this.transactions, this.pricing, this.pricingCatalog, this.accounts);
     this.viewsPages = new ViewsPagesRepository(this.#database);
     this.search = new SearchService(this.#database);
     this.objects = new ObjectRepository(this.#database);
@@ -183,7 +189,7 @@ export class DatabaseService {
 
   #clearWorkspace(): void {
     const tables = [
-      'inventory_movements', 'shop_money_movements', 'shop_daily_sessions', 'shop_transactions', 'shop_accounts',
+      'inventory_movements', 'shop_money_movements', 'shop_daily_sessions', 'shop_transactions', 'pricing_services', 'pricing_profiles', 'shop_accounts', 'pricing_channels', 'pricing_providers',
       'object_property_values', 'object_audit_log', 'object_records', 'shop_templates',
       'object_properties', 'shop_saved_views', 'shop_custom_pages', 'app_metadata',
     ];

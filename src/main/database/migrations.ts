@@ -596,4 +596,142 @@ export const migrations: readonly Migration[] = [
       `);
     },
   },
+  {
+    id: 13,
+    name: 'pricing_engine_core',
+    up(database) {
+      database.exec(`
+        CREATE TABLE pricing_profiles (
+          id TEXT PRIMARY KEY NOT NULL,
+          name TEXT NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 120),
+          provider TEXT,
+          channel TEXT,
+          service TEXT,
+          currency TEXT NOT NULL DEFAULT 'EGP' CHECK (currency = 'EGP'),
+          input_mode TEXT NOT NULL CHECK (input_mode IN ('customer_pays', 'customer_receives')),
+          active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+          components_json TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          archived_at TEXT
+        ) STRICT;
+
+        CREATE UNIQUE INDEX pricing_profiles_active_name
+          ON pricing_profiles (name COLLATE NOCASE)
+          WHERE archived_at IS NULL;
+        CREATE INDEX pricing_profiles_service_provider
+          ON pricing_profiles (service, provider, channel, active)
+          WHERE archived_at IS NULL;
+
+        CREATE TABLE object_audit_log_v13 (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          entity_type TEXT NOT NULL CHECK (entity_type IN ('property', 'record', 'template', 'account', 'transaction', 'view', 'page', 'daily_session', 'pricing_profile')),
+          entity_id TEXT NOT NULL,
+          action TEXT NOT NULL CHECK (action IN ('created', 'updated', 'archived')),
+          actor TEXT NOT NULL CHECK (actor = 'local-user'),
+          snapshot_json TEXT NOT NULL CHECK (json_valid(snapshot_json)),
+          created_at TEXT NOT NULL
+        ) STRICT;
+
+        INSERT INTO object_audit_log_v13 (id, entity_type, entity_id, action, actor, snapshot_json, created_at)
+          SELECT id, entity_type, entity_id, action, actor, snapshot_json, created_at FROM object_audit_log;
+        DROP TABLE object_audit_log;
+        ALTER TABLE object_audit_log_v13 RENAME TO object_audit_log;
+        CREATE INDEX object_audit_log_entity ON object_audit_log (entity_id, id DESC);
+
+        ALTER TABLE shop_transactions ADD COLUMN principal_amount REAL NOT NULL DEFAULT 0.0;
+        ALTER TABLE shop_transactions ADD COLUMN delivered_value REAL NOT NULL DEFAULT 0.0;
+        ALTER TABLE shop_transactions ADD COLUMN provider_cost REAL NOT NULL DEFAULT 0.0;
+        ALTER TABLE shop_transactions ADD COLUMN tax_amount REAL NOT NULL DEFAULT 0.0;
+        ALTER TABLE shop_transactions ADD COLUMN customer_fee REAL NOT NULL DEFAULT 0.0;
+        ALTER TABLE shop_transactions ADD COLUMN profit_markup REAL NOT NULL DEFAULT 0.0;
+        ALTER TABLE shop_transactions ADD COLUMN provider_commission REAL NOT NULL DEFAULT 0.0;
+        ALTER TABLE shop_transactions ADD COLUMN discount REAL NOT NULL DEFAULT 0.0;
+        ALTER TABLE shop_transactions ADD COLUMN cashback REAL NOT NULL DEFAULT 0.0;
+        ALTER TABLE shop_transactions ADD COLUMN customer_total REAL NOT NULL DEFAULT 0.0;
+        ALTER TABLE shop_transactions ADD COLUMN shop_net_cost REAL NOT NULL DEFAULT 0.0;
+        ALTER TABLE shop_transactions ADD COLUMN net_profit REAL NOT NULL DEFAULT 0.0;
+        ALTER TABLE shop_transactions ADD COLUMN pricing_profile_id TEXT REFERENCES pricing_profiles(id) ON DELETE SET NULL;
+        ALTER TABLE shop_transactions ADD COLUMN pricing_snapshot_json TEXT;
+        ALTER TABLE shop_transactions ADD COLUMN pricing_overrides_json TEXT;
+
+        UPDATE shop_transactions
+        SET principal_amount = total_amount,
+            delivered_value = total_amount,
+            customer_total = total_amount;
+      `);
+    },
+  },
+  {
+    id: 14,
+    name: 'pricing_service_catalog',
+    up(database) {
+      database.exec(`
+        CREATE TABLE pricing_providers (
+          id TEXT PRIMARY KEY NOT NULL,
+          name TEXT NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 120),
+          active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          archived_at TEXT
+        ) STRICT;
+        CREATE UNIQUE INDEX pricing_providers_active_name
+          ON pricing_providers (name COLLATE NOCASE) WHERE archived_at IS NULL;
+
+        CREATE TABLE pricing_channels (
+          id TEXT PRIMARY KEY NOT NULL,
+          name TEXT NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 120),
+          provider_id TEXT REFERENCES pricing_providers(id) ON DELETE SET NULL,
+          active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          archived_at TEXT
+        ) STRICT;
+        CREATE UNIQUE INDEX pricing_channels_active_name_provider
+          ON pricing_channels (name COLLATE NOCASE, COALESCE(provider_id, '')) WHERE archived_at IS NULL;
+
+        CREATE TABLE pricing_services (
+          id TEXT PRIMARY KEY NOT NULL,
+          name TEXT NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 120),
+          category TEXT NOT NULL CHECK (length(trim(category)) BETWEEN 1 AND 80),
+          provider_id TEXT REFERENCES pricing_providers(id) ON DELETE SET NULL,
+          channel_id TEXT REFERENCES pricing_channels(id) ON DELETE SET NULL,
+          pricing_profile_id TEXT NOT NULL REFERENCES pricing_profiles(id) ON DELETE RESTRICT,
+          operation_kind TEXT NOT NULL CHECK (operation_kind IN ('sale', 'purchase', 'expense', 'income', 'transfer')),
+          input_label TEXT NOT NULL CHECK (length(trim(input_label)) BETWEEN 1 AND 120),
+          input_modes_json TEXT NOT NULL CHECK (json_valid(input_modes_json)),
+          default_input_mode TEXT NOT NULL CHECK (default_input_mode IN ('customer_pays', 'customer_receives')),
+          payment_account_types_json TEXT NOT NULL CHECK (json_valid(payment_account_types_json)),
+          active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          archived_at TEXT
+        ) STRICT;
+        CREATE UNIQUE INDEX pricing_services_active_name
+          ON pricing_services (name COLLATE NOCASE) WHERE archived_at IS NULL;
+        CREATE INDEX pricing_services_operation
+          ON pricing_services (operation_kind, active) WHERE archived_at IS NULL;
+
+        ALTER TABLE shop_accounts ADD COLUMN provider_id TEXT REFERENCES pricing_providers(id) ON DELETE SET NULL;
+        ALTER TABLE shop_transactions ADD COLUMN pricing_service_id TEXT REFERENCES pricing_services(id) ON DELETE SET NULL;
+        CREATE INDEX shop_transactions_pricing_service_date
+          ON shop_transactions (pricing_service_id, created_at) WHERE archived_at IS NULL;
+
+        CREATE TABLE object_audit_log_v14 (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          entity_type TEXT NOT NULL CHECK (entity_type IN ('property', 'record', 'template', 'account', 'transaction', 'view', 'page', 'daily_session', 'pricing_profile', 'pricing_provider', 'pricing_channel', 'pricing_service')),
+          entity_id TEXT NOT NULL,
+          action TEXT NOT NULL CHECK (action IN ('created', 'updated', 'archived')),
+          actor TEXT NOT NULL CHECK (actor = 'local-user'),
+          snapshot_json TEXT NOT NULL CHECK (json_valid(snapshot_json)),
+          created_at TEXT NOT NULL
+        ) STRICT;
+        INSERT INTO object_audit_log_v14 (id, entity_type, entity_id, action, actor, snapshot_json, created_at)
+          SELECT id, entity_type, entity_id, action, actor, snapshot_json, created_at FROM object_audit_log;
+        DROP TABLE object_audit_log;
+        ALTER TABLE object_audit_log_v14 RENAME TO object_audit_log;
+        CREATE INDEX object_audit_log_entity ON object_audit_log (entity_id, id DESC);
+      `);
+    },
+  },
 ];

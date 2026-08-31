@@ -28,6 +28,7 @@ import type {
   RepaymentDraft,
 } from '../../shared/person-debt-contract';
 import type { PaymentMode, QuickEntryDraft } from '../../shared/quick-entry-contract';
+import type { PricingChannelDraft, PricingProfileDraft, PricingProviderDraft, PricingQuoteInput, PricingServiceDraft } from '../../shared/pricing-contract';
 import type {
   CloseSessionDraft,
   OpenSessionDraft,
@@ -229,6 +230,7 @@ function parseAccountDraft(value: unknown): AccountDraft {
     feeConfig: isObject(value.feeConfig) ? value.feeConfig as AccountDraft['feeConfig'] : undefined,
     initialBalance,
     name: value.name,
+    providerId: typeof value.providerId === 'string' ? value.providerId : undefined,
   };
 }
 
@@ -311,13 +313,14 @@ function parseQuickEntryDraft(value: unknown): QuickEntryDraft {
     throw new ObjectDomainError('invalid-input', 'A valid payment mode is required.');
   }
 
-  const validOperations = ['sale', 'purchase', 'expense', 'income', 'transfer', 'reconciliation'];
+  const validOperations = ['sale', 'purchase', 'expense', 'income', 'transfer', 'adjustment', 'reconciliation'];
   const operationKind = typeof value.operationKind === 'string' && validOperations.includes(value.operationKind)
     ? value.operationKind as QuickEntryDraft['operationKind']
     : 'sale';
 
   return {
     accountId: typeof value.accountId === 'string' ? value.accountId : undefined,
+    adjustmentDirection: value.adjustmentDirection === 'outflow' ? 'outflow' : 'inflow',
     collectorId: typeof value.collectorId === 'string' ? value.collectorId : undefined,
     itemId: typeof value.itemId === 'string' ? value.itemId : undefined,
     note: typeof value.note === 'string' ? value.note : undefined,
@@ -325,6 +328,12 @@ function parseQuickEntryDraft(value: unknown): QuickEntryDraft {
     paidAmount: typeof value.paidAmount === 'number' ? value.paidAmount : undefined,
     paymentMode: value.paymentMode as PaymentMode,
     personId: typeof value.personId === 'string' ? value.personId : undefined,
+    pricingCustomerType: typeof value.pricingCustomerType === 'string' ? value.pricingCustomerType : undefined,
+    pricingInputMode: value.pricingInputMode === 'customer_receives' ? 'customer_receives' : value.pricingInputMode === 'customer_pays' ? 'customer_pays' : undefined,
+    pricingOverrides: Array.isArray(value.pricingOverrides) ? value.pricingOverrides as QuickEntryDraft['pricingOverrides'] : undefined,
+    pricingProfileId: typeof value.pricingProfileId === 'string' ? value.pricingProfileId : undefined,
+    pricingServiceId: typeof value.pricingServiceId === 'string' ? value.pricingServiceId : undefined,
+    providerCost: typeof value.providerCost === 'number' ? value.providerCost : undefined,
     providerFee: typeof value.providerFee === 'number' ? value.providerFee : undefined,
     quantity: typeof value.quantity === 'number' ? value.quantity : undefined,
     serviceFee: typeof value.serviceFee === 'number' ? value.serviceFee : undefined,
@@ -332,6 +341,46 @@ function parseQuickEntryDraft(value: unknown): QuickEntryDraft {
     toAccountId: typeof value.toAccountId === 'string' ? value.toAccountId : undefined,
     totalAmount,
   };
+}
+
+function parsePricingProfileDraft(value: unknown): PricingProfileDraft {
+  if (!isObject(value) || typeof value.name !== 'string' || !Array.isArray(value.components)) {
+    throw new ObjectDomainError('invalid-input', 'A valid pricing profile is required.');
+  }
+  if (value.currency !== 'EGP' || (value.inputMode !== 'customer_pays' && value.inputMode !== 'customer_receives')) {
+    throw new ObjectDomainError('invalid-input', 'Pricing profile currency or input mode is invalid.');
+  }
+  return value as unknown as PricingProfileDraft;
+}
+
+function parsePricingQuoteInput(value: unknown): PricingQuoteInput {
+  if (!isObject(value)) throw new ObjectDomainError('invalid-input', 'A valid pricing quote input is required.');
+  const amount = Number(value.amount);
+  if (!Number.isFinite(amount) || amount < 0) throw new ObjectDomainError('invalid-input', 'Pricing amount must be non-negative.');
+  return {
+    amount,
+    context: isObject(value.context) ? value.context : undefined,
+    inputMode: value.inputMode === 'customer_receives' ? 'customer_receives' : value.inputMode === 'customer_pays' ? 'customer_pays' : undefined,
+    overrides: Array.isArray(value.overrides) ? value.overrides as PricingQuoteInput['overrides'] : undefined,
+    providerCost: optionalNumber(value.providerCost, 'Provider cost'),
+  };
+}
+
+function parsePricingProviderDraft(value: unknown): PricingProviderDraft {
+  if (!isObject(value) || typeof value.name !== 'string') throw new ObjectDomainError('invalid-input', 'A valid provider is required.');
+  return { active: value.active === true, name: value.name };
+}
+
+function parsePricingChannelDraft(value: unknown): PricingChannelDraft {
+  if (!isObject(value) || typeof value.name !== 'string') throw new ObjectDomainError('invalid-input', 'A valid channel is required.');
+  return { active: value.active === true, name: value.name, providerId: typeof value.providerId === 'string' ? value.providerId : undefined };
+}
+
+function parsePricingServiceDraft(value: unknown): PricingServiceDraft {
+  if (!isObject(value) || typeof value.name !== 'string' || typeof value.category !== 'string' || typeof value.pricingProfileId !== 'string') {
+    throw new ObjectDomainError('invalid-input', 'A valid service template is required.');
+  }
+  return value as unknown as PricingServiceDraft;
 }
 
 function parseRepaymentDraft(value: unknown): RepaymentDraft {
@@ -664,6 +713,47 @@ export function registerIpcHandlers({
     trust(event);
     return mutation(() => database.quickEntry.submit(parseQuickEntryDraft(draft)));
   });
+  ipcMain.handle(IPC_CHANNELS.quickEntryQuotePricing, (event, draft: unknown) => {
+    trust(event);
+    return mutation(() => database.quickEntry.previewPricing(parseQuickEntryDraft(draft)));
+  });
+
+  // Pricing
+  ipcMain.handle(IPC_CHANNELS.pricingList, (event) => {
+    trust(event);
+    return database.pricing.listProfiles();
+  });
+  ipcMain.handle(IPC_CHANNELS.pricingCreate, (event, draft: unknown) => {
+    trust(event);
+    return mutation(() => database.pricing.createProfile(parsePricingProfileDraft(draft)));
+  });
+  ipcMain.handle(IPC_CHANNELS.pricingUpdate, (event, id: unknown, draft: unknown) => {
+    trust(event);
+    return mutation(() => database.pricing.updateProfile(parseId(id), parsePricingProfileDraft(draft)));
+  });
+  ipcMain.handle(IPC_CHANNELS.pricingArchive, (event, id: unknown) => {
+    trust(event);
+    return mutation(() => {
+      database.pricing.archiveProfile(parseId(id));
+      return null;
+    });
+  });
+  ipcMain.handle(IPC_CHANNELS.pricingQuote, (event, id: unknown, input: unknown) => {
+    trust(event);
+    return mutation(() => database.pricing.quote(parseId(id), parsePricingQuoteInput(input)));
+  });
+  ipcMain.handle(IPC_CHANNELS.pricingProviderList, (event) => { trust(event); return database.pricingCatalog.listProviders(); });
+  ipcMain.handle(IPC_CHANNELS.pricingProviderCreate, (event, draft: unknown) => { trust(event); return mutation(() => database.pricingCatalog.createProvider(parsePricingProviderDraft(draft))); });
+  ipcMain.handle(IPC_CHANNELS.pricingProviderUpdate, (event, id: unknown, draft: unknown) => { trust(event); return mutation(() => database.pricingCatalog.updateProvider(parseId(id), parsePricingProviderDraft(draft))); });
+  ipcMain.handle(IPC_CHANNELS.pricingProviderArchive, (event, id: unknown) => { trust(event); return mutation(() => { database.pricingCatalog.archiveProvider(parseId(id)); return null; }); });
+  ipcMain.handle(IPC_CHANNELS.pricingChannelList, (event) => { trust(event); return database.pricingCatalog.listChannels(); });
+  ipcMain.handle(IPC_CHANNELS.pricingChannelCreate, (event, draft: unknown) => { trust(event); return mutation(() => database.pricingCatalog.createChannel(parsePricingChannelDraft(draft))); });
+  ipcMain.handle(IPC_CHANNELS.pricingChannelUpdate, (event, id: unknown, draft: unknown) => { trust(event); return mutation(() => database.pricingCatalog.updateChannel(parseId(id), parsePricingChannelDraft(draft))); });
+  ipcMain.handle(IPC_CHANNELS.pricingChannelArchive, (event, id: unknown) => { trust(event); return mutation(() => { database.pricingCatalog.archiveChannel(parseId(id)); return null; }); });
+  ipcMain.handle(IPC_CHANNELS.pricingServiceList, (event) => { trust(event); return database.pricingCatalog.listServices(); });
+  ipcMain.handle(IPC_CHANNELS.pricingServiceCreate, (event, draft: unknown) => { trust(event); return mutation(() => database.pricingCatalog.createService(parsePricingServiceDraft(draft))); });
+  ipcMain.handle(IPC_CHANNELS.pricingServiceUpdate, (event, id: unknown, draft: unknown) => { trust(event); return mutation(() => database.pricingCatalog.updateService(parseId(id), parsePricingServiceDraft(draft))); });
+  ipcMain.handle(IPC_CHANNELS.pricingServiceArchive, (event, id: unknown) => { trust(event); return mutation(() => { database.pricingCatalog.archiveService(parseId(id)); return null; }); });
 
   // People Debt
   ipcMain.handle(IPC_CHANNELS.peopleBalances, (event) => {

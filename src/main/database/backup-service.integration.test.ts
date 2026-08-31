@@ -32,7 +32,7 @@ describe('BackupService', () => {
     expect(backup.id).toBeDefined();
     expect(backup.trigger).toBe('manual');
     expect(backup.checksum).toHaveLength(64); // SHA-256 hex
-    expect(backup.schemaVersion).toBe(12);
+    expect(backup.schemaVersion).toBe(14);
     expect(backup.sizeBytes).toBeGreaterThan(0);
 
     const list = service.listBackups();
@@ -58,7 +58,7 @@ describe('BackupService', () => {
     expect(healthyCheck.valid).toBe(true);
     expect(healthyCheck.checksumMatch).toBe(true);
     expect(healthyCheck.sqliteIntegrityPassed).toBe(true);
-    expect(healthyCheck.schemaVersion).toBe(12);
+    expect(healthyCheck.schemaVersion).toBe(14);
 
     // 2. Tampered file verification
     writeFileSync(backup.filePath, 'TAMPERED_RANDOM_CORRUPT_BYTES', 'utf-8');

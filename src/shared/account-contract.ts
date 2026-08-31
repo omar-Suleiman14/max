@@ -17,6 +17,7 @@ export type AccountDraft = Readonly<{
   feeConfig?: FeeConfig;
   initialBalance: number;
   name: string;
+  providerId?: string;
 }>;
 
 export type AccountDefinition = AccountDraft & Readonly<{

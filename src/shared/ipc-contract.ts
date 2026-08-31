@@ -25,6 +25,10 @@ import type {
 } from './object-contract';
 import type { TemplateDefinition, TemplateDraft } from './template-contract';
 import type {
+  PricingChannel, PricingChannelDraft, PricingProfile, PricingProfileDraft, PricingProvider, PricingProviderDraft,
+  PricingQuoteInput, PricingService, PricingServiceDraft, PricingSnapshot,
+} from './pricing-contract';
+import type {
   LedgerSummary,
   TransactionDraft,
   TransactionRecord,
@@ -69,7 +73,25 @@ export const IPC_CHANNELS = {
   peopleForgiveDebt: 'max:people:debt:forgive',
   peopleRepayDebt: 'max:people:debt:repay',
   peopleStatement: 'max:people:statement',
+  pricingArchive: 'max:pricing:archive',
+  pricingCreate: 'max:pricing:create',
+  pricingList: 'max:pricing:list',
+  pricingQuote: 'max:pricing:quote',
+  pricingUpdate: 'max:pricing:update',
+  pricingProviderArchive: 'max:pricing:providers:archive',
+  pricingProviderCreate: 'max:pricing:providers:create',
+  pricingProviderList: 'max:pricing:providers:list',
+  pricingProviderUpdate: 'max:pricing:providers:update',
+  pricingChannelArchive: 'max:pricing:channels:archive',
+  pricingChannelCreate: 'max:pricing:channels:create',
+  pricingChannelList: 'max:pricing:channels:list',
+  pricingChannelUpdate: 'max:pricing:channels:update',
+  pricingServiceArchive: 'max:pricing:services:archive',
+  pricingServiceCreate: 'max:pricing:services:create',
+  pricingServiceList: 'max:pricing:services:list',
+  pricingServiceUpdate: 'max:pricing:services:update',
   quickEntryGetSuggestion: 'max:quick-entry:suggestion',
+  quickEntryQuotePricing: 'max:quick-entry:pricing-quote',
   quickEntrySubmit: 'max:quick-entry:submit',
   reconciliationCloseSession: 'max:reconciliation:session:close',
   reconciliationCurrentSession: 'max:reconciliation:session:current',
@@ -198,8 +220,34 @@ export type MaxApi = Readonly<{
     getStatement: (personId: string) => Promise<PersonFinancialStatement>;
     repayDebt: (draft: RepaymentDraft) => Promise<MutationResult<TransactionRecord>>;
   }>;
+  pricing: Readonly<{
+    archive: (id: string) => Promise<MutationResult<null>>;
+    create: (draft: PricingProfileDraft) => Promise<MutationResult<PricingProfile>>;
+    list: () => Promise<readonly PricingProfile[]>;
+    quote: (profileId: string, input: PricingQuoteInput) => Promise<MutationResult<PricingSnapshot>>;
+    update: (id: string, draft: PricingProfileDraft) => Promise<MutationResult<PricingProfile>>;
+    providers: Readonly<{
+      archive: (id: string) => Promise<MutationResult<null>>;
+      create: (draft: PricingProviderDraft) => Promise<MutationResult<PricingProvider>>;
+      list: () => Promise<readonly PricingProvider[]>;
+      update: (id: string, draft: PricingProviderDraft) => Promise<MutationResult<PricingProvider>>;
+    }>;
+    channels: Readonly<{
+      archive: (id: string) => Promise<MutationResult<null>>;
+      create: (draft: PricingChannelDraft) => Promise<MutationResult<PricingChannel>>;
+      list: () => Promise<readonly PricingChannel[]>;
+      update: (id: string, draft: PricingChannelDraft) => Promise<MutationResult<PricingChannel>>;
+    }>;
+    services: Readonly<{
+      archive: (id: string) => Promise<MutationResult<null>>;
+      create: (draft: PricingServiceDraft) => Promise<MutationResult<PricingService>>;
+      list: () => Promise<readonly PricingService[]>;
+      update: (id: string, draft: PricingServiceDraft) => Promise<MutationResult<PricingService>>;
+    }>;
+  }>;
   quickEntry: Readonly<{
     getSuggestion: (itemId?: string, templateId?: string) => Promise<QuickEntryPriceSuggestion>;
+    quotePricing: (draft: QuickEntryDraft) => Promise<MutationResult<PricingSnapshot | null>>;
     submit: (draft: QuickEntryDraft) => Promise<MutationResult<TransactionRecord>>;
   }>;
   reconciliation: Readonly<{

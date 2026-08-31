@@ -52,8 +52,6 @@ import { UniversalSearchDialog } from '../search/universal-search-dialog';
 import { QuickEntryDialog } from '../quick-entry/quick-entry-dialog';
 import { UndoToast } from '../ui/undo-toast';
 import { TransactionsWorkspace } from '../transactions/transactions-workspace';
-import { TransactionChooser, type TransactionChoice } from '../transactions/transaction-chooser';
-import type { TransactionType } from '../../shared/transaction-contract';
 import { ObjectWorkspace } from '../objects/object-workspace';
 
 const pageLabels: Record<string, TranslationKey> = {
@@ -107,8 +105,6 @@ export function MaxApp() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [blueprintModalTab, setBlueprintModalTab] = useState<'export' | 'import'>();
   const [quickEntryOpen, setQuickEntryOpen] = useState(false);
-  const [transactionChooserOpen, setTransactionChooserOpen] = useState(false);
-  const [transactionCreateType, setTransactionCreateType] = useState<Exclude<TransactionType, 'reversal'>>('sale');
   const [dataRevision, setDataRevision] = useState(0);
   const [recentTxForUndo, setRecentTxForUndo] = useState<TransactionRecord>();
   const [objectCreateRequest, setObjectCreateRequest] = useState(0);
@@ -200,7 +196,7 @@ export function MaxApp() {
         setSearchOpen(true);
       } else if ((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === 's') {
         event.preventDefault();
-        setTransactionChooserOpen(true);
+        setQuickEntryOpen(true);
       } else if (event.key === '/' && !isEditingTarget(event.target)) {
         event.preventDefault();
         setSearchOpen(true);
@@ -215,17 +211,6 @@ export function MaxApp() {
     setRequestedSavedViewId(undefined);
     setCommandOpen(false);
     setObjectCreateRequest(0);
-  }
-
-  function handleTransactionChoice(choice: TransactionChoice) {
-    setTransactionChooserOpen(false);
-    if (choice === 'quick-sale') {
-      setQuickEntryOpen(true);
-      return;
-    }
-    navigate('transactions');
-    setTransactionCreateType(choice);
-    setObjectCreateRequest((request) => request + 1);
   }
 
   const handleAddCustomPage = useCallback(async () => {
@@ -538,7 +523,6 @@ export function MaxApp() {
               key="transactions"
               locale={locale}
               refreshRequest={dataRevision}
-              requestedCreateType={transactionCreateType}
             />
           ) : page === 'reconciliation' ? (
             <ReconciliationWorkspace key="reconciliation" locale={locale} />
@@ -577,9 +561,6 @@ export function MaxApp() {
             void window.maxApi.shop.getMetadata().then((d) => setShopName(d.shopName));
           }}
         />
-      )}
-      {transactionChooserOpen && (
-        <TransactionChooser locale={locale} onChoose={handleTransactionChoice} onClose={() => setTransactionChooserOpen(false)} />
       )}
       {quickEntryOpen && (
         <QuickEntryDialog
