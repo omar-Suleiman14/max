@@ -35,6 +35,10 @@ jobs:
       - name: Prepare trusted build runtimes
         run: npm run setup:runtime
 
+      - name: Rebuild trusted macOS packaging helper
+        if: runner.os == 'macOS'
+        run: npm rebuild macos-alias
+
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
 

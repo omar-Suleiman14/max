@@ -33,7 +33,7 @@ const config = {
   packagerConfig: {
     asar: true,
     electronZipDir: join(__dirname, '.cache', 'electron-zips'),
-    executableName: 'max',
+    executableName: process.platform === 'linux' ? 'max-shop-os' : 'max',
     ignore: [
       /^\/(?:\.cache|\.npm-cache|artifacts|backups|out)(?:\/|$)/,
       /^\/\.env(?:\.|$)/,
