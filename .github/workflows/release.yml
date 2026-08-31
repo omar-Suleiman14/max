@@ -35,10 +35,6 @@ jobs:
       - name: Prepare trusted build runtimes
         run: npm run setup:runtime
 
-      - name: Rebuild trusted macOS packaging helper
-        if: runner.os == 'macOS'
-        run: npm rebuild macos-alias
-
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
 
@@ -58,7 +54,12 @@ jobs:
         run: npm test
 
       - name: Build native installer
+        if: runner.os != 'macOS'
         run: npm run make
+
+      - name: Build native macOS app archive
+        if: runner.os == 'macOS'
+        run: npx electron-forge make --targets=@electron-forge/maker-zip
 
       - name: Upload native artifacts
         uses: actions/upload-artifact@v7
