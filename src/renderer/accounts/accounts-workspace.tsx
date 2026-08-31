@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 
-import type { AccountDefinition, AccountDraft, AccountType } from '../../shared/account-contract';
+import { calculateFee, type AccountDefinition, type AccountDraft, type AccountType, type FeeType } from '../../shared/account-contract';
 import type { TransferDraft } from '../../shared/transaction-contract';
 import type { Locale } from '../app/i18n';
 import { Button } from '../ui/button';
@@ -51,6 +51,11 @@ function AccountEditor({
   const [name, setName] = useState(initial?.name ?? '');
   const [accountType, setAccountType] = useState<AccountType>(initial?.accountType ?? 'cash');
   const [initialBalance, setInitialBalance] = useState(initial ? String(initial.initialBalance) : '0');
+  const [feeType, setFeeType] = useState<FeeType>(initial?.feeConfig?.feeType ?? 'none');
+  const [fixedAmount, setFixedAmount] = useState(initial?.feeConfig?.fixedAmount?.toString() ?? '');
+  const [percentage, setPercentage] = useState(initial?.feeConfig?.percentage?.toString() ?? '');
+  const [minFee, setMinFee] = useState(initial?.feeConfig?.minFee?.toString() ?? '');
+  const [maxFee, setMaxFee] = useState(initial?.feeConfig?.maxFee?.toString() ?? '');
   const [error, setError] = useState<string>();
   const [saving, setSaving] = useState(false);
 
@@ -66,6 +71,13 @@ function AccountEditor({
 
     const nextError = await onSave({
       accountType,
+      feeConfig: feeType === 'none' ? undefined : {
+        feeType,
+        fixedAmount: fixedAmount === '' ? undefined : Number(fixedAmount),
+        maxFee: maxFee === '' ? undefined : Number(maxFee),
+        minFee: minFee === '' ? undefined : Number(minFee),
+        percentage: percentage === '' ? undefined : Number(percentage),
+      },
       initialBalance: balanceNum,
       name,
     });
@@ -131,6 +143,30 @@ function AccountEditor({
           </label>
         )}
 
+        <div className="quick-step-block">
+          <label className="field">
+            <span>{accountsCopy(locale, 'feeSettings')}</span>
+            <select onChange={(event) => setFeeType(event.target.value as FeeType)} value={feeType}>
+              <option value="none">{accountsCopy(locale, 'feeNone')}</option>
+              <option value="fixed">{accountsCopy(locale, 'feeFixed')}</option>
+              <option value="percentage">{accountsCopy(locale, 'feePercentage')}</option>
+              <option value="fixed_plus_percentage">{accountsCopy(locale, 'feeFixedPlusPercentage')}</option>
+            </select>
+          </label>
+          {feeType !== 'none' && (
+            <div className="field-pair">
+              {(feeType === 'fixed' || feeType === 'fixed_plus_percentage') && (
+                <label className="field"><span>{accountsCopy(locale, 'feeFixed')}</span><input min="0" onChange={(event) => setFixedAmount(event.target.value)} step="0.01" type="number" value={fixedAmount} /></label>
+              )}
+              {(feeType === 'percentage' || feeType === 'fixed_plus_percentage') && (
+                <label className="field"><span>{accountsCopy(locale, 'feePercentageValue')}</span><input max="100" min="0" onChange={(event) => setPercentage(event.target.value)} step="0.01" type="number" value={percentage} /></label>
+              )}
+              <label className="field"><span>{accountsCopy(locale, 'feeMinimum')}</span><input min="0" onChange={(event) => setMinFee(event.target.value)} step="0.01" type="number" value={minFee} /></label>
+              <label className="field"><span>{accountsCopy(locale, 'feeMaximum')}</span><input min="0" onChange={(event) => setMaxFee(event.target.value)} step="0.01" type="number" value={maxFee} /></label>
+            </div>
+          )}
+        </div>
+
         <footer className="form-footer">
           <Button onClick={onClose}>{accountsCopy(locale, 'cancel')}</Button>
           <Button disabled={saving} type="submit" variant="primary">
@@ -156,6 +192,8 @@ function TransferDialog({
   const [fromAccountId, setFromAccountId] = useState(accounts[0]?.id ?? '');
   const [toAccountId, setToAccountId] = useState(accounts[1]?.id ?? accounts[0]?.id ?? '');
   const [amount, setAmount] = useState('');
+  const [providerFee, setProviderFee] = useState('0');
+  const [serviceFee, setServiceFee] = useState('0');
   const [note, setNote] = useState('');
   const [error, setError] = useState<string>();
   const [transferring, setTransferring] = useState(false);
@@ -165,12 +203,12 @@ function TransferDialog({
     setTransferring(true);
     const amountNum = Number(amount);
     if (!Number.isFinite(amountNum) || amountNum <= 0) {
-      setError('Please enter an amount greater than zero.');
+      setError(locale === 'ar' ? 'أدخل مبلغًا أكبر من الصفر.' : 'Enter an amount greater than zero.');
       setTransferring(false);
       return;
     }
     if (fromAccountId === toAccountId) {
-      setError('Source and destination accounts must be different.');
+      setError(locale === 'ar' ? 'يجب أن يختلف حساب المصدر عن حساب الوجهة.' : 'Source and destination accounts must be different.');
       setTransferring(false);
       return;
     }
@@ -179,6 +217,8 @@ function TransferDialog({
       amount: amountNum,
       fromAccountId,
       note: note.trim() || undefined,
+      providerFee: Number(providerFee) || 0,
+      serviceFee: Number(serviceFee) || 0,
       toAccountId,
     });
     setTransferring(false);
@@ -208,7 +248,7 @@ function TransferDialog({
         <div className="field-pair">
           <label className="field">
             <span>{accountsCopy(locale, 'fromAccount')}</span>
-            <select onChange={(e) => setFromAccountId(e.target.value)} value={fromAccountId}>
+            <select onChange={(e) => { const id = e.target.value; setFromAccountId(id); const account = accounts.find((candidate) => candidate.id === id); setProviderFee(String(calculateFee(Number(amount) || 0, account?.feeConfig))); }} value={fromAccountId}>
               {accounts.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.name} ({a.balance.toFixed(2)})
@@ -234,7 +274,7 @@ function TransferDialog({
           <input
             data-autofocus="true"
             min="0.01"
-            onChange={(e) => setAmount(e.target.value)}
+            onChange={(e) => { const value = e.target.value; setAmount(value); const account = accounts.find((candidate) => candidate.id === fromAccountId); setProviderFee(String(calculateFee(Number(value) || 0, account?.feeConfig))); }}
             placeholder="0.00"
             required
             step="0.01"
@@ -242,6 +282,15 @@ function TransferDialog({
             value={amount}
           />
         </label>
+
+        <div className="field-pair">
+          <label className="field"><span>{accountsCopy(locale, 'providerFee')}</span><input min="0" onChange={(event) => setProviderFee(event.target.value)} step="0.01" type="number" value={providerFee} /></label>
+          <label className="field"><span>{accountsCopy(locale, 'serviceFee')}</span><input min="0" onChange={(event) => setServiceFee(event.target.value)} step="0.01" type="number" value={serviceFee} /></label>
+        </div>
+        <div className="transfer-fee-breakdown">
+          <div className="fee-row"><span>{accountsCopy(locale, 'transferSourceDebit')}:</span><strong>{((Number(amount) || 0) + (Number(providerFee) || 0)).toFixed(2)}</strong></div>
+          <div className="fee-row fee-row--total"><span>{accountsCopy(locale, 'transferDestinationCredit')}:</span><strong>{((Number(amount) || 0) + (Number(serviceFee) || 0)).toFixed(2)}</strong></div>
+        </div>
 
         <label className="field">
           <span>{accountsCopy(locale, 'transferNote')}</span>

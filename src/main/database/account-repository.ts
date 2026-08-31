@@ -3,6 +3,7 @@ import type { DatabaseSync } from 'node:sqlite';
 
 import {
   accountTypes,
+  feeTypes,
   type AccountDefinition,
   type AccountDraft,
   type AccountType,
@@ -181,9 +182,40 @@ export class AccountRepository {
       throw new ObjectDomainError('invalid-input', 'Initial balance must be a non-negative number.');
     }
 
+    let feeConfig: FeeConfig | undefined;
+    if (draft.feeConfig && draft.feeConfig.feeType !== 'none') {
+      if (!feeTypes.includes(draft.feeConfig.feeType)) {
+        throw new ObjectDomainError('invalid-input', 'Invalid fee type.');
+      }
+      const normalizeOptionalMoney = (value: number | undefined, label: string) => {
+        if (value === undefined) return undefined;
+        const number = Number(value);
+        if (!Number.isFinite(number) || number < 0) {
+          throw new ObjectDomainError('invalid-input', `${label} must be a non-negative number.`);
+        }
+        return Math.round(number * 100) / 100;
+      };
+      const percentage = normalizeOptionalMoney(draft.feeConfig.percentage, 'Fee percentage');
+      if (percentage !== undefined && percentage > 100) {
+        throw new ObjectDomainError('invalid-input', 'Fee percentage cannot exceed 100%.');
+      }
+      const minFee = normalizeOptionalMoney(draft.feeConfig.minFee, 'Minimum fee');
+      const maxFee = normalizeOptionalMoney(draft.feeConfig.maxFee, 'Maximum fee');
+      if (minFee !== undefined && maxFee !== undefined && minFee > maxFee) {
+        throw new ObjectDomainError('invalid-input', 'Minimum fee cannot exceed maximum fee.');
+      }
+      feeConfig = {
+        feeType: draft.feeConfig.feeType,
+        fixedAmount: normalizeOptionalMoney(draft.feeConfig.fixedAmount, 'Fixed fee'),
+        maxFee,
+        minFee,
+        percentage,
+      };
+    }
+
     return {
       accountType: draft.accountType,
-      feeConfig: draft.feeConfig,
+      feeConfig,
       initialBalance: Math.round(initialBalance * 100) / 100,
       name,
     };

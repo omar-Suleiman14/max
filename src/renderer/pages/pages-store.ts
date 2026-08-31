@@ -3,7 +3,7 @@ import type { NotionBlock } from '../ui/notion-block-editor';
 import type { CustomPage as DatabaseCustomPage } from '../../shared/views-search-contract';
 
 const CUSTOM_PAGES_KEY = 'max:custom_pages';
-const TRASHED_PAGES_KEY = 'max:trashed_pages';
+const LEGACY_TRASHED_PAGES_KEY = 'max:trashed_pages';
 
 function fromDatabasePage(page: DatabaseCustomPage): CustomPage {
   let layout: { blocks?: readonly NotionBlock[]; favorite?: boolean; wiki?: boolean } = {};
@@ -53,60 +53,23 @@ export async function updatePersistentCustomPage(page: CustomPage, position: num
 }
 
 export async function archivePersistentCustomPage(page: CustomPage): Promise<void> {
-  try {
-    const trash = loadTrashedPages();
-    window.localStorage.setItem(TRASHED_PAGES_KEY, JSON.stringify([...trash, page]));
-  } catch {
-    // Archiving in SQLite is authoritative even if the optional local trash hint fails.
-  }
   await window.maxApi.pages.archive(page.id);
 }
 
-export function loadTrashedPages(): readonly CustomPage[] {
-  try {
-    const raw = window.localStorage.getItem(TRASHED_PAGES_KEY);
-    const parsed = raw ? JSON.parse(raw) as unknown : [];
-    return Array.isArray(parsed) ? parsed as readonly CustomPage[] : [];
-  } catch {
-    return [];
-  }
+export async function loadTrashedPages(): Promise<readonly CustomPage[]> {
+  return (await window.maxApi.pages.listArchived()).map(fromDatabasePage);
 }
 
 export async function restoreTrashedPage(id: string): Promise<CustomPage | undefined> {
-  const trash = loadTrashedPages();
-  const page = trash.find((candidate) => candidate.id === id);
-  if (!page) return undefined;
-  
-  // Re-create in SQLite for persistence
-  const created = await createPersistentCustomPage(page.title, page.icon);
-  if (created) {
-    const hydrated = {
-      ...created,
-      blocks: page.blocks,
-      favorite: page.favorite,
-      wiki: page.wiki,
-    };
-    await updatePersistentCustomPage(hydrated, 0);
-    window.localStorage.setItem(TRASHED_PAGES_KEY, JSON.stringify(trash.filter((candidate) => candidate.id !== id)));
-    return hydrated;
-  }
-  
-  // Fallback to local
-  saveCustomPages([...loadCustomPages(), { ...page, updatedAt: new Date().toISOString() }]);
-  window.localStorage.setItem(TRASHED_PAGES_KEY, JSON.stringify(trash.filter((candidate) => candidate.id !== id)));
-  return page;
+  const restored = await window.maxApi.pages.restore(id);
+  return restored.ok ? fromDatabasePage(restored.value) : undefined;
 }
 
-export function emptyPageTrash(): void {
-  window.localStorage.removeItem(TRASHED_PAGES_KEY);
+export async function emptyPageTrash(): Promise<void> {
+  await window.maxApi.pages.emptyTrash();
 }
 
 export const defaultHomeBlocks: readonly NotionBlock[] = [
-  {
-    content: 'Shop Dashboard & Overview',
-    id: 'block_welcome_h1',
-    type: 'h1',
-  },
   {
     content: 'Welcome to Max. You can type **/** anywhere to insert headings, notes, bullet lists, or embed live interactive database tables directly into this page.',
     id: 'block_welcome_callout',
@@ -145,7 +108,6 @@ export const defaultHomeBlocks: readonly NotionBlock[] = [
 ];
 
 const defaultHomeBlocksArabic: readonly NotionBlock[] = [
-  { content: 'نظرة عامة على المتجر', id: 'block_welcome_h1', type: 'h1' },
   { content: 'هذه مساحتك اليومية في ماكس. أضف ملاحظاتك أو أدرج جدولًا مباشرًا باستخدام الأمر /.', id: 'block_welcome_callout', type: 'callout' },
   { content: '', id: 'block_divider_1', type: 'divider' },
   { content: 'أولويات اليوم', id: 'block_notes_h2', type: 'h2' },
@@ -240,9 +202,9 @@ export function deleteCustomPage(id: string): void {
   const deleted = current.find((page) => page.id === id);
   if (deleted) {
     try {
-      const raw = window.localStorage.getItem(TRASHED_PAGES_KEY);
+      const raw = window.localStorage.getItem(LEGACY_TRASHED_PAGES_KEY);
       const trash = raw ? JSON.parse(raw) as readonly CustomPage[] : [];
-      window.localStorage.setItem(TRASHED_PAGES_KEY, JSON.stringify([...trash, deleted]));
+      window.localStorage.setItem(LEGACY_TRASHED_PAGES_KEY, JSON.stringify([...trash, deleted]));
     } catch {
       // The active workspace still remains usable if local recovery storage is unavailable.
     }
@@ -256,7 +218,7 @@ const HOME_PAGE_META_KEY = 'max:home_page_meta';
 
 export function loadHomePage(locale: 'ar' | 'en' = 'en'): CustomPage {
   let blocks = locale === 'ar' ? defaultHomeBlocksArabic : defaultHomeBlocks;
-  let title = '';
+  let title = locale === 'ar' ? 'الرئيسية' : 'Home';
   let icon = 'lucide:Home';
 
   try {
@@ -264,7 +226,7 @@ export function loadHomePage(locale: 'ar' | 'en' = 'en'): CustomPage {
     if (rawBlocks) {
       const parsed = JSON.parse(rawBlocks) as unknown;
       if (Array.isArray(parsed) && parsed.length > 0) {
-        blocks = parsed as readonly NotionBlock[];
+        blocks = (parsed as readonly NotionBlock[]).filter((block) => block.id !== 'block_welcome_h1');
       }
     }
 

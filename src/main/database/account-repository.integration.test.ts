@@ -68,6 +68,22 @@ describe('AccountRepository', () => {
     expect(updated.initialBalance).toBe(100);
   });
 
+  it('persists and validates provider fee defaults', () => {
+    const db = service();
+    const account = db.accounts.createAccount({
+      accountType: 'wallet',
+      feeConfig: { feeType: 'fixed_plus_percentage', fixedAmount: 1.5, maxFee: 25, minFee: 2, percentage: 1 },
+      initialBalance: 100,
+      name: 'Provider Wallet',
+    });
+
+    expect(account.feeConfig).toEqual({ feeType: 'fixed_plus_percentage', fixedAmount: 1.5, maxFee: 25, minFee: 2, percentage: 1 });
+    expect(() => db.accounts.updateAccount(account.id, {
+      ...account,
+      feeConfig: { feeType: 'percentage', percentage: 101 },
+    })).toThrowError(ObjectDomainError);
+  });
+
   it('archives account and allows reusing the name', () => {
     const db = service();
     const acc = db.accounts.createAccount({

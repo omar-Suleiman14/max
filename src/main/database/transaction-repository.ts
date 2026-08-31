@@ -64,6 +64,9 @@ export class TransactionRepository {
           t.item_id,
           i.label AS item_label,
           t.note,
+          t.quantity,
+          t.provider_fee,
+          t.service_fee,
           t.reversal_of_id,
           t.reversed_at,
           t.created_at,
@@ -150,6 +153,9 @@ export class TransactionRepository {
           t.item_id,
           i.label AS item_label,
           t.note,
+          t.quantity,
+          t.provider_fee,
+          t.service_fee,
           t.reversal_of_id,
           t.reversed_at,
           t.created_at,
@@ -226,39 +232,6 @@ export class TransactionRepository {
           : 'unpaid';
 
     return this.#transaction(() => {
-      // Inventory: oversell prevention + stock mutation for sale/purchase
-      if (draft.itemId && draft.quantity && draft.quantity > 0) {
-        const itemRow = this.database
-          .prepare('SELECT current_quantity FROM object_records WHERE id = ? AND archived_at IS NULL')
-          .get(draft.itemId) as { current_quantity: number | null } | undefined;
-
-        if (draft.transactionType === 'sale') {
-          const currentQty = itemRow?.current_quantity;
-          if (currentQty !== null && currentQty !== undefined && currentQty < draft.quantity) {
-            throw new ObjectDomainError(
-              'invalid-input',
-              `Only ${currentQty} available in stock.`,
-            );
-          }
-          // Deduct stock
-          this.database
-            .prepare('UPDATE object_records SET current_quantity = COALESCE(current_quantity, 0) - ? WHERE id = ?')
-            .run(draft.quantity, draft.itemId);
-          // Create inventory movement
-          this.database
-            .prepare('INSERT INTO inventory_movements (item_id, operation_id, quantity_delta, reason, created_at) VALUES (?, ?, ?, ?, ?)')
-            .run(draft.itemId, id, -draft.quantity, 'sale', now);
-        } else if (draft.transactionType === 'purchase') {
-          // Add stock
-          this.database
-            .prepare('UPDATE object_records SET current_quantity = COALESCE(current_quantity, 0) + ? WHERE id = ?')
-            .run(draft.quantity, draft.itemId);
-          this.database
-            .prepare('INSERT INTO inventory_movements (item_id, operation_id, quantity_delta, reason, created_at) VALUES (?, ?, ?, ?, ?)')
-            .run(draft.itemId, id, draft.quantity, 'purchase', now);
-        }
-      }
-
       this.database
         .prepare(`
           INSERT INTO shop_transactions (
@@ -282,6 +255,14 @@ export class TransactionRepository {
           now,
           now,
         );
+
+      if (draft.itemId && draft.quantity) {
+        if (draft.transactionType === 'sale') {
+          this.#applyInventoryDelta(draft.itemId, -draft.quantity, id, 'sale', now);
+        } else if (draft.transactionType === 'purchase') {
+          this.#applyInventoryDelta(draft.itemId, draft.quantity, id, 'purchase', now);
+        }
+      }
 
       for (const m of draft.movements) {
         this.database
@@ -369,8 +350,9 @@ export class TransactionRepository {
         .prepare(`
           INSERT INTO shop_transactions (
             id, transaction_type, total_amount, paid_amount, payment_status,
-            person_id, item_id, note, reversal_of_id, created_at, updated_at
-          ) VALUES (?, 'reversal', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            person_id, item_id, note, quantity, provider_fee, service_fee,
+            reversal_of_id, created_at, updated_at
+          ) VALUES (?, 'reversal', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `)
         .run(
           reversalId,
@@ -380,6 +362,9 @@ export class TransactionRepository {
           original.personId ?? null,
           original.itemId ?? null,
           reversalNote,
+          original.quantity ?? null,
+          original.providerFee ?? 0,
+          original.serviceFee ?? 0,
           original.id,
           now,
           now,
@@ -394,6 +379,13 @@ export class TransactionRepository {
             VALUES (?, ?, ?, ?, ?)
           `)
           .run(reversalId, m.accountId, oppositeType, m.amount, now);
+      }
+
+      const inventoryMovements = this.database
+        .prepare('SELECT item_id, quantity_delta FROM inventory_movements WHERE operation_id = ?')
+        .all(original.id) as { item_id: string; quantity_delta: number }[];
+      for (const inventory of inventoryMovements) {
+        this.#applyInventoryDelta(inventory.item_id, -inventory.quantity_delta, reversalId, 'reversal', now);
       }
 
       const reversalRecord = this.getTransaction(reversalId);
@@ -417,10 +409,7 @@ export class TransactionRepository {
         .prepare('SELECT item_id, quantity_delta FROM inventory_movements WHERE operation_id = ?')
         .all(id) as { item_id: string; quantity_delta: number }[];
       for (const inv of invMovements) {
-        // Reverse: add back what was deducted or deduct what was added
-        this.database
-          .prepare('UPDATE object_records SET current_quantity = COALESCE(current_quantity, 0) - ? WHERE id = ?')
-          .run(inv.quantity_delta, inv.item_id);
+        this.#updateInventoryQuantity(inv.item_id, -inv.quantity_delta);
       }
       // Delete the inventory movements
       this.database
@@ -555,15 +544,27 @@ export class TransactionRepository {
       throw new ObjectDomainError('invalid-input', 'Unpaid transactions cannot have money movements.');
     }
 
+    const quantity = draft.quantity === undefined ? undefined : Number(draft.quantity);
+    if (quantity !== undefined && (!Number.isInteger(quantity) || quantity <= 0)) {
+      throw new ObjectDomainError('invalid-input', 'Quantity must be a positive whole number.');
+    }
+    const providerFee = draft.providerFee === undefined ? undefined : Number(draft.providerFee);
+    const serviceFee = draft.serviceFee === undefined ? undefined : Number(draft.serviceFee);
+    for (const [label, fee] of [['Provider fee', providerFee], ['Service fee', serviceFee]] as const) {
+      if (fee !== undefined && (!Number.isFinite(fee) || fee < 0)) {
+        throw new ObjectDomainError('invalid-input', `${label} must be a non-negative number.`);
+      }
+    }
+
     return {
       itemId: draft.itemId,
       movements,
       note: draft.note?.trim() || undefined,
       paidAmount: Math.round(paidAmount * 100) / 100,
       personId: draft.personId,
-      providerFee: draft.providerFee ? Math.round(Number(draft.providerFee) * 100) / 100 : undefined,
-      quantity: draft.quantity ? Math.max(1, Math.round(Number(draft.quantity))) : undefined,
-      serviceFee: draft.serviceFee ? Math.round(Number(draft.serviceFee) * 100) / 100 : undefined,
+      providerFee: providerFee === undefined ? undefined : Math.round(providerFee * 100) / 100,
+      quantity,
+      serviceFee: serviceFee === undefined ? undefined : Math.round(serviceFee * 100) / 100,
       totalAmount: Math.round(totalAmount * 100) / 100,
       transactionType: draft.transactionType,
     };
@@ -591,12 +592,71 @@ export class TransactionRepository {
       .get(draft.toAccountId);
     if (!toAcc) throw new ObjectDomainError('not-found', 'Destination account not found.');
 
+    const providerFee = Number(draft.providerFee ?? 0);
+    const serviceFee = Number(draft.serviceFee ?? 0);
+    if (!Number.isFinite(providerFee) || providerFee < 0 || !Number.isFinite(serviceFee) || serviceFee < 0) {
+      throw new ObjectDomainError('invalid-input', 'Transfer fees must be non-negative numbers.');
+    }
+
     return {
       amount: Math.round(amount * 100) / 100,
       fromAccountId: draft.fromAccountId,
       note: draft.note?.trim() || undefined,
+      providerFee: Math.round(providerFee * 100) / 100,
+      serviceFee: Math.round(serviceFee * 100) / 100,
       toAccountId: draft.toAccountId,
     };
+  }
+
+  #applyInventoryDelta(
+    itemId: string,
+    delta: number,
+    operationId: string,
+    reason: 'purchase' | 'reversal' | 'sale',
+    now: string,
+  ): void {
+    const row = this.database
+      .prepare('SELECT current_quantity FROM object_records WHERE id = ? AND object_kind = ? AND archived_at IS NULL')
+      .get(itemId, 'item') as { current_quantity: number | null } | undefined;
+    if (!row) throw new ObjectDomainError('not-found', 'Selected item record not found.');
+    if (row.current_quantity === null) {
+      throw new ObjectDomainError('invalid-input', 'This item does not track inventory. Add a Quantity property value first.');
+    }
+    const next = row.current_quantity + delta;
+    if (next < 0) {
+      throw new ObjectDomainError('invalid-input', `Only ${row.current_quantity} available in stock.`);
+    }
+    this.#updateInventoryQuantity(itemId, delta);
+    this.database
+      .prepare('INSERT INTO inventory_movements (item_id, operation_id, quantity_delta, reason, created_at) VALUES (?, ?, ?, ?, ?)')
+      .run(itemId, operationId, delta, reason, now);
+  }
+
+  #updateInventoryQuantity(itemId: string, delta: number): void {
+    const result = this.database
+      .prepare('UPDATE object_records SET current_quantity = current_quantity + ? WHERE id = ? AND current_quantity IS NOT NULL')
+      .run(delta, itemId);
+    if (result.changes !== 1) {
+      throw new ObjectDomainError('invalid-input', 'This item does not track inventory.');
+    }
+    const quantity = (this.database
+      .prepare('SELECT current_quantity FROM object_records WHERE id = ?')
+      .get(itemId) as { current_quantity: number }).current_quantity;
+    const property = this.database
+      .prepare("SELECT id FROM object_properties WHERE object_kind = 'item' AND semantic_role = 'QUANTITY' AND archived_at IS NULL")
+      .get() as { id: string } | undefined;
+    if (property) {
+      const now = new Date().toISOString();
+      this.database.prepare(`
+        INSERT INTO object_property_values (record_id, property_id, value_json, normalized_value, active, updated_at)
+        VALUES (?, ?, ?, NULL, 1, ?)
+        ON CONFLICT (record_id, property_id) DO UPDATE SET
+          value_json = excluded.value_json,
+          normalized_value = NULL,
+          active = 1,
+          updated_at = excluded.updated_at
+      `).run(itemId, property.id, JSON.stringify(quantity), now);
+    }
   }
 
   #writeAudit(entityId: string, action: 'archived' | 'created' | 'updated', snapshot: unknown, now: string): void {

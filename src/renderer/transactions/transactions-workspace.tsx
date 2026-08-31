@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 
-import type { AccountDefinition } from '../../shared/account-contract';
+import { calculateFee, type AccountDefinition } from '../../shared/account-contract';
 import type { ConfigurableRecord } from '../../shared/object-contract';
 import type {
   LedgerSummary,
@@ -307,6 +307,8 @@ function TransferEditor({ accounts, locale, onClose, onSave }: Readonly<{
   const [fromAccountId, setFromAccountId] = useState(accounts[0]?.id ?? '');
   const [toAccountId, setToAccountId] = useState(accounts[1]?.id ?? '');
   const [amount, setAmount] = useState('');
+  const [providerFee, setProviderFee] = useState('0');
+  const [serviceFee, setServiceFee] = useState('0');
   const [note, setNote] = useState('');
   const [error, setError] = useState<string>();
   const [saving, setSaving] = useState(false);
@@ -314,7 +316,14 @@ function TransferEditor({ accounts, locale, onClose, onSave }: Readonly<{
   async function submit(event: FormEvent) {
     event.preventDefault();
     setSaving(true);
-    const nextError = await onSave({ amount: Number(amount), fromAccountId, note: note.trim() || undefined, toAccountId });
+    const nextError = await onSave({
+      amount: Number(amount),
+      fromAccountId,
+      note: note.trim() || undefined,
+      providerFee: Number(providerFee) || 0,
+      serviceFee: Number(serviceFee) || 0,
+      toAccountId,
+    });
     setError(nextError);
     setSaving(false);
   }
@@ -329,10 +338,18 @@ function TransferEditor({ accounts, locale, onClose, onSave }: Readonly<{
         {accounts.length < 2 && <p className="form-error" role="alert">{locale === 'ar' ? 'أنشئ حسابين على الأقل لإجراء تحويل.' : 'Create at least two accounts to make a transfer.'}</p>}
         {error && <p className="form-error" role="alert">{error}</p>}
         <div className="field-pair">
-          <label className="field"><span>{locale === 'ar' ? 'من حساب' : 'From account'}</span><select onChange={(event) => setFromAccountId(event.target.value)} value={fromAccountId}>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name} ({account.balance.toFixed(2)})</option>)}</select></label>
+          <label className="field"><span>{locale === 'ar' ? 'من حساب' : 'From account'}</span><select onChange={(event) => { const id = event.target.value; setFromAccountId(id); const account = accounts.find((candidate) => candidate.id === id); setProviderFee(String(calculateFee(Number(amount) || 0, account?.feeConfig))); }} value={fromAccountId}>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name} ({account.balance.toFixed(2)})</option>)}</select></label>
           <label className="field"><span>{locale === 'ar' ? 'إلى حساب' : 'To account'}</span><select onChange={(event) => setToAccountId(event.target.value)} value={toAccountId}>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name} ({account.balance.toFixed(2)})</option>)}</select></label>
         </div>
-        <label className="field"><span>{transactionsCopy(locale, 'totalAmount')}</span><input data-autofocus="true" min="0.01" onChange={(event) => setAmount(event.target.value)} placeholder="0.00" required step="0.01" type="number" value={amount} /></label>
+        <label className="field"><span>{transactionsCopy(locale, 'totalAmount')}</span><input data-autofocus="true" min="0.01" onChange={(event) => { const value = event.target.value; setAmount(value); const account = accounts.find((candidate) => candidate.id === fromAccountId); setProviderFee(String(calculateFee(Number(value) || 0, account?.feeConfig))); }} placeholder="0.00" required step="0.01" type="number" value={amount} /></label>
+        <div className="field-pair">
+          <label className="field"><span>{transactionsCopy(locale, 'providerFee')}</span><input min="0" onChange={(event) => setProviderFee(event.target.value)} step="0.01" type="number" value={providerFee} /></label>
+          <label className="field"><span>{transactionsCopy(locale, 'serviceFee')}</span><input min="0" onChange={(event) => setServiceFee(event.target.value)} step="0.01" type="number" value={serviceFee} /></label>
+        </div>
+        <div className="transfer-fee-breakdown">
+          <div className="fee-row"><span>{transactionsCopy(locale, 'transferSourceDebit')}:</span><strong>{((Number(amount) || 0) + (Number(providerFee) || 0)).toFixed(2)}</strong></div>
+          <div className="fee-row fee-row--total"><span>{transactionsCopy(locale, 'transferDestinationCredit')}:</span><strong>{((Number(amount) || 0) + (Number(serviceFee) || 0)).toFixed(2)}</strong></div>
+        </div>
         <label className="field"><span>{transactionsCopy(locale, 'note')}</span><input onChange={(event) => setNote(event.target.value)} placeholder={locale === 'ar' ? 'مثال: تحويل من الخزنة إلى البنك' : 'e.g., Cash drawer deposit to bank'} value={note} /></label>
         <footer className="form-footer"><Button onClick={onClose}>{transactionsCopy(locale, 'cancel')}</Button><Button disabled={saving || accounts.length < 2} type="submit" variant="primary">{locale === 'ar' ? 'تسجيل التحويل' : 'Record transfer'}</Button></footer>
       </form>

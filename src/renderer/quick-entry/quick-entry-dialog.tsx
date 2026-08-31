@@ -26,7 +26,7 @@ import type { TransactionRecord } from '../../shared/transaction-contract';
 import type { Locale } from '../app/i18n';
 import { Button } from '../ui/button';
 import { FocusedOverlay } from '../ui/focused-overlay';
-import { quickEntryCopy } from './quick-entry-i18n';
+import { quickEntryCopy, quickEntryOversellCopy } from './quick-entry-i18n';
 
 type QuickEntryDialogProps = Readonly<{
   initialOperation?: OperationKind;
@@ -110,11 +110,11 @@ export function QuickEntryDialog({
           setToAccountId(aList[1].id);
         }
       } catch {
-        setError('Failed to load shop catalog.');
+        setError(quickEntryCopy(locale, 'catalogLoadFailed'));
       }
     }
     void loadData();
-  }, []);
+  }, [locale]);
 
   // Fetch price suggestion when item changes
   const updateItemSuggestion = useCallback(
@@ -196,14 +196,14 @@ export function QuickEntryDialog({
     setError(undefined);
 
     if (totalAmountNum <= 0) {
-      setError('Please enter a valid amount greater than zero.');
+      setError(quickEntryCopy(locale, 'amountInvalid'));
       setSubmitting(false);
       return;
     }
 
     if (operationKind === 'sale') {
       if (selectedItem && currentStock !== undefined && currentStock !== null && currentStock < (Number(quantity) || 1)) {
-        setError(`Only ${currentStock} units in stock. Cannot oversell.`);
+        setError(quickEntryOversellCopy(locale, currentStock));
         setSubmitting(false);
         return;
       }
@@ -216,7 +216,7 @@ export function QuickEntryDialog({
 
       if (paymentMode === 'partial') {
         if (paidNowNum <= 0 || paidNowNum >= totalAmountNum) {
-          setError('Paid amount must be between 0 and total amount.');
+          setError(quickEntryCopy(locale, 'paidAmountInvalid'));
           setSubmitting(false);
           return;
         }
@@ -240,12 +240,12 @@ export function QuickEntryDialog({
       }
     } else if (operationKind === 'transfer') {
       if (!selectedAccountId || !toAccountId) {
-        setError('Both source and destination accounts are required.');
+        setError(quickEntryCopy(locale, 'transferAccountsRequired'));
         setSubmitting(false);
         return;
       }
       if (selectedAccountId === toAccountId) {
-        setError('Source and destination accounts must be different.');
+        setError(quickEntryCopy(locale, 'transferAccountsDifferent'));
         setSubmitting(false);
         return;
       }
@@ -268,7 +268,9 @@ export function QuickEntryDialog({
       paymentMode,
       personId: selectedPersonId || undefined,
       providerFee: operationKind === 'transfer' ? calculatedProviderFee : undefined,
-      quantity: (operationKind === 'sale' || operationKind === 'purchase') ? (Number(quantity) || 1) : undefined,
+      quantity: (operationKind === 'sale' || operationKind === 'purchase') && selectedItem?.currentQuantity !== undefined
+        ? (Number(quantity) || 1)
+        : undefined,
       toAccountId: operationKind === 'transfer' ? toAccountId : undefined,
       totalAmount: totalAmountNum,
     };
@@ -309,7 +311,7 @@ export function QuickEntryDialog({
       </header>
 
       {/* Operation Switcher */}
-      <div className="operation-switcher-bar" role="tablist" aria-label="Operation types">
+      <div className="operation-switcher-bar" role="tablist" aria-label={quickEntryCopy(locale, 'operationTypes')}>
         {operations.map((op) => {
           const Icon = op.icon;
           const isActive = operationKind === op.id;
@@ -385,7 +387,7 @@ export function QuickEntryDialog({
                 <span>{quickEntryCopy(locale, 'note')}</span>
                 <input
                   onChange={(e) => setCustomNote(e.target.value)}
-                  placeholder={operationKind === 'sale' ? 'e.g., Screen Protector + Fitting' : 'e.g., Wholesale batch #12'}
+                  placeholder={quickEntryCopy(locale, operationKind === 'sale' ? 'salePlaceholder' : 'purchasePlaceholder')}
                   value={customNote}
                 />
               </label>
@@ -407,7 +409,7 @@ export function QuickEntryDialog({
                 <input
                   data-autofocus="true"
                   onChange={(e) => setCustomNote(e.target.value)}
-                  placeholder={operationKind === 'expense' ? 'e.g., Shop electricity bill, packaging supplies' : 'e.g., Consulting service, maintenance fee'}
+                  placeholder={quickEntryCopy(locale, operationKind === 'expense' ? 'expensePlaceholder' : 'incomePlaceholder')}
                   required
                   value={customNote}
                 />
@@ -416,7 +418,7 @@ export function QuickEntryDialog({
               <label className="field">
                 <span>{quickEntryCopy(locale, 'person')}</span>
                 <select onChange={(e) => setSelectedPersonId(e.target.value)} value={selectedPersonId}>
-                  <option value="">-- Optional contact --</option>
+                  <option value="">-- {quickEntryCopy(locale, 'optionalContact')} --</option>
                   {people.map((p) => (
                     <option key={p.id} value={p.id}>{p.label}</option>
                   ))}
@@ -473,7 +475,7 @@ export function QuickEntryDialog({
               <span>{quickEntryCopy(locale, 'note')}</span>
               <input
                 onChange={(e) => setCustomNote(e.target.value)}
-                placeholder="e.g., Daily cash deposit to bank"
+                placeholder={quickEntryCopy(locale, 'transferPlaceholder')}
                 value={customNote}
               />
             </label>
@@ -662,7 +664,7 @@ export function QuickEntryDialog({
                 <label className="field">
                   <span>{quickEntryCopy(locale, 'collector')}</span>
                   <select onChange={(e) => setCollectorId(e.target.value)} value={collectorId}>
-                    <option value="">None</option>
+                    <option value="">{quickEntryCopy(locale, 'noCollector')}</option>
                     {people.map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.label}
@@ -678,7 +680,7 @@ export function QuickEntryDialog({
               <label className="field" style={{ marginTop: '0.75rem' }}>
                 <span>{quickEntryCopy(locale, 'supplier')}</span>
                 <select onChange={(e) => setSelectedPersonId(e.target.value)} value={selectedPersonId}>
-                  <option value="">-- Optional supplier --</option>
+                  <option value="">-- {quickEntryCopy(locale, 'optionalSupplier')} --</option>
                   {people.map((p) => (
                     <option key={p.id} value={p.id}>{p.label}</option>
                   ))}

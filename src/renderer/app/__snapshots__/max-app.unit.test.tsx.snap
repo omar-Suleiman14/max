@@ -723,7 +723,7 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
       </span>
       <bdi>
         <strong>
-          الرئيسية
+          Home
         </strong>
       </bdi>
     </div>
@@ -798,7 +798,7 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
     </div>
   </header>
   <main
-    aria-label="الرئيسية"
+    aria-label="Home"
     class="content"
     data-custom-page="false"
     data-page="home"
@@ -848,7 +848,7 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
           <input
             class="custom-page-title-input"
             placeholder="نظرة عامة على المتجر"
-            value=""
+            value="Home"
           />
         </div>
       </div>
@@ -858,105 +858,6 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
         <div
           class="notion-editor-canvas"
         >
-          <div
-            class="notion-block-row"
-            data-drag-over="false"
-            data-dragging="false"
-            data-type="h1"
-          >
-            <div
-              class="notion-block-gutter"
-            >
-              <button
-                aria-label="Add block below"
-                class="notion-gutter-btn notion-gutter-btn--add"
-                title="إضافة سطر"
-                type="button"
-              >
-                <svg
-                  aria-hidden="true"
-                  class="lucide lucide-plus"
-                  fill="none"
-                  height="14"
-                  stroke="currentColor"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  viewBox="0 0 24 24"
-                  width="14"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M5 12h14"
-                  />
-                  <path
-                    d="M12 5v14"
-                  />
-                </svg>
-              </button>
-              <button
-                aria-label="خيارات السطر"
-                class="notion-gutter-btn notion-gutter-btn--drag"
-                draggable="true"
-                title="سحب للترتيب"
-                type="button"
-              >
-                <svg
-                  aria-hidden="true"
-                  class="lucide lucide-grip-vertical"
-                  fill="none"
-                  height="14"
-                  stroke="currentColor"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  viewBox="0 0 24 24"
-                  width="14"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <circle
-                    cx="9"
-                    cy="12"
-                    r="1"
-                  />
-                  <circle
-                    cx="9"
-                    cy="5"
-                    r="1"
-                  />
-                  <circle
-                    cx="9"
-                    cy="19"
-                    r="1"
-                  />
-                  <circle
-                    cx="15"
-                    cy="12"
-                    r="1"
-                  />
-                  <circle
-                    cx="15"
-                    cy="5"
-                    r="1"
-                  />
-                  <circle
-                    cx="15"
-                    cy="19"
-                    r="1"
-                  />
-                </svg>
-              </button>
-            </div>
-            <div
-              class="notion-block-body"
-            >
-              <input
-                class="notion-heading-input notion-heading-input--h1"
-                placeholder="عنوان 1..."
-                value="Shop Dashboard & Overview"
-              />
-            </div>
-          </div>
           <div
             class="notion-block-row"
             data-drag-over="false"

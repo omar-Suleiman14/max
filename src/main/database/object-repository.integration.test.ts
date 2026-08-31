@@ -43,6 +43,18 @@ function service(): DatabaseService {
 /* ------------------------------------------------------------------ */
 
 describe('property definitions', () => {
+  it('persists language-independent semantic roles and enforces compatible types', () => {
+    const db = service();
+    db.objects.createProperty({ ...draft('اسم المنتج', 'text', 'item', { required: true }), semanticRole: 'DISPLAY_NAME' });
+    db.objects.createProperty({ ...draft('سعرنا', 'money'), semanticRole: 'PRICE' });
+    db.objects.createProperty({ ...draft('عدد القطع', 'number', 'item', { required: true }), semanticRole: 'QUANTITY' });
+
+    expect(db.objects.listProperties('item').map(({ semanticRole }) => semanticRole)).toEqual(['DISPLAY_NAME', 'PRICE', 'QUANTITY']);
+    expect(() => db.objects.createProperty({ ...draft('سعر خاطئ', 'checkbox'), semanticRole: 'PRICE' })).toThrowError();
+    expect(() => db.objects.createProperty({ ...draft('سعر آخر', 'money'), semanticRole: 'PRICE' })).toThrowError(/Only one active PRICE/);
+    db.close();
+  });
+
   it('creates every initial property type and returns correct metadata', () => {
     const db = service();
     const types: PropertyType[] = [

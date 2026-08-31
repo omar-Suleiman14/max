@@ -40,6 +40,18 @@ const maxApi: MaxApi = Object.freeze({
     validate: (blueprint: unknown) =>
       ipcRenderer.invoke(IPC_CHANNELS.blueprintValidate, blueprint) as ReturnType<MaxApi['blueprints']['validate']>,
   }),
+  cloudBackups: Object.freeze({
+    create: (sessionToken: string, trigger?: BackupTrigger) =>
+      ipcRenderer.invoke(IPC_CHANNELS.cloudBackupCreate, sessionToken, trigger) as ReturnType<MaxApi['cloudBackups']['create']>,
+    getStatus: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.cloudBackupStatus) as ReturnType<MaxApi['cloudBackups']['getStatus']>,
+    list: (sessionToken: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.cloudBackupList, sessionToken) as ReturnType<MaxApi['cloudBackups']['list']>,
+    restore: (sessionToken: string, backupId: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.cloudBackupRestore, sessionToken, backupId) as ReturnType<MaxApi['cloudBackups']['restore']>,
+    runScheduled: (sessionToken: string, schedule: 'daily' | 'manual' | 'weekly') =>
+      ipcRenderer.invoke(IPC_CHANNELS.cloudBackupRunScheduled, sessionToken, schedule) as ReturnType<MaxApi['cloudBackups']['runScheduled']>,
+  }),
   objects: Object.freeze({
     archiveProperty: (id: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.objectPropertyArchive, id) as ReturnType<MaxApi['objects']['archiveProperty']>,
@@ -107,6 +119,8 @@ const maxApi: MaxApi = Object.freeze({
       ipcRenderer.invoke(IPC_CHANNELS.shopCompleteOnboarding, draft) as ReturnType<MaxApi['shop']['completeOnboarding']>,
     getMetadata: () =>
       ipcRenderer.invoke(IPC_CHANNELS.shopGetMetadata) as ReturnType<MaxApi['shop']['getMetadata']>,
+    resetDemoData: (locale: 'ar' | 'en') =>
+      ipcRenderer.invoke(IPC_CHANNELS.shopResetDemoData, locale) as ReturnType<MaxApi['shop']['resetDemoData']>,
     seedDemoData: (locale: 'ar' | 'en') =>
       ipcRenderer.invoke(IPC_CHANNELS.shopSeedDemoData, locale) as ReturnType<MaxApi['shop']['seedDemoData']>,
     updateMetadata: (patch: Partial<ShopMetadata>) =>
@@ -149,8 +163,14 @@ const maxApi: MaxApi = Object.freeze({
       ipcRenderer.invoke(IPC_CHANNELS.pageArchive, id) as ReturnType<MaxApi['pages']['archive']>,
     create: (draft: CustomPageDraft) =>
       ipcRenderer.invoke(IPC_CHANNELS.pageCreate, draft) as ReturnType<MaxApi['pages']['create']>,
+    emptyTrash: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.pageEmptyTrash) as ReturnType<MaxApi['pages']['emptyTrash']>,
     list: () =>
       ipcRenderer.invoke(IPC_CHANNELS.pageList) as ReturnType<MaxApi['pages']['list']>,
+    listArchived: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.pageListArchived) as ReturnType<MaxApi['pages']['listArchived']>,
+    restore: (id: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.pageRestore, id) as ReturnType<MaxApi['pages']['restore']>,
     update: (id: string, draft: CustomPageDraft) =>
       ipcRenderer.invoke(IPC_CHANNELS.pageUpdate, id, draft) as ReturnType<MaxApi['pages']['update']>,
   }),

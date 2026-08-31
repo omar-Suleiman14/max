@@ -25,3 +25,22 @@ export type RestoreResult = Readonly<{
   restored: boolean;
   safetyRollbackOccurred: boolean;
 }>;
+
+export type CloudBackupMetadata = Readonly<{
+  checksum: string;
+  createdAt: string;
+  id: string;
+  sizeBytes: number;
+  trigger: BackupTrigger;
+}>;
+
+export type CloudBackupCreateResult = Readonly<{
+  cloudBackup?: CloudBackupMetadata;
+  cloudError?: string;
+  localBackup: BackupMetadata;
+}>;
+
+export type CloudBackupStatus = Readonly<{
+  configured: boolean;
+  lastSuccessfulCloudBackupAt?: string;
+}>;

@@ -6,7 +6,7 @@ compatibility_date = "2024-09-23"
 # Secrets (such as CLERK_SECRET_KEY) must be set via `wrangler secret put CLERK_SECRET_KEY` and never committed.
 [[r2_buckets]]
 binding = "BACKUPS_BUCKET"
-bucket_name = "max-cloud-backups"
+bucket_name = "max-backups"
 
 [observability]
 enabled = true

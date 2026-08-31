@@ -77,6 +77,10 @@ const shopApi = {
     return Promise.resolve({ ok: true as const, value: shopMetadataState });
   }),
   getMetadata: vi.fn(() => Promise.resolve(shopMetadataState)),
+  resetDemoData: vi.fn(() => Promise.resolve({
+    ok: true as const,
+    value: { accounts: 5, items: 24, pages: 4, people: 8, transactions: 15 },
+  })),
   seedDemoData: vi.fn(() => Promise.resolve({
     ok: true as const,
     value: { accounts: 3, items: 3, pages: 2, people: 3, transactions: 7 },
@@ -266,7 +270,13 @@ const pagesApi = {
         },
       }),
   ),
+  emptyTrash: vi.fn((): Promise<TestMutationResult<null>> => Promise.resolve({ ok: true, value: null })),
   list: vi.fn((): Promise<readonly CustomPage[]> => Promise.resolve([])),
+  listArchived: vi.fn((): Promise<readonly CustomPage[]> => Promise.resolve([])),
+  restore: vi.fn((): Promise<TestMutationResult<CustomPage>> => Promise.resolve({
+    ok: true,
+    value: { createdAt: '2026-08-30', id: 'restored', layoutJson: '{"blocks":[]}', name: 'Restored', position: 0, updatedAt: '2026-08-30' },
+  })),
   update: vi.fn(
     (id: string, draft: CustomPageDraft): Promise<TestMutationResult<CustomPage>> =>
       Promise.resolve({
@@ -310,6 +320,14 @@ const backupsApi = {
   verify: vi.fn(() => Promise.resolve({ checksumMatch: true, sqliteIntegrityPassed: true, valid: true })),
 };
 
+const cloudBackupsApi = {
+  create: vi.fn(),
+  getStatus: vi.fn(() => Promise.resolve({ configured: false })),
+  list: vi.fn(() => Promise.resolve({ ok: true as const, value: [] })),
+  restore: vi.fn(),
+  runScheduled: vi.fn(() => Promise.resolve({ ok: true as const, value: null })),
+};
+
 beforeEach(() => {
   window.localStorage.clear();
   document.documentElement.lang = 'en';
@@ -343,6 +361,7 @@ beforeEach(() => {
       accounts: accountsApi,
       backups: backupsApi,
       blueprints: blueprintApi,
+      cloudBackups: cloudBackupsApi,
       objects: objectApi,
       pages: pagesApi,
       people: peopleApi,
@@ -371,6 +390,7 @@ beforeEach(() => {
   pagesApi.archive.mockClear();
   pagesApi.create.mockClear();
   pagesApi.list.mockClear();
+  pagesApi.listArchived.mockClear();
   pagesApi.update.mockClear();
   resetWorkspace.mockClear();
   scrollIntoView.mockClear();
@@ -428,11 +448,12 @@ describe('Max shell', () => {
     const user = userEvent.setup();
     const { container } = render(<MaxApp />);
     await screen.findByRole('button', { name: 'Home' });
-    await user.click(screen.getByRole('button', { name: 'العربية' }));
+    await user.click(screen.getByRole('button', { name: 'Settings' }));
+    await user.click(screen.getByRole('radio', { name: /^العربية/ }));
 
     expect(document.documentElement).toHaveAttribute('lang', 'ar');
     expect(document.documentElement).toHaveAttribute('dir', 'rtl');
-    await user.click(screen.getByRole('button', { name: 'الإعدادات' }));
+    await user.click(screen.getByRole('button', { name: 'المظهر' }));
     const systemTheme = screen.getByRole('radio', { name: 'النظام' });
     systemTheme.focus();
     await user.keyboard('{ArrowLeft}');
@@ -468,9 +489,10 @@ describe('Max shell', () => {
     await user.click(appearanceSection);
     expect(appearanceSection).toHaveAttribute('aria-current', 'page');
     expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
-    await user.click(screen.getByRole('button', { name: 'Add demo data' }));
-    await waitFor(() => expect(shopApi.seedDemoData).toHaveBeenCalledWith('en'));
-    expect(screen.getByRole('status')).toHaveTextContent('Demo data added.');
+    await user.click(screen.getByRole('button', { name: 'Prepare demo store' }));
+    await user.click(screen.getByRole('button', { name: 'Confirm reset' }));
+    await waitFor(() => expect(shopApi.resetDemoData).toHaveBeenCalledWith('en'));
+    expect(screen.getByRole('status')).toHaveTextContent('Demo store is ready.');
     await user.click(screen.getByRole('radio', { name: 'Dark' }));
     expect(document.documentElement).toHaveAttribute('data-theme', 'dark');
     expect(window.localStorage.getItem('max.ui.theme')).toBe('dark');
@@ -564,9 +586,9 @@ describe('Max shell', () => {
     await screen.findByRole('button', { name: 'Home' });
 
     await user.keyboard('{Control>}s{/Control}');
-    expect(await screen.findByRole('heading', { name: 'Quick Action' })).toBeInTheDocument();
-    for (const op of ['Sell', 'Purchase', 'Expense', 'Income', 'Transfer']) {
-      expect(screen.getByRole('tab', { name: op })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'What do you want to record?' })).toBeInTheDocument();
+    for (const choice of ['Quick sale', 'Sale', 'Purchase', 'Expense', 'Income', 'Account transfer', 'Adjustment']) {
+      expect(screen.getByRole('button', { name: new RegExp(`^${choice}`, 'i') })).toBeInTheDocument();
     }
     await user.keyboard('{Escape}');
     await user.click(screen.getByRole('button', { name: 'Databases' }));
@@ -585,9 +607,10 @@ describe('Max shell', () => {
     render(<MaxApp />);
     await screen.findByRole('button', { name: 'Home' });
     await user.keyboard('{Control>}s{/Control}');
+    await user.click(await screen.findByRole('button', { name: /Quick sale/i }));
     await user.selectOptions(await screen.findByLabelText('Select item or enter note'), 'priced-item');
 
-    expect(screen.getByPlaceholderText('e.g., Screen Protector + Fitting')).toHaveValue('Screen Protector');
+    expect(screen.getByPlaceholderText('e.g., Screen protector with fitting')).toHaveValue('Screen Protector');
     await waitFor(() => expect(screen.getByPlaceholderText('0.00')).toHaveValue(75));
   });
 

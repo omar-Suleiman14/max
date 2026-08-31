@@ -56,7 +56,7 @@ describe('BlueprintService', () => {
     db.blueprints.importBlueprint(phoneShopBlueprint);
 
     const itemProps = db.objects.listProperties('item');
-    expect(itemProps).toHaveLength(6);
+    expect(itemProps).toHaveLength(7);
     expect(itemProps.map((p) => p.name)).toEqual([
       'Model',
       'Brand',
@@ -64,6 +64,7 @@ describe('BlueprintService', () => {
       'IMEI',
       'Cost Price',
       'Selling Price',
+      'Stock',
     ]);
 
     const personProps = db.objects.listProperties('person');

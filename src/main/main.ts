@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog, session } from 'electron';
 import { join } from 'node:path';
 
+import { CloudBackupService } from './cloud/cloud-backup-service';
 import { DatabaseService } from './database/database-service';
 import { registerIpcHandlers, removeIpcHandlers } from './ipc/register-ipc-handlers';
 import { getPlatformAdapter } from './platform/platform-adapter';
@@ -10,6 +11,10 @@ import { runSmokeTest } from './smoke/run-smoke-test';
 import { createMainWindow } from './window/create-main-window';
 
 const platform = getPlatformAdapter();
+if (process.env.MAX_SMOKE_TEST === '1') {
+  // Deterministic screenshots on CI/virtualized GPUs.
+  app.disableHardwareAcceleration();
+}
 const handledInstallerLifecycle =
   platform.platform === 'windows' && handleWindowsSquirrelLifecycle();
 
@@ -47,8 +52,14 @@ if (handledInstallerLifecycle) {
 
       database = new DatabaseService(join(app.getPath('userData'), 'max.sqlite'));
       database.initialize();
+      const cloudBackups = new CloudBackupService(
+        database.backups,
+        MAX_BACKUP_WORKER_URL,
+        join(app.getPath('userData'), 'cloud-backup-state.json'),
+      );
 
       registerIpcHandlers({
+        cloudBackups,
         database,
         developmentServerUrl: MAIN_WINDOW_VITE_DEV_SERVER_URL,
         platform,

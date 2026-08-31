@@ -34,6 +34,15 @@ const config = {
     asar: true,
     electronZipDir: join(__dirname, '.cache', 'electron-zips'),
     executableName: 'max',
+    ignore: [
+      /^\/(?:\.cache|\.npm-cache|artifacts|backups|out)(?:\/|$)/,
+      /^\/\.env(?:\.|$)/,
+      /^\/(?:\.github|docs|scripts|src|worker)(?:\/|$)/,
+      /^\/node_modules\/(?:\.cache|\.vite)(?:\/|$)/,
+      /^\/node_modules\/\.package-lock\.json$/,
+      /^\/(?:AGENTS\.md|README\.md|eslint\.config\.mjs|forge\.config\.cjs|index\.html|tsconfig[^/]*|vite\.[^/]*|vitest\.[^/]*)$/,
+      /^\/(?:\.editorconfig|\.gitattributes|\.gitignore|\.npmrc|\.nvmrc)$/,
+    ],
   },
   rebuildConfig: {},
   makers: [
@@ -82,7 +91,10 @@ const config = {
       [FuseV1Options.EnableCookieEncryption]: true,
       [FuseV1Options.EnableNodeOptionsEnvironmentVariable]: false,
       [FuseV1Options.EnableNodeCliInspectArguments]: false,
-      [FuseV1Options.EnableEmbeddedAsarIntegrityValidation]: true,
+      // Forge 6 uses a packager generation that does not embed the Windows PE
+      // ASAR integrity resource required by Electron 44. Keep the app ASAR-only
+      // and disable this fuse so the signed executable remains launchable.
+      [FuseV1Options.EnableEmbeddedAsarIntegrityValidation]: false,
       [FuseV1Options.OnlyLoadAppFromAsar]: true,
     }),
   ],

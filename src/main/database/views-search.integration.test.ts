@@ -65,6 +65,13 @@ describe('ViewsPagesRepository & SearchService', () => {
 
     db.viewsPages.archivePage(page.id);
     expect(db.viewsPages.listPages()).toHaveLength(0);
+    expect(db.viewsPages.listArchivedPages()[0]?.id).toBe(page.id);
+    expect(db.viewsPages.restorePage(page.id).id).toBe(page.id);
+    expect(db.viewsPages.listPages()[0]?.name).toBe('Updated Dashboard');
+
+    db.viewsPages.archivePage(page.id);
+    db.viewsPages.emptyPageTrash();
+    expect(db.viewsPages.listArchivedPages()).toEqual([]);
   });
 
   it('normalizes Arabic and English search terms ignoring diacritics and letter variants', () => {
@@ -162,6 +169,32 @@ describe('ViewsPagesRepository & SearchService', () => {
       second.initialize();
       expect(second.search.query('persistent')[0]?.id).toBe(account.id);
       second.close();
+    } finally {
+      rmSync(directory, { force: true, recursive: true });
+    }
+  });
+
+  it('keeps a restored page and its original identity across database restarts', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'max-page-trash-'));
+    const filename = join(directory, 'max.sqlite');
+    try {
+      const first = new DatabaseService(filename);
+      first.initialize();
+      const page = first.viewsPages.createPage({ layoutJson: '{"blocks":[]}', name: 'Client checklist' });
+      first.viewsPages.archivePage(page.id);
+      first.close();
+
+      const second = new DatabaseService(filename);
+      second.initialize();
+      expect(second.viewsPages.listArchivedPages()[0]?.id).toBe(page.id);
+      expect(second.viewsPages.restorePage(page.id).id).toBe(page.id);
+      second.close();
+
+      const third = new DatabaseService(filename);
+      third.initialize();
+      expect(third.viewsPages.listPages()[0]?.id).toBe(page.id);
+      expect(third.viewsPages.listPages()[0]?.name).toBe('Client checklist');
+      third.close();
     } finally {
       rmSync(directory, { force: true, recursive: true });
     }

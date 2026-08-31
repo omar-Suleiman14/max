@@ -11,6 +11,7 @@ import type {
   PropertyDraft,
   PropertyRules,
   PropertyValue,
+  SemanticRole,
 } from '../../shared/object-contract';
 
 type PropertyRow = Readonly<{
@@ -21,11 +22,13 @@ type PropertyRow = Readonly<{
   position: number;
   property_type: PropertyDefinition['type'];
   rules_json: string;
+  semantic_role: SemanticRole | null;
   updated_at: string;
 }>;
 
 type RecordRow = Readonly<{
   created_at: string;
+  current_quantity: number | null;
   id: string;
   label: string;
   object_kind: ObjectKind;
@@ -89,6 +92,19 @@ function validatePropertyDraft(draft: PropertyDraft): PropertyDraft {
   if (draft.type === 'relation' && !rules.relationTarget) {
     throw new ObjectDomainError('invalid-input', 'Relation properties need an Item or Person target.');
   }
+  if (draft.semanticRole) {
+    if (draft.objectKind !== 'item') {
+      throw new ObjectDomainError('invalid-input', 'Semantic roles are available only for item properties.');
+    }
+    const compatible = draft.semanticRole === 'DISPLAY_NAME'
+      ? ['text', 'select', 'status'].includes(draft.type)
+      : draft.semanticRole === 'PRICE'
+        ? ['money', 'number'].includes(draft.type)
+        : draft.type === 'number';
+    if (!compatible) {
+      throw new ObjectDomainError('invalid-input', `${draft.semanticRole} is not compatible with ${draft.type}.`);
+    }
+  }
   if (rules.minimum !== undefined && (!Number.isFinite(rules.minimum))) {
     throw new ObjectDomainError('invalid-input', 'Minimum must be a finite number.');
   }
@@ -114,7 +130,7 @@ function validatePropertyDraft(draft: PropertyDraft): PropertyDraft {
     throw new ObjectDomainError('invalid-input', 'Minimum length cannot be greater than maximum length.');
   }
 
-  return { ...draft, name, rules };
+  return { ...draft, name, rules, semanticRole: draft.semanticRole };
 }
 
 function rowToProperty(row: PropertyRow): PropertyDefinition {
@@ -125,6 +141,7 @@ function rowToProperty(row: PropertyRow): PropertyDefinition {
     objectKind: row.object_kind,
     position: row.position,
     rules: JSON.parse(row.rules_json) as PropertyRules,
+    semanticRole: row.semantic_role ?? undefined,
     type: row.property_type,
     updatedAt: row.updated_at,
   };
@@ -148,7 +165,7 @@ export class ObjectRepository {
   listProperties(objectKind: ObjectKind): readonly PropertyDefinition[] {
     return (this.database
       .prepare(`
-        SELECT id, object_kind, name, property_type, rules_json, position, created_at, updated_at
+        SELECT id, object_kind, name, property_type, rules_json, semantic_role, position, created_at, updated_at
         FROM object_properties
         WHERE object_kind = ? AND archived_at IS NULL
         ORDER BY position, id
@@ -181,11 +198,14 @@ export class ObjectRepository {
         this.database
           .prepare(`
             INSERT INTO object_properties
-              (id, object_kind, name, property_type, rules_json, position, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+              (id, object_kind, name, property_type, rules_json, semantic_role, position, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
           `)
-          .run(id, draft.objectKind, draft.name, draft.type, JSON.stringify(draft.rules), positionRow.position, now, now);
+          .run(id, draft.objectKind, draft.name, draft.type, JSON.stringify(draft.rules), draft.semanticRole ?? null, positionRow.position, now, now);
       } catch (error) {
+        if (/semantic_role/.test(String(error))) {
+          throw new ObjectDomainError('schema-conflict', `Only one active ${draft.semanticRole} property is allowed.`);
+        }
         if (/object_properties(?:_active_name|\.object_kind|\.name)/.test(String(error))) {
           throw new ObjectDomainError('unique', 'Property names must be unique within this schema.');
         }
@@ -227,11 +247,14 @@ export class ObjectRepository {
         this.database
           .prepare(`
             UPDATE object_properties
-            SET name = ?, property_type = ?, rules_json = ?, updated_at = ?
+            SET name = ?, property_type = ?, rules_json = ?, semantic_role = ?, updated_at = ?
             WHERE id = ? AND archived_at IS NULL
           `)
-          .run(draft.name, draft.type, JSON.stringify(draft.rules), now, id);
+          .run(draft.name, draft.type, JSON.stringify(draft.rules), draft.semanticRole ?? null, now, id);
       } catch (error) {
+        if (/semantic_role/.test(String(error))) {
+          throw new ObjectDomainError('schema-conflict', `Only one active ${draft.semanticRole} property is allowed.`);
+        }
         if (/object_properties(?:_active_name|\.object_kind|\.name)/.test(String(error))) {
           throw new ObjectDomainError('unique', 'Property names must be unique within this schema.');
         }
@@ -248,6 +271,15 @@ export class ObjectRepository {
         }
       }
 
+      if (draft.semanticRole === 'QUANTITY') {
+        for (const record of existingRecords) {
+          const value = record.values[id];
+          if (typeof value === 'number') {
+            this.#setInventoryQuantity(record.id, value, record.currentQuantity, now, 'opening');
+          }
+        }
+      }
+
       const property = this.#getProperty(id);
       this.#writeAudit('property', id, 'updated', property, now);
       return property;
@@ -260,6 +292,9 @@ export class ObjectRepository {
     this.#transaction(() => {
       this.database.prepare('UPDATE object_properties SET archived_at = ?, updated_at = ? WHERE id = ?').run(now, now, id);
       this.database.prepare('UPDATE object_property_values SET active = 0, updated_at = ? WHERE property_id = ?').run(now, id);
+      if (property.semanticRole === 'QUANTITY') {
+        this.database.prepare("UPDATE object_records SET current_quantity = NULL, updated_at = ? WHERE object_kind = 'item' AND archived_at IS NULL").run(now);
+      }
       this.#writeAudit('property', id, 'archived', property, now);
     });
   }
@@ -267,7 +302,7 @@ export class ObjectRepository {
   listRecords(objectKind: ObjectKind): readonly ConfigurableRecord[] {
     const records = this.database
       .prepare(`
-        SELECT id, object_kind, label, template_id, position, created_at, updated_at
+        SELECT id, object_kind, label, template_id, current_quantity, position, created_at, updated_at
         FROM object_records
         WHERE object_kind = ? AND archived_at IS NULL
         ORDER BY position, label COLLATE NOCASE, id
@@ -296,6 +331,7 @@ export class ObjectRepository {
 
     return records.map((record) => ({
       createdAt: record.created_at,
+      currentQuantity: record.current_quantity ?? undefined,
       id: record.id,
       label: record.label,
       objectKind: record.object_kind,
@@ -316,6 +352,7 @@ export class ObjectRepository {
         .prepare('INSERT INTO object_records (id, object_kind, label, template_id, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
         .run(id, draft.objectKind, draft.label, draft.templateId ?? null, position, now, now);
       this.#writeValues(id, draft, now);
+      this.#syncInventoryFromDraft(id, draft, undefined, now);
       const record = this.#getRecord(id);
       this.#writeAudit('record', id, 'created', record, now);
       return record;
@@ -334,6 +371,7 @@ export class ObjectRepository {
       this.database.prepare('UPDATE object_records SET label = ?, template_id = ?, updated_at = ? WHERE id = ?').run(draft.label, draft.templateId ?? null, now, id);
       this.database.prepare('UPDATE object_property_values SET active = 0, updated_at = ? WHERE record_id = ?').run(now, id);
       this.#writeValues(id, draft, now);
+      this.#syncInventoryFromDraft(id, draft, previous.currentQuantity, now);
       const record = this.#getRecord(id);
       this.#writeAudit('record', id, 'updated', record, now);
       return record;
@@ -391,7 +429,7 @@ export class ObjectRepository {
   #getProperty(id: string): PropertyDefinition {
     const row = this.database
       .prepare(`
-        SELECT id, object_kind, name, property_type, rules_json, position, created_at, updated_at
+        SELECT id, object_kind, name, property_type, rules_json, semantic_role, position, created_at, updated_at
         FROM object_properties WHERE id = ? AND archived_at IS NULL
       `)
       .get(id) as PropertyRow | undefined;
@@ -402,7 +440,7 @@ export class ObjectRepository {
   #getRecord(id: string): ConfigurableRecord {
     const row = this.database
       .prepare(`
-        SELECT id, object_kind, label, template_id, position, created_at, updated_at
+        SELECT id, object_kind, label, template_id, current_quantity, position, created_at, updated_at
         FROM object_records WHERE id = ? AND archived_at IS NULL
       `)
       .get(id) as RecordRow | undefined;
@@ -412,6 +450,7 @@ export class ObjectRepository {
       .all(id) as { property_id: string; value_json: string }[];
     return {
       createdAt: row.created_at,
+      currentQuantity: row.current_quantity ?? undefined,
       id: row.id,
       label: row.label,
       objectKind: row.object_kind,
@@ -488,6 +527,12 @@ export class ObjectRepository {
         if (property.rules.maximum !== undefined && value > property.rules.maximum) {
           throw invalidPropertyError(property, `the maximum is ${property.rules.maximum}.`);
         }
+        if (property.semanticRole === 'QUANTITY' && (!Number.isInteger(value) || value < 0)) {
+          throw invalidPropertyError(property, 'enter a non-negative whole quantity.');
+        }
+        if (property.semanticRole === 'PRICE' && value < 0) {
+          throw invalidPropertyError(property, 'enter a non-negative price.');
+        }
         break;
       }
       case 'date':
@@ -542,6 +587,40 @@ export class ObjectRepository {
       const property = propertiesById.get(propertyId);
       if (!property) throw new ObjectDomainError('invalid-input', 'Unknown property.', propertyId);
       upsert.run(recordId, propertyId, JSON.stringify(value), property.rules.unique ? canonicalValue(value) : null, now);
+    }
+  }
+
+  #syncInventoryFromDraft(
+    recordId: string,
+    draft: ConfigurableRecordDraft,
+    previousQuantity: number | undefined,
+    now: string,
+  ): void {
+    if (draft.objectKind !== 'item') return;
+    const quantityProperty = this.listProperties('item').find((property) => property.semanticRole === 'QUANTITY');
+    if (!quantityProperty) return;
+    const quantity = draft.values[quantityProperty.id];
+    if (typeof quantity !== 'number') {
+      this.database.prepare('UPDATE object_records SET current_quantity = NULL WHERE id = ?').run(recordId);
+      return;
+    }
+    this.#setInventoryQuantity(recordId, quantity, previousQuantity, now, previousQuantity === undefined ? 'opening' : 'adjustment');
+  }
+
+  #setInventoryQuantity(
+    recordId: string,
+    quantity: number,
+    previousQuantity: number | undefined,
+    now: string,
+    reason: 'adjustment' | 'opening',
+  ): void {
+    const normalized = Math.round(quantity);
+    this.database.prepare('UPDATE object_records SET current_quantity = ? WHERE id = ?').run(normalized, recordId);
+    const delta = normalized - (previousQuantity ?? 0);
+    if (delta !== 0) {
+      this.database
+        .prepare('INSERT INTO inventory_movements (item_id, operation_id, quantity_delta, reason, created_at) VALUES (?, NULL, ?, ?, ?)')
+        .run(recordId, delta, reason, now);
     }
   }
 

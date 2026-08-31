@@ -35,9 +35,10 @@ export class BlueprintService {
     const itemPropsById = new Map(itemProperties.map((p) => [p.id, p.name]));
     const personPropsById = new Map(personProperties.map((p) => [p.id, p.name]));
 
-    const mapProperty = (p: { name: string; rules: PropertyRules; type: PropertyDraft['type'] }): BlueprintProperty => ({
+    const mapProperty = (p: { name: string; rules: PropertyRules; semanticRole?: PropertyDraft['semanticRole']; type: PropertyDraft['type'] }): BlueprintProperty => ({
       name: p.name,
       rules: p.rules,
+      semanticRole: p.semanticRole,
       type: p.type,
     });
 
@@ -130,6 +131,10 @@ export class BlueprintService {
 
           if (!prop.type || !propertyTypes.includes(prop.type)) {
             issues.push({ field: 'type', message: `Property type "${String(prop.type)}" is invalid.`, path: `${propPath}.type` });
+          }
+
+          if (prop.semanticRole !== undefined && !['DISPLAY_NAME', 'PRICE', 'QUANTITY'].includes(prop.semanticRole)) {
+            issues.push({ field: 'semanticRole', message: `Semantic role "${String(prop.semanticRole)}" is invalid.`, path: `${propPath}.semanticRole` });
           }
 
           if (!prop.rules || typeof prop.rules !== 'object') {
@@ -241,6 +246,7 @@ export class BlueprintService {
           name: p.name.trim(),
           objectKind: 'item',
           rules: p.rules,
+          semanticRole: p.semanticRole,
           type: p.type,
         };
 
@@ -265,6 +271,7 @@ export class BlueprintService {
           name: p.name.trim(),
           objectKind: 'person',
           rules: p.rules,
+          semanticRole: p.semanticRole,
           type: p.type,
         };
 

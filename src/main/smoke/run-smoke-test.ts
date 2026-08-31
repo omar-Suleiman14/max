@@ -114,18 +114,38 @@ async function openSmokeSurface(window: BrowserWindow): Promise<void> {
 
   const selectorBySurface: Readonly<Record<string, string>> = {
     create: '.topbar [aria-haspopup="menu"]',
-    settings: '.sidebar__footer button:last-child',
   };
   const selector = selectorBySurface[surface];
-  if (surface !== 'command' && !selector) {
+  if (!['command', 'settings'].includes(surface ?? '') && !selector) {
     throw new Error(`Unknown smoke surface: ${surface}.`);
   }
   const opened = (await window.webContents.executeJavaScript(
     surface === 'command'
       ? `document.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, ctrlKey: true, key: 'k' })); true;`
+      : surface === 'settings'
+        ? `(() => {
+            const target = Array.from(document.querySelectorAll('.sidebar__footer button')).find((button) => {
+              const label = button.getAttribute('aria-label') || button.textContent || '';
+              return label.includes('Settings') || label.includes('الإعدادات');
+            });
+            target?.click();
+            return Boolean(target);
+          })();`
       : `(() => { const target = document.querySelector(${JSON.stringify(selector)}); target?.click(); return Boolean(target); })();`,
   )) as boolean;
   if (!opened) throw new Error(`Smoke surface ${surface} could not be opened.`);
+  if (surface === 'settings') {
+    const ready = (await window.webContents.executeJavaScript(`
+      new Promise((resolve) => {
+        const deadline = Date.now() + 2000;
+        const check = () => document.querySelector('.settings-page-wrapper')
+          ? resolve(true)
+          : Date.now() >= deadline ? resolve(false) : setTimeout(check, 40);
+        check();
+      });
+    `)) as boolean;
+    if (!ready) throw new Error('Settings did not open during smoke test.');
+  }
 }
 
 export async function runSmokeTest(window: BrowserWindow): Promise<void> {

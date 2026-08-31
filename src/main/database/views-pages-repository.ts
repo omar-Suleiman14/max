@@ -172,6 +172,13 @@ export class ViewsPagesRepository {
     return rows.map((r) => this.#rowToPage(r));
   }
 
+  listArchivedPages(): readonly CustomPage[] {
+    const rows = this.database
+      .prepare('SELECT * FROM shop_custom_pages WHERE archived_at IS NOT NULL ORDER BY updated_at DESC')
+      .all() as CustomPageRow[];
+    return rows.map((row) => this.#rowToPage(row));
+  }
+
   getPage(id: string): CustomPage {
     const row = this.database
       .prepare('SELECT * FROM shop_custom_pages WHERE id = ? AND archived_at IS NULL')
@@ -241,6 +248,20 @@ export class ViewsPagesRepository {
     const now = new Date().toISOString();
     this.database.prepare('UPDATE shop_custom_pages SET archived_at = ?, updated_at = ? WHERE id = ?').run(now, now, id);
     this.#audit('page', id, 'archived', existing);
+  }
+
+  restorePage(id: string): CustomPage {
+    const row = this.database.prepare('SELECT * FROM shop_custom_pages WHERE id = ? AND archived_at IS NOT NULL').get(id) as CustomPageRow | undefined;
+    if (!row) throw new ObjectDomainError('not-found', `Archived page ${id} not found.`);
+    const now = new Date().toISOString();
+    this.database.prepare('UPDATE shop_custom_pages SET archived_at = NULL, updated_at = ? WHERE id = ?').run(now, id);
+    const restored = this.getPage(id);
+    this.#audit('page', id, 'updated', restored);
+    return restored;
+  }
+
+  emptyPageTrash(): void {
+    this.database.prepare('DELETE FROM shop_custom_pages WHERE archived_at IS NOT NULL').run();
   }
 
   #rowToPage(r: CustomPageRow): CustomPage {

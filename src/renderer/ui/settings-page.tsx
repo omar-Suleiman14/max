@@ -22,7 +22,7 @@ import { useEffect, useState, type KeyboardEvent } from 'react';
 
 import type { BackupSchedule, ShopMetadata } from '../../shared/blueprint-contract';
 import { type Locale, translate } from '../app/i18n';
-import type { SettingsSectionId } from '../app/app-types';
+import type { CustomPage, SettingsSectionId } from '../app/app-types';
 import type { ThemePreference } from '../app/preferences';
 import { BackupManager } from '../backup/backup-manager';
 import { BlueprintDialog } from '../blueprints/blueprint-dialog';
@@ -63,17 +63,18 @@ export function SettingsPage({
   const [shopMetadata, setShopMetadata] = useState<ShopMetadata>();
   const [shopNameInput, setShopNameInput] = useState('');
   const [blueprintModalTab, setBlueprintModalTab] = useState<'export' | 'import'>();
-  const [trashedPages, setTrashedPages] = useState(loadTrashedPages);
+  const [trashedPages, setTrashedPages] = useState<readonly CustomPage[]>([]);
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [dangerError, setDangerError] = useState<string>();
-  const [demoState, setDemoState] = useState<'idle' | 'loading' | 'added' | 'exists' | 'error'>('idle');
+  const [demoState, setDemoState] = useState<'idle' | 'confirming' | 'loading' | 'added' | 'error'>('idle');
 
   useEffect(() => {
     void window.maxApi.shop.getMetadata().then((data) => {
       setShopMetadata(data);
       setShopNameInput(data.shopName);
     });
+    void loadTrashedPages().then(setTrashedPages);
   }, []);
 
   useEffect(() => {
@@ -120,15 +121,27 @@ export function SettingsPage({
   }
 
   async function handleSeedDemoData() {
+    if (demoState !== 'confirming') {
+      setDemoState('confirming');
+      return;
+    }
     setDemoState('loading');
-    const result = await window.maxApi.shop.seedDemoData(locale);
+    const safetyBackup = await window.maxApi.backups.create('pre-delete');
+    if (!safetyBackup.ok) {
+      setDemoState('error');
+      return;
+    }
+    const result = await window.maxApi.shop.resetDemoData(locale);
     if (!result.ok) {
       setDemoState('error');
       return;
     }
-    const added = Object.values(result.value).some((count) => count > 0);
-    setDemoState(added ? 'added' : 'exists');
-    if (added) onDemoDataSeeded();
+    window.localStorage.removeItem('max:home_page_blocks');
+    window.localStorage.removeItem('max:home_page_meta');
+    window.localStorage.removeItem('max:custom_pages');
+    window.localStorage.removeItem('max:trashed_pages');
+    setDemoState('added');
+    onDemoDataSeeded();
   }
 
   async function handleDeleteWorkspace() {
@@ -211,6 +224,23 @@ export function SettingsPage({
               </label>
             </div>
 
+            <div className="settings-control-stack">
+              <div className="settings-control-copy">
+                <strong>{translate(locale, 'language')}</strong>
+                <small>{locale === 'ar' ? 'تتغير لغة واجهة Max واتجاهها فورًا.' : 'Max’s interface language and direction change immediately.'}</small>
+                <p className="settings-language-warning" role="note">
+                  <AlertTriangle aria-hidden="true" size={14} />
+                  {locale === 'ar'
+                    ? 'ستتغير واجهة Max، لكن الأسماء والملاحظات والنصوص الأخرى التي أنشأتها ستبقى كما كتبتها ولن تُترجم تلقائيًا.'
+                    : 'Max’s interface will switch, but names, notes, and other text you created stay as written and are not translated automatically.'}
+                </p>
+              </div>
+              <div aria-label={translate(locale, 'language')} className="choice-grid choice-grid--language" role="radiogroup">
+                <button aria-checked={locale === 'en'} className="choice-card" data-selected={locale === 'en'} onClick={() => onChangeLocale('en')} onKeyDown={moveRadio} role="radio" type="button"><Languages aria-hidden="true" size={17} /><span>English</span><small>{locale === 'ar' ? 'من اليسار إلى اليمين' : 'Left to right'}</small></button>
+                <button aria-checked={locale === 'ar'} className="choice-card" data-selected={locale === 'ar'} onClick={() => onChangeLocale('ar')} onKeyDown={moveRadio} role="radio" type="button"><Languages aria-hidden="true" size={17} /><span>العربية</span><small>من اليمين إلى اليسار</small></button>
+              </div>
+            </div>
+
             <div className="settings-control-row">
               <div className="settings-control-copy"><strong>{translate(locale, 'blueprint')}</strong><small>{shopMetadata?.blueprintName || (locale === 'ar' ? 'استورد هيكل متجر أو صدّر الهيكل الحالي.' : 'Import a shop structure or export the current one.')}</small></div>
               <div className="settings-row-actions">
@@ -221,14 +251,14 @@ export function SettingsPage({
 
             <div className="settings-control-row">
               <div className="settings-control-copy">
-                <strong>{locale === 'ar' ? 'بيانات العرض' : 'Demo workspace'}</strong>
-                <small>{locale === 'ar' ? 'حسابات وأصناف وعملاء ومعاملات وصفحات جاهزة للعرض، دون حذف بياناتك.' : 'Presentation-ready accounts, items, people, transactions, and pages—without deleting your data.'}</small>
-                {demoState === 'added' && <p className="form-success" role="status">{locale === 'ar' ? 'تمت إضافة بيانات العرض.' : 'Demo data added.'}</p>}
-                {demoState === 'exists' && <p className="settings-muted" role="status">{locale === 'ar' ? 'بيانات العرض موجودة بالفعل.' : 'Demo data is already present.'}</p>}
-                {demoState === 'error' && <p className="form-error" role="alert">{locale === 'ar' ? 'تعذرت إضافة بيانات العرض.' : 'Demo data could not be added.'}</p>}
+                <strong>{locale === 'ar' ? 'متجر العرض التجريبي' : 'Demo store'}</strong>
+                <small>{locale === 'ar' ? 'ينشئ نسخة أمان ثم يستبدل بيانات مساحة العمل بمتجر هواتف متكامل وجاهز للعرض.' : 'Creates a safety backup, then replaces workspace data with a complete presentation-ready phone store.'}</small>
+                {demoState === 'confirming' && <p className="form-error" role="alert">{locale === 'ar' ? 'سيتم استبدال البيانات الحالية. اضغط مرة أخرى للتأكيد.' : 'Current workspace data will be replaced. Press again to confirm.'}</p>}
+                {demoState === 'added' && <p className="form-success" role="status">{locale === 'ar' ? 'أصبح متجر العرض جاهزًا.' : 'Demo store is ready.'}</p>}
+                {demoState === 'error' && <p className="form-error" role="alert">{locale === 'ar' ? 'تعذر تجهيز متجر العرض. لم تُحذف البيانات دون نسخة أمان.' : 'Demo reset failed. Data was not removed without a safety backup.'}</p>}
               </div>
-              <Button disabled={demoState === 'loading' || demoState === 'added' || demoState === 'exists'} icon={<Sparkles aria-hidden="true" size={15} />} onClick={() => void handleSeedDemoData()}>
-                {demoState === 'loading' ? (locale === 'ar' ? 'جارٍ الإضافة…' : 'Adding…') : (locale === 'ar' ? 'إضافة بيانات العرض' : 'Add demo data')}
+              <Button disabled={demoState === 'loading'} icon={<Sparkles aria-hidden="true" size={15} />} onClick={() => void handleSeedDemoData()}>
+                {demoState === 'loading' ? (locale === 'ar' ? 'جارٍ التجهيز…' : 'Preparing…') : demoState === 'confirming' ? (locale === 'ar' ? 'تأكيد الاستبدال' : 'Confirm reset') : (locale === 'ar' ? 'تجهيز متجر العرض' : 'Prepare demo store')}
               </Button>
             </div>
 
@@ -252,14 +282,6 @@ export function SettingsPage({
                     <Icon aria-hidden="true" size={17} /><span>{translate(locale, label)}</span>
                   </button>
                 ))}
-              </div>
-            </div>
-
-            <div className="settings-control-stack">
-              <div className="settings-control-copy"><strong>{translate(locale, 'language')}</strong><small>{locale === 'ar' ? 'يتغير اتجاه الواجهة تلقائيًا مع اللغة.' : 'Interface direction follows the selected language.'}</small></div>
-              <div aria-label={translate(locale, 'language')} className="choice-grid choice-grid--language" role="radiogroup">
-                <button aria-checked={locale === 'en'} className="choice-card" data-selected={locale === 'en'} onClick={() => onChangeLocale('en')} onKeyDown={moveRadio} role="radio" type="button"><Languages aria-hidden="true" size={17} /><span>English</span><small>Left to right</small></button>
-                <button aria-checked={locale === 'ar'} className="choice-card" data-selected={locale === 'ar'} onClick={() => onChangeLocale('ar')} onKeyDown={moveRadio} role="radio" type="button"><Languages aria-hidden="true" size={17} /><span>العربية</span><small>من اليمين إلى اليسار</small></button>
               </div>
             </div>
 
@@ -295,8 +317,8 @@ export function SettingsPage({
             </div>
 
             <div className="settings-control-stack">
-              {trashedPages.length === 0 ? <div className="settings-empty-row"><Trash2 aria-hidden="true" size={17} /><span>{locale === 'ar' ? 'المهملات فارغة' : 'Trash is empty'}</span></div> : <div className="settings-trash-list">{trashedPages.map((trashedPage) => <div key={trashedPage.id}><span>{trashedPage.title || (locale === 'ar' ? 'صفحة بدون عنوان' : 'Untitled page')}</span><Button onClick={() => { void restoreTrashedPage(trashedPage.id).then(() => setTrashedPages(loadTrashedPages())); }}>{locale === 'ar' ? 'استعادة' : 'Restore'}</Button></div>)}</div>}
-              {trashedPages.length > 0 && <Button onClick={() => { emptyPageTrash(); setTrashedPages([]); }} variant="consequential">{locale === 'ar' ? 'إفراغ المهملات' : 'Empty trash'}</Button>}
+              {trashedPages.length === 0 ? <div className="settings-empty-row"><Trash2 aria-hidden="true" size={17} /><span>{locale === 'ar' ? 'المهملات فارغة' : 'Trash is empty'}</span></div> : <div className="settings-trash-list">{trashedPages.map((trashedPage) => <div key={trashedPage.id}><span>{trashedPage.title || (locale === 'ar' ? 'صفحة بدون عنوان' : 'Untitled page')}</span><Button onClick={() => { void restoreTrashedPage(trashedPage.id).then(() => loadTrashedPages().then(setTrashedPages)); }}>{locale === 'ar' ? 'استعادة' : 'Restore'}</Button></div>)}</div>}
+              {trashedPages.length > 0 && <Button onClick={() => { void emptyPageTrash().then(() => setTrashedPages([])); }} variant="consequential">{locale === 'ar' ? 'إفراغ المهملات' : 'Empty trash'}</Button>}
             </div>
 
             <div className="settings-danger-zone">

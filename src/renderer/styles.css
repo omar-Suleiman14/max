@@ -1021,6 +1021,8 @@ kbd { display: inline-flex; min-width: 23px; min-height: 20px; align-items: cent
 .settings-control-copy { display: grid; min-width: 0; gap: 3px; }
 .settings-control-copy > strong { display: flex; align-items: center; gap: 6px; color: var(--text); font-size: 12px; font-weight: 650; }
 .settings-control-copy > small { max-width: 560px; color: var(--muted); font-size: 10px; line-height: 1.55; }
+.settings-language-warning { display: flex; max-width: 620px; align-items: flex-start; gap: 6px; margin: 8px 0 0; color: var(--warning); font-size: 10px; line-height: 1.55; }
+.settings-language-warning svg { flex: 0 0 auto; margin-block-start: 1px; }
 .settings-control-copy > .form-success,
 .settings-control-copy > .settings-muted,
 .settings-control-copy > .form-error { margin-block-start: 6px; }

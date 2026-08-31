@@ -1,3 +1,5 @@
+import { createClerkClient } from '@clerk/backend';
+
 export interface R2ObjectMetadata {
   customMetadata?: Record<string, string>;
   key: string;
@@ -30,76 +32,25 @@ export interface R2Bucket {
 
 export interface Env {
   BACKUPS_BUCKET: R2Bucket;
-  CLERK_JWT_KEY?: string;
-  CLERK_SECRET_KEY?: string;
+  CLERK_PUBLISHABLE_KEY: string;
+  CLERK_SECRET_KEY: string;
 }
-
-type TokenPayload = {
-  exp?: number;
-  sub?: string;
-  [key: string]: unknown;
-};
 
 /**
  * Verify Clerk JWT token using public key or claims verification.
  * Extracts authenticated userId from token subject ('sub').
  */
-async function authenticateRequest(request: Request, _env: Env): Promise<{ error?: Response; userId?: string }> {
-  const authHeader = request.headers.get('Authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return {
-      error: new Response(JSON.stringify({ error: 'Missing or malformed Authorization header' }), {
-        headers: { 'Content-Type': 'application/json' },
-        status: 401,
-      }),
-    };
-  }
-
-  const token = authHeader.slice(7).trim();
-  if (!token) {
-    return {
-      error: new Response(JSON.stringify({ error: 'Empty bearer token' }), {
-        headers: { 'Content-Type': 'application/json' },
-        status: 401,
-      }),
-    };
-  }
-
+async function authenticateRequest(request: Request, env: Env): Promise<{ error?: Response; userId?: string }> {
   try {
-    // Parse JWT parts safely
-    const parts = token.split('.');
-    if (parts.length !== 3) {
-      return {
-        error: new Response(JSON.stringify({ error: 'Invalid JWT structure' }), {
-          headers: { 'Content-Type': 'application/json' },
-          status: 401,
-        }),
-      };
-    }
-
-    const payloadJson = atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'));
-    const payload = JSON.parse(payloadJson) as TokenPayload;
-
-    if (!payload.sub) {
-      return {
-        error: new Response(JSON.stringify({ error: 'Invalid token: missing subject claim' }), {
-          headers: { 'Content-Type': 'application/json' },
-          status: 401,
-        }),
-      };
-    }
-
-    // Check expiration if present
-    if (payload.exp && Date.now() >= payload.exp * 1000) {
-      return {
-        error: new Response(JSON.stringify({ error: 'Token has expired' }), {
-          headers: { 'Content-Type': 'application/json' },
-          status: 401,
-        }),
-      };
-    }
-
-    return { userId: payload.sub };
+    if (!env.CLERK_SECRET_KEY || !env.CLERK_PUBLISHABLE_KEY) throw new Error('Clerk is not configured.');
+    const state = await createClerkClient({
+      publishableKey: env.CLERK_PUBLISHABLE_KEY,
+      secretKey: env.CLERK_SECRET_KEY,
+    }).authenticateRequest(request);
+    if (!state.isAuthenticated) throw new Error('Unauthenticated.');
+    const userId = state.toAuth().userId;
+    if (!userId) throw new Error('Missing Clerk user.');
+    return { userId };
   } catch {
     return {
       error: new Response(JSON.stringify({ error: 'Authentication failed' }), {
@@ -110,7 +61,10 @@ async function authenticateRequest(request: Request, _env: Env): Promise<{ error
   }
 }
 
-export default {
+export type WorkerAuthenticator = (request: Request, env: Env) => Promise<{ error?: Response; userId?: string }>;
+
+export function createWorker(authenticate: WorkerAuthenticator = authenticateRequest) {
+  return {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     const pathname = url.pathname;
@@ -148,7 +102,7 @@ export default {
 
     // All /v1/backups endpoints require Clerk authentication
     if (pathname.startsWith('/v1/backups')) {
-      const auth = await authenticateRequest(request, env);
+      const auth = await authenticate(request, env);
       if (auth.error || !auth.userId) {
         return auth.error ?? new Response(JSON.stringify({ error: 'Unauthorized' }), { headers: corsHeaders, status: 401 });
       }
@@ -165,7 +119,7 @@ export default {
           id: obj.key.replace(userPrefix, '').replace('.maxbak', ''),
           sizeBytes: obj.size,
           trigger: obj.customMetadata?.trigger ?? 'manual',
-        }));
+        })).sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 
         return new Response(JSON.stringify({ backups, count: backups.length }), { headers: corsHeaders, status: 200 });
       }
@@ -173,7 +127,10 @@ export default {
       // 2. UPLOAD BACKUP: PUT /v1/backups/:backupId
       const singleMatch = pathname.match(/^\/v1\/backups\/([^/]+)$/);
       if (singleMatch && method === 'PUT') {
-        const backupId = singleMatch[1];
+        const backupId = singleMatch[1] ?? '';
+        if (!/^[a-zA-Z0-9_-]{1,100}$/.test(backupId)) {
+          return new Response(JSON.stringify({ error: 'Invalid backup identifier' }), { headers: corsHeaders, status: 400 });
+        }
         const key = `${userPrefix}${backupId}.maxbak`;
         const checksum = request.headers.get('X-Backup-Checksum') ?? '';
         const trigger = request.headers.get('X-Backup-Trigger') ?? 'manual';
@@ -194,6 +151,10 @@ export default {
           },
         });
 
+        const retained = await env.BACKUPS_BUCKET.list({ prefix: userPrefix });
+        const expired = retained.objects.sort((left, right) => right.uploaded.getTime() - left.uploaded.getTime()).slice(30);
+        if (expired.length > 0) await env.BACKUPS_BUCKET.delete(expired.map(({ key: expiredKey }) => expiredKey));
+
         return new Response(
           JSON.stringify({
             checksum,
@@ -208,7 +169,10 @@ export default {
 
       // 3. DOWNLOAD BACKUP: GET /v1/backups/:backupId
       if (singleMatch && method === 'GET') {
-        const backupId = singleMatch[1];
+        const backupId = singleMatch[1] ?? '';
+        if (!/^[a-zA-Z0-9_-]{1,100}$/.test(backupId)) {
+          return new Response(JSON.stringify({ error: 'Invalid backup identifier' }), { headers: corsHeaders, status: 400 });
+        }
         const key = `${userPrefix}${backupId}.maxbak`;
         const object = await env.BACKUPS_BUCKET.get(key);
 
@@ -229,7 +193,10 @@ export default {
 
       // 4. DELETE BACKUP: DELETE /v1/backups/:backupId
       if (singleMatch && method === 'DELETE') {
-        const backupId = singleMatch[1];
+        const backupId = singleMatch[1] ?? '';
+        if (!/^[a-zA-Z0-9_-]{1,100}$/.test(backupId)) {
+          return new Response(JSON.stringify({ error: 'Invalid backup identifier' }), { headers: corsHeaders, status: 400 });
+        }
         const key = `${userPrefix}${backupId}.maxbak`;
         await env.BACKUPS_BUCKET.delete(key);
 
@@ -239,4 +206,7 @@ export default {
 
     return new Response(JSON.stringify({ error: 'Not found' }), { headers: corsHeaders, status: 404 });
   },
-};
+  };
+}
+
+export default createWorker();

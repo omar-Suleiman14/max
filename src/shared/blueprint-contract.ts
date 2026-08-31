@@ -1,4 +1,4 @@
-import type { ObjectKind, PropertyRules, PropertyType, PropertyValue } from './object-contract';
+import type { ObjectKind, PropertyRules, PropertyType, PropertyValue, SemanticRole } from './object-contract';
 
 export const backupSchedules = ['daily', 'weekly', 'manual'] as const;
 export type BackupSchedule = (typeof backupSchedules)[number];
@@ -6,6 +6,7 @@ export type BackupSchedule = (typeof backupSchedules)[number];
 export type BlueprintProperty = Readonly<{
   name: string;
   rules: PropertyRules;
+  semanticRole?: SemanticRole;
   type: PropertyType;
 }>;
 

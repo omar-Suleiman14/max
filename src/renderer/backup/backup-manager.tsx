@@ -2,6 +2,8 @@ import {
   AlertTriangle,
   Archive,
   CheckCircle2,
+  Cloud,
+  CloudDownload,
   HardDrive,
   History,
   RotateCcw,
@@ -10,8 +12,9 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
-import type { BackupMetadata, BackupVerificationResult } from '../../shared/backup-contract';
+import type { BackupMetadata, BackupVerificationResult, CloudBackupMetadata, CloudBackupStatus } from '../../shared/backup-contract';
 import type { Locale } from '../app/i18n';
+import { useAuth } from '../auth/auth-context';
 import { Button } from '../ui/button';
 import { FocusedOverlay } from '../ui/focused-overlay';
 import { backupCopy } from './backup-i18n';
@@ -27,6 +30,7 @@ function formatBytes(bytes: number): string {
 }
 
 export function BackupManager({ locale }: BackupManagerProps) {
+  const auth = useAuth();
   const [backups, setBackups] = useState<readonly BackupMetadata[]>([]);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -35,6 +39,9 @@ export function BackupManager({ locale }: BackupManagerProps) {
   const [restoreConfirmBackup, setRestoreConfirmBackup] = useState<BackupMetadata>();
   const [restoring, setRestoring] = useState(false);
   const [notice, setNotice] = useState<{ message: string; type: 'error' | 'success' }>();
+  const [cloudBackups, setCloudBackups] = useState<readonly CloudBackupMetadata[]>([]);
+  const [cloudStatus, setCloudStatus] = useState<CloudBackupStatus>({ configured: false });
+  const [restoreConfirmCloud, setRestoreConfirmCloud] = useState<CloudBackupMetadata>();
 
   const loadBackups = useCallback(async () => {
     setLoading(true);
@@ -52,16 +59,51 @@ export function BackupManager({ locale }: BackupManagerProps) {
     void loadBackups();
   }, [loadBackups]);
 
+  const loadCloud = useCallback(async () => {
+    const status = await window.maxApi.cloudBackups.getStatus();
+    setCloudStatus(status);
+    if (!status.configured || !auth.isSignedIn) return;
+    const token = await auth.getToken();
+    if (!token) return;
+    const result = await window.maxApi.cloudBackups.list(token);
+    if (result.ok) setCloudBackups(result.value);
+  }, [auth]);
+
+  useEffect(() => {
+    void loadCloud();
+    if (!auth.isSignedIn) return;
+    void Promise.all([auth.getToken(), window.maxApi.shop.getMetadata()]).then(async ([token, metadata]) => {
+      if (!token) return;
+      const result = await window.maxApi.cloudBackups.runScheduled(token, metadata.backupSchedule);
+      if (result.ok && result.value) {
+        await loadBackups();
+        await loadCloud();
+      }
+    }).catch(() => undefined);
+  }, [auth, loadBackups, loadCloud]);
+
   async function handleCreateBackup() {
     setCreating(true);
     setNotice(undefined);
     try {
-      const res = await window.maxApi.backups.create('manual');
-      if (res.ok) {
-        setNotice({ message: backupCopy(locale, 'backupCreated'), type: 'success' });
+      const token = cloudStatus.configured && auth.isSignedIn ? await auth.getToken() : null;
+      if (token) {
+        const result = await window.maxApi.cloudBackups.create(token, 'manual');
+        if (!result.ok) {
+          setNotice({ message: result.error.message, type: 'error' });
+        } else if (result.value.cloudError) {
+          setNotice({ message: locale === 'ar' ? `حُفظت النسخة المحلية. تعذر الحفظ السحابي: ${result.value.cloudError}` : `Local backup saved. Cloud backup failed: ${result.value.cloudError}`, type: 'error' });
+        } else {
+          setNotice({ message: locale === 'ar' ? 'حُفظت النسختان المحلية والسحابية.' : 'Local and cloud backups saved.', type: 'success' });
+        }
         await loadBackups();
+        await loadCloud();
       } else {
-        setNotice({ message: res.error.message, type: 'error' });
+        const res = await window.maxApi.backups.create('manual');
+        setNotice(res.ok
+          ? { message: backupCopy(locale, 'backupCreated'), type: 'success' }
+          : { message: res.error.message, type: 'error' });
+        if (res.ok) await loadBackups();
       }
     } catch (err) {
       setNotice({ message: err instanceof Error ? err.message : String(err), type: 'error' });
@@ -104,6 +146,27 @@ export function BackupManager({ locale }: BackupManagerProps) {
     }
   }
 
+  async function handleCloudRestore(backup: CloudBackupMetadata) {
+    setRestoring(true);
+    setNotice(undefined);
+    try {
+      const token = await auth.getToken();
+      if (!token) throw new Error(locale === 'ar' ? 'سجّل الدخول لاستعادة نسخة سحابية.' : 'Sign in to restore a cloud backup.');
+      const result = await window.maxApi.cloudBackups.restore(token, backup.id);
+      if (result.ok && result.value.restored) {
+        setNotice({ message: backupCopy(locale, 'restoreSuccess'), type: 'success' });
+        setRestoreConfirmCloud(undefined);
+        await loadBackups();
+      } else {
+        setNotice({ message: result.ok ? (result.value.error ?? backupCopy(locale, 'restoreFailed')) : result.error.message, type: 'error' });
+      }
+    } catch (error) {
+      setNotice({ message: error instanceof Error ? error.message : String(error), type: 'error' });
+    } finally {
+      setRestoring(false);
+    }
+  }
+
   return (
     <div className="backup-manager">
       <div className="backup-manager__header">
@@ -117,7 +180,7 @@ export function BackupManager({ locale }: BackupManagerProps) {
           onClick={() => void handleCreateBackup()}
           variant="primary"
         >
-          {creating ? 'Creating...' : backupCopy(locale, 'createBackup')}
+          {creating ? backupCopy(locale, 'creating') : backupCopy(locale, 'createBackup')}
         </Button>
       </div>
 
@@ -151,7 +214,7 @@ export function BackupManager({ locale }: BackupManagerProps) {
                   <th>{backupCopy(locale, 'trigger')}</th>
                   <th>{backupCopy(locale, 'size')}</th>
                   <th>{backupCopy(locale, 'checksum')}</th>
-                  <th>Actions</th>
+                  <th>{backupCopy(locale, 'actions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -205,6 +268,31 @@ export function BackupManager({ locale }: BackupManagerProps) {
         )}
       </div>
 
+      <div className="backup-history backup-history--cloud">
+        <div className="section-title">
+          <Cloud aria-hidden="true" size={16} />
+          <h4>{locale === 'ar' ? 'Max للنسخ السحابي' : 'Max Cloud Backup'}</h4>
+        </div>
+        <p className="settings-muted">
+          {!cloudStatus.configured
+            ? (locale === 'ar' ? 'النسخ السحابي غير مفعّل في هذا الإصدار. النسخ المحلية تعمل كالمعتاد.' : 'Cloud backup is not enabled in this build. Local backups continue to work normally.')
+            : !auth.isSignedIn
+              ? (locale === 'ar' ? 'سجّل الدخول من الشريط الجانبي لتفعيل النسخ السحابي.' : 'Sign in from the sidebar to enable cloud backup.')
+              : (locale === 'ar' ? 'جاهز. كل نسخة سحابية تخص حسابك فقط.' : 'Ready. Cloud backups are private to your account.')}
+          {cloudStatus.lastSuccessfulCloudBackupAt && ` ${locale === 'ar' ? 'آخر نسخة:' : 'Last backup:'} ${new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(cloudStatus.lastSuccessfulCloudBackupAt))}`}
+        </p>
+        {cloudBackups.length > 0 && (
+          <div className="settings-trash-list">
+            {cloudBackups.map((backup) => (
+              <div key={backup.id}>
+                <span>{new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(backup.createdAt))} · {formatBytes(backup.sizeBytes)}</span>
+                <Button icon={<CloudDownload aria-hidden="true" size={14} />} onClick={() => setRestoreConfirmCloud(backup)}>{backupCopy(locale, 'restore')}</Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {restoreConfirmBackup && (
         <FocusedOverlay className="object-dialog" labelId="restore-confirm-title" onClose={() => setRestoreConfirmBackup(undefined)}>
           <header className="dialog-header">
@@ -224,7 +312,7 @@ export function BackupManager({ locale }: BackupManagerProps) {
             </div>
 
             <p style={{ fontSize: '13px', color: 'var(--text-soft)' }}>
-              Target snapshot: <strong>{restoreConfirmBackup.filename}</strong> (
+              {backupCopy(locale, 'targetSnapshot')}: <strong>{restoreConfirmBackup.filename}</strong> (
               {new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(restoreConfirmBackup.createdAt))})
             </p>
 
@@ -239,6 +327,15 @@ export function BackupManager({ locale }: BackupManagerProps) {
                 {restoring ? backupCopy(locale, 'restoring') : backupCopy(locale, 'restore')}
               </Button>
             </footer>
+          </div>
+        </FocusedOverlay>
+      )}
+      {restoreConfirmCloud && (
+        <FocusedOverlay className="object-dialog" labelId="cloud-restore-confirm-title" onClose={() => setRestoreConfirmCloud(undefined)}>
+          <header className="dialog-header"><div><p className="eyebrow">MAX · CLOUD</p><h2 id="cloud-restore-confirm-title">{backupCopy(locale, 'restore')}</h2></div><button aria-label={backupCopy(locale, 'cancel')} className="icon-button" onClick={() => setRestoreConfirmCloud(undefined)} type="button"><X aria-hidden="true" size={19} /></button></header>
+          <div style={{ padding: '16px 20px', display: 'grid', gap: '14px' }}>
+            <p>{backupCopy(locale, 'confirmRestore')}</p>
+            <footer className="form-footer"><Button onClick={() => setRestoreConfirmCloud(undefined)}>{backupCopy(locale, 'cancel')}</Button><Button disabled={restoring} onClick={() => void handleCloudRestore(restoreConfirmCloud)} variant="primary">{restoring ? backupCopy(locale, 'restoring') : backupCopy(locale, 'restore')}</Button></footer>
           </div>
         </FocusedOverlay>
       )}

@@ -3,6 +3,9 @@ import type {
   BackupMetadata,
   BackupTrigger,
   BackupVerificationResult,
+  CloudBackupCreateResult,
+  CloudBackupMetadata,
+  CloudBackupStatus,
   RestoreResult,
 } from './backup-contract';
 import type {
@@ -37,6 +40,11 @@ export const IPC_CHANNELS = {
   backupList: 'max:backup:list',
   backupRestore: 'max:backup:restore',
   backupVerify: 'max:backup:verify',
+  cloudBackupCreate: 'max:cloud-backup:create',
+  cloudBackupList: 'max:cloud-backup:list',
+  cloudBackupRestore: 'max:cloud-backup:restore',
+  cloudBackupRunScheduled: 'max:cloud-backup:run-scheduled',
+  cloudBackupStatus: 'max:cloud-backup:status',
   blueprintExport: 'max:blueprints:export',
   blueprintImport: 'max:blueprints:import',
   blueprintValidate: 'max:blueprints:validate',
@@ -53,6 +61,9 @@ export const IPC_CHANNELS = {
   pageArchive: 'max:pages:archive',
   pageCreate: 'max:pages:create',
   pageList: 'max:pages:list',
+  pageListArchived: 'max:pages:list-archived',
+  pageRestore: 'max:pages:restore',
+  pageEmptyTrash: 'max:pages:empty-trash',
   pageUpdate: 'max:pages:update',
   peopleBalances: 'max:people:balances',
   peopleForgiveDebt: 'max:people:debt:forgive',
@@ -69,6 +80,7 @@ export const IPC_CHANNELS = {
   shopCompleteOnboarding: 'max:shop:onboarding:complete',
   shopGetMetadata: 'max:shop:metadata:get',
   shopSeedDemoData: 'max:shop:demo-data:seed',
+  shopResetDemoData: 'max:shop:demo-data:reset',
   shopUpdateMetadata: 'max:shop:metadata:update',
   systemHealth: 'max:system:health',
   systemResetWorkspace: 'max:system:workspace:reset',
@@ -152,6 +164,13 @@ export type MaxApi = Readonly<{
     import: (blueprint: Blueprint) => Promise<MutationResult<Blueprint>>;
     validate: (blueprint: unknown) => Promise<BlueprintValidationResult>;
   }>;
+  cloudBackups: Readonly<{
+    create: (sessionToken: string, trigger?: BackupTrigger) => Promise<MutationResult<CloudBackupCreateResult>>;
+    getStatus: () => Promise<CloudBackupStatus>;
+    list: (sessionToken: string) => Promise<MutationResult<readonly CloudBackupMetadata[]>>;
+    restore: (sessionToken: string, backupId: string) => Promise<MutationResult<RestoreResult>>;
+    runScheduled: (sessionToken: string, schedule: 'daily' | 'manual' | 'weekly') => Promise<MutationResult<CloudBackupCreateResult | null>>;
+  }>;
   objects: Readonly<{
     archiveProperty: (id: string) => Promise<MutationResult<null>>;
     archiveRecord: (id: string) => Promise<MutationResult<null>>;
@@ -167,7 +186,10 @@ export type MaxApi = Readonly<{
   pages: Readonly<{
     archive: (id: string) => Promise<MutationResult<null>>;
     create: (draft: CustomPageDraft) => Promise<MutationResult<CustomPage>>;
+    emptyTrash: () => Promise<MutationResult<null>>;
     list: () => Promise<readonly CustomPage[]>;
+    listArchived: () => Promise<readonly CustomPage[]>;
+    restore: (id: string) => Promise<MutationResult<CustomPage>>;
     update: (id: string, draft: CustomPageDraft) => Promise<MutationResult<CustomPage>>;
   }>;
   people: Readonly<{
@@ -193,6 +215,7 @@ export type MaxApi = Readonly<{
   shop: Readonly<{
     completeOnboarding: (draft: CompleteOnboardingDraft) => Promise<MutationResult<ShopMetadata>>;
     getMetadata: () => Promise<ShopMetadata>;
+    resetDemoData: (locale: 'ar' | 'en') => Promise<MutationResult<DemoSeedSummary>>;
     seedDemoData: (locale: 'ar' | 'en') => Promise<MutationResult<DemoSeedSummary>>;
     updateMetadata: (patch: Partial<ShopMetadata>) => Promise<MutationResult<ShopMetadata>>;
   }>;

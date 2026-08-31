@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { DatabaseService } from './database-service';
 import { ObjectDomainError } from './object-repository';
+import { phoneShopBlueprint } from '../../shared/starter-blueprints';
 
 function service(): DatabaseService {
   const db = new DatabaseService(':memory:');
@@ -256,5 +257,45 @@ describe('TransactionRepository', () => {
         transactionType: 'sale',
       }),
     ).toThrowError(ObjectDomainError);
+  });
+
+  it('updates tracked inventory atomically and restores it on reversal', () => {
+    const db = service();
+    db.completeOnboarding({ backupSchedule: 'manual', blueprint: phoneShopBlueprint, includeDemoData: false, locale: 'en', shopName: 'Inventory test' });
+    const properties = new Map(db.objects.listProperties('item').map((property) => [property.name, property.id]));
+    const item = db.objects.createRecord({
+      label: 'Tracked charger',
+      objectKind: 'item',
+      values: {
+        [properties.get('Model')!]: 'Tracked charger',
+        [properties.get('Selling Price')!]: 500,
+        [properties.get('Stock')!]: 3,
+      },
+    });
+    const cash = db.accounts.createAccount({ accountType: 'cash', initialBalance: 0, name: 'Cash' });
+
+    const sale = db.transactions.createTransaction({ itemId: item.id, movements: [{ accountId: cash.id, amount: 1_000, movementType: 'inflow' }], paidAmount: 1_000, quantity: 2, totalAmount: 1_000, transactionType: 'sale' });
+    expect(db.objects.listRecords('item')[0]?.currentQuantity).toBe(1);
+    expect(db.objects.listRecords('item')[0]?.values[properties.get('Stock')!]).toBe(1);
+
+    expect(() => db.transactions.createTransaction({ itemId: item.id, movements: [{ accountId: cash.id, amount: 1_000, movementType: 'inflow' }], paidAmount: 1_000, quantity: 2, totalAmount: 1_000, transactionType: 'sale' })).toThrowError(ObjectDomainError);
+    expect(db.objects.listRecords('item')[0]?.currentQuantity).toBe(1);
+    expect(db.accounts.getAccount(cash.id).balance).toBe(1_000);
+
+    db.transactions.reverseTransaction(sale.id);
+    expect(db.objects.listRecords('item')[0]?.currentQuantity).toBe(3);
+    expect(db.accounts.getAccount(cash.id).balance).toBe(0);
+  });
+
+  it('preserves transfer fee snapshots and exact account deltas', () => {
+    const db = service();
+    const source = db.accounts.createAccount({ accountType: 'wallet', initialBalance: 2_000, name: 'Source' });
+    const destination = db.accounts.createAccount({ accountType: 'bank', initialBalance: 500, name: 'Destination' });
+    const transfer = db.transactions.createTransfer({ amount: 1_000, fromAccountId: source.id, providerFee: 15, serviceFee: 5, toAccountId: destination.id });
+
+    expect(transfer.providerFee).toBe(15);
+    expect(transfer.serviceFee).toBe(5);
+    expect(db.accounts.getAccount(source.id).balance).toBe(985);
+    expect(db.accounts.getAccount(destination.id).balance).toBe(1_505);
   });
 });

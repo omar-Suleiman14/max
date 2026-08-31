@@ -33,6 +33,7 @@ import {
   type PropertyDefinition,
   type PropertyDraft,
   type PropertyValue,
+  type SemanticRole,
 } from '../../shared/object-contract';
 import type { TemplateDefinition, TemplateDraft } from '../../shared/template-contract';
 import type { Locale } from '../app/i18n';
@@ -310,6 +311,7 @@ function PropertyEditor({
   const [maximumLength, setMaximumLength] = useState(initial?.rules.maximumLength?.toString() ?? '');
   const [choices, setChoices] = useState(initial?.rules.choices.join('\n') ?? '');
   const [relationTarget, setRelationTarget] = useState<ObjectKind>(initial?.rules.relationTarget ?? 'person');
+  const [semanticRole, setSemanticRole] = useState<SemanticRole | ''>(initial?.semanticRole ?? '');
   const [error, setError] = useState<string>();
   const [saving, setSaving] = useState(false);
 
@@ -332,6 +334,7 @@ function PropertyEditor({
         required,
         unique,
       },
+      semanticRole: semanticRole || undefined,
       type,
     });
     setSaving(false);
@@ -358,7 +361,13 @@ function PropertyEditor({
         </label>
         <label className="field">
           <span>{objectCopy(locale, 'type')}</span>
-          <select onChange={(event) => setType(event.target.value as PropertyDraft['type'])} value={type}>
+          <select onChange={(event) => {
+            const nextType = event.target.value as PropertyDraft['type'];
+            setType(nextType);
+            if (semanticRole === 'PRICE' && !['money', 'number'].includes(nextType)) setSemanticRole('');
+            if (semanticRole === 'QUANTITY' && nextType !== 'number') setSemanticRole('');
+            if (semanticRole === 'DISPLAY_NAME' && !['text', 'select', 'status'].includes(nextType)) setSemanticRole('');
+          }} value={type}>
             {propertyTypes.map((propertyType) => (
               <option key={propertyType} value={propertyType}>
                 {propertyTypeLabel(locale, propertyType)}
@@ -366,6 +375,17 @@ function PropertyEditor({
             ))}
           </select>
         </label>
+        {objectKind === 'item' && (
+          <label className="field">
+            <span>{objectCopy(locale, 'semanticRole')}</span>
+            <select onChange={(event) => setSemanticRole(event.target.value as SemanticRole | '')} value={semanticRole}>
+              <option value="">{objectCopy(locale, 'semanticRoleNone')}</option>
+              {['text', 'select', 'status'].includes(type) && <option value="DISPLAY_NAME">{objectCopy(locale, 'semanticRoleDisplay')}</option>}
+              {['money', 'number'].includes(type) && <option value="PRICE">{objectCopy(locale, 'semanticRolePrice')}</option>}
+              {type === 'number' && <option value="QUANTITY">{objectCopy(locale, 'semanticRoleQuantity')}</option>}
+            </select>
+          </label>
+        )}
         <div className="rule-grid">
           <label className="check-field">
             <input checked={required} onChange={(event) => setRequired(event.target.checked)} type="checkbox" />
@@ -748,6 +768,12 @@ export function ObjectWorkspace({ createRequest, locale, objectKind, onViewsChan
   const collapsedGroups = new Set<string>();
   const [draggedRecordId, setDraggedRecordId] = useState<string | null>(null);
   const [dragOverRecordId, setDragOverRecordId] = useState<string | null>(null);
+  const quickCreatePropertyIds = useMemo(
+    () => new Set(properties
+      .filter((property) => property.rules.required || property.semanticRole === 'PRICE' || property.semanticRole === 'QUANTITY')
+      .map((property) => property.id)),
+    [properties],
+  );
 
   function handleRecordDragStart(id: string) {
     setDraggedRecordId(id);
@@ -974,6 +1000,7 @@ export function ObjectWorkspace({ createRequest, locale, objectKind, onViewsChan
         name: property.name,
         objectKind: property.objectKind,
         rules: { ...property.rules, choices: [...property.rules.choices, newChoice] },
+        semanticRole: property.semanticRole,
         type: property.type,
       });
       if (!propertyResult.ok) {
@@ -1447,7 +1474,7 @@ export function ObjectWorkspace({ createRequest, locale, objectKind, onViewsChan
                                   </th>
                                   {properties.map((property) => (
                                     <td key={property.id}>
-                                      <InlinePropertyInput
+                                      {quickCreatePropertyIds.has(property.id) && <InlinePropertyInput
                                         locale={locale}
                                         onChange={(value) => setInlineValues((current) => {
                                           const next = { ...current };
@@ -1458,7 +1485,7 @@ export function ObjectWorkspace({ createRequest, locale, objectKind, onViewsChan
                                         property={property}
                                         relatedRecords={relatedRecords}
                                         value={inlineValues[property.id]}
-                                      />
+                                      />}
                                     </td>
                                   ))}
                                   <td>

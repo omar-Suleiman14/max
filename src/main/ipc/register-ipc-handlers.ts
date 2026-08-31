@@ -10,15 +10,18 @@ import type {
   CompleteOnboardingDraft,
   ShopMetadata,
 } from '../../shared/blueprint-contract';
+import type { BackupTrigger } from '../../shared/backup-contract';
 import { IPC_CHANNELS, type SystemHealth } from '../../shared/ipc-contract';
 import {
   objectKinds,
   propertyTypes,
+  semanticRoles,
   type ConfigurableRecordDraft,
   type MutationResult,
   type ObjectKind,
   type PropertyDraft,
   type PropertyValue,
+  type SemanticRole,
 } from '../../shared/object-contract';
 import type {
   ForgivenessDraft,
@@ -47,11 +50,13 @@ import {
   type TransferDraft,
 } from '../../shared/transaction-contract';
 import type { DatabaseService } from '../database/database-service';
+import type { CloudBackupService } from '../cloud/cloud-backup-service';
 import { ObjectDomainError } from '../database/object-repository';
 import type { PlatformAdapter } from '../platform/platform-adapter';
 import { assertTrustedSender } from '../security/trusted-sender';
 
 type RegisterIpcHandlersOptions = Readonly<{
+  cloudBackups: CloudBackupService;
   database: DatabaseService;
   developmentServerUrl?: string;
   platform: PlatformAdapter;
@@ -64,6 +69,13 @@ function isObject(value: unknown): value is Record<string, unknown> {
 function parseId(value: unknown): string {
   if (typeof value !== 'string' || value.length < 1 || value.length > 120) {
     throw new ObjectDomainError('invalid-input', 'A valid identifier is required.');
+  }
+  return value;
+}
+
+function parseSessionToken(value: unknown): string {
+  if (typeof value !== 'string' || value.length < 1 || value.length > 16_384) {
+    throw new ObjectDomainError('invalid-input', 'A valid signed-in session is required.');
   }
   return value;
 }
@@ -124,6 +136,9 @@ function parsePropertyDraft(value: unknown): PropertyDraft {
       required: rules.required,
       unique: rules.unique,
     },
+    semanticRole: typeof value.semanticRole === 'string' && semanticRoles.includes(value.semanticRole as SemanticRole)
+      ? value.semanticRole as SemanticRole
+      : undefined,
     type: value.type as PropertyDraft['type'],
   };
 }
@@ -211,6 +226,7 @@ function parseAccountDraft(value: unknown): AccountDraft {
 
   return {
     accountType: value.accountType as AccountType,
+    feeConfig: isObject(value.feeConfig) ? value.feeConfig as AccountDraft['feeConfig'] : undefined,
     initialBalance,
     name: value.name,
   };
@@ -256,6 +272,9 @@ function parseTransactionDraft(value: unknown): TransactionDraft {
     note: typeof value.note === 'string' ? value.note : undefined,
     paidAmount,
     personId: typeof value.personId === 'string' ? value.personId : undefined,
+    providerFee: typeof value.providerFee === 'number' ? value.providerFee : undefined,
+    quantity: typeof value.quantity === 'number' ? value.quantity : undefined,
+    serviceFee: typeof value.serviceFee === 'number' ? value.serviceFee : undefined,
     totalAmount,
     transactionType: value.transactionType as TransactionType,
   };
@@ -274,6 +293,8 @@ function parseTransferDraft(value: unknown): TransferDraft {
     amount,
     fromAccountId: value.fromAccountId,
     note: typeof value.note === 'string' ? value.note : undefined,
+    providerFee: typeof value.providerFee === 'number' ? value.providerFee : undefined,
+    serviceFee: typeof value.serviceFee === 'number' ? value.serviceFee : undefined,
     toAccountId: value.toAccountId,
   };
 }
@@ -419,7 +440,19 @@ function mutation<T>(work: () => T): MutationResult<T> {
   }
 }
 
+async function asyncMutation<T>(work: () => Promise<T>): Promise<MutationResult<T>> {
+  try {
+    return { ok: true, value: await work() };
+  } catch (error) {
+    if (error instanceof ObjectDomainError) {
+      return { error: { code: error.code, message: error.message, propertyId: error.propertyId }, ok: false };
+    }
+    return { error: { code: 'invalid-input', message: error instanceof Error ? error.message : 'Cloud backup failed.' }, ok: false };
+  }
+}
+
 export function registerIpcHandlers({
+  cloudBackups,
   database,
   developmentServerUrl,
   platform,
@@ -545,6 +578,13 @@ export function registerIpcHandlers({
     }
     return mutation(() => database.seedDemoData(locale));
   });
+  ipcMain.handle(IPC_CHANNELS.shopResetDemoData, (event, locale: unknown) => {
+    trust(event);
+    if (locale !== 'ar' && locale !== 'en') {
+      throw new ObjectDomainError('invalid-input', 'A valid locale (ar or en) is required.');
+    }
+    return mutation(() => database.resetDemoWorkspace(locale));
+  });
   ipcMain.handle(IPC_CHANNELS.shopUpdateMetadata, (event, patch: unknown) => {
     trust(event);
     return mutation(() => database.shopMetadata.updateMetadata(patch as Partial<ShopMetadata>));
@@ -669,6 +709,10 @@ export function registerIpcHandlers({
     trust(event);
     return database.viewsPages.listPages();
   });
+  ipcMain.handle(IPC_CHANNELS.pageListArchived, (event) => {
+    trust(event);
+    return database.viewsPages.listArchivedPages();
+  });
   ipcMain.handle(IPC_CHANNELS.pageCreate, (event, draft: unknown) => {
     trust(event);
     return mutation(() => database.viewsPages.createPage(parseCustomPageDraft(draft)));
@@ -681,6 +725,17 @@ export function registerIpcHandlers({
     trust(event);
     return mutation(() => {
       database.viewsPages.archivePage(parseId(id));
+      return null;
+    });
+  });
+  ipcMain.handle(IPC_CHANNELS.pageRestore, (event, id: unknown) => {
+    trust(event);
+    return mutation(() => database.viewsPages.restorePage(parseId(id)));
+  });
+  ipcMain.handle(IPC_CHANNELS.pageEmptyTrash, (event) => {
+    trust(event);
+    return mutation(() => {
+      database.viewsPages.emptyPageTrash();
       return null;
     });
   });
@@ -735,6 +790,31 @@ export function registerIpcHandlers({
   ipcMain.handle(IPC_CHANNELS.backupRestore, (event, backupIdOrPath: unknown) => {
     trust(event);
     return mutation(() => database.backups.restoreBackup(parseId(backupIdOrPath)));
+  });
+  ipcMain.handle(IPC_CHANNELS.cloudBackupStatus, (event) => {
+    trust(event);
+    return cloudBackups.getStatus();
+  });
+  ipcMain.handle(IPC_CHANNELS.cloudBackupCreate, (event, sessionToken: unknown, trigger: unknown) => {
+    trust(event);
+    const parsedTrigger = typeof trigger === 'string' && ['daily', 'manual', 'pre-delete', 'pre-restore', 'weekly'].includes(trigger)
+      ? trigger as BackupTrigger : 'manual';
+    return asyncMutation(() => cloudBackups.create(parseSessionToken(sessionToken), parsedTrigger));
+  });
+  ipcMain.handle(IPC_CHANNELS.cloudBackupList, (event, sessionToken: unknown) => {
+    trust(event);
+    return asyncMutation(() => cloudBackups.list(parseSessionToken(sessionToken)));
+  });
+  ipcMain.handle(IPC_CHANNELS.cloudBackupRestore, (event, sessionToken: unknown, backupId: unknown) => {
+    trust(event);
+    return asyncMutation(() => cloudBackups.restore(parseSessionToken(sessionToken), parseId(backupId)));
+  });
+  ipcMain.handle(IPC_CHANNELS.cloudBackupRunScheduled, (event, sessionToken: unknown, schedule: unknown) => {
+    trust(event);
+    if (!['daily', 'manual', 'weekly'].includes(String(schedule))) {
+      return mutation(() => { throw new ObjectDomainError('invalid-input', 'Invalid backup schedule.'); });
+    }
+    return asyncMutation(() => cloudBackups.runScheduled(parseSessionToken(sessionToken), schedule as 'daily' | 'manual' | 'weekly'));
   });
   ipcMain.handle(IPC_CHANNELS.systemResetWorkspace, (event) => {
     trust(event);

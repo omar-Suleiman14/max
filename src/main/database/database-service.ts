@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 
 import type { DatabaseHealth, DemoSeedSummary } from '../../shared/ipc-contract';
 import type { CompleteOnboardingDraft, ShopMetadata } from '../../shared/blueprint-contract';
+import { phoneShopBlueprint } from '../../shared/starter-blueprints';
 import { AccountRepository } from './account-repository';
 import { BlueprintService } from './blueprint-service';
 import { DemoDataService } from './demo-data-service';
@@ -149,19 +150,44 @@ export class DatabaseService {
 
   resetWorkspace(): void {
     this.#assertInitialized();
-    const tables = [
-      'shop_money_movements', 'shop_daily_sessions', 'shop_transactions', 'shop_accounts',
-      'object_property_values', 'object_audit_log', 'object_records', 'shop_templates',
-      'object_properties', 'shop_saved_views', 'shop_custom_pages', 'app_metadata',
-    ];
     this.#database.exec('BEGIN IMMEDIATE;');
     try {
-      for (const table of tables) this.#database.exec(`DELETE FROM ${table};`);
+      this.#clearWorkspace();
       this.#database.exec('COMMIT;');
     } catch (error) {
       if (this.#database.isTransaction) this.#database.exec('ROLLBACK;');
       throw error;
     }
+  }
+
+  resetDemoWorkspace(locale: 'ar' | 'en'): DemoSeedSummary {
+    this.#assertInitialized();
+    this.#database.exec('BEGIN IMMEDIATE;');
+    try {
+      this.#clearWorkspace();
+      this.blueprints.importBlueprint(phoneShopBlueprint);
+      const summary = this.demoData.seed(locale);
+      this.shopMetadata.completeOnboarding({
+        backupSchedule: 'daily',
+        includeDemoData: false,
+        locale,
+        shopName: locale === 'ar' ? 'متجر Max التجريبي' : 'Max Demo Mobile Store',
+      });
+      this.#database.exec('COMMIT;');
+      return summary;
+    } catch (error) {
+      if (this.#database.isTransaction) this.#database.exec('ROLLBACK;');
+      throw error;
+    }
+  }
+
+  #clearWorkspace(): void {
+    const tables = [
+      'inventory_movements', 'shop_money_movements', 'shop_daily_sessions', 'shop_transactions', 'shop_accounts',
+      'object_property_values', 'object_audit_log', 'object_records', 'shop_templates',
+      'object_properties', 'shop_saved_views', 'shop_custom_pages', 'app_metadata',
+    ];
+    for (const table of tables) this.#database.exec(`DELETE FROM ${table};`);
   }
 
   completeOnboarding(draft: CompleteOnboardingDraft): ShopMetadata {

@@ -9,6 +9,7 @@ export const phoneShopBlueprint: Blueprint = {
       {
         name: 'Model',
         rules: { choices: [], digitsOnly: false, required: true, unique: false },
+        semanticRole: 'DISPLAY_NAME',
         type: 'text',
       },
       {
@@ -51,7 +52,14 @@ export const phoneShopBlueprint: Blueprint = {
       {
         name: 'Selling Price',
         rules: { choices: [], digitsOnly: false, minimum: 0, required: false, unique: false },
+        semanticRole: 'PRICE',
         type: 'money',
+      },
+      {
+        name: 'Stock',
+        rules: { choices: [], digitsOnly: false, minimum: 0, required: true, unique: false },
+        semanticRole: 'QUANTITY',
+        type: 'number',
       },
     ],
     person: [
@@ -75,21 +83,21 @@ export const phoneShopBlueprint: Blueprint = {
   templates: [
     {
       defaults: { Condition: 'Brand New' },
-      fieldOrder: ['Model', 'Brand', 'Condition', 'IMEI', 'Selling Price', 'Cost Price'],
+      fieldOrder: ['Model', 'Selling Price', 'Stock', 'Brand', 'Condition', 'IMEI', 'Cost Price'],
       name: 'New Phone',
       objectKind: 'item',
       progressive: ['Cost Price'],
     },
     {
       defaults: { Condition: 'Used - Good' },
-      fieldOrder: ['Model', 'Brand', 'Condition', 'IMEI', 'Selling Price', 'Cost Price'],
+      fieldOrder: ['Model', 'Selling Price', 'Stock', 'Brand', 'Condition', 'IMEI', 'Cost Price'],
       name: 'Used Phone',
       objectKind: 'item',
       progressive: ['Cost Price'],
     },
     {
       defaults: {},
-      fieldOrder: ['Model', 'Brand', 'Selling Price', 'Cost Price'],
+      fieldOrder: ['Model', 'Selling Price', 'Stock', 'Brand', 'Cost Price'],
       name: 'Accessory / Case',
       objectKind: 'item',
       progressive: ['Cost Price'],

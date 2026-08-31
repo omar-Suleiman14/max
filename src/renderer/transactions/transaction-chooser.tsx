@@ -61,6 +61,7 @@ export function TransactionChooser({ locale, onChoose, onClose }: TransactionCho
           const Icon = choice.icon;
           return (
             <button
+              aria-label={locale === 'ar' ? choice.labelAr : choice.labelEn}
               key={choice.id}
               className="transaction-choice"
               data-autofocus={index === 0 ? 'true' : undefined}

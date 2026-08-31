@@ -7,7 +7,6 @@ import {
   Copy,
   Database,
   GripVertical,
-  Languages,
   MoreHorizontal,
   Pencil,
   Palette,
@@ -31,7 +30,6 @@ type SidebarProps = Readonly<{
   homePage: CustomPage;
   locale: Locale;
   onAddCustomPage: () => void;
-  onChangeLocale: () => void;
   onCollapse: () => void;
   onDeletePage: (id: string) => void;
   onDuplicatePage: (id: string) => void;
@@ -81,7 +79,6 @@ export function Sidebar({
   homePage,
   locale,
   onAddCustomPage,
-  onChangeLocale,
   onCollapse,
   onDeletePage,
   onDuplicatePage,
@@ -200,7 +197,6 @@ export function Sidebar({
   const CollapseIcon = collapsed
     ? (isRtl ? ArrowLeftToLine : ArrowRightToLine)
     : (isRtl ? ArrowRightToLine : ArrowLeftToLine);
-  const languageLabel = locale === 'en' ? 'العربية' : 'English';
   const settingsSections: readonly Readonly<{ icon: LucideIcon; id: SettingsSectionId; label: string }>[] = [
     { icon: Store, id: 'settings-general', label: locale === 'ar' ? 'عام' : 'General' },
     { icon: Palette, id: 'settings-appearance', label: locale === 'ar' ? 'المظهر' : 'Appearance' },
@@ -414,12 +410,6 @@ export function Sidebar({
       <div className="sidebar__footer">
         {!collapsed && <AuthWidget locale={locale} />}
         {!isSettings && <SidebarAction collapsed={collapsed} icon={Database} isActive={page === 'databases'} label={translate(locale, 'databases')} onClick={() => onNavigate('databases')} />}
-        <SidebarAction
-          collapsed={collapsed}
-          icon={Languages}
-          label={languageLabel}
-          onClick={onChangeLocale}
-        />
         <SidebarAction
           collapsed={collapsed}
           icon={SettingsActionIcon}

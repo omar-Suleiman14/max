@@ -200,7 +200,7 @@ export function MaxApp() {
         setSearchOpen(true);
       } else if ((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === 's') {
         event.preventDefault();
-        setQuickEntryOpen(true);
+        setTransactionChooserOpen(true);
       } else if (event.key === '/' && !isEditingTarget(event.target)) {
         event.preventDefault();
         setSearchOpen(true);
@@ -416,7 +416,6 @@ export function MaxApp() {
         homePage={homePage}
         locale={locale}
         onAddCustomPage={() => void handleAddCustomPage()}
-        onChangeLocale={() => setLocale(locale === 'en' ? 'ar' : 'en')}
         onCollapse={() => setSidebarCollapsed((collapsed) => !collapsed)}
         onDeletePage={handleDeleteCustomPage}
         onDuplicatePage={(id) => void handleDuplicateCustomPage(id)}
@@ -504,6 +503,8 @@ export function MaxApp() {
               onDemoDataSeeded={() => {
                 setDataRevision((revision) => revision + 1);
                 void loadPersistentCustomPages().then(setCustomPages);
+                setHomePage(loadHomePage(locale));
+                void window.maxApi.shop.getMetadata().then((metadata) => setShopName(metadata.shopName));
               }}
               onResetAppearance={() => setTheme('system')}
               onSectionChange={setSettingsSection}

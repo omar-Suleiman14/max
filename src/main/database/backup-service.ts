@@ -5,6 +5,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  renameSync,
   statSync,
   unlinkSync,
   writeFileSync,
@@ -287,6 +288,50 @@ export class BackupService {
         safetyRollbackOccurred: true,
       };
     }
+  }
+
+  importDownloadedBackup(input: Readonly<{
+    bytes: Uint8Array;
+    checksum: string;
+    createdAt: string;
+    id: string;
+    trigger: BackupTrigger;
+  }>): BackupMetadata {
+    if (!/^[a-zA-Z0-9_-]{1,100}$/.test(input.id)) {
+      throw new ObjectDomainError('invalid-input', 'Invalid cloud backup identifier.');
+    }
+    const actualChecksum = createHash('sha256').update(input.bytes).digest('hex');
+    if (!input.checksum || actualChecksum !== input.checksum) {
+      throw new ObjectDomainError('invalid-input', 'Downloaded cloud backup failed checksum verification.');
+    }
+
+    const filename = `max-cloud-${input.id}.maxbak`;
+    const filePath = join(this.#backupDir, filename);
+    const temporaryPath = `${filePath}.download`;
+    writeFileSync(temporaryPath, input.bytes);
+    renameSync(temporaryPath, filePath);
+
+    const provisional: BackupMetadata = {
+      checksum: actualChecksum,
+      createdAt: input.createdAt,
+      filePath,
+      filename,
+      id: input.id,
+      schemaVersion: 0,
+      sizeBytes: input.bytes.byteLength,
+      trigger: input.trigger,
+    };
+    writeFileSync(`${filePath}.json`, JSON.stringify(provisional, null, 2), 'utf-8');
+    const verification = this.verifyBackup(filePath);
+    if (!verification.valid) {
+      unlinkSync(filePath);
+      unlinkSync(`${filePath}.json`);
+      throw new ObjectDomainError('invalid-input', `Downloaded cloud backup is invalid: ${verification.error ?? 'SQLite integrity check failed.'}`);
+    }
+    const metadata = { ...provisional, schemaVersion: verification.schemaVersion ?? 1 };
+    writeFileSync(`${filePath}.json`, JSON.stringify(metadata, null, 2), 'utf-8');
+    this.#pruneOldBackups();
+    return metadata;
   }
 
   #pruneOldBackups(): void {
