@@ -1071,4 +1071,15 @@ export const migrations: readonly Migration[] = [
       `);
     },
   },
+  {
+    id: 16,
+    name: 'person_statement_lookup',
+    up(database) {
+      database.exec(`
+        CREATE INDEX shop_transactions_person_active_created
+          ON shop_transactions (person_id, created_at DESC, id DESC)
+          WHERE archived_at IS NULL;
+      `);
+    },
+  },
 ];

@@ -26,34 +26,7 @@ export class PersonDebtService {
       `)
       .all() as { id: string; label: string }[];
 
-    return people.map((p) => {
-      const balanceRow = this.database
-        .prepare(`
-          SELECT
-            COALESCE(SUM(CASE WHEN transaction_type = 'sale' THEN (total_amount - paid_amount) ELSE 0 END), 0)
-            - COALESCE(SUM(CASE WHEN transaction_type = 'income' AND (note LIKE 'Debt Repayment%' OR note LIKE 'سداد دين%') THEN paid_amount ELSE 0 END), 0)
-            - COALESCE(SUM(CASE WHEN transaction_type = 'adjustment' AND (note LIKE 'Debt Forgiveness%' OR note LIKE 'إسقاط دين%') THEN total_amount ELSE 0 END), 0)
-            AS receivable,
-            COALESCE(SUM(CASE WHEN transaction_type IN ('purchase', 'expense') THEN (total_amount - paid_amount) ELSE 0 END), 0)
-            AS payable,
-            MAX(created_at) AS last_activity
-          FROM shop_transactions
-          WHERE person_id = ? AND archived_at IS NULL AND reversed_at IS NULL
-        `)
-        .get(p.id) as { last_activity: string | null; payable: number; receivable: number };
-
-      const receivable = Math.max(0, Math.round(balanceRow.receivable * 100) / 100);
-      const payable = Math.max(0, Math.round(balanceRow.payable * 100) / 100);
-
-      return {
-        lastActivity: balanceRow.last_activity ?? undefined,
-        netBalance: Math.round((receivable - payable) * 100) / 100,
-        payable,
-        personId: p.id,
-        personLabel: p.label,
-        receivable,
-      };
-    });
+    return people.map((person) => this.#getBalance(person));
   }
 
   getStatement(personId: string): PersonFinancialStatement {
@@ -65,18 +38,10 @@ export class PersonDebtService {
       throw new ObjectDomainError('not-found', 'Person record not found.');
     }
 
-    const allBalances = this.getBalances();
-    const summary = allBalances.find((b) => b.personId === personId) ?? {
-      netBalance: 0,
-      payable: 0,
-      personId: person.id,
-      personLabel: person.label,
-      receivable: 0,
-    };
+    const summary = this.#getBalance(person);
 
     const history = this.transactions
-      .listTransactions(500)
-      .filter((tx) => tx.personId === personId);
+      .listTransactions(500, personId);
 
     const unpaidTransactions = history.filter(
       (tx) =>
@@ -137,5 +102,34 @@ export class PersonDebtService {
       totalAmount: amount,
       transactionType: 'adjustment',
     });
+  }
+
+  #getBalance(person: { id: string; label: string }): PersonBalanceSummary {
+    const balanceRow = this.database
+      .prepare(`
+        SELECT
+          COALESCE(SUM(CASE WHEN transaction_type = 'sale' THEN (total_amount - paid_amount) ELSE 0 END), 0)
+          - COALESCE(SUM(CASE WHEN transaction_type = 'income' AND (note LIKE 'Debt Repayment%' OR note LIKE 'سداد دين%') THEN paid_amount ELSE 0 END), 0)
+          - COALESCE(SUM(CASE WHEN transaction_type = 'adjustment' AND (note LIKE 'Debt Forgiveness%' OR note LIKE 'إسقاط دين%') THEN total_amount ELSE 0 END), 0)
+          AS receivable,
+          COALESCE(SUM(CASE WHEN transaction_type IN ('purchase', 'expense') THEN (total_amount - paid_amount) ELSE 0 END), 0)
+          AS payable,
+          MAX(created_at) AS last_activity
+        FROM shop_transactions
+        WHERE person_id = ? AND archived_at IS NULL AND reversed_at IS NULL
+      `)
+      .get(person.id) as { last_activity: string | null; payable: number; receivable: number };
+
+    const receivable = Math.max(0, Math.round(balanceRow.receivable * 100) / 100);
+    const payable = Math.max(0, Math.round(balanceRow.payable * 100) / 100);
+
+    return {
+      lastActivity: balanceRow.last_activity ?? undefined,
+      netBalance: Math.round((receivable - payable) * 100) / 100,
+      payable,
+      personId: person.id,
+      personLabel: person.label,
+      receivable,
+    };
   }
 }
