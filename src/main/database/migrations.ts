@@ -734,4 +734,352 @@ export const migrations: readonly Migration[] = [
       `);
     },
   },
+  {
+    id: 15,
+    name: 'workspace_schema_core',
+    up(database) {
+      database.exec(`
+        CREATE TABLE workspace_nodes (
+          id TEXT PRIMARY KEY NOT NULL,
+          kind TEXT NOT NULL CHECK (kind IN ('page', 'database', 'record')),
+          parent_node_id TEXT REFERENCES workspace_nodes(id) ON DELETE SET NULL,
+          title TEXT NOT NULL CHECK (length(trim(title)) BETWEEN 1 AND 200),
+          icon TEXT,
+          content_json TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(content_json)),
+          position_key TEXT NOT NULL,
+          revision INTEGER NOT NULL DEFAULT 1 CHECK (revision >= 1),
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          archived_at TEXT
+        ) STRICT;
+
+        CREATE INDEX workspace_nodes_parent
+          ON workspace_nodes (parent_node_id, position_key) WHERE archived_at IS NULL;
+        CREATE INDEX workspace_nodes_kind_position
+          ON workspace_nodes (kind, position_key) WHERE archived_at IS NULL;
+
+        CREATE TABLE workspace_databases (
+          id TEXT PRIMARY KEY NOT NULL REFERENCES workspace_nodes(id) ON DELETE CASCADE,
+          default_view_id TEXT,
+          visibility TEXT NOT NULL DEFAULT 'normal' CHECK (visibility IN ('normal', 'advanced')),
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        ) STRICT;
+
+        CREATE TABLE workspace_properties (
+          id TEXT PRIMARY KEY NOT NULL,
+          database_id TEXT NOT NULL REFERENCES workspace_databases(id) ON DELETE CASCADE,
+          name TEXT NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 120),
+          type TEXT NOT NULL CHECK (type IN (
+            'title', 'text', 'number', 'money', 'select', 'multi_select', 'status',
+            'checkbox', 'date', 'relation', 'rollup', 'formula', 'url', 'email',
+            'phone', 'file', 'user', 'created_time', 'created_by', 'last_edited_time',
+            'last_edited_by', 'auto_id', 'button'
+          )),
+          required INTEGER NOT NULL DEFAULT 0 CHECK (required IN (0, 1)),
+          unique_value INTEGER NOT NULL DEFAULT 0 CHECK (unique_value IN (0, 1)),
+          default_value_json TEXT CHECK (default_value_json IS NULL OR json_valid(default_value_json)),
+          config_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(config_json)),
+          position_key TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          archived_at TEXT
+        ) STRICT;
+
+        CREATE INDEX workspace_properties_database
+          ON workspace_properties (database_id, position_key) WHERE archived_at IS NULL;
+        CREATE UNIQUE INDEX workspace_properties_active_name
+          ON workspace_properties (database_id, name COLLATE NOCASE) WHERE archived_at IS NULL;
+        CREATE UNIQUE INDEX workspace_properties_single_title
+          ON workspace_properties (database_id) WHERE type = 'title' AND archived_at IS NULL;
+
+        CREATE TABLE workspace_status_groups (
+          id TEXT PRIMARY KEY NOT NULL,
+          property_id TEXT NOT NULL REFERENCES workspace_properties(id) ON DELETE CASCADE,
+          category TEXT NOT NULL CHECK (category IN ('NOT_STARTED', 'ACTIVE', 'COMPLETE')),
+          label TEXT NOT NULL CHECK (length(trim(label)) BETWEEN 1 AND 80),
+          position_key TEXT NOT NULL
+        ) STRICT;
+
+        CREATE INDEX workspace_status_groups_property
+          ON workspace_status_groups (property_id, position_key);
+
+        CREATE TABLE workspace_property_options (
+          id TEXT PRIMARY KEY NOT NULL,
+          property_id TEXT NOT NULL REFERENCES workspace_properties(id) ON DELETE CASCADE,
+          status_group_id TEXT REFERENCES workspace_status_groups(id) ON DELETE SET NULL,
+          label TEXT NOT NULL CHECK (length(trim(label)) BETWEEN 1 AND 120),
+          style_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(style_json)),
+          position_key TEXT NOT NULL,
+          archived_at TEXT
+        ) STRICT;
+
+        CREATE INDEX workspace_property_options_prop
+          ON workspace_property_options (property_id, position_key) WHERE archived_at IS NULL;
+        CREATE UNIQUE INDEX workspace_property_options_active_label
+          ON workspace_property_options (property_id, label COLLATE NOCASE) WHERE archived_at IS NULL;
+
+        CREATE TABLE workspace_record_templates (
+          id TEXT PRIMARY KEY NOT NULL,
+          database_id TEXT NOT NULL REFERENCES workspace_databases(id) ON DELETE CASCADE,
+          name TEXT NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 120),
+          icon TEXT,
+          defaults_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(defaults_json)),
+          content_json TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(content_json)),
+          position_key TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          archived_at TEXT
+        ) STRICT;
+
+        CREATE INDEX workspace_record_templates_db
+          ON workspace_record_templates (database_id, position_key) WHERE archived_at IS NULL;
+
+        CREATE TABLE workspace_records (
+          id TEXT PRIMARY KEY NOT NULL REFERENCES workspace_nodes(id) ON DELETE CASCADE,
+          database_id TEXT NOT NULL REFERENCES workspace_databases(id) ON DELETE RESTRICT,
+          sequence INTEGER NOT NULL CHECK (sequence >= 1),
+          position_key TEXT NOT NULL,
+          template_id TEXT REFERENCES workspace_record_templates(id) ON DELETE SET NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          archived_at TEXT
+        ) STRICT;
+
+        CREATE UNIQUE INDEX workspace_records_db_sequence
+          ON workspace_records (database_id, sequence);
+        CREATE INDEX workspace_records_db_pos
+          ON workspace_records (database_id, position_key) WHERE archived_at IS NULL;
+        CREATE INDEX workspace_records_archived
+          ON workspace_records (database_id, archived_at);
+
+        CREATE TABLE workspace_property_values (
+          record_id TEXT NOT NULL REFERENCES workspace_records(id) ON DELETE CASCADE,
+          property_id TEXT NOT NULL REFERENCES workspace_properties(id) ON DELETE CASCADE,
+          text_value TEXT,
+          number_value REAL,
+          money_minor_value INTEGER,
+          boolean_value INTEGER CHECK (boolean_value IS NULL OR boolean_value IN (0, 1)),
+          date_start TEXT,
+          date_end TEXT,
+          date_has_time INTEGER DEFAULT 0 CHECK (date_has_time IN (0, 1)),
+          option_id TEXT REFERENCES workspace_property_options(id) ON DELETE SET NULL,
+          json_value TEXT CHECK (json_value IS NULL OR json_valid(json_value)),
+          updated_at TEXT NOT NULL,
+          PRIMARY KEY (record_id, property_id)
+        ) STRICT;
+
+        CREATE INDEX workspace_property_values_text
+          ON workspace_property_values (property_id, text_value) WHERE text_value IS NOT NULL;
+        CREATE INDEX workspace_property_values_number
+          ON workspace_property_values (property_id, number_value) WHERE number_value IS NOT NULL;
+        CREATE INDEX workspace_property_values_money
+          ON workspace_property_values (property_id, money_minor_value) WHERE money_minor_value IS NOT NULL;
+        CREATE INDEX workspace_property_values_date
+          ON workspace_property_values (property_id, date_start) WHERE date_start IS NOT NULL;
+        CREATE INDEX workspace_property_values_option
+          ON workspace_property_values (property_id, option_id) WHERE option_id IS NOT NULL;
+
+        CREATE TABLE workspace_multi_select_values (
+          record_id TEXT NOT NULL REFERENCES workspace_records(id) ON DELETE CASCADE,
+          property_id TEXT NOT NULL REFERENCES workspace_properties(id) ON DELETE CASCADE,
+          option_id TEXT NOT NULL REFERENCES workspace_property_options(id) ON DELETE CASCADE,
+          position_key TEXT NOT NULL,
+          PRIMARY KEY (record_id, property_id, option_id)
+        ) STRICT;
+
+        CREATE INDEX workspace_multi_select_prop_opt
+          ON workspace_multi_select_values (property_id, option_id);
+
+        CREATE TABLE workspace_relations (
+          id TEXT PRIMARY KEY NOT NULL,
+          source_property_id TEXT NOT NULL REFERENCES workspace_properties(id) ON DELETE CASCADE,
+          source_database_id TEXT NOT NULL REFERENCES workspace_databases(id) ON DELETE CASCADE,
+          target_database_id TEXT NOT NULL REFERENCES workspace_databases(id) ON DELETE CASCADE,
+          inverse_property_id TEXT REFERENCES workspace_properties(id) ON DELETE SET NULL,
+          source_cardinality TEXT NOT NULL DEFAULT 'many' CHECK (source_cardinality IN ('one', 'many')),
+          target_cardinality TEXT NOT NULL DEFAULT 'many' CHECK (target_cardinality IN ('one', 'many')),
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          archived_at TEXT
+        ) STRICT;
+
+        CREATE INDEX workspace_relations_pair
+          ON workspace_relations (source_database_id, target_database_id) WHERE archived_at IS NULL;
+
+        CREATE TABLE workspace_relation_edges (
+          id TEXT PRIMARY KEY NOT NULL,
+          relation_id TEXT NOT NULL REFERENCES workspace_relations(id) ON DELETE CASCADE,
+          source_record_id TEXT NOT NULL REFERENCES workspace_records(id) ON DELETE CASCADE,
+          target_record_id TEXT NOT NULL REFERENCES workspace_records(id) ON DELETE CASCADE,
+          position_key TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          archived_at TEXT,
+          UNIQUE (relation_id, source_record_id, target_record_id)
+        ) STRICT;
+
+        CREATE INDEX workspace_relation_edges_source
+          ON workspace_relation_edges (relation_id, source_record_id) WHERE archived_at IS NULL;
+        CREATE INDEX workspace_relation_edges_target
+          ON workspace_relation_edges (relation_id, target_record_id) WHERE archived_at IS NULL;
+
+        CREATE TABLE workspace_views (
+          id TEXT PRIMARY KEY NOT NULL,
+          database_id TEXT NOT NULL REFERENCES workspace_databases(id) ON DELETE CASCADE,
+          owner_type TEXT NOT NULL DEFAULT 'database' CHECK (owner_type IN ('database', 'block')),
+          owner_id TEXT NOT NULL,
+          name TEXT NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 120),
+          layout TEXT NOT NULL CHECK (layout IN (
+            'table', 'list', 'board', 'calendar', 'gallery', 'timeline', 'chart', 'map', 'form'
+          )),
+          filter_ast_json TEXT CHECK (filter_ast_json IS NULL OR json_valid(filter_ast_json)),
+          sort_json TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(sort_json)),
+          group_json TEXT CHECK (group_json IS NULL OR json_valid(group_json)),
+          property_state_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(property_state_json)),
+          layout_config_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(layout_config_json)),
+          position_key TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          archived_at TEXT
+        ) STRICT;
+
+        CREATE INDEX workspace_views_db_pos
+          ON workspace_views (database_id, position_key) WHERE archived_at IS NULL;
+        CREATE INDEX workspace_views_owner
+          ON workspace_views (owner_type, owner_id) WHERE archived_at IS NULL;
+
+        CREATE TABLE workspace_dependencies (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          source_kind TEXT NOT NULL,
+          source_id TEXT NOT NULL,
+          target_kind TEXT NOT NULL,
+          target_id TEXT NOT NULL,
+          dependency_type TEXT NOT NULL,
+          metadata_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(metadata_json)),
+          created_at TEXT NOT NULL
+        ) STRICT;
+
+        CREATE INDEX workspace_dependencies_target
+          ON workspace_dependencies (target_kind, target_id);
+        CREATE INDEX workspace_dependencies_source
+          ON workspace_dependencies (source_kind, source_id);
+
+        CREATE TABLE workspace_workflows (
+          id TEXT PRIMARY KEY NOT NULL,
+          name TEXT NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 120),
+          icon TEXT,
+          kind TEXT NOT NULL DEFAULT 'custom' CHECK (kind IN ('built_in', 'custom')),
+          input_schema_json TEXT NOT NULL CHECK (json_valid(input_schema_json)),
+          steps_json TEXT NOT NULL CHECK (json_valid(steps_json)),
+          result_schema_json TEXT DEFAULT '{}' CHECK (result_schema_json IS NULL OR json_valid(result_schema_json)),
+          version INTEGER NOT NULL DEFAULT 1 CHECK (version >= 1),
+          position_key TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          archived_at TEXT
+        ) STRICT;
+
+        CREATE INDEX workspace_workflows_kind_pos
+          ON workspace_workflows (kind, position_key) WHERE archived_at IS NULL;
+
+        CREATE TABLE workspace_workflow_revisions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          workflow_id TEXT NOT NULL REFERENCES workspace_workflows(id) ON DELETE CASCADE,
+          version INTEGER NOT NULL CHECK (version >= 1),
+          definition_json TEXT NOT NULL CHECK (json_valid(definition_json)),
+          created_at TEXT NOT NULL,
+          UNIQUE (workflow_id, version)
+        ) STRICT;
+
+        CREATE TABLE workspace_workflow_runs (
+          id TEXT PRIMARY KEY NOT NULL,
+          workflow_id TEXT NOT NULL REFERENCES workspace_workflows(id) ON DELETE RESTRICT,
+          workflow_version INTEGER NOT NULL CHECK (workflow_version >= 1),
+          status TEXT NOT NULL CHECK (status IN ('completed', 'failed', 'rolled_back')),
+          input_json TEXT NOT NULL CHECK (json_valid(input_json)),
+          result_json TEXT CHECK (result_json IS NULL OR json_valid(result_json)),
+          actor_id TEXT NOT NULL,
+          started_at TEXT NOT NULL,
+          completed_at TEXT,
+          error_json TEXT CHECK (error_json IS NULL OR json_valid(error_json))
+        ) STRICT;
+
+        CREATE INDEX workspace_workflow_runs_wf
+          ON workspace_workflow_runs (workflow_id, started_at DESC);
+
+        CREATE TABLE workspace_attachments (
+          id TEXT PRIMARY KEY NOT NULL,
+          filename TEXT NOT NULL,
+          mime_type TEXT NOT NULL,
+          size_bytes INTEGER NOT NULL CHECK (size_bytes >= 0),
+          content_blob BLOB NOT NULL,
+          created_at TEXT NOT NULL
+        ) STRICT;
+
+        CREATE TABLE workspace_file_values (
+          record_id TEXT NOT NULL REFERENCES workspace_records(id) ON DELETE CASCADE,
+          property_id TEXT NOT NULL REFERENCES workspace_properties(id) ON DELETE CASCADE,
+          attachment_id TEXT NOT NULL REFERENCES workspace_attachments(id) ON DELETE CASCADE,
+          position_key TEXT NOT NULL,
+          PRIMARY KEY (record_id, property_id, attachment_id)
+        ) STRICT;
+
+        CREATE TABLE workspace_audit_log (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          entity_kind TEXT NOT NULL,
+          entity_id TEXT NOT NULL,
+          action TEXT NOT NULL CHECK (action IN ('created', 'updated', 'archived', 'restored')),
+          actor_id TEXT NOT NULL,
+          before_json TEXT CHECK (before_json IS NULL OR json_valid(before_json)),
+          after_json TEXT CHECK (after_json IS NULL OR json_valid(after_json)),
+          metadata_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(metadata_json)),
+          created_at TEXT NOT NULL
+        ) STRICT;
+
+        CREATE INDEX workspace_audit_log_entity
+          ON workspace_audit_log (entity_kind, entity_id, id DESC);
+
+        CREATE VIRTUAL TABLE workspace_search_index USING fts5(
+          entity_id UNINDEXED,
+          entity_kind UNINDEXED,
+          database_id UNINDEXED,
+          display_title UNINDEXED,
+          display_subtitle UNINDEXED,
+          display_metadata UNINDEXED,
+          search_text,
+          tokenize = 'unicode61 remove_diacritics 2'
+        );
+
+        CREATE TABLE workspace_migration_map (
+          legacy_entity_type TEXT NOT NULL,
+          legacy_id TEXT NOT NULL,
+          workspace_entity_type TEXT NOT NULL,
+          workspace_id TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          PRIMARY KEY (legacy_entity_type, legacy_id)
+        ) STRICT;
+
+        CREATE TABLE workspace_migration_issues (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          legacy_entity_type TEXT NOT NULL,
+          legacy_id TEXT NOT NULL,
+          severity TEXT NOT NULL CHECK (severity IN ('warning', 'error')),
+          message TEXT NOT NULL,
+          details_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(details_json)),
+          created_at TEXT NOT NULL
+        ) STRICT;
+      `);
+    },
+  },
+  {
+    id: 16,
+    name: 'person_statement_lookup',
+    up(database) {
+      database.exec(`
+        CREATE INDEX shop_transactions_person_active_created
+          ON shop_transactions (person_id, created_at DESC, id DESC)
+          WHERE archived_at IS NULL;
+      `);
+    },
+  },
 ];

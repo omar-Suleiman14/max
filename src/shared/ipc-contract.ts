@@ -34,6 +34,53 @@ import type {
   TransactionRecord,
   TransferDraft,
 } from './transaction-contract';
+import type {
+  MigrationSummary,
+  MutationResult as WorkspaceMutationResult,
+  WorkspaceNavigation,
+  WorkspaceNode,
+  WorkspaceNodeDraft,
+  WorkspaceNodePatch,
+  WorkspaceSearchResult,
+} from './workspace-contract';
+import type {
+  DatabaseSchema,
+  WorkspaceDatabase,
+  WorkspaceDatabaseDraft,
+  WorkspaceDatabasePatch,
+} from './database-contract';
+import type {
+  PropertyDraft as WorkspacePropertyDraft,
+  PropertyPatch as WorkspacePropertyPatch,
+  PropertyType,
+  TypeConversionPreview,
+  TypeConversionStrategy,
+  WorkspaceProperty,
+  WorkspaceRecord,
+  WorkspaceRecordDraft,
+  WorkspaceRecordPatch,
+} from './property-contract';
+import type {
+  RelationTargetSummary,
+  WorkspaceRelation,
+  WorkspaceRelationDraft,
+} from './relation-contract';
+import type {
+  DatabaseQueryParams,
+  DatabaseQueryResult,
+} from './query-contract';
+import type {
+  WorkspaceView,
+  WorkspaceViewDraft,
+  WorkspaceViewPatch,
+} from './view-contract';
+import type {
+  WorkflowExecutionInput,
+  WorkflowExecutionResult,
+  WorkspaceWorkflow,
+  WorkspaceWorkflowDraft,
+} from './workflow-contract';
+import type { TemplateImportResult, WorkspaceTemplateV2 } from './template-v2-contract';
 
 export const IPC_CHANNELS = {
   accountArchive: 'max:accounts:archive',
@@ -121,6 +168,54 @@ export const IPC_CHANNELS = {
   viewCreate: 'max:views:create',
   viewList: 'max:views:list',
   viewUpdate: 'max:views:update',
+
+  // Max v0.2.0 Workspace Channels
+  workspaceGetNavigation: 'max:workspace:navigation:get',
+  workspaceGetNode: 'max:workspace:nodes:get',
+  workspaceCreateNode: 'max:workspace:nodes:create',
+  workspaceUpdateNode: 'max:workspace:nodes:update',
+  workspaceArchiveNode: 'max:workspace:nodes:archive',
+  workspaceRestoreNode: 'max:workspace:nodes:restore',
+  workspaceReorderNode: 'max:workspace:nodes:reorder',
+  workspaceGetDatabase: 'max:workspace:databases:get',
+  workspaceGetDatabaseSchema: 'max:workspace:databases:schema',
+  workspaceCreateDatabase: 'max:workspace:databases:create',
+  workspaceUpdateDatabase: 'max:workspace:databases:update',
+  workspaceArchiveDatabase: 'max:workspace:databases:archive',
+  workspaceDuplicateDatabase: 'max:workspace:databases:duplicate',
+  workspaceListProperties: 'max:workspace:properties:list',
+  workspaceCreateProperty: 'max:workspace:properties:create',
+  workspaceUpdateProperty: 'max:workspace:properties:update',
+  workspaceArchiveProperty: 'max:workspace:properties:archive',
+  workspacePreviewTypeConversion: 'max:workspace:properties:preview-type-conversion',
+  workspaceApplyTypeConversion: 'max:workspace:properties:apply-type-conversion',
+  workspaceGetRecord: 'max:workspace:records:get',
+  workspaceCreateRecord: 'max:workspace:records:create',
+  workspaceUpdateRecord: 'max:workspace:records:update',
+  workspaceArchiveRecord: 'max:workspace:records:archive',
+  workspaceBatchCreateRecords: 'max:workspace:records:batch-create',
+  workspaceListRelations: 'max:workspace:relations:list',
+  workspaceCreateRelation: 'max:workspace:relations:create',
+  workspaceArchiveRelation: 'max:workspace:relations:archive',
+  workspaceGetRelatedRecords: 'max:workspace:relations:get-related',
+  workspaceLinkRecords: 'max:workspace:relations:link',
+  workspaceUnlinkRecords: 'max:workspace:relations:unlink',
+  workspaceSearchRelationTargets: 'max:workspace:relations:search-targets',
+  workspaceListViews: 'max:workspace:views:list',
+  workspaceGetView: 'max:workspace:views:get',
+  workspaceCreateView: 'max:workspace:views:create',
+  workspaceUpdateView: 'max:workspace:views:update',
+  workspaceArchiveView: 'max:workspace:views:archive',
+  workspaceQueryDatabase: 'max:workspace:queries:execute',
+  workspaceListWorkflows: 'max:workspace:workflows:list',
+  workspaceGetWorkflow: 'max:workspace:workflows:get',
+  workspaceCreateWorkflow: 'max:workspace:workflows:create',
+  workspaceUpdateWorkflow: 'max:workspace:workflows:update',
+  workspaceArchiveWorkflow: 'max:workspace:workflows:archive',
+  workspaceExecuteWorkflow: 'max:workspace:workflows:execute',
+  workspaceSearch: 'max:workspace:search:query',
+  workspaceImportTemplate: 'max:workspace:templates:import',
+  workspaceMigrateV01: 'max:workspace:migration:v01-to-v02',
 } as const;
 
 export type DatabaseHealth = Readonly<{
@@ -291,5 +386,53 @@ export type MaxApi = Readonly<{
     create: (draft: SavedViewDraft) => Promise<MutationResult<SavedView>>;
     list: (targetKind?: ViewTargetKind) => Promise<readonly SavedView[]>;
     update: (id: string, draft: SavedViewDraft) => Promise<MutationResult<SavedView>>;
+  }>;
+  workspace: Readonly<{
+    archiveDatabase: (id: string) => Promise<WorkspaceMutationResult<null>>;
+    archiveNode: (id: string) => Promise<WorkspaceMutationResult<null>>;
+    archiveProperty: (id: string) => Promise<WorkspaceMutationResult<null>>;
+    archiveRecord: (id: string) => Promise<WorkspaceMutationResult<null>>;
+    archiveRelation: (id: string) => Promise<WorkspaceMutationResult<null>>;
+    archiveView: (id: string) => Promise<WorkspaceMutationResult<null>>;
+    archiveWorkflow: (id: string) => Promise<WorkspaceMutationResult<null>>;
+    applyTypeConversion: (propertyId: string, targetType: PropertyType, strategy?: TypeConversionStrategy) => Promise<WorkspaceMutationResult<WorkspaceProperty>>;
+    batchCreateRecords: (records: readonly WorkspaceRecordDraft[]) => Promise<WorkspaceMutationResult<readonly WorkspaceRecord[]>>;
+    createDatabase: (draft: WorkspaceDatabaseDraft) => Promise<WorkspaceMutationResult<WorkspaceDatabase>>;
+    createNode: (draft: WorkspaceNodeDraft) => Promise<WorkspaceMutationResult<WorkspaceNode>>;
+    createProperty: (draft: WorkspacePropertyDraft) => Promise<WorkspaceMutationResult<WorkspaceProperty>>;
+    createRecord: (draft: WorkspaceRecordDraft) => Promise<WorkspaceMutationResult<WorkspaceRecord>>;
+    createRelation: (draft: WorkspaceRelationDraft) => Promise<WorkspaceMutationResult<WorkspaceRelation>>;
+    createView: (draft: WorkspaceViewDraft) => Promise<WorkspaceMutationResult<WorkspaceView>>;
+    createWorkflow: (draft: WorkspaceWorkflowDraft) => Promise<WorkspaceMutationResult<WorkspaceWorkflow>>;
+    duplicateDatabase: (id: string, options?: { includeRecords?: boolean; title?: string }) => Promise<WorkspaceMutationResult<WorkspaceDatabase>>;
+    executeWorkflow: (input: WorkflowExecutionInput) => Promise<WorkspaceMutationResult<WorkflowExecutionResult>>;
+    getDatabase: (id: string) => Promise<WorkspaceDatabase | null>;
+    getDatabaseSchema: (id: string) => Promise<DatabaseSchema>;
+    getNavigation: (includeArchived?: boolean) => Promise<WorkspaceNavigation>;
+    getNode: (id: string) => Promise<WorkspaceNode | null>;
+    getRecord: (id: string) => Promise<WorkspaceRecord | null>;
+    getRelatedRecords: (recordId: string, relationId: string) => Promise<readonly WorkspaceRecord[]>;
+    getView: (id: string) => Promise<WorkspaceView | null>;
+    getWorkflow: (id: string) => Promise<WorkspaceWorkflow | null>;
+    importTemplate: (template: WorkspaceTemplateV2) => Promise<WorkspaceMutationResult<TemplateImportResult>>;
+    linkRecords: (relationId: string, sourceRecordId: string, targetRecordId: string) => Promise<WorkspaceMutationResult<null>>;
+    listProperties: (databaseId: string) => Promise<readonly WorkspaceProperty[]>;
+    listRelations: (databaseId: string) => Promise<readonly WorkspaceRelation[]>;
+    listViews: (databaseId: string) => Promise<readonly WorkspaceView[]>;
+    listWorkflows: () => Promise<readonly WorkspaceWorkflow[]>;
+    migrateV01: () => Promise<WorkspaceMutationResult<MigrationSummary>>;
+    previewTypeConversion: (propertyId: string, targetType: PropertyType) => Promise<TypeConversionPreview>;
+    queryDatabase: (params: DatabaseQueryParams) => Promise<DatabaseQueryResult>;
+    reorderNode: (id: string, targetPositionKey: string, newParentId?: string | null) => Promise<WorkspaceMutationResult<WorkspaceNode>>;
+    restoreNode: (id: string) => Promise<WorkspaceMutationResult<WorkspaceNode>>;
+    searchRelationTargets: (relationId: string, query: string, limit?: number, fromRecordId?: string) => Promise<readonly RelationTargetSummary[]>;
+    searchWorkspace: (query: string, limit?: number) => Promise<readonly WorkspaceSearchResult[]>;
+    unlinkRecords: (relationId: string, sourceRecordId: string, targetRecordId: string) => Promise<WorkspaceMutationResult<null>>;
+    updateDatabase: (id: string, patch: WorkspaceDatabasePatch) => Promise<WorkspaceMutationResult<WorkspaceDatabase>>;
+    updateNode: (id: string, patch: WorkspaceNodePatch) => Promise<WorkspaceMutationResult<WorkspaceNode>>;
+    updateProperty: (id: string, patch: WorkspacePropertyPatch) => Promise<WorkspaceMutationResult<WorkspaceProperty>>;
+    updateRecord: (id: string, patch: WorkspaceRecordPatch) => Promise<WorkspaceMutationResult<WorkspaceRecord>>;
+    updateView: (id: string, patch: WorkspaceViewPatch) => Promise<WorkspaceMutationResult<WorkspaceView>>;
+    updateWorkflow: (id: string, patch: Partial<WorkspaceWorkflowDraft>) => Promise<WorkspaceMutationResult<WorkspaceWorkflow>>;
   }>;
 }>;

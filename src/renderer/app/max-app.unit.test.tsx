@@ -55,6 +55,7 @@ const blueprintApi = {
 import type { CompleteOnboardingDraft, ShopMetadata } from '../../shared/blueprint-contract';
 import type { QuickEntryDraft, QuickEntryPriceSuggestion } from '../../shared/quick-entry-contract';
 import type { AccountDefinition } from '../../shared/account-contract';
+import type { WorkspaceNavigation, WorkspaceNode, WorkspaceNodeDraft, WorkspaceNodePatch } from '../../shared/workspace-contract';
 import type { ConfigurableRecord, PropertyDefinition, PropertyDraft } from '../../shared/object-contract';
 import { calculatePricing, type PricingProfile, type PricingProfileDraft, type PricingService } from '../../shared/pricing-contract';
 
@@ -352,6 +353,35 @@ const viewsApi = {
   update: vi.fn(),
 };
 
+const workspaceNode = (draft: WorkspaceNodeDraft) => ({
+  archivedAt: null,
+  contentJson: draft.contentJson ?? '[]',
+  createdAt: '2026-08-30T10:00:00.000Z',
+  icon: draft.icon ?? null,
+  id: draft.id ?? 'workspace-page-1',
+  kind: draft.kind,
+  parentNodeId: draft.parentNodeId ?? null,
+  positionKey: draft.positionKey ?? 'p00000001',
+  revision: 1,
+  title: draft.title,
+  updatedAt: '2026-08-30T10:00:00.000Z',
+});
+
+const workspaceApi = {
+  archiveNode: vi.fn(() => Promise.resolve({ ok: true as const, value: null })),
+  createNode: vi.fn((draft: WorkspaceNodeDraft) => Promise.resolve({ ok: true as const, value: workspaceNode(draft) })),
+  getNavigation: vi.fn<() => Promise<WorkspaceNavigation>>(() => Promise.resolve({ databases: [], pages: [] })),
+  getNode: vi.fn<(id: string) => Promise<WorkspaceNode | null>>(() => Promise.resolve(null)),
+  listWorkflows: vi.fn(() => Promise.resolve([])),
+  migrateV01: vi.fn(() => Promise.resolve({
+    ok: true as const,
+    value: { accountsMigrated: 0, inventoryMovementsMigrated: 0, itemsMigrated: 0, moneyMovementsMigrated: 0, pagesMigrated: 0, parityCheckPassed: true, peopleMigrated: 0, transactionsMigrated: 0, viewsMigrated: 0 },
+  })),
+  restoreNode: vi.fn(),
+  searchWorkspace: vi.fn(() => Promise.resolve([])),
+  updateNode: vi.fn((id: string, patch: WorkspaceNodePatch) => Promise.resolve({ ok: true as const, value: workspaceNode({ ...patch, id, kind: 'page', title: patch.title ?? 'Untitled' }) })),
+};
+
 const reconciliationApi = {
   closeSession: vi.fn(),
   getCurrentSession: vi.fn(() => Promise.resolve(null)),
@@ -421,6 +451,7 @@ beforeEach(() => {
       templates: templateApi,
       transactions: transactionsApi,
       views: viewsApi,
+      workspace: workspaceApi,
     },
   });
   getHealth.mockClear();
@@ -459,6 +490,12 @@ beforeEach(() => {
   pagesApi.list.mockClear();
   pagesApi.listArchived.mockClear();
   pagesApi.update.mockClear();
+  workspaceApi.createNode.mockClear();
+  workspaceApi.getNavigation.mockReset();
+  workspaceApi.getNavigation.mockResolvedValue({ databases: [], pages: [] });
+  workspaceApi.getNode.mockReset();
+  workspaceApi.getNode.mockResolvedValue(null);
+  workspaceApi.updateNode.mockClear();
   resetWorkspace.mockClear();
   scrollIntoView.mockClear();
 });
@@ -599,15 +636,15 @@ describe('Max shell', () => {
   });
 
   it('shows favorites, duplicates independent pages, and omits offline copy links', async () => {
-    pagesApi.list.mockResolvedValueOnce([{
-      createdAt: '2026-08-30T10:00:00.000Z',
+    const sourcePage = workspaceNode({
+      contentJson: JSON.stringify({ blocks: [{ content: 'Client brief', id: 'source-block', type: 'text' }], favorite: true, wiki: false }),
       icon: 'lucide:FileText',
       id: 'source-page',
-      layoutJson: JSON.stringify({ blocks: [{ content: 'Client brief', id: 'source-block', type: 'text' }], favorite: true, wiki: false }),
-      name: 'Client notes',
-      position: 0,
-      updatedAt: '2026-08-30T10:00:00.000Z',
-    }]);
+      kind: 'page',
+      title: 'Client notes',
+    });
+    workspaceApi.getNavigation.mockResolvedValue({ databases: [], pages: [{ ...sourcePage, level: 0 }] });
+    workspaceApi.getNode.mockImplementation((id: string) => Promise.resolve(id === sourcePage.id ? sourcePage : null));
     const user = userEvent.setup();
     render(<MaxApp />);
 
@@ -617,9 +654,9 @@ describe('Max shell', () => {
     expect(screen.queryByRole('menuitem', { name: 'Copy link' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('menuitem', { name: 'Duplicate' }));
 
-    await waitFor(() => expect(pagesApi.update).toHaveBeenCalled());
-    const duplicateCall = pagesApi.update.mock.calls.find(([id]) => id === 'page-1');
-    const duplicatedLayout = JSON.parse(duplicateCall?.[1].layoutJson ?? '{}') as { blocks?: readonly { id: string }[] };
+    await waitFor(() => expect(workspaceApi.updateNode).toHaveBeenCalled());
+    const duplicateCall = workspaceApi.updateNode.mock.calls.find(([id]) => id === 'workspace-page-1');
+    const duplicatedLayout = JSON.parse(duplicateCall?.[1].contentJson ?? '{}') as { blocks?: readonly { id: string }[] };
     expect(duplicatedLayout.blocks?.[0]?.id).not.toBe('source-block');
     expect(screen.getByRole('main', { name: 'Client notes copy' })).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Change icon or emoji' })).toHaveLength(1);
@@ -642,7 +679,6 @@ describe('Max shell', () => {
     const user = userEvent.setup();
     render(<MaxApp />);
     await screen.findByRole('button', { name: 'Home' });
-    await user.click(screen.getByRole('button', { name: 'Databases' }));
 
     const filterButton = await screen.findByRole('button', { name: 'Filter' });
     expect(filterButton).toBeInTheDocument();
@@ -781,8 +817,6 @@ describe('Max shell', () => {
     objectApi.updateRecord.mockResolvedValueOnce({ ok: true, value: { ...record, values: { condition: 'Used' } } });
     render(<MaxApp />);
     await screen.findByRole('button', { name: 'Home' });
-    await user.click(screen.getByRole('button', { name: 'Databases' }));
-
     await user.click(await screen.findByRole('button', { name: 'Brand New' }));
     const optionInput = screen.getByPlaceholderText('Search or create an option');
     await user.clear(optionInput);

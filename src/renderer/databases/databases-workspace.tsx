@@ -3,26 +3,29 @@ import {
   ContactRound,
   Database,
   Package,
+  Plus,
   ReceiptText,
   Scale,
   type LucideIcon,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 import { AccountsWorkspace } from '../accounts/accounts-workspace';
 import type { Locale } from '../app/i18n';
 import { ObjectWorkspace } from '../objects/object-workspace';
 import { ReconciliationWorkspace } from '../reconciliation/reconciliation-workspace';
 import { TransactionsWorkspace } from '../transactions/transactions-workspace';
+import type { NavigationItem } from '../../shared/workspace-contract';
+import { DatabasePage } from './DatabasePage';
 
-export type DatabaseTab = 'accounts' | 'items' | 'people' | 'reconciliation' | 'transactions';
+export type DatabaseTab = 'accounts' | 'items' | 'people' | 'reconciliation' | 'transactions' | (string & {});
 
 type DatabasesWorkspaceProps = Readonly<{
   initialTab?: DatabaseTab;
   locale: Locale;
 }>;
 
-const dbTabs: readonly Readonly<{
+const builtInTabs: readonly Readonly<{
   icon: LucideIcon;
   id: DatabaseTab;
   labelAr: string;
@@ -37,6 +40,37 @@ const dbTabs: readonly Readonly<{
 
 export function DatabasesWorkspace({ initialTab = 'items', locale }: DatabasesWorkspaceProps) {
   const [activeTab, setActiveTab] = useState<DatabaseTab>(initialTab);
+  const [customDatabases, setCustomDatabases] = useState<readonly NavigationItem[]>([]);
+
+  const loadDatabases = useCallback(async () => {
+    try {
+      const nav = await window.maxApi.workspace.getNavigation();
+      setCustomDatabases(nav.databases || []);
+    } catch {
+      setCustomDatabases([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadDatabases();
+  }, [loadDatabases]);
+
+  const handleCreateDatabase = async () => {
+    const title = window.prompt(locale === 'ar' ? 'اسم قاعدة البيانات الجديدة:' : 'New Database Name:');
+    if (!title || !title.trim()) return;
+
+    const res = await window.maxApi.workspace.createDatabase({
+      title: title.trim(),
+      visibility: 'normal',
+    });
+
+    if (res.ok) {
+      await loadDatabases();
+      setActiveTab(res.value.id);
+    }
+  };
+
+  const isBuiltIn = builtInTabs.some((t) => t.id === activeTab);
 
   return (
     <div className="databases-workspace">
@@ -56,7 +90,7 @@ export function DatabasesWorkspace({ initialTab = 'items', locale }: DatabasesWo
         </div>
 
         <nav aria-label="Databases Switcher" className="databases-tabs">
-          {dbTabs.map((tab) => {
+          {builtInTabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
             const label = locale === 'ar' ? tab.labelAr : tab.labelEn;
@@ -75,6 +109,35 @@ export function DatabasesWorkspace({ initialTab = 'items', locale }: DatabasesWo
               </button>
             );
           })}
+
+          {/* Custom / Migrated Generic Databases */}
+          {customDatabases.map((db) => {
+            const isActive = activeTab === db.id;
+            return (
+              <button
+                key={db.id}
+                aria-current={isActive ? 'page' : undefined}
+                className="databases-tab"
+                data-active={isActive}
+                onClick={() => setActiveTab(db.id)}
+                type="button"
+              >
+                <Database aria-hidden="true" size={17} />
+                <span>{db.title}</span>
+              </button>
+            );
+          })}
+
+          {/* New Database Button */}
+          <button
+            type="button"
+            className="databases-tab text-muted hover:text-foreground"
+            onClick={() => void handleCreateDatabase()}
+            title="Create new database"
+          >
+            <Plus size={16} className="mr-1" />
+            <span>{locale === 'ar' ? 'قاعدة جديدة' : 'New Database'}</span>
+          </button>
         </nav>
       </div>
 
@@ -94,6 +157,9 @@ export function DatabasesWorkspace({ initialTab = 'items', locale }: DatabasesWo
         {activeTab === 'reconciliation' && (
           <ReconciliationWorkspace key="reconciliation" locale={locale} />
         )}
+
+        {/* Render Generic Workspace Database */}
+        {!isBuiltIn && <DatabasePage key={activeTab} databaseId={activeTab} locale={locale} />}
       </div>
     </div>
   );

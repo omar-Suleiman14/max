@@ -21,6 +21,7 @@ import {
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 
 import type { AppPage, CustomPage, SettingsSectionId } from '../app/app-types';
+import type { NavigationItem } from '../../shared/workspace-contract';
 import { type Locale, translate } from '../app/i18n';
 import { AuthWidget } from '../auth/auth-provider';
 import { PageIconRenderer } from './page-icon-renderer';
@@ -28,6 +29,7 @@ import { PageIconRenderer } from './page-icon-renderer';
 type SidebarProps = Readonly<{
   collapsed: boolean;
   customPages: readonly CustomPage[];
+  databases: readonly NavigationItem[];
   homePage: CustomPage;
   locale: Locale;
   onAddCustomPage: () => void;
@@ -77,6 +79,7 @@ function SidebarAction({
 export function Sidebar({
   collapsed,
   customPages,
+  databases,
   homePage,
   locale,
   onAddCustomPage,
@@ -404,6 +407,27 @@ export function Sidebar({
           <Plus size={15} />
           {!collapsed && <span>{translate(locale, 'addPage')}</span>}
         </button>
+
+        {databases.length > 0 && (
+          <>
+            {!collapsed && <p className="sidebar__section-label">{locale === 'ar' ? 'قواعد البيانات' : 'Databases'}</p>}
+            {databases.map((database) => (
+              <button
+                aria-current={page === database.id ? 'page' : undefined}
+                aria-label={database.title}
+                className="nav-item"
+                data-active={page === database.id}
+                key={database.id}
+                onClick={() => onNavigate(database.id)}
+                title={database.title}
+                type="button"
+              >
+                <Database aria-hidden="true" size={17} />
+                {!collapsed && <span className="nav-item__title">{database.title}</span>}
+              </button>
+            ))}
+          </>
+        )}
           </nav>
         </>
       )}

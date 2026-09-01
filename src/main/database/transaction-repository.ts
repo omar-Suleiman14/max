@@ -98,7 +98,8 @@ type MovementRow = Readonly<{
 export class TransactionRepository {
   constructor(private readonly database: DatabaseSync) {}
 
-  listTransactions(limit = 200): readonly TransactionRecord[] {
+  listTransactions(limit = 200, personId?: string): readonly TransactionRecord[] {
+    const personFilter = personId ? 'AND t.person_id = ?' : '';
     const rows = this.database
       .prepare(`
         SELECT
@@ -139,11 +140,11 @@ export class TransactionRepository {
         FROM shop_transactions t
         LEFT JOIN object_records p ON p.id = t.person_id
         LEFT JOIN object_records i ON i.id = t.item_id
-        WHERE t.archived_at IS NULL
+        WHERE t.archived_at IS NULL ${personFilter}
         ORDER BY t.created_at DESC, t.id DESC
         LIMIT ?
       `)
-      .all(limit) as TransactionRow[];
+      .all(...(personId ? [personId, limit] : [limit])) as TransactionRow[];
 
     if (rows.length === 0) return [];
 

@@ -12,6 +12,21 @@ import type { CloseSessionDraft, OpenSessionDraft } from '../shared/reconciliati
 import type { TemplateDraft } from '../shared/template-contract';
 import type { TransactionDraft, TransferDraft } from '../shared/transaction-contract';
 import type { CustomPageDraft, SavedViewDraft, ViewTargetKind } from '../shared/views-search-contract';
+import type { WorkspaceDatabaseDraft, WorkspaceDatabasePatch } from '../shared/database-contract';
+import type {
+  PropertyType as WorkspacePropertyType,
+  TypeConversionStrategy,
+  WorkspacePropertyDraft,
+  WorkspacePropertyPatch,
+  WorkspaceRecordDraft,
+  WorkspaceRecordPatch,
+} from '../shared/property-contract';
+import type { DatabaseQueryParams } from '../shared/query-contract';
+import type { WorkspaceRelationDraft } from '../shared/relation-contract';
+import type { WorkspaceTemplateV2 } from '../shared/template-v2-contract';
+import type { WorkspaceViewDraft, WorkspaceViewPatch } from '../shared/view-contract';
+import type { WorkflowExecutionInput, WorkspaceWorkflowDraft } from '../shared/workflow-contract';
+import type { WorkspaceNodeDraft, WorkspaceNodePatch } from '../shared/workspace-contract';
 
 const maxApi: MaxApi = Object.freeze({
   accounts: Object.freeze({
@@ -220,6 +235,100 @@ const maxApi: MaxApi = Object.freeze({
       ipcRenderer.invoke(IPC_CHANNELS.viewList, targetKind) as ReturnType<MaxApi['views']['list']>,
     update: (id: string, draft: SavedViewDraft) =>
       ipcRenderer.invoke(IPC_CHANNELS.viewUpdate, id, draft) as ReturnType<MaxApi['views']['update']>,
+  }),
+  workspace: Object.freeze({
+    archiveDatabase: (id: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceArchiveDatabase, id) as ReturnType<MaxApi['workspace']['archiveDatabase']>,
+    archiveNode: (id: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceArchiveNode, id) as ReturnType<MaxApi['workspace']['archiveNode']>,
+    archiveProperty: (id: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceArchiveProperty, id) as ReturnType<MaxApi['workspace']['archiveProperty']>,
+    archiveRecord: (id: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceArchiveRecord, id) as ReturnType<MaxApi['workspace']['archiveRecord']>,
+    archiveRelation: (id: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceArchiveRelation, id) as ReturnType<MaxApi['workspace']['archiveRelation']>,
+    archiveView: (id: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceArchiveView, id) as ReturnType<MaxApi['workspace']['archiveView']>,
+    archiveWorkflow: (id: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceArchiveWorkflow, id) as ReturnType<MaxApi['workspace']['archiveWorkflow']>,
+    applyTypeConversion: (propertyId: string, targetType: WorkspacePropertyType, strategy?: TypeConversionStrategy) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceApplyTypeConversion, propertyId, targetType, strategy) as ReturnType<MaxApi['workspace']['applyTypeConversion']>,
+    batchCreateRecords: (records: readonly WorkspaceRecordDraft[]) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceBatchCreateRecords, records) as ReturnType<MaxApi['workspace']['batchCreateRecords']>,
+    createDatabase: (draft: WorkspaceDatabaseDraft) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceCreateDatabase, draft) as ReturnType<MaxApi['workspace']['createDatabase']>,
+    createNode: (draft: WorkspaceNodeDraft) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceCreateNode, draft) as ReturnType<MaxApi['workspace']['createNode']>,
+    createProperty: (draft: WorkspacePropertyDraft) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceCreateProperty, draft) as ReturnType<MaxApi['workspace']['createProperty']>,
+    createRecord: (draft: WorkspaceRecordDraft) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceCreateRecord, draft) as ReturnType<MaxApi['workspace']['createRecord']>,
+    createRelation: (draft: WorkspaceRelationDraft) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceCreateRelation, draft) as ReturnType<MaxApi['workspace']['createRelation']>,
+    createView: (draft: WorkspaceViewDraft) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceCreateView, draft) as ReturnType<MaxApi['workspace']['createView']>,
+    createWorkflow: (draft: WorkspaceWorkflowDraft) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceCreateWorkflow, draft) as ReturnType<MaxApi['workspace']['createWorkflow']>,
+    duplicateDatabase: (id: string, options?: { includeRecords?: boolean; title?: string }) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceDuplicateDatabase, id, options) as ReturnType<MaxApi['workspace']['duplicateDatabase']>,
+    executeWorkflow: (input: WorkflowExecutionInput) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceExecuteWorkflow, input) as ReturnType<MaxApi['workspace']['executeWorkflow']>,
+    getDatabase: (id: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceGetDatabase, id) as ReturnType<MaxApi['workspace']['getDatabase']>,
+    getDatabaseSchema: (id: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceGetDatabaseSchema, id) as ReturnType<MaxApi['workspace']['getDatabaseSchema']>,
+    getNavigation: (includeArchived?: boolean) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceGetNavigation, includeArchived) as ReturnType<MaxApi['workspace']['getNavigation']>,
+    getNode: (id: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceGetNode, id) as ReturnType<MaxApi['workspace']['getNode']>,
+    getRecord: (id: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceGetRecord, id) as ReturnType<MaxApi['workspace']['getRecord']>,
+    getRelatedRecords: (recordId: string, relationId: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceGetRelatedRecords, recordId, relationId) as ReturnType<MaxApi['workspace']['getRelatedRecords']>,
+    getView: (id: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceGetView, id) as ReturnType<MaxApi['workspace']['getView']>,
+    getWorkflow: (id: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceGetWorkflow, id) as ReturnType<MaxApi['workspace']['getWorkflow']>,
+    importTemplate: (template: WorkspaceTemplateV2) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceImportTemplate, template) as ReturnType<MaxApi['workspace']['importTemplate']>,
+    linkRecords: (relationId: string, sourceRecordId: string, targetRecordId: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceLinkRecords, relationId, sourceRecordId, targetRecordId) as ReturnType<MaxApi['workspace']['linkRecords']>,
+    listProperties: (databaseId: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceListProperties, databaseId) as ReturnType<MaxApi['workspace']['listProperties']>,
+    listRelations: (databaseId: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceListRelations, databaseId) as ReturnType<MaxApi['workspace']['listRelations']>,
+    listViews: (databaseId: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceListViews, databaseId) as ReturnType<MaxApi['workspace']['listViews']>,
+    listWorkflows: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceListWorkflows) as ReturnType<MaxApi['workspace']['listWorkflows']>,
+    migrateV01: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceMigrateV01) as ReturnType<MaxApi['workspace']['migrateV01']>,
+    previewTypeConversion: (propertyId: string, targetType: WorkspacePropertyType) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspacePreviewTypeConversion, propertyId, targetType) as ReturnType<MaxApi['workspace']['previewTypeConversion']>,
+    queryDatabase: (params: DatabaseQueryParams) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceQueryDatabase, params) as ReturnType<MaxApi['workspace']['queryDatabase']>,
+    reorderNode: (id: string, targetPositionKey: string, newParentId?: string | null) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceReorderNode, id, targetPositionKey, newParentId) as ReturnType<MaxApi['workspace']['reorderNode']>,
+    restoreNode: (id: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceRestoreNode, id) as ReturnType<MaxApi['workspace']['restoreNode']>,
+    searchRelationTargets: (relationId: string, query: string, limit?: number, fromRecordId?: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceSearchRelationTargets, relationId, query, limit, fromRecordId) as ReturnType<MaxApi['workspace']['searchRelationTargets']>,
+    searchWorkspace: (query: string, limit?: number) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceSearch, query, limit) as ReturnType<MaxApi['workspace']['searchWorkspace']>,
+    unlinkRecords: (relationId: string, sourceRecordId: string, targetRecordId: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceUnlinkRecords, relationId, sourceRecordId, targetRecordId) as ReturnType<MaxApi['workspace']['unlinkRecords']>,
+    updateDatabase: (id: string, patch: WorkspaceDatabasePatch) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceUpdateDatabase, id, patch) as ReturnType<MaxApi['workspace']['updateDatabase']>,
+    updateNode: (id: string, patch: WorkspaceNodePatch) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceUpdateNode, id, patch) as ReturnType<MaxApi['workspace']['updateNode']>,
+    updateProperty: (id: string, patch: WorkspacePropertyPatch) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceUpdateProperty, id, patch) as ReturnType<MaxApi['workspace']['updateProperty']>,
+    updateRecord: (id: string, patch: WorkspaceRecordPatch) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceUpdateRecord, id, patch) as ReturnType<MaxApi['workspace']['updateRecord']>,
+    updateView: (id: string, patch: WorkspaceViewPatch) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceUpdateView, id, patch) as ReturnType<MaxApi['workspace']['updateView']>,
+    updateWorkflow: (id: string, patch: Partial<WorkspaceWorkflowDraft>) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceUpdateWorkflow, id, patch) as ReturnType<MaxApi['workspace']['updateWorkflow']>,
   }),
 });
 

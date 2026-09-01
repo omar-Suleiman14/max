@@ -13,7 +13,7 @@ import { ObjectDomainError } from '../database/object-repository';
 
 type Fetch = typeof fetch;
 
-const backupTriggers: readonly BackupTrigger[] = ['daily', 'manual', 'pre-delete', 'pre-restore', 'weekly'];
+const backupTriggers: readonly BackupTrigger[] = ['daily', 'manual', 'pre-delete', 'pre-migration', 'pre-restore', 'weekly'];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

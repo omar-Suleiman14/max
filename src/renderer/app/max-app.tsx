@@ -11,19 +11,22 @@ import {
   Settings,
   X,
   Zap,
+  Workflow,
   type LucideIcon,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { BackupSchedule, Blueprint } from '../../shared/blueprint-contract';
 import type { TransactionRecord } from '../../shared/transaction-contract';
+import type { WorkspaceNavigation } from '../../shared/workspace-contract';
 import { BlueprintDialog } from '../blueprints/blueprint-dialog';
 import { DatabasesWorkspace } from '../databases/databases-workspace';
+import { DatabasePage } from '../databases/DatabasePage';
 import { Onboarding } from '../onboarding/onboarding';
 import { CustomPageView } from '../pages/custom-page-view';
 import {
-  loadCustomPages,
   loadHomePage,
+  loadPersistentHomePage,
   saveHomePage,
   archivePersistentCustomPage,
   createPersistentCustomPage,
@@ -53,6 +56,7 @@ import { QuickEntryDialog } from '../quick-entry/quick-entry-dialog';
 import { UndoToast } from '../ui/undo-toast';
 import { TransactionsWorkspace } from '../transactions/transactions-workspace';
 import { ObjectWorkspace } from '../objects/object-workspace';
+import { WorkflowLauncherDialog } from '../workflows/workflow-launcher-dialog';
 
 const pageLabels: Record<string, TranslationKey> = {
   accounts: 'account',
@@ -100,11 +104,13 @@ export function MaxApp() {
   const [settingsSection, setSettingsSection] = useState<SettingsSectionId>('settings-general');
   const [page, setPage] = useState<AppPage>('home');
   const [customPages, setCustomPages] = useState<readonly CustomPage[]>([]);
+  const [workspaceNavigation, setWorkspaceNavigation] = useState<WorkspaceNavigation>({ databases: [], pages: [] });
   const [homePage, setHomePage] = useState<CustomPage>(() => loadHomePage(locale));
   const [commandOpen, setCommandOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [blueprintModalTab, setBlueprintModalTab] = useState<'export' | 'import'>();
   const [quickEntryOpen, setQuickEntryOpen] = useState(false);
+  const [workflowOpen, setWorkflowOpen] = useState(false);
   const [dataRevision, setDataRevision] = useState(0);
   const [recentTxForUndo, setRecentTxForUndo] = useState<TransactionRecord>();
   const [objectCreateRequest, setObjectCreateRequest] = useState(0);
@@ -115,6 +121,8 @@ export function MaxApp() {
   const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(null);
   const [shopName, setShopName] = useState('');
   const [onboardingPreview, setOnboardingPreview] = useState(false);
+  const [openRecordId, setOpenRecordId] = useState<string>();
+  const startupLocale = useRef(locale);
 
   const effectiveTheme = resolveTheme(theme, systemUsesDark);
 
@@ -163,12 +171,26 @@ export function MaxApp() {
 
     void window.maxApi.shop
       .getMetadata()
-      .then((data) => {
+      .then(async (data) => {
         if (active) {
           setOnboardingCompleted(data.onboardingCompleted);
           setShopName(data.shopName);
           if (data.locale) {
             setLocale((current) => (data.locale !== current ? data.locale : current));
+          }
+        }
+        if (data.onboardingCompleted) {
+          const migration = await window.maxApi.workspace.migrateV01();
+          if (!migration.ok) throw new Error(migration.error.message);
+          const [pages, persistedHome, navigation] = await Promise.all([
+            loadPersistentCustomPages(),
+            loadPersistentHomePage(data.locale ?? startupLocale.current),
+            window.maxApi.workspace.getNavigation(),
+          ]);
+          if (active) {
+            setCustomPages(pages);
+            setHomePage(persistedHome);
+            setWorkspaceNavigation(navigation);
           }
         }
       })
@@ -177,12 +199,6 @@ export function MaxApp() {
           setOnboardingCompleted(true);
         }
       });
-
-    void loadPersistentCustomPages().then((pages) => {
-      if (active) setCustomPages(pages);
-    }).catch(() => {
-      if (active) setCustomPages(loadCustomPages());
-    });
 
     return () => {
       active = false;
@@ -208,6 +224,7 @@ export function MaxApp() {
 
   function navigate(nextPage: AppPage) {
     setPage(nextPage);
+    setOpenRecordId(undefined);
     setRequestedSavedViewId(undefined);
     setCommandOpen(false);
     setObjectCreateRequest(0);
@@ -284,7 +301,17 @@ export function MaxApp() {
       setLocale(res.value.locale);
       setHomePage(loadHomePage(res.value.locale));
       setOnboardingCompleted(true);
-      void loadPersistentCustomPages().then(setCustomPages);
+      const migration = await window.maxApi.workspace.migrateV01();
+      if (migration.ok) {
+        const [pages, persistedHome, navigation] = await Promise.all([
+          loadPersistentCustomPages(),
+          loadPersistentHomePage(res.value.locale),
+          window.maxApi.workspace.getNavigation(),
+        ]);
+        setCustomPages(pages);
+        setHomePage(persistedHome);
+        setWorkspaceNavigation(navigation);
+      }
     }
   }
 
@@ -368,11 +395,14 @@ export function MaxApp() {
 
   const isCustomPage = customPages.some((candidate) => candidate.id === page);
   const activeCustomPage = isCustomPage ? customPages.find((p) => p.id === page) : undefined;
+  const activeWorkspaceDatabase = workspaceNavigation.databases.find((database) => database.id === page);
 
   const pageLabel = page === 'home'
     ? homePage.title.trim() || translate(locale, 'home')
     : isCustomPage
       ? activeCustomPage?.title || translate(locale, 'untitledPage')
+      : activeWorkspaceDatabase
+        ? activeWorkspaceDatabase.title
       : page in pageLabels && pageLabels[page]
         ? translate(locale, pageLabels[page])
         : page;
@@ -398,6 +428,7 @@ export function MaxApp() {
       <Sidebar
         collapsed={sidebarCollapsed}
         customPages={customPages}
+        databases={workspaceNavigation.databases}
         homePage={homePage}
         locale={locale}
         onAddCustomPage={() => void handleAddCustomPage()}
@@ -439,6 +470,13 @@ export function MaxApp() {
               <kbd>{runtimePlatform === 'macos' ? '⌘' : 'Ctrl'} F</kbd>
             </button>
             <Button
+              icon={<Workflow aria-hidden="true" size={16} />}
+              onClick={() => setWorkflowOpen(true)}
+              variant="ghost"
+            >
+              {locale === 'ar' ? 'سير العمل' : 'Workflows'}
+            </Button>
+            <Button
               className="quick-entry-trigger"
               icon={<Zap aria-hidden="true" size={16} />}
               onClick={() => setQuickEntryOpen(true)}
@@ -478,6 +516,8 @@ export function MaxApp() {
             />
           ) : page === 'databases' ? (
             <DatabasesWorkspace key="databases" locale={locale} />
+          ) : activeWorkspaceDatabase ? (
+            <DatabasePage databaseId={activeWorkspaceDatabase.id} locale={locale} onOpenRecordId={openRecordId} />
           ) : page === 'settings' ? (
             <SettingsPage
               key="settings"
@@ -549,6 +589,13 @@ export function MaxApp() {
             else if (res.kind === 'account') navigate('accounts');
             else if (res.kind === 'transaction') navigate('transactions');
             else if (res.kind === 'page') navigate(res.id);
+            else if (res.kind === 'database') navigate(res.id);
+            else if (res.kind === 'record' && res.databaseId) {
+              setPage(res.databaseId);
+              setOpenRecordId(res.id);
+            } else if (res.kind === 'view' && 'databaseId' in res && typeof res.databaseId === 'string') {
+              navigate(res.databaseId);
+            }
           }}
         />
       )}
@@ -574,6 +621,7 @@ export function MaxApp() {
           }}
         />
       )}
+      {workflowOpen && <WorkflowLauncherDialog locale={locale} onClose={() => setWorkflowOpen(false)} />}
       {recentTxForUndo && (
         <UndoToast
           locale={locale}
