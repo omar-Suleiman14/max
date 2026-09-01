@@ -13,6 +13,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 
 import { calculateFee, type AccountDefinition, type AccountDraft, type AccountType, type FeeType } from '../../shared/account-contract';
 import type { TransferDraft } from '../../shared/transaction-contract';
+import type { PricingProvider } from '../../shared/pricing-contract';
 import type { Locale } from '../app/i18n';
 import { Button } from '../ui/button';
 import { FocusedOverlay } from '../ui/focused-overlay';
@@ -42,11 +43,13 @@ function AccountEditor({
   locale,
   onClose,
   onSave,
+  providers,
 }: Readonly<{
   initial?: AccountDefinition;
   locale: Locale;
   onClose: () => void;
   onSave: (draft: AccountDraft) => Promise<string | undefined>;
+  providers: readonly PricingProvider[];
 }>) {
   const [name, setName] = useState(initial?.name ?? '');
   const [accountType, setAccountType] = useState<AccountType>(initial?.accountType ?? 'cash');
@@ -56,6 +59,7 @@ function AccountEditor({
   const [percentage, setPercentage] = useState(initial?.feeConfig?.percentage?.toString() ?? '');
   const [minFee, setMinFee] = useState(initial?.feeConfig?.minFee?.toString() ?? '');
   const [maxFee, setMaxFee] = useState(initial?.feeConfig?.maxFee?.toString() ?? '');
+  const [providerId, setProviderId] = useState(initial?.providerId ?? '');
   const [error, setError] = useState<string>();
   const [saving, setSaving] = useState(false);
 
@@ -80,6 +84,7 @@ function AccountEditor({
       },
       initialBalance: balanceNum,
       name,
+      providerId: providerId || undefined,
     });
     setSaving(false);
     setError(nextError);
@@ -116,6 +121,14 @@ function AccountEditor({
             required
             value={name}
           />
+        </label>
+
+        <label className="field">
+          <span>{accountsCopy(locale, 'provider')}</span>
+          <select onChange={(event) => setProviderId(event.target.value)} value={providerId}>
+            <option value="">{accountsCopy(locale, 'noProvider')}</option>
+            {providers.filter((provider) => provider.active).map((provider) => <option key={provider.id} value={provider.id}>{provider.name}</option>)}
+          </select>
         </label>
 
         <label className="field">
@@ -314,6 +327,7 @@ function TransferDialog({
 
 export function AccountsWorkspace({ createRequest, locale, refreshRequest = 0 }: AccountsWorkspaceProps) {
   const [accounts, setAccounts] = useState<readonly AccountDefinition[]>([]);
+  const [providers, setProviders] = useState<readonly PricingProvider[]>([]);
   const [loading, setLoading] = useState(true);
   const [accountEditor, setAccountEditor] = useState<AccountDefinition | 'new'>();
   const [transferOpen, setTransferOpen] = useState(false);
@@ -323,8 +337,9 @@ export function AccountsWorkspace({ createRequest, locale, refreshRequest = 0 }:
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const list = await window.maxApi.accounts.list();
+      const [list, providerList] = await Promise.all([window.maxApi.accounts.list(), window.maxApi.pricing.providers.list()]);
       setAccounts(list);
+      setProviders(providerList);
     } catch {
       setError('Could not load accounts.');
     } finally {
@@ -484,6 +499,7 @@ export function AccountsWorkspace({ createRequest, locale, refreshRequest = 0 }:
           locale={locale}
           onClose={() => setAccountEditor(undefined)}
           onSave={handleSaveAccount}
+          providers={providers}
         />
       )}
 

@@ -14,10 +14,12 @@ export type OperationKind =
   | 'expense'
   | 'income'
   | 'transfer'
+  | 'adjustment'
   | 'reconciliation';
 
 export type QuickEntryDraft = Readonly<{
   accountId?: string;
+  adjustmentDirection?: 'inflow' | 'outflow';
   collectorId?: string;
   itemId?: string;
   note?: string;
@@ -25,6 +27,12 @@ export type QuickEntryDraft = Readonly<{
   paidAmount?: number;
   paymentMode: PaymentMode;
   personId?: string;
+  pricingCustomerType?: string;
+  pricingInputMode?: 'customer_pays' | 'customer_receives';
+  pricingOverrides?: readonly PricingOverride[];
+  pricingProfileId?: string;
+  pricingServiceId?: string;
+  providerCost?: number;
   providerFee?: number;
   quantity?: number;
   serviceFee?: number;
@@ -32,3 +40,4 @@ export type QuickEntryDraft = Readonly<{
   toAccountId?: string;
   totalAmount: number;
 }>;
+import type { PricingOverride } from './pricing-contract';

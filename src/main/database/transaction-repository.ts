@@ -10,6 +10,7 @@ import {
   type MovementType,
   type PaymentStatus,
   type TransactionDraft,
+  type TransactionPricing,
   type TransactionRecord,
   type TransactionType,
   type TransferDraft,
@@ -18,8 +19,13 @@ import { ObjectDomainError } from './object-repository';
 
 type TransactionRow = Readonly<{
   archived_at: string | null;
+  cashback: number;
+  customer_fee: number;
+  customer_total: number;
   created_at: string;
   id: string;
+  delivered_value: number;
+  discount: number;
   item_id: string | null;
   item_label: string | null;
   note: string | null;
@@ -28,14 +34,56 @@ type TransactionRow = Readonly<{
   person_id: string | null;
   person_label: string | null;
   provider_fee: number;
+  provider_commission: number;
+  provider_cost: number;
+  pricing_overrides_json: string | null;
+  pricing_profile_id: string | null;
+  pricing_service_id: string | null;
+  pricing_snapshot_json: string | null;
+  principal_amount: number;
+  profit_markup: number;
   quantity: number | null;
   reversal_of_id: string | null;
   reversed_at: string | null;
   service_fee: number;
+  shop_net_cost: number;
+  net_profit: number;
+  tax_amount: number;
   total_amount: number;
   transaction_type: TransactionType;
   updated_at: string;
 }>;
+
+function rowPricing(row: TransactionRow): TransactionPricing | undefined {
+  if (!row.pricing_profile_id || !row.pricing_snapshot_json) return undefined;
+  try {
+    const snapshot = JSON.parse(row.pricing_snapshot_json) as TransactionPricing['snapshot'];
+    const overrides = row.pricing_overrides_json
+      ? JSON.parse(row.pricing_overrides_json) as TransactionPricing['overrides']
+      : snapshot.input.overrides ?? [];
+    return {
+      cashback: row.cashback,
+      customerFee: row.customer_fee,
+      customerTotal: row.customer_total,
+      deliveredValue: row.delivered_value,
+      discount: row.discount,
+      netProfit: row.net_profit,
+      overrides,
+      principalAmount: row.principal_amount,
+      profileId: row.pricing_profile_id,
+      serviceId: row.pricing_service_id ?? undefined,
+      profitMarkup: row.profit_markup,
+      providerCommission: row.provider_commission,
+      providerCost: row.provider_cost,
+      providerFee: row.provider_fee,
+      shopNetCost: row.shop_net_cost,
+      snapshot,
+      taxAmount: row.tax_amount,
+    };
+  } catch {
+    return undefined;
+  }
+}
 
 type MovementRow = Readonly<{
   account_id: string;
@@ -67,6 +115,22 @@ export class TransactionRepository {
           t.quantity,
           t.provider_fee,
           t.service_fee,
+          t.principal_amount,
+          t.delivered_value,
+          t.provider_cost,
+          t.tax_amount,
+          t.customer_fee,
+          t.profit_markup,
+          t.provider_commission,
+          t.discount,
+          t.cashback,
+          t.customer_total,
+          t.shop_net_cost,
+          t.net_profit,
+          t.pricing_profile_id,
+          t.pricing_service_id,
+          t.pricing_snapshot_json,
+          t.pricing_overrides_json,
           t.reversal_of_id,
           t.reversed_at,
           t.created_at,
@@ -128,6 +192,7 @@ export class TransactionRepository {
       paymentStatus: row.payment_status,
       personId: row.person_id ?? undefined,
       personLabel: row.person_label ?? undefined,
+      pricing: rowPricing(row),
       providerFee: row.provider_fee ? Math.round(row.provider_fee * 100) / 100 : undefined,
       quantity: row.quantity ?? undefined,
       reversalOfId: row.reversal_of_id ?? undefined,
@@ -156,6 +221,22 @@ export class TransactionRepository {
           t.quantity,
           t.provider_fee,
           t.service_fee,
+          t.principal_amount,
+          t.delivered_value,
+          t.provider_cost,
+          t.tax_amount,
+          t.customer_fee,
+          t.profit_markup,
+          t.provider_commission,
+          t.discount,
+          t.cashback,
+          t.customer_total,
+          t.shop_net_cost,
+          t.net_profit,
+          t.pricing_profile_id,
+          t.pricing_service_id,
+          t.pricing_snapshot_json,
+          t.pricing_overrides_json,
           t.reversal_of_id,
           t.reversed_at,
           t.created_at,
@@ -208,6 +289,7 @@ export class TransactionRepository {
       paymentStatus: row.payment_status,
       personId: row.person_id ?? undefined,
       personLabel: row.person_label ?? undefined,
+      pricing: rowPricing(row),
       providerFee: row.provider_fee ? Math.round(row.provider_fee * 100) / 100 : undefined,
       quantity: row.quantity ?? undefined,
       reversalOfId: row.reversal_of_id ?? undefined,
@@ -256,6 +338,23 @@ export class TransactionRepository {
           now,
         );
 
+      if (draft.pricing) {
+        const pricing = draft.pricing;
+        this.database.prepare(`
+          UPDATE shop_transactions SET
+            principal_amount = ?, delivered_value = ?, provider_cost = ?, provider_fee = ?, tax_amount = ?,
+            customer_fee = ?, profit_markup = ?, provider_commission = ?, discount = ?, cashback = ?,
+            customer_total = ?, shop_net_cost = ?, net_profit = ?, pricing_profile_id = ?, pricing_service_id = ?,
+            pricing_snapshot_json = ?, pricing_overrides_json = ?
+          WHERE id = ?
+        `).run(
+          pricing.principalAmount, pricing.deliveredValue, pricing.providerCost, pricing.providerFee, pricing.taxAmount,
+          pricing.customerFee, pricing.profitMarkup, pricing.providerCommission, pricing.discount, pricing.cashback,
+          pricing.customerTotal, pricing.shopNetCost, pricing.netProfit, pricing.profileId, pricing.serviceId ?? null,
+          JSON.stringify(pricing.snapshot), JSON.stringify(pricing.overrides), id,
+        );
+      }
+
       if (draft.itemId && draft.quantity) {
         if (draft.transactionType === 'sale') {
           this.#applyInventoryDelta(draft.itemId, -draft.quantity, id, 'sale', now);
@@ -299,6 +398,23 @@ export class TransactionRepository {
           ) VALUES (?, 'transfer', ?, ?, 'paid', ?, ?, ?, ?, ?)
         `)
         .run(id, draft.amount, draft.amount, draft.note ?? null, providerFee, serviceFee, now, now);
+
+      if (draft.pricing) {
+        const pricing = draft.pricing;
+        this.database.prepare(`
+          UPDATE shop_transactions SET
+            principal_amount = ?, delivered_value = ?, provider_cost = ?, provider_fee = ?, tax_amount = ?,
+            customer_fee = ?, profit_markup = ?, provider_commission = ?, discount = ?, cashback = ?,
+            customer_total = ?, shop_net_cost = ?, net_profit = ?, pricing_profile_id = ?, pricing_service_id = ?,
+            pricing_snapshot_json = ?, pricing_overrides_json = ?
+          WHERE id = ?
+        `).run(
+          pricing.principalAmount, pricing.deliveredValue, pricing.providerCost, pricing.providerFee, pricing.taxAmount,
+          pricing.customerFee, pricing.profitMarkup, pricing.providerCommission, pricing.discount, pricing.cashback,
+          pricing.customerTotal, pricing.shopNetCost, pricing.netProfit, pricing.profileId, pricing.serviceId ?? null,
+          JSON.stringify(pricing.snapshot), JSON.stringify(pricing.overrides), id,
+        );
+      }
 
       // Outflow from source account (amount + provider fee)
       this.database
@@ -562,6 +678,7 @@ export class TransactionRepository {
       note: draft.note?.trim() || undefined,
       paidAmount: Math.round(paidAmount * 100) / 100,
       personId: draft.personId,
+      pricing: draft.pricing,
       providerFee: providerFee === undefined ? undefined : Math.round(providerFee * 100) / 100,
       quantity,
       serviceFee: serviceFee === undefined ? undefined : Math.round(serviceFee * 100) / 100,
@@ -602,6 +719,7 @@ export class TransactionRepository {
       amount: Math.round(amount * 100) / 100,
       fromAccountId: draft.fromAccountId,
       note: draft.note?.trim() || undefined,
+      pricing: draft.pricing,
       providerFee: Math.round(providerFee * 100) / 100,
       serviceFee: Math.round(serviceFee * 100) / 100,
       toAccountId: draft.toAccountId,

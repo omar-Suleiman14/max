@@ -145,6 +145,115 @@ describe('QuickEntryService', () => {
     expect(summary.totalSales).toBe(expectedCash - 10000);
   });
 
+  it('records audited account adjustments from quick entry in either direction', () => {
+    const db = service();
+    const cash = db.accounts.createAccount({ accountType: 'cash', initialBalance: 100, name: 'Drawer' });
+
+    const decrease = db.quickEntry.submit({
+      accountId: cash.id,
+      adjustmentDirection: 'outflow',
+      note: 'Count correction',
+      operationKind: 'adjustment',
+      paymentMode: 'full',
+      totalAmount: 12.5,
+    });
+    expect(decrease.transactionType).toBe('adjustment');
+    expect(decrease.movements[0]?.movementType).toBe('outflow');
+    expect(db.accounts.getAccount(cash.id).balance).toBe(87.5);
+
+    const increase = db.quickEntry.submit({
+      accountId: cash.id,
+      adjustmentDirection: 'inflow',
+      operationKind: 'adjustment',
+      paymentMode: 'full',
+      totalAmount: 2.5,
+    });
+    expect(increase.movements[0]?.movementType).toBe('inflow');
+    expect(db.accounts.getAccount(cash.id).balance).toBe(90);
+  });
+
+  it('persists an immutable pricing snapshot and all transaction profit amounts', () => {
+    const db = service();
+    const cash = db.accounts.createAccount({ accountType: 'cash', initialBalance: 0, name: 'Drawer' });
+    const baseProfile = {
+      active: true,
+      components: [
+        { base: 'principal', calculation: { fixedAmount: 5, kind: 'fixed' }, chargedTo: 'customer', conditions: [], id: 'provider-fee', label: 'Provider fee', order: 10, priority: 0, rounding: { mode: 'nearest', precision: 2 }, type: 'provider_fee' },
+        { base: 'principal', calculation: { fixedAmount: 3, kind: 'fixed' }, chargedTo: 'customer', conditions: [], id: 'profit', label: 'Profit', order: 20, priority: 0, rounding: { mode: 'nearest', precision: 2 }, type: 'profit' },
+        { base: 'principal', calculation: { fixedAmount: 2, kind: 'fixed' }, chargedTo: 'provider', conditions: [], id: 'commission', label: 'Commission', order: 30, paidTo: 'shop', priority: 0, rounding: { mode: 'nearest', precision: 2 }, type: 'commission' },
+      ],
+      currency: 'EGP',
+      inputMode: 'customer_pays',
+      name: 'Electricity bill',
+      provider: 'Fawry',
+      service: 'Electricity',
+    } as const;
+    const profile = db.pricing.createProfile(baseProfile);
+
+    const transaction = db.quickEntry.submit({
+      accountId: cash.id,
+      operationKind: 'sale',
+      paymentMode: 'full',
+      pricingProfileId: profile.id,
+      providerCost: 505,
+      totalAmount: 500,
+    });
+    expect(transaction.totalAmount).toBe(508);
+    expect(transaction.pricing).toMatchObject({
+      customerTotal: 508,
+      netProfit: 5,
+      principalAmount: 500,
+      profitMarkup: 3,
+      providerCommission: 2,
+      providerFee: 5,
+      shopNetCost: 503,
+    });
+    expect(db.accounts.getAccount(cash.id).balance).toBe(508);
+
+    db.pricing.updateProfile(profile.id, {
+      ...baseProfile,
+      components: baseProfile.components.map((component) => component.id === 'profit'
+        ? { ...component, calculation: { fixedAmount: 10, kind: 'fixed' as const } }
+        : component),
+    });
+    const historical = db.transactions.getTransaction(transaction.id);
+    expect(historical?.pricing?.profitMarkup).toBe(3);
+    expect(historical?.pricing?.snapshot.profile.components.find(({ id }) => id === 'profit')?.calculation).toMatchObject({ fixedAmount: 3 });
+  });
+
+  it('resolves service pricing and automatic provider, channel, same-provider, and first-N context', () => {
+    const db = service();
+    const vodafone = db.pricingCatalog.createProvider({ active: true, name: 'Vodafone' });
+    const orange = db.pricingCatalog.createProvider({ active: true, name: 'Orange' });
+    const aman = db.pricingCatalog.createChannel({ active: true, name: 'Aman', providerId: vodafone.id });
+    const source = db.accounts.createAccount({ accountType: 'wallet', initialBalance: 1_000, name: 'Vodafone Cash', providerId: vodafone.id });
+    const destination = db.accounts.createAccount({ accountType: 'wallet', initialBalance: 0, name: 'Orange Cash', providerId: orange.id });
+    const base = { base: 'principal', chargedTo: 'customer', order: 10, priority: 0, rounding: { mode: 'nearest', precision: 2 } } as const;
+    const profile = db.pricing.createProfile({
+      active: true, components: [
+        { ...base, calculation: { fixedAmount: 5, kind: 'fixed' }, conditions: [{ field: 'same_provider', operator: 'eq', value: false }], id: 'different-provider-profit', label: 'Different provider profit', type: 'profit' },
+        { ...base, calculation: { fixedAmount: 2, kind: 'fixed' }, conditions: [{ field: 'transaction_count', operator: 'gte', value: 3 }], id: 'after-free-fee', label: 'Fee after first two', order: 20, type: 'provider_fee' },
+        { ...base, calculation: { fixedAmount: 1, kind: 'fixed' }, conditions: [{ field: 'channel', operator: 'eq', value: 'Aman' }], id: 'aman-fee', label: 'Aman fee', order: 30, type: 'customer_fee' },
+        { ...base, calculation: { fixedAmount: 4, kind: 'fixed' }, chargedTo: 'provider', conditions: [{ field: 'source_provider', operator: 'eq', value: 'Vodafone' }, { field: 'destination_provider', operator: 'eq', value: 'Orange' }], id: 'commission', label: 'Commission', order: 40, paidTo: 'shop', type: 'commission' },
+      ], currency: 'EGP', inputMode: 'customer_pays', name: 'Wallet routing',
+    });
+    const pricingService = db.pricingCatalog.createService({
+      active: true, category: 'Wallet transfer', channelId: aman.id, defaultInputMode: 'customer_pays', inputLabel: 'Transfer amount',
+      inputModes: ['customer_pays'], name: 'Vodafone to Orange', operation: 'transfer', paymentAccountTypes: ['wallet'],
+      pricingProfileId: profile.id, providerId: vodafone.id,
+    });
+    const draft = { accountId: source.id, operationKind: 'transfer', paymentMode: 'full', pricingServiceId: pricingService.id, providerCost: 100, toAccountId: destination.id, totalAmount: 100 } as const;
+
+    const preview = db.quickEntry.previewPricing(draft);
+    expect(preview?.totals).toMatchObject({ customerTotal: 106, netProfit: 10, providerFee: 0 });
+    const first = db.quickEntry.submit(draft);
+    expect(first.pricing).toMatchObject({ profileId: profile.id, serviceId: pricingService.id, profitMarkup: 5, providerCommission: 4 });
+    db.quickEntry.submit(draft);
+    const third = db.quickEntry.submit(draft);
+    expect(third.pricing?.providerFee).toBe(2);
+    expect(third.pricing?.snapshot.input.context).toMatchObject({ channel: 'Aman', destinationProvider: 'Orange', sameProvider: false, service: 'Vodafone to Orange', sourceProvider: 'Vodafone', transactionCount: 3 });
+  });
+
   it('rejects invalid inputs atomically', () => {
     const db = service();
     expect(() =>

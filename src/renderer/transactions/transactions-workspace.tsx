@@ -758,6 +758,40 @@ export function TransactionsWorkspace({ createRequest, locale, refreshRequest = 
               </div>
             )}
 
+            {detailTarget.pricing && (
+              <div className="transaction-pricing-snapshot">
+                <div className="transaction-pricing-snapshot__head">
+                  <strong>{transactionsCopy(locale, 'pricingSnapshot')}</strong>
+                  <span>{detailTarget.pricing.snapshot.profile.name}</span>
+                </div>
+                <div className="transaction-pricing-grid">
+                  {([
+                    ['principalAmount', detailTarget.pricing.principalAmount],
+                    ['deliveredValue', detailTarget.pricing.deliveredValue],
+                    ['providerFee', detailTarget.pricing.providerFee],
+                    ['taxAmount', detailTarget.pricing.taxAmount],
+                    ['profitMarkup', detailTarget.pricing.profitMarkup],
+                    ['providerCommission', detailTarget.pricing.providerCommission],
+                    ['discount', detailTarget.pricing.discount],
+                    ['cashback', detailTarget.pricing.cashback],
+                    ['shopNetCost', detailTarget.pricing.shopNetCost],
+                    ['netProfit', detailTarget.pricing.netProfit],
+                  ] as const).map(([label, value]) => (
+                    <div key={label}><span>{transactionsCopy(locale, label)}</span><strong>{value.toFixed(2)}</strong></div>
+                  ))}
+                </div>
+                <div className="transaction-pricing-components">
+                  {detailTarget.pricing.snapshot.componentResults.map((result) => (
+                    <div key={result.componentId}>
+                      <span>{result.label}</span>
+                      <strong>{result.actualAmount.toFixed(2)}</strong>
+                      {result.override && <small>{transactionsCopy(locale, 'calculated')}: {result.calculatedAmount.toFixed(2)} · {result.override.reason}</small>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="movements-breakdown">
               <strong>{transactionsCopy(locale, 'moneyMovements')}</strong>
               {detailTarget.movements.length === 0 ? (

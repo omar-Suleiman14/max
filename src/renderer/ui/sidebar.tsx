@@ -1,4 +1,5 @@
 import {
+  BadgeDollarSign,
   Archive,
   ArrowLeftToLine,
   ArrowRightToLine,
@@ -199,6 +200,7 @@ export function Sidebar({
     : (isRtl ? ArrowRightToLine : ArrowLeftToLine);
   const settingsSections: readonly Readonly<{ icon: LucideIcon; id: SettingsSectionId; label: string }>[] = [
     { icon: Store, id: 'settings-general', label: locale === 'ar' ? 'عام' : 'General' },
+    { icon: BadgeDollarSign, id: 'settings-pricing', label: locale === 'ar' ? 'التسعير' : 'Pricing' },
     { icon: Palette, id: 'settings-appearance', label: locale === 'ar' ? 'المظهر' : 'Appearance' },
     { icon: Database, id: 'settings-backup', label: locale === 'ar' ? 'النسخ الاحتياطي' : 'Backup' },
     { icon: Archive, id: 'settings-archive', label: locale === 'ar' ? 'الأرشيف والمهملات' : 'Archive & trash' },
