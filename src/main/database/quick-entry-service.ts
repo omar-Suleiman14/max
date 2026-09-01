@@ -5,14 +5,25 @@ import type {
   QuickEntryPriceSuggestion,
 } from '../../shared/quick-entry-contract';
 import type { TransactionRecord } from '../../shared/transaction-contract';
+import type { TransactionPricing } from '../../shared/transaction-contract';
 import { ObjectDomainError } from './object-repository';
 import type { TransactionRepository } from './transaction-repository';
+import type { PricingRepository } from './pricing-repository';
+import type { PricingCatalogRepository } from './pricing-catalog-repository';
+import type { AccountRepository } from './account-repository';
 
 export class QuickEntryService {
   constructor(
     private readonly database: DatabaseSync,
     private readonly transactions: TransactionRepository,
+    private readonly pricing: PricingRepository,
+    private readonly pricingCatalog: PricingCatalogRepository,
+    private readonly accounts: AccountRepository,
   ) {}
+
+  previewPricing(draft: QuickEntryDraft) {
+    return this.#calculatePricing(draft, draft.totalAmount)?.snapshot ?? null;
+  }
 
   getSuggestion(itemId?: string, templateId?: string): QuickEntryPriceSuggestion {
     // 1. Explicit item price
@@ -119,27 +130,31 @@ export class QuickEntryService {
 
     const operationKind = draft.operationKind ?? 'sale';
     const quantity = draft.quantity ? Math.max(1, Math.round(Number(draft.quantity))) : undefined;
+    const pricing = this.#calculatePricing(draft, total);
 
     if (operationKind === 'sale') {
-      return this.#submitSale(draft, total, quantity);
+      return this.#submitSale(draft, pricing?.customerTotal ?? total, quantity, pricing);
     }
     if (operationKind === 'purchase') {
-      return this.#submitPurchase(draft, total, quantity);
+      return this.#submitPurchase(draft, pricing?.shopNetCost ?? total, quantity, pricing);
     }
     if (operationKind === 'expense') {
-      return this.#submitExpense(draft, total);
+      return this.#submitExpense(draft, pricing?.shopNetCost ?? total, pricing);
     }
     if (operationKind === 'income') {
-      return this.#submitIncome(draft, total);
+      return this.#submitIncome(draft, pricing?.customerTotal ?? total, pricing);
     }
     if (operationKind === 'transfer') {
-      return this.#submitTransfer(draft, total);
+      return this.#submitTransfer(draft, total, pricing);
+    }
+    if (operationKind === 'adjustment') {
+      return this.#submitAdjustment(draft, total);
     }
 
     throw new ObjectDomainError('invalid-input', 'Unsupported operation kind.');
   }
 
-  #submitSale(draft: QuickEntryDraft, total: number, quantity?: number): TransactionRecord {
+  #submitSale(draft: QuickEntryDraft, total: number, quantity?: number, pricing?: TransactionPricing): TransactionRecord {
     if (draft.paymentMode === 'full') {
       if (!draft.accountId) {
         throw new ObjectDomainError('invalid-input', 'Payment account is required for full payment.');
@@ -150,6 +165,7 @@ export class QuickEntryService {
         note: draft.note,
         paidAmount: total,
         personId: draft.personId,
+        pricing,
         quantity,
         totalAmount: total,
         transactionType: 'sale',
@@ -173,6 +189,7 @@ export class QuickEntryService {
         note: draft.note ? `${draft.note} (Partial)` : undefined,
         paidAmount: paid,
         personId: draft.personId,
+        pricing,
         quantity,
         totalAmount: total,
         transactionType: 'sale',
@@ -186,6 +203,7 @@ export class QuickEntryService {
         note: draft.note ? `${draft.note} (Unpaid / Later)` : 'Unpaid (Later)',
         paidAmount: 0,
         personId: draft.personId,
+        pricing,
         quantity,
         totalAmount: total,
         transactionType: 'sale',
@@ -195,7 +213,7 @@ export class QuickEntryService {
     throw new ObjectDomainError('invalid-input', 'Invalid payment mode.');
   }
 
-  #submitPurchase(draft: QuickEntryDraft, total: number, quantity?: number): TransactionRecord {
+  #submitPurchase(draft: QuickEntryDraft, total: number, quantity?: number, pricing?: TransactionPricing): TransactionRecord {
     if (!draft.accountId) {
       throw new ObjectDomainError('invalid-input', 'Payment account is required for purchase.');
     }
@@ -205,13 +223,14 @@ export class QuickEntryService {
       note: draft.note,
       paidAmount: total,
       personId: draft.personId,
+      pricing,
       quantity,
       totalAmount: total,
       transactionType: 'purchase',
     });
   }
 
-  #submitExpense(draft: QuickEntryDraft, total: number): TransactionRecord {
+  #submitExpense(draft: QuickEntryDraft, total: number, pricing?: TransactionPricing): TransactionRecord {
     if (!draft.accountId) {
       throw new ObjectDomainError('invalid-input', 'Payment account is required for expense.');
     }
@@ -220,12 +239,13 @@ export class QuickEntryService {
       note: draft.note,
       paidAmount: total,
       personId: draft.personId,
+      pricing,
       totalAmount: total,
       transactionType: 'expense',
     });
   }
 
-  #submitIncome(draft: QuickEntryDraft, total: number): TransactionRecord {
+  #submitIncome(draft: QuickEntryDraft, total: number, pricing?: TransactionPricing): TransactionRecord {
     if (!draft.accountId) {
       throw new ObjectDomainError('invalid-input', 'Receiving account is required for income.');
     }
@@ -234,12 +254,13 @@ export class QuickEntryService {
       note: draft.note,
       paidAmount: total,
       personId: draft.personId,
+      pricing,
       totalAmount: total,
       transactionType: 'income',
     });
   }
 
-  #submitTransfer(draft: QuickEntryDraft, total: number): TransactionRecord {
+  #submitTransfer(draft: QuickEntryDraft, total: number, pricing?: TransactionPricing): TransactionRecord {
     if (!draft.accountId || !draft.toAccountId) {
       throw new ObjectDomainError('invalid-input', 'Both source and destination accounts are required for transfer.');
     }
@@ -247,9 +268,81 @@ export class QuickEntryService {
       amount: total,
       fromAccountId: draft.accountId,
       note: draft.note,
+      pricing,
       providerFee: draft.providerFee,
       serviceFee: draft.serviceFee,
       toAccountId: draft.toAccountId,
     });
+  }
+
+  #submitAdjustment(draft: QuickEntryDraft, total: number): TransactionRecord {
+    if (!draft.accountId) {
+      throw new ObjectDomainError('invalid-input', 'Account is required for an adjustment.');
+    }
+    return this.transactions.createTransaction({
+      movements: [{
+        accountId: draft.accountId,
+        amount: total,
+        movementType: draft.adjustmentDirection === 'outflow' ? 'outflow' : 'inflow',
+      }],
+      note: draft.note,
+      paidAmount: total,
+      totalAmount: total,
+      transactionType: 'adjustment',
+    });
+  }
+
+  #calculatePricing(draft: QuickEntryDraft, amount: number): TransactionPricing | undefined {
+    const service = draft.pricingServiceId ? this.pricingCatalog.getService(draft.pricingServiceId) : undefined;
+    if (service && service.operation !== draft.operationKind) {
+      throw new ObjectDomainError('invalid-input', 'The selected service does not support this operation.');
+    }
+    const profileId = draft.pricingProfileId ?? service?.pricingProfileId;
+    if (!profileId) return undefined;
+    const inputMode = draft.pricingInputMode ?? service?.defaultInputMode;
+    if (service && inputMode && !service.inputModes.includes(inputMode)) {
+      throw new ObjectDomainError('invalid-input', 'The selected service does not support this input mode.');
+    }
+    const source = draft.accountId ? this.accounts.getAccount(draft.accountId) : undefined;
+    const destination = draft.toAccountId ? this.accounts.getAccount(draft.toAccountId) : undefined;
+    if (service && source && !service.paymentAccountTypes.includes(source.accountType)) {
+      throw new ObjectDomainError('invalid-input', 'The selected account type is not allowed for this service.');
+    }
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    const countRow = service
+      ? this.database.prepare(`SELECT COUNT(*) AS count FROM shop_transactions WHERE pricing_service_id = ? AND created_at >= ? AND archived_at IS NULL AND reversed_at IS NULL`).get(service.id, monthStart) as { count: number }
+      : this.database.prepare(`SELECT COUNT(*) AS count FROM shop_transactions WHERE pricing_profile_id = ? AND created_at >= ? AND archived_at IS NULL AND reversed_at IS NULL`).get(profileId, monthStart) as { count: number };
+    const providers = this.pricingCatalog.listProviders();
+    const channels = this.pricingCatalog.listChannels();
+    const sourceProviderId = source?.providerId ?? service?.providerId;
+    const destinationProviderId = destination?.providerId;
+    const providerName = (id?: string) => providers.find((provider) => provider.id === id)?.name;
+    const snapshot = this.pricing.quote(profileId, {
+      amount,
+      context: {
+        channel: channels.find((channel) => channel.id === service?.channelId)?.name,
+        customerType: draft.pricingCustomerType,
+        date: now.toISOString().slice(0, 10),
+        destinationAccountType: destination?.accountType,
+        destinationProvider: providerName(destinationProviderId),
+        operation: draft.operationKind,
+        sameProvider: sourceProviderId !== undefined && destinationProviderId !== undefined ? sourceProviderId === destinationProviderId : undefined,
+        service: service?.name,
+        sourceAccountType: source?.accountType,
+        sourceProvider: providerName(sourceProviderId),
+        transactionCount: countRow.count + 1,
+      },
+      inputMode,
+      overrides: draft.pricingOverrides,
+      providerCost: draft.providerCost,
+    });
+    return {
+      ...snapshot.totals,
+      overrides: draft.pricingOverrides ?? [],
+      profileId,
+      serviceId: service?.id,
+      snapshot,
+    };
   }
 }

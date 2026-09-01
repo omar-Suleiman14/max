@@ -56,6 +56,7 @@ import type { CompleteOnboardingDraft, ShopMetadata } from '../../shared/bluepri
 import type { QuickEntryDraft, QuickEntryPriceSuggestion } from '../../shared/quick-entry-contract';
 import type { AccountDefinition } from '../../shared/account-contract';
 import type { ConfigurableRecord, PropertyDefinition, PropertyDraft } from '../../shared/object-contract';
+import { calculatePricing, type PricingProfile, type PricingProfileDraft, type PricingService } from '../../shared/pricing-contract';
 
 let shopMetadataState: ShopMetadata = {
   backupSchedule: 'daily',
@@ -190,6 +191,19 @@ const transactionsApi = {
 
 const quickEntryApi = {
   getSuggestion: vi.fn<() => Promise<QuickEntryPriceSuggestion>>(() => Promise.resolve({ amount: null, source: 'none' as const })),
+  quotePricing: vi.fn((draft: QuickEntryDraft) => {
+    const profile = pricingProfiles.find(({ id }) => id === draft.pricingProfileId);
+    if (!profile) return Promise.resolve({ ok: true as const, value: null });
+    return Promise.resolve({
+      ok: true as const,
+      value: calculatePricing(profile, {
+        amount: draft.totalAmount,
+        inputMode: draft.pricingInputMode,
+        overrides: draft.pricingOverrides,
+        providerCost: draft.providerCost,
+      }, '2026-08-31'),
+    });
+  }),
   submit: vi.fn((draft: QuickEntryDraft) =>
     Promise.resolve({
       ok: true as const,
@@ -206,6 +220,39 @@ const quickEntryApi = {
       },
     }),
   ),
+};
+
+let pricingProfiles: PricingProfile[] = [];
+let pricingServices: PricingService[] = [];
+const emptyCatalogApi = {
+  archive: vi.fn(() => Promise.resolve({ ok: true as const, value: null })),
+  create: vi.fn(),
+  list: vi.fn(() => Promise.resolve([])),
+  update: vi.fn(),
+};
+const pricingApi = {
+  archive: vi.fn((id: string) => {
+    pricingProfiles = pricingProfiles.filter((profile) => profile.id !== id);
+    return Promise.resolve({ ok: true as const, value: null });
+  }),
+  create: vi.fn((draft: PricingProfileDraft) => {
+    const profile: PricingProfile = { ...draft, createdAt: '2026-08-31', id: `pricing-${pricingProfiles.length + 1}`, updatedAt: '2026-08-31' };
+    pricingProfiles = [...pricingProfiles, profile];
+    return Promise.resolve({ ok: true as const, value: profile });
+  }),
+  list: vi.fn(() => Promise.resolve(pricingProfiles)),
+  channels: emptyCatalogApi,
+  providers: emptyCatalogApi,
+  quote: vi.fn(),
+  services: {
+    ...emptyCatalogApi,
+    list: vi.fn(() => Promise.resolve(pricingServices)),
+  },
+  update: vi.fn((id: string, draft: PricingProfileDraft) => {
+    const profile: PricingProfile = { ...draft, createdAt: '2026-08-31', id, updatedAt: '2026-08-31' };
+    pricingProfiles = pricingProfiles.map((candidate) => candidate.id === id ? profile : candidate);
+    return Promise.resolve({ ok: true as const, value: profile });
+  }),
 };
 
 const peopleApi = {
@@ -365,6 +412,7 @@ beforeEach(() => {
       objects: objectApi,
       pages: pagesApi,
       people: peopleApi,
+      pricing: pricingApi,
       quickEntry: quickEntryApi,
       reconciliation: reconciliationApi,
       search: searchApi,
@@ -380,8 +428,27 @@ beforeEach(() => {
   shopApi.completeOnboarding.mockClear();
   shopApi.seedDemoData.mockClear();
   accountsApi.list.mockClear();
+  accountsApi.list.mockResolvedValue([]);
+  objectApi.listProperties.mockResolvedValue([]);
+  objectApi.listRecords.mockResolvedValue([]);
   transactionsApi.list.mockClear();
+  quickEntryApi.getSuggestion.mockReset();
+  quickEntryApi.getSuggestion.mockResolvedValue({ amount: null, source: 'none' as const });
+  quickEntryApi.quotePricing.mockClear();
   quickEntryApi.submit.mockClear();
+  pricingProfiles = [];
+  pricingServices = [];
+  pricingApi.archive.mockClear();
+  pricingApi.create.mockClear();
+  pricingApi.list.mockClear();
+  pricingApi.quote.mockClear();
+  pricingApi.services.list.mockClear();
+  pricingApi.services.list.mockImplementation(() => Promise.resolve(pricingServices));
+  pricingApi.providers.list.mockClear();
+  pricingApi.providers.list.mockResolvedValue([]);
+  pricingApi.channels.list.mockClear();
+  pricingApi.channels.list.mockResolvedValue([]);
+  pricingApi.update.mockClear();
   searchApi.query.mockClear();
   reconciliationApi.getCurrentSession.mockClear();
   reconciliationApi.listSessions.mockClear();
@@ -500,6 +567,28 @@ describe('Max shell', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Home' })).toBeInTheDocument());
   });
 
+  it('creates an editable pricing profile from Settings without leaving the workspace', async () => {
+    const user = userEvent.setup();
+    render(<MaxApp />);
+    await screen.findByRole('button', { name: 'Home' });
+    await user.click(screen.getByRole('button', { name: 'Settings' }));
+    await user.click(await screen.findByRole('button', { name: 'Pricing' }));
+    await user.click(screen.getByRole('button', { name: 'New pricing profile' }));
+    await user.type(screen.getByLabelText('Name'), 'Vodafone recharge');
+    await user.type(screen.getByLabelText('Provider'), 'Vodafone');
+    await user.type(screen.getByLabelText('Service'), 'Recharge');
+    await user.click(screen.getByRole('button', { name: 'Add component' }));
+    await user.click(screen.getByRole('button', { name: 'Save pricing profile' }));
+
+    await waitFor(() => expect(pricingApi.create).toHaveBeenCalledWith(expect.objectContaining({
+      components: [expect.objectContaining({ type: 'profit' })],
+      name: 'Vodafone recharge',
+      provider: 'Vodafone',
+      service: 'Recharge',
+    })));
+    expect((await screen.findAllByText('Vodafone recharge')).length).toBeGreaterThan(0);
+  });
+
   it('moves predictably through sidebar navigation with arrow keys and creates custom page', async () => {
     const user = userEvent.setup();
     render(<MaxApp />);
@@ -569,7 +658,7 @@ describe('Max shell', () => {
     expect(screen.getByRole('button', { name: 'Add sort' })).toBeInTheDocument();
   });
 
-  it('opens the complete transaction chooser with Ctrl+S and creates a database row inline', async () => {
+  it('opens Quick Sale directly with Ctrl+S and keeps every operation in the popup', async () => {
     const user = userEvent.setup();
     objectApi.createRecord.mockResolvedValueOnce({
       ok: true,
@@ -586,9 +675,10 @@ describe('Max shell', () => {
     await screen.findByRole('button', { name: 'Home' });
 
     await user.keyboard('{Control>}s{/Control}');
-    expect(await screen.findByRole('heading', { name: 'What do you want to record?' })).toBeInTheDocument();
-    for (const choice of ['Quick sale', 'Sale', 'Purchase', 'Expense', 'Income', 'Account transfer', 'Adjustment']) {
-      expect(screen.getByRole('button', { name: new RegExp(`^${choice}`, 'i') })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Quick Action' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'What do you want to record?' })).not.toBeInTheDocument();
+    for (const operation of ['Sell', 'Purchase', 'Expense', 'Income', 'Transfer', 'Adjust']) {
+      expect(screen.getByRole('tab', { name: operation })).toBeInTheDocument();
     }
     await user.keyboard('{Escape}');
     await user.click(screen.getByRole('button', { name: 'Databases' }));
@@ -601,17 +691,80 @@ describe('Max shell', () => {
   it('prefills a selected sale item note and suggested amount', async () => {
     const user = userEvent.setup();
     const item = { createdAt: '2026-08-30', id: 'priced-item', label: 'Screen Protector', objectKind: 'item' as const, updatedAt: '2026-08-30', values: {} };
-    objectApi.listRecords.mockResolvedValueOnce([item]).mockResolvedValueOnce([]);
+    objectApi.listRecords.mockResolvedValue([item]);
     accountsApi.list.mockResolvedValueOnce([{ accountType: 'cash', balance: 0, createdAt: '2026-08-30', id: 'cash', initialBalance: 0, name: 'Cash', position: 0, updatedAt: '2026-08-30' }]);
     quickEntryApi.getSuggestion.mockResolvedValueOnce({ amount: 75, source: 'item-price' as const });
     render(<MaxApp />);
     await screen.findByRole('button', { name: 'Home' });
     await user.keyboard('{Control>}s{/Control}');
-    await user.click(await screen.findByRole('button', { name: /Quick sale/i }));
     await user.selectOptions(await screen.findByLabelText('Select item or enter note'), 'priced-item');
 
     expect(screen.getByPlaceholderText('e.g., Screen protector with fitting')).toHaveValue('Screen Protector');
     await waitFor(() => expect(screen.getByPlaceholderText('0.00')).toHaveValue(75));
+  });
+
+  it('previews configurable recharge value and submits the selected pricing profile inline', async () => {
+    const user = userEvent.setup();
+    const recharge: PricingProfile = {
+      active: true,
+      components: [
+        { base: 'principal', calculation: { entries: [{ customerPays: 100, deliveredValue: 70, providerCost: 100 }], kind: 'lookup' }, chargedTo: 'customer', conditions: [], id: 'conversion', label: 'Recharge value', order: 10, priority: 0, rounding: { mode: 'nearest', precision: 2 }, type: 'conversion' },
+        { base: 'principal', calculation: { fixedAmount: 2, kind: 'fixed' }, chargedTo: 'provider', conditions: [], id: 'commission', label: 'Provider commission', order: 20, paidTo: 'shop', priority: 0, rounding: { mode: 'nearest', precision: 2 }, type: 'commission' },
+      ],
+      createdAt: '2026-08-31', currency: 'EGP', id: 'recharge', inputMode: 'customer_pays', name: 'Mobile recharge', service: 'Recharge', updatedAt: '2026-08-31',
+    };
+    pricingProfiles = [recharge];
+    pricingServices = [{
+      active: true, category: 'Recharge', createdAt: '2026-08-31', defaultInputMode: 'customer_pays', id: 'recharge-service',
+      inputLabel: 'Customer payment', inputModes: ['customer_pays'], name: 'Mobile recharge', operation: 'sale',
+      paymentAccountTypes: ['cash'], pricingProfileId: recharge.id, updatedAt: '2026-08-31',
+    }];
+    accountsApi.list.mockResolvedValue([{
+      accountType: 'cash', balance: 0, createdAt: '2026-08-31', id: 'cash', initialBalance: 0, name: 'Cash', position: 0, updatedAt: '2026-08-31',
+    }]);
+
+    render(<MaxApp />);
+    await screen.findByRole('button', { name: 'Home' });
+    await user.keyboard('{Control>}s{/Control}');
+    await user.selectOptions(await screen.findByLabelText('Service'), 'recharge-service');
+    fireEvent.change(screen.getAllByPlaceholderText('0.00')[0]!, { target: { value: '100' } });
+
+    expect(await screen.findByText('70.00')).toBeInTheDocument();
+    expect(screen.getByText('98.00')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Record Sale (Enter)' }));
+    await waitFor(() => expect(quickEntryApi.submit).toHaveBeenCalledWith(expect.objectContaining({
+      pricingInputMode: 'customer_pays',
+      pricingProfileId: 'recharge',
+      pricingServiceId: 'recharge-service',
+      totalAmount: 100,
+    })));
+  });
+
+  it('records an account adjustment without leaving the Quick Action popup', async () => {
+    const user = userEvent.setup();
+    accountsApi.list.mockResolvedValue([{
+      accountType: 'cash', balance: 100, createdAt: '2026-08-30', id: 'cash', initialBalance: 100,
+      name: 'Cash', position: 0, updatedAt: '2026-08-30',
+    }]);
+    render(<MaxApp />);
+    await screen.findByRole('button', { name: 'Home' });
+
+    await user.keyboard('{Control>}s{/Control}');
+    await user.click(await screen.findByRole('tab', { name: 'Adjust' }));
+    await screen.findByRole('button', { name: /Cash/ });
+    await user.selectOptions(screen.getByLabelText('Adjustment direction'), 'outflow');
+    await user.type(screen.getByPlaceholderText('0.00'), '12.5');
+    await user.type(screen.getByPlaceholderText('e.g., Correct counted cash after review'), 'Count correction');
+    await user.click(screen.getByRole('button', { name: 'Record Adjustment (Enter)' }));
+
+    await waitFor(() => expect(quickEntryApi.submit).toHaveBeenCalledWith(expect.objectContaining({
+      accountId: 'cash',
+      adjustmentDirection: 'outflow',
+      note: 'Count correction',
+      operationKind: 'adjustment',
+      totalAmount: 12.5,
+    })));
+    expect(screen.queryByRole('heading', { name: 'Quick Action' })).not.toBeInTheDocument();
   });
 
   it('edits a select cell and persists a newly created colored option', async () => {

@@ -32,6 +32,7 @@ export type EngineStatus = 'checking' | 'ready' | 'unavailable';
 
 export type SettingsSectionId =
   | 'settings-general'
+  | 'settings-pricing'
   | 'settings-appearance'
   | 'settings-backup'
   | 'settings-archive';

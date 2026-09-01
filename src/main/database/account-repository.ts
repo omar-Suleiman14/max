@@ -20,6 +20,7 @@ type AccountRow = Readonly<{
   initial_balance: number;
   name: string;
   position: number;
+  provider_id: string | null;
   updated_at: string;
 }>;
 
@@ -39,6 +40,7 @@ function rowToAccount(row: AccountRow): AccountDefinition {
     initialBalance: Math.round(row.initial_balance * 100) / 100,
     name: row.name,
     position: row.position,
+    providerId: row.provider_id ?? undefined,
     updatedAt: row.updated_at,
   };
 }
@@ -58,6 +60,7 @@ export class AccountRepository {
           a.created_at,
           a.updated_at,
           a.fee_config_json,
+          a.provider_id,
           (
             a.initial_balance
             + COALESCE((SELECT SUM(amount) FROM shop_money_movements WHERE account_id = a.id AND movement_type = 'inflow' AND archived_at IS NULL), 0)
@@ -83,6 +86,7 @@ export class AccountRepository {
           a.created_at,
           a.updated_at,
           a.fee_config_json,
+          a.provider_id,
           (
             a.initial_balance
             + COALESCE((SELECT SUM(amount) FROM shop_money_movements WHERE account_id = a.id AND movement_type = 'inflow' AND archived_at IS NULL), 0)
@@ -112,10 +116,10 @@ export class AccountRepository {
       try {
         this.database
           .prepare(`
-            INSERT INTO shop_accounts (id, name, account_type, initial_balance, fee_config_json, position, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO shop_accounts (id, name, account_type, initial_balance, fee_config_json, provider_id, position, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
           `)
-          .run(id, draft.name, draft.accountType, draft.initialBalance, feeConfigJson, positionRow.position, now, now);
+          .run(id, draft.name, draft.accountType, draft.initialBalance, feeConfigJson, draft.providerId ?? null, positionRow.position, now, now);
       } catch (error) {
         if (/shop_accounts(?:_active_name|\.name)/.test(String(error))) {
           throw new ObjectDomainError('unique', 'An account with this name already exists.');
@@ -140,10 +144,10 @@ export class AccountRepository {
         this.database
           .prepare(`
             UPDATE shop_accounts
-            SET name = ?, account_type = ?, initial_balance = ?, fee_config_json = ?, updated_at = ?
+            SET name = ?, account_type = ?, initial_balance = ?, fee_config_json = ?, provider_id = ?, updated_at = ?
             WHERE id = ? AND archived_at IS NULL
           `)
-          .run(draft.name, draft.accountType, draft.initialBalance, feeConfigJson, now, id);
+          .run(draft.name, draft.accountType, draft.initialBalance, feeConfigJson, draft.providerId ?? null, now, id);
       } catch (error) {
         if (/shop_accounts(?:_active_name|\.name)/.test(String(error))) {
           throw new ObjectDomainError('unique', 'An account with this name already exists.');
@@ -218,6 +222,7 @@ export class AccountRepository {
       feeConfig,
       initialBalance: Math.round(initialBalance * 100) / 100,
       name,
+      providerId: typeof draft.providerId === 'string' && draft.providerId.length > 0 ? draft.providerId : undefined,
     };
   }
 

@@ -6,6 +6,7 @@ import type { Blueprint, CompleteOnboardingDraft, ShopMetadata } from '../shared
 import { IPC_CHANNELS, type MaxApi } from '../shared/ipc-contract';
 import type { ConfigurableRecordDraft, ObjectKind, PropertyDraft } from '../shared/object-contract';
 import type { ForgivenessDraft, RepaymentDraft } from '../shared/person-debt-contract';
+import type { PricingChannelDraft, PricingProfileDraft, PricingProviderDraft, PricingQuoteInput, PricingServiceDraft } from '../shared/pricing-contract';
 import type { QuickEntryDraft } from '../shared/quick-entry-contract';
 import type { CloseSessionDraft, OpenSessionDraft } from '../shared/reconciliation-contract';
 import type { TemplateDraft } from '../shared/template-contract';
@@ -84,11 +85,43 @@ const maxApi: MaxApi = Object.freeze({
     repayDebt: (draft: RepaymentDraft) =>
       ipcRenderer.invoke(IPC_CHANNELS.peopleRepayDebt, draft) as ReturnType<MaxApi['people']['repayDebt']>,
   }),
+  pricing: Object.freeze({
+    archive: (id: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.pricingArchive, id) as ReturnType<MaxApi['pricing']['archive']>,
+    create: (draft: PricingProfileDraft) =>
+      ipcRenderer.invoke(IPC_CHANNELS.pricingCreate, draft) as ReturnType<MaxApi['pricing']['create']>,
+    list: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.pricingList) as ReturnType<MaxApi['pricing']['list']>,
+    quote: (profileId: string, input: PricingQuoteInput) =>
+      ipcRenderer.invoke(IPC_CHANNELS.pricingQuote, profileId, input) as ReturnType<MaxApi['pricing']['quote']>,
+    update: (id: string, draft: PricingProfileDraft) =>
+      ipcRenderer.invoke(IPC_CHANNELS.pricingUpdate, id, draft) as ReturnType<MaxApi['pricing']['update']>,
+    providers: Object.freeze({
+      archive: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.pricingProviderArchive, id) as ReturnType<MaxApi['pricing']['providers']['archive']>,
+      create: (draft: PricingProviderDraft) => ipcRenderer.invoke(IPC_CHANNELS.pricingProviderCreate, draft) as ReturnType<MaxApi['pricing']['providers']['create']>,
+      list: () => ipcRenderer.invoke(IPC_CHANNELS.pricingProviderList) as ReturnType<MaxApi['pricing']['providers']['list']>,
+      update: (id: string, draft: PricingProviderDraft) => ipcRenderer.invoke(IPC_CHANNELS.pricingProviderUpdate, id, draft) as ReturnType<MaxApi['pricing']['providers']['update']>,
+    }),
+    channels: Object.freeze({
+      archive: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.pricingChannelArchive, id) as ReturnType<MaxApi['pricing']['channels']['archive']>,
+      create: (draft: PricingChannelDraft) => ipcRenderer.invoke(IPC_CHANNELS.pricingChannelCreate, draft) as ReturnType<MaxApi['pricing']['channels']['create']>,
+      list: () => ipcRenderer.invoke(IPC_CHANNELS.pricingChannelList) as ReturnType<MaxApi['pricing']['channels']['list']>,
+      update: (id: string, draft: PricingChannelDraft) => ipcRenderer.invoke(IPC_CHANNELS.pricingChannelUpdate, id, draft) as ReturnType<MaxApi['pricing']['channels']['update']>,
+    }),
+    services: Object.freeze({
+      archive: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.pricingServiceArchive, id) as ReturnType<MaxApi['pricing']['services']['archive']>,
+      create: (draft: PricingServiceDraft) => ipcRenderer.invoke(IPC_CHANNELS.pricingServiceCreate, draft) as ReturnType<MaxApi['pricing']['services']['create']>,
+      list: () => ipcRenderer.invoke(IPC_CHANNELS.pricingServiceList) as ReturnType<MaxApi['pricing']['services']['list']>,
+      update: (id: string, draft: PricingServiceDraft) => ipcRenderer.invoke(IPC_CHANNELS.pricingServiceUpdate, id, draft) as ReturnType<MaxApi['pricing']['services']['update']>,
+    }),
+  }),
   quickEntry: Object.freeze({
     getSuggestion: (itemId?: string, templateId?: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.quickEntryGetSuggestion, itemId, templateId) as ReturnType<
         MaxApi['quickEntry']['getSuggestion']
       >,
+    quotePricing: (draft: QuickEntryDraft) =>
+      ipcRenderer.invoke(IPC_CHANNELS.quickEntryQuotePricing, draft) as ReturnType<MaxApi['quickEntry']['quotePricing']>,
     submit: (draft: QuickEntryDraft) =>
       ipcRenderer.invoke(IPC_CHANNELS.quickEntrySubmit, draft) as ReturnType<MaxApi['quickEntry']['submit']>,
   }),

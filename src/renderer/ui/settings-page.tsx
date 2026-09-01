@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   ArrowRight,
   AlertTriangle,
+  BadgeDollarSign,
   Database,
   Download,
   Eye,
@@ -25,6 +26,7 @@ import { type Locale, translate } from '../app/i18n';
 import type { CustomPage, SettingsSectionId } from '../app/app-types';
 import type { ThemePreference } from '../app/preferences';
 import { BackupManager } from '../backup/backup-manager';
+import { PricingSettings } from '../pricing/pricing-settings';
 import { BlueprintDialog } from '../blueprints/blueprint-dialog';
 import { emptyPageTrash, loadTrashedPages, restoreTrashedPage } from '../pages/pages-store';
 import { Button } from './button';
@@ -90,7 +92,7 @@ export function SettingsPage({
 
   useEffect(() => {
     if (!('IntersectionObserver' in window)) return;
-    const sectionIds = ['settings-general', 'settings-appearance', 'settings-backup', 'settings-archive'];
+    const sectionIds = ['settings-general', 'settings-pricing', 'settings-appearance', 'settings-backup', 'settings-archive'];
     const root = document.querySelector<HTMLElement>('.content[data-page="settings"]');
     const observer = new IntersectionObserver((entries) => {
       const visible = entries
@@ -266,6 +268,14 @@ export function SettingsPage({
               <div className="settings-control-copy"><strong>{locale === 'ar' ? 'جولة الإعداد' : 'Onboarding tour'}</strong><small>{locale === 'ar' ? 'شاهد خطوات الإعداد مرة أخرى دون تغيير البيانات.' : 'Preview setup again without changing workspace data.'}</small></div>
               <Button icon={<Eye aria-hidden="true" size={16} />} onClick={onShowOnboarding}>{locale === 'ar' ? 'عرض الجولة' : 'View tour'}</Button>
             </div>
+          </section>
+
+          <section className="settings-section settings-scroll-section" id="settings-pricing" tabIndex={-1} aria-labelledby="settings-pricing-title">
+            <div className="settings-section__intro">
+              <BadgeDollarSign aria-hidden="true" size={19} />
+              <div><h2 id="settings-pricing-title">{locale === 'ar' ? 'التسعير' : 'Pricing'}</h2><p>{locale === 'ar' ? 'رسوم وربح وعمولات وضرائب وتحويل قيمة قابلة للضبط لكل خدمة.' : 'Configurable fees, profit, commissions, tax, and value conversion for every service.'}</p></div>
+            </div>
+            <PricingSettings locale={locale} />
           </section>
 
           <section className="settings-section settings-scroll-section" id="settings-appearance" tabIndex={-1} aria-labelledby="settings-appearance-title">

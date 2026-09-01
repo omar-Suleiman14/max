@@ -34,6 +34,7 @@ export type TransactionDraft = Readonly<{
   note?: string;
   paidAmount: number;
   personId?: string;
+  pricing?: TransactionPricing;
   providerFee?: number;
   quantity?: number;
   serviceFee?: number;
@@ -41,10 +42,18 @@ export type TransactionDraft = Readonly<{
   transactionType: TransactionType;
 }>;
 
+export type TransactionPricing = PricingAmounts & Readonly<{
+  overrides: readonly PricingOverride[];
+  profileId: string;
+  serviceId?: string;
+  snapshot: PricingSnapshot;
+}>;
+
 export type TransferDraft = Readonly<{
   amount: number;
   fromAccountId: string;
   note?: string;
+  pricing?: TransactionPricing;
   providerFee?: number;
   serviceFee?: number;
   toAccountId: string;
@@ -61,6 +70,7 @@ export type TransactionRecord = Readonly<{
   paymentStatus: PaymentStatus;
   personId?: string;
   personLabel?: string;
+  pricing?: TransactionPricing;
   providerFee?: number;
   quantity?: number;
   reversalOfId?: string;
@@ -79,3 +89,4 @@ export type LedgerSummary = Readonly<{
   totalSales: number;
   totalWallet: number;
 }>;
+import type { PricingAmounts, PricingOverride, PricingSnapshot } from './pricing-contract';

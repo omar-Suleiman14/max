@@ -2,6 +2,7 @@ import {
   ArrowLeftRight,
   BanknoteArrowDown,
   BanknoteArrowUp,
+  Calculator,
   Check,
   CreditCard,
   History,
@@ -23,6 +24,7 @@ import type {
   QuickEntryDraft,
 } from '../../shared/quick-entry-contract';
 import type { TransactionRecord } from '../../shared/transaction-contract';
+import type { PricingOverride, PricingProfile, PricingService, PricingSnapshot } from '../../shared/pricing-contract';
 import type { Locale } from '../app/i18n';
 import { Button } from '../ui/button';
 import { FocusedOverlay } from '../ui/focused-overlay';
@@ -73,6 +75,8 @@ export function QuickEntryDialog({
   const [items, setItems] = useState<readonly ConfigurableRecord[]>([]);
   const [people, setPeople] = useState<readonly ConfigurableRecord[]>([]);
   const [accounts, setAccounts] = useState<readonly AccountDefinition[]>([]);
+  const [pricingProfiles, setPricingProfiles] = useState<readonly PricingProfile[]>([]);
+  const [pricingServices, setPricingServices] = useState<readonly PricingService[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string>('');
   const [customNote, setCustomNote] = useState<string>('');
   const [unitPrice, setUnitPrice] = useState<string>('');
@@ -86,6 +90,15 @@ export function QuickEntryDialog({
   const [paidNowAmount, setPaidNowAmount] = useState<string>('');
   const [selectedPersonId, setSelectedPersonId] = useState<string>('');
   const [collectorId, setCollectorId] = useState<string>('');
+  const [adjustmentDirection, setAdjustmentDirection] = useState<'inflow' | 'outflow'>('inflow');
+  const [selectedPricingProfileId, setSelectedPricingProfileId] = useState('');
+  const [selectedPricingServiceId, setSelectedPricingServiceId] = useState('');
+  const [pricingCustomerType, setPricingCustomerType] = useState('retail');
+  const [pricingInputMode, setPricingInputMode] = useState<'customer_pays' | 'customer_receives'>('customer_pays');
+  const [providerCost, setProviderCost] = useState('');
+  const [pricingPreview, setPricingPreview] = useState<PricingSnapshot>();
+  const [pricingError, setPricingError] = useState<string>();
+  const [pricingOverrides, setPricingOverrides] = useState<readonly PricingOverride[]>([]);
   const [error, setError] = useState<string>();
   const [submitting, setSubmitting] = useState<boolean>(false);
 
@@ -95,14 +108,18 @@ export function QuickEntryDialog({
   useEffect(() => {
     async function loadData() {
       try {
-        const [iList, pList, aList] = await Promise.all([
+        const [iList, pList, aList, pricingList, serviceList] = await Promise.all([
           window.maxApi.objects.listRecords('item'),
           window.maxApi.objects.listRecords('person'),
           window.maxApi.accounts.list(),
+          window.maxApi.pricing.list(),
+          window.maxApi.pricing.services.list(),
         ]);
         setItems(iList);
         setPeople(pList);
         setAccounts(aList);
+        setPricingProfiles(pricingList.filter((profile) => profile.active));
+        setPricingServices(serviceList.filter((service) => service.active));
         if (aList[0]) {
           setSelectedAccountId(aList[0].id);
         }
@@ -179,7 +196,44 @@ export function QuickEntryDialog({
 
   const totalAmountNum = Number(amount) || 0;
   const paidNowNum = Number(paidNowAmount) || 0;
-  const remainingDebt = Math.max(0, totalAmountNum - paidNowNum);
+  const customerDueNum = pricingPreview?.totals.customerTotal ?? totalAmountNum;
+  const remainingDebt = Math.max(0, customerDueNum - paidNowNum);
+
+  useEffect(() => {
+    if (!selectedPricingProfileId || totalAmountNum <= 0) {
+      setPricingPreview(undefined);
+      setPricingError(undefined);
+      return;
+    }
+    let active = true;
+    void window.maxApi.quickEntry.quotePricing({
+      accountId: selectedAccountId || undefined,
+      operationKind,
+      paymentMode,
+      pricingCustomerType: pricingCustomerType || undefined,
+      pricingInputMode,
+      pricingOverrides,
+      pricingProfileId: selectedPricingProfileId,
+      pricingServiceId: selectedPricingServiceId || undefined,
+      providerCost: providerCost === '' ? undefined : Number(providerCost),
+      toAccountId: operationKind === 'transfer' ? toAccountId || undefined : undefined,
+      totalAmount: totalAmountNum,
+    }).then((result) => {
+      if (!active) return;
+      if (result.ok && result.value) {
+        setPricingPreview(result.value);
+        setPricingError(undefined);
+        if (paymentMode === 'full') setPaidNowAmount(String(result.value.totals.customerTotal));
+      } else if (!result.ok) {
+        setPricingPreview(undefined);
+        setPricingError(result.error.message);
+      } else {
+        setPricingPreview(undefined);
+        setPricingError(undefined);
+      }
+    });
+    return () => { active = false; };
+  }, [operationKind, paymentMode, pricingCustomerType, pricingInputMode, pricingOverrides, providerCost, selectedAccountId, selectedPricingProfileId, selectedPricingServiceId, toAccountId, totalAmountNum]);
 
   // Selected item stock info
   const selectedItem = items.find((i) => i.id === selectedItemId);
@@ -197,6 +251,11 @@ export function QuickEntryDialog({
 
     if (totalAmountNum <= 0) {
       setError(quickEntryCopy(locale, 'amountInvalid'));
+      setSubmitting(false);
+      return;
+    }
+    if (pricingOverrides.some(({ reason }) => !reason.trim())) {
+      setError(quickEntryCopy(locale, 'overrideReasonRequired'));
       setSubmitting(false);
       return;
     }
@@ -232,7 +291,7 @@ export function QuickEntryDialog({
         setSubmitting(false);
         return;
       }
-    } else if (operationKind === 'purchase' || operationKind === 'expense' || operationKind === 'income') {
+    } else if (operationKind === 'purchase' || operationKind === 'expense' || operationKind === 'income' || operationKind === 'adjustment') {
       if (!selectedAccountId) {
         setError(quickEntryCopy(locale, 'noAccounts'));
         setSubmitting(false);
@@ -255,11 +314,13 @@ export function QuickEntryDialog({
       operationKind === 'sale' ? 'Sale' :
       operationKind === 'purchase' ? 'Purchase' :
       operationKind === 'expense' ? 'Expense' :
-      operationKind === 'income' ? 'Income' : 'Transfer'
+      operationKind === 'income' ? 'Income' :
+      operationKind === 'adjustment' ? 'Adjustment' : 'Transfer'
     );
 
     const draft: QuickEntryDraft = {
       accountId: operationKind !== 'sale' || paymentMode !== 'later' ? selectedAccountId : undefined,
+      adjustmentDirection: operationKind === 'adjustment' ? adjustmentDirection : undefined,
       collectorId: collectorId || undefined,
       itemId: selectedItemId || undefined,
       note: noteText,
@@ -267,6 +328,12 @@ export function QuickEntryDialog({
       paidAmount: paymentMode === 'full' ? totalAmountNum : paymentMode === 'partial' ? paidNowNum : 0,
       paymentMode,
       personId: selectedPersonId || undefined,
+      pricingCustomerType: selectedPricingProfileId ? pricingCustomerType || undefined : undefined,
+      pricingInputMode: selectedPricingProfileId ? pricingInputMode : undefined,
+      pricingOverrides: selectedPricingProfileId ? [...pricingOverrides] : undefined,
+      pricingProfileId: selectedPricingProfileId || undefined,
+      pricingServiceId: selectedPricingServiceId || undefined,
+      providerCost: selectedPricingProfileId && providerCost !== '' ? Number(providerCost) : undefined,
       providerFee: operationKind === 'transfer' ? calculatedProviderFee : undefined,
       quantity: (operationKind === 'sale' || operationKind === 'purchase') && selectedItem?.currentQuantity !== undefined
         ? (Number(quantity) || 1)
@@ -292,7 +359,12 @@ export function QuickEntryDialog({
     { id: 'expense', icon: BanknoteArrowUp, label: quickEntryCopy(locale, 'operationExpense') },
     { id: 'income', icon: BanknoteArrowDown, label: quickEntryCopy(locale, 'operationIncome') },
     { id: 'transfer', icon: ArrowLeftRight, label: quickEntryCopy(locale, 'operationTransfer') },
+    { id: 'adjustment', icon: Calculator, label: quickEntryCopy(locale, 'operationAdjustment') },
   ];
+  const selectedPricingService = pricingServices.find((service) => service.id === selectedPricingServiceId);
+  const availableAccounts = selectedPricingService
+    ? accounts.filter((account) => selectedPricingService.paymentAccountTypes.includes(account.accountType))
+    : accounts;
 
   return (
     <FocusedOverlay className="quick-entry-dialog" labelId="quick-entry-title" onClose={onClose}>
@@ -322,6 +394,11 @@ export function QuickEntryDialog({
               data-active={isActive ? 'true' : undefined}
               onClick={() => {
                 setOperationKind(op.id);
+                if (selectedPricingService?.operation !== op.id) {
+                  setSelectedPricingServiceId('');
+                  setSelectedPricingProfileId('');
+                  setPricingOverrides([]);
+                }
                 setError(undefined);
               }}
               type="button"
@@ -446,7 +523,7 @@ export function QuickEntryDialog({
                   value={selectedAccountId}
                 >
                   <option value="">-- {quickEntryCopy(locale, 'selectSourceAccount')} --</option>
-                  {accounts.map((acc) => (
+                  {availableAccounts.map((acc) => (
                     <option key={acc.id} value={acc.id}>
                       {acc.name} ({acc.balance.toFixed(2)})
                     </option>
@@ -462,7 +539,7 @@ export function QuickEntryDialog({
                   value={toAccountId}
                 >
                   <option value="">-- {quickEntryCopy(locale, 'selectDestinationAccount')} --</option>
-                  {accounts.map((acc) => (
+                  {availableAccounts.map((acc) => (
                     <option key={acc.id} value={acc.id}>
                       {acc.name} ({acc.balance.toFixed(2)})
                     </option>
@@ -482,11 +559,44 @@ export function QuickEntryDialog({
           </div>
         )}
 
+        {/* ADJUSTMENT: DIRECTION & NOTE */}
+        {operationKind === 'adjustment' && (
+          <div className="quick-step-block">
+            <div className="quick-step-head">
+              <span className="step-num">1</span>
+              <strong>{quickEntryCopy(locale, 'adjustment')}</strong>
+            </div>
+
+            <div className="field-pair">
+              <label className="field">
+                <span>{quickEntryCopy(locale, 'adjustmentDirection')}</span>
+                <select
+                  data-autofocus="true"
+                  onChange={(event) => setAdjustmentDirection(event.target.value as 'inflow' | 'outflow')}
+                  value={adjustmentDirection}
+                >
+                  <option value="inflow">{quickEntryCopy(locale, 'adjustmentIncrease')}</option>
+                  <option value="outflow">{quickEntryCopy(locale, 'adjustmentDecrease')}</option>
+                </select>
+              </label>
+
+              <label className="field">
+                <span>{quickEntryCopy(locale, 'note')}</span>
+                <input
+                  onChange={(event) => setCustomNote(event.target.value)}
+                  placeholder={quickEntryCopy(locale, 'adjustmentPlaceholder')}
+                  value={customNote}
+                />
+              </label>
+            </div>
+          </div>
+        )}
+
         {/* AMOUNT STEP */}
         <div className="quick-step-block">
           <div className="quick-step-head">
             <span className="step-num">2</span>
-            <strong>{quickEntryCopy(locale, 'amount')}</strong>
+            <strong>{selectedPricingService?.inputLabel || (selectedPricingProfileId ? quickEntryCopy(locale, pricingInputMode === 'customer_pays' ? 'customerPaysInput' : 'customerReceivesInput') : quickEntryCopy(locale, 'amount'))}</strong>
             {sourceBadge(priceSource, isAmountConfirmed, locale)}
           </div>
 
@@ -520,6 +630,66 @@ export function QuickEntryDialog({
               </Button>
             )}
           </div>
+
+          <div className="quick-pricing-controls">
+            <label className="field">
+              <span>{quickEntryCopy(locale, 'service')}</span>
+              <select onChange={(event) => {
+                const serviceId = event.target.value;
+                setSelectedPricingServiceId(serviceId);
+                setPricingOverrides([]);
+                const service = pricingServices.find((candidate) => candidate.id === serviceId);
+                if (service) {
+                  setSelectedPricingProfileId(service.pricingProfileId);
+                  setPricingInputMode(service.defaultInputMode);
+                  if (!customNote.trim()) setCustomNote(service.name);
+                } else {
+                  setSelectedPricingProfileId('');
+                }
+              }} value={selectedPricingServiceId}>
+                <option value="">{quickEntryCopy(locale, 'noService')}</option>
+                {pricingServices.filter((service) => service.operation === operationKind).map((service) => <option key={service.id} value={service.id}>{service.name}</option>)}
+              </select>
+            </label>
+            {selectedPricingService && selectedPricingService.inputModes.length > 1 && <label className="field"><span>{quickEntryCopy(locale, 'pricingInput')}</span><select onChange={(event) => setPricingInputMode(event.target.value as typeof pricingInputMode)} value={pricingInputMode}>{selectedPricingService.inputModes.map((mode) => <option key={mode} value={mode}>{quickEntryCopy(locale, mode === 'customer_pays' ? 'customerPaysInput' : 'customerReceivesInput')}</option>)}</select></label>}
+            {selectedPricingProfileId && <details className="quick-pricing-setup"><summary>{quickEntryCopy(locale, 'pricingDetails')}</summary><div>
+              <label className="field"><span>{quickEntryCopy(locale, 'pricingProfile')}</span><select onChange={(event) => { setSelectedPricingProfileId(event.target.value); setPricingOverrides([]); }} value={selectedPricingProfileId}>{pricingProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}</select></label>
+              <label className="field"><span>{quickEntryCopy(locale, 'customerType')}</span><input onChange={(event) => setPricingCustomerType(event.target.value)} placeholder="retail" value={pricingCustomerType} /></label>
+              <label className="field"><span>{quickEntryCopy(locale, 'providerCost')}</span><input min="0" onChange={(event) => setProviderCost(event.target.value)} placeholder="0.00" step="0.01" type="number" value={providerCost} /></label>
+            </div></details>}
+          </div>
+
+          {pricingError && <p className="form-error" role="alert">{pricingError}</p>}
+          {pricingPreview && <div className="quick-pricing-preview">
+            <div><span>{quickEntryCopy(locale, 'customerPaysInput')}</span><strong>{pricingPreview.totals.customerTotal.toFixed(2)}</strong></div>
+            <div><span>{quickEntryCopy(locale, 'deliveredValue')}</span><strong>{pricingPreview.totals.deliveredValue.toFixed(2)}</strong></div>
+            <div><span>{quickEntryCopy(locale, 'shopCost')}</span><strong>{pricingPreview.totals.shopNetCost.toFixed(2)}</strong></div>
+            <div><span>{quickEntryCopy(locale, 'netProfit')}</span><strong>{pricingPreview.totals.netProfit.toFixed(2)}</strong></div>
+          </div>}
+          {pricingPreview && pricingPreview.componentResults.length > 0 && <details className="quick-pricing-overrides">
+            <summary>{quickEntryCopy(locale, 'adjustPricing')}</summary>
+            <div>
+              {pricingPreview.componentResults.map((result) => {
+                const current = pricingOverrides.find(({ componentId }) => componentId === result.componentId);
+                return <div className="quick-pricing-override-row" key={result.componentId}>
+                  <span>{result.label}<small>{result.calculatedAmount.toFixed(2)}</small></span>
+                  <input aria-label={`${result.label} actual amount`} min="0" onChange={(event) => {
+                    const amount = Number(event.target.value);
+                    setPricingOverrides((overrides) => [
+                      ...overrides.filter(({ componentId }) => componentId !== result.componentId),
+                      { actor: 'local-user', amount: Number.isFinite(amount) ? amount : result.calculatedAmount, componentId: result.componentId, reason: current?.reason ?? '' },
+                    ]);
+                  }} step="0.01" type="number" value={current?.amount ?? result.actualAmount} />
+                  <input aria-label={`${result.label} ${quickEntryCopy(locale, 'overrideReason')}`} onChange={(event) => {
+                    setPricingOverrides((overrides) => [
+                      ...overrides.filter(({ componentId }) => componentId !== result.componentId),
+                      { actor: 'local-user', amount: current?.amount ?? result.actualAmount, componentId: result.componentId, reason: event.target.value },
+                    ]);
+                  }} placeholder={quickEntryCopy(locale, 'overrideReason')} value={current?.reason ?? ''} />
+                </div>;
+              })}
+            </div>
+          </details>}
 
           {/* Transfer Fee Preview */}
           {operationKind === 'transfer' && totalAmountNum > 0 && (
@@ -586,7 +756,7 @@ export function QuickEntryDialog({
             {/* Account Chips */}
             {(operationKind !== 'sale' || paymentMode !== 'later') && (
               <div className="quick-account-selector">
-                {accounts.map((acc) => (
+                {availableAccounts.map((acc) => (
                   <button
                     key={acc.id}
                     className="quick-account-chip"
@@ -699,6 +869,7 @@ export function QuickEntryDialog({
               operationKind === 'purchase' ? <ShoppingCart aria-hidden="true" size={16} /> :
               operationKind === 'expense' ? <BanknoteArrowUp aria-hidden="true" size={16} /> :
               operationKind === 'income' ? <BanknoteArrowDown aria-hidden="true" size={16} /> :
+              operationKind === 'adjustment' ? <Calculator aria-hidden="true" size={16} /> :
               <ArrowLeftRight aria-hidden="true" size={16} />
             }
             type="submit"
@@ -708,6 +879,7 @@ export function QuickEntryDialog({
              operationKind === 'purchase' ? quickEntryCopy(locale, 'recordPurchase') :
              operationKind === 'expense' ? quickEntryCopy(locale, 'recordExpense') :
              operationKind === 'income' ? quickEntryCopy(locale, 'recordIncome') :
+             operationKind === 'adjustment' ? quickEntryCopy(locale, 'recordAdjustment') :
              quickEntryCopy(locale, 'recordTransfer')}
           </Button>
         </footer>
