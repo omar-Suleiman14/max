@@ -1,7 +1,7 @@
 {
   "name": "max-shop-os",
   "productName": "Max",
-  "version": "0.2.0",
+  "version": "0.2.5",
   "description": "Offline-first configurable shop operating system",
   "private": true,
   "main": ".vite/build/main.js",
@@ -16,6 +16,7 @@
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:smoke": "npm run setup:runtime && cross-env MAX_SMOKE_TEST=1 electron-forge start",
     "build": "npm run setup:runtime && electron-forge package",
+    "verify:size": "node scripts/verify-size-budget.cjs",
     "make": "npm run setup:runtime && electron-forge make",
     "make:flatpak": "npm run setup:runtime && cross-env MAX_ENABLE_FLATPAK=1 electron-forge make --platform=linux --arch=x64 --targets=@electron-forge/maker-flatpak"
   },

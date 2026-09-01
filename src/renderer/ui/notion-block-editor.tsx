@@ -19,15 +19,16 @@ import {
   Users,
   type LucideIcon,
 } from 'lucide-react';
-import React, { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import React, { lazy, Suspense, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 
-import { AccountsWorkspace } from '../accounts/accounts-workspace';
 import type { Locale } from '../app/i18n';
-import { ObjectWorkspace } from '../objects/object-workspace';
-import { ReconciliationWorkspace } from '../reconciliation/reconciliation-workspace';
-import { TransactionsWorkspace } from '../transactions/transactions-workspace';
 import type { NavigationItem } from '../../shared/workspace-contract';
-import { DatabasePage } from '../databases/DatabasePage';
+
+const AccountsWorkspace = lazy(() => import('../accounts/accounts-workspace').then((module) => ({ default: module.AccountsWorkspace })));
+const DatabasePage = lazy(() => import('../databases/DatabasePage').then((module) => ({ default: module.DatabasePage })));
+const ObjectWorkspace = lazy(() => import('../objects/object-workspace').then((module) => ({ default: module.ObjectWorkspace })));
+const ReconciliationWorkspace = lazy(() => import('../reconciliation/reconciliation-workspace').then((module) => ({ default: module.ReconciliationWorkspace })));
+const TransactionsWorkspace = lazy(() => import('../transactions/transactions-workspace').then((module) => ({ default: module.TransactionsWorkspace })));
 
 export type BlockType =
   | 'bullet'
@@ -893,6 +894,7 @@ export function NotionBlockEditor({ blocks, locale, onChange }: NotionBlockEdito
               {block.type === 'database-view' && (
                 <div className="notion-embedded-db-card">
                   <div className="notion-embedded-db-content">
+                    <Suspense fallback={<div aria-live="polite" className="notion-embedded-db-loading" role="status">{locale === 'ar' ? 'جارٍ تحميل قاعدة البيانات…' : 'Loading database…'}</div>}>
                     {block.databaseId ? (
                       <DatabasePage databaseId={block.databaseId} initialViewId={block.viewId} locale={locale} />
                     ) : (block.databaseKind ?? block.content) === 'items' ? (
@@ -906,6 +908,7 @@ export function NotionBlockEditor({ blocks, locale, onChange }: NotionBlockEdito
                     ) : (
                       <ReconciliationWorkspace locale={locale} />
                     )}
+                    </Suspense>
                   </div>
                 </div>
               )}

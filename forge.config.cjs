@@ -1,7 +1,25 @@
 const { FusesPlugin } = require('@electron-forge/plugin-fuses');
 const { VitePlugin } = require('@electron-forge/plugin-vite');
 const { FuseV1Options, FuseVersion } = require('@electron/fuses');
+const { readdir, rm } = require('node:fs/promises');
 const { join } = require('node:path');
+
+function trimElectronLocales(buildPath, _electronVersion, platform, _arch, callback) {
+  const keep = platform === 'darwin'
+    ? new Set(['ar.lproj', 'en.lproj', 'en_GB.lproj', 'en_US.lproj'])
+    : new Set(['ar.pak', 'en-US.pak']);
+  const localeDirectory = platform === 'darwin'
+    ? join(buildPath, 'Electron.app', 'Contents', 'Resources')
+    : join(buildPath, 'locales');
+
+  void readdir(localeDirectory, { withFileTypes: true })
+    .then((entries) => Promise.all(entries
+      .filter((entry) => platform === 'darwin' ? entry.isDirectory() && entry.name.endsWith('.lproj') : entry.isFile() && entry.name.endsWith('.pak'))
+      .filter((entry) => !keep.has(entry.name))
+      .map((entry) => rm(join(localeDirectory, entry.name), { force: true, recursive: entry.isDirectory() }))))
+    .then(() => callback())
+    .catch((error) => callback(error));
+}
 
 const linuxMakers = [
   {
@@ -31,6 +49,7 @@ if (process.env.MAX_ENABLE_FLATPAK === '1') {
 /** @type {import('@electron-forge/shared-types').ForgeConfig} */
 const config = {
   packagerConfig: {
+    afterExtract: [trimElectronLocales],
     asar: true,
     electronZipDir: join(__dirname, '.cache', 'electron-zips'),
     executableName: process.platform === 'linux' ? 'max-shop-os' : 'max',
@@ -40,6 +59,9 @@ const config = {
       /^\/(?:\.github|docs|scripts|src|worker)(?:\/|$)/,
       /^\/node_modules\/(?:\.cache|\.vite)(?:\/|$)/,
       /^\/node_modules\/\.package-lock\.json$/,
+      // Vite bundles every runtime dependency into main, preload, and renderer
+      // output. Shipping node_modules duplicated ~47 MiB in app.asar.
+      /^\/node_modules(?:\/|$)/,
       /^\/(?:AGENTS\.md|README\.md|eslint\.config\.mjs|forge\.config\.cjs|index\.html|tsconfig[^/]*|vite\.[^/]*|vitest\.[^/]*)$/,
       /^\/(?:\.editorconfig|\.gitattributes|\.gitignore|\.npmrc|\.nvmrc)$/,
     ],

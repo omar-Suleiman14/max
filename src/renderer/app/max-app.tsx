@@ -14,15 +14,11 @@ import {
   Workflow,
   type LucideIcon,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { BackupSchedule, Blueprint } from '../../shared/blueprint-contract';
 import type { TransactionRecord } from '../../shared/transaction-contract';
 import type { WorkspaceNavigation } from '../../shared/workspace-contract';
-import { BlueprintDialog } from '../blueprints/blueprint-dialog';
-import { DatabasesWorkspace } from '../databases/databases-workspace';
-import { DatabasePage } from '../databases/DatabasePage';
-import { Onboarding } from '../onboarding/onboarding';
 import { CustomPageView } from '../pages/custom-page-view';
 import {
   loadHomePage,
@@ -45,18 +41,24 @@ import {
   type ThemePreference,
 } from './preferences';
 import { Button } from '../ui/button';
-import { CommandMenu, type Command } from '../ui/command-menu';
+import type { Command } from '../ui/command-menu';
 import { EmptyPage } from '../ui/empty-page';
-import { SettingsPage } from '../ui/settings-page';
 import { Sidebar } from '../ui/sidebar';
-import { AccountsWorkspace } from '../accounts/accounts-workspace';
-import { ReconciliationWorkspace } from '../reconciliation/reconciliation-workspace';
-import { UniversalSearchDialog } from '../search/universal-search-dialog';
-import { QuickEntryDialog } from '../quick-entry/quick-entry-dialog';
 import { UndoToast } from '../ui/undo-toast';
-import { TransactionsWorkspace } from '../transactions/transactions-workspace';
-import { ObjectWorkspace } from '../objects/object-workspace';
-import { WorkflowLauncherDialog } from '../workflows/workflow-launcher-dialog';
+
+const AccountsWorkspace = lazy(() => import('../accounts/accounts-workspace').then((module) => ({ default: module.AccountsWorkspace })));
+const BlueprintDialog = lazy(() => import('../blueprints/blueprint-dialog').then((module) => ({ default: module.BlueprintDialog })));
+const CommandMenu = lazy(() => import('../ui/command-menu').then((module) => ({ default: module.CommandMenu })));
+const DatabasePage = lazy(() => import('../databases/DatabasePage').then((module) => ({ default: module.DatabasePage })));
+const DatabasesWorkspace = lazy(() => import('../databases/databases-workspace').then((module) => ({ default: module.DatabasesWorkspace })));
+const ObjectWorkspace = lazy(() => import('../objects/object-workspace').then((module) => ({ default: module.ObjectWorkspace })));
+const Onboarding = lazy(() => import('../onboarding/onboarding').then((module) => ({ default: module.Onboarding })));
+const QuickEntryDialog = lazy(() => import('../quick-entry/quick-entry-dialog').then((module) => ({ default: module.QuickEntryDialog })));
+const ReconciliationWorkspace = lazy(() => import('../reconciliation/reconciliation-workspace').then((module) => ({ default: module.ReconciliationWorkspace })));
+const SettingsPage = lazy(() => import('../ui/settings-page').then((module) => ({ default: module.SettingsPage })));
+const TransactionsWorkspace = lazy(() => import('../transactions/transactions-workspace').then((module) => ({ default: module.TransactionsWorkspace })));
+const UniversalSearchDialog = lazy(() => import('../search/universal-search-dialog').then((module) => ({ default: module.UniversalSearchDialog })));
+const WorkflowLauncherDialog = lazy(() => import('../workflows/workflow-launcher-dialog').then((module) => ({ default: module.WorkflowLauncherDialog })));
 
 const pageLabels: Record<string, TranslationKey> = {
   accounts: 'account',
@@ -386,11 +388,11 @@ export function MaxApp() {
   }, [customPages, handleAddCustomPage, locale]);
 
   if (onboardingCompleted === false) {
-    return <Onboarding initialLocale={locale} onComplete={handleCompleteOnboarding} />;
+    return <Suspense fallback={null}><Onboarding initialLocale={locale} onComplete={handleCompleteOnboarding} /></Suspense>;
   }
 
   if (onboardingPreview) {
-    return <Onboarding initialLocale={locale} onClose={() => setOnboardingPreview(false)} onComplete={() => { setOnboardingPreview(false); return Promise.resolve(); }} preview />;
+    return <Suspense fallback={null}><Onboarding initialLocale={locale} onClose={() => setOnboardingPreview(false)} onComplete={() => { setOnboardingPreview(false); return Promise.resolve(); }} preview /></Suspense>;
   }
 
   const isCustomPage = customPages.some((candidate) => candidate.id === page);
@@ -412,12 +414,16 @@ export function MaxApp() {
 
   function navigateSettingsSection(section: SettingsSectionId) {
     setSettingsSection(section);
-    const target = document.getElementById(section);
-    target?.scrollIntoView({
-      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
-      block: 'start',
-    });
-    target?.focus({ preventScroll: true });
+    const revealSection = () => {
+      const target = document.getElementById(section);
+      target?.scrollIntoView({
+        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+        block: 'start',
+      });
+      target?.focus({ preventScroll: true });
+      return Boolean(target);
+    };
+    if (!revealSection()) window.setTimeout(revealSection, 0);
   }
 
   return (
@@ -500,6 +506,7 @@ export function MaxApp() {
             </div>
           </header>}
 
+          <Suspense fallback={<div aria-live="polite" className="page-loading" role="status">{locale === 'ar' ? 'جارٍ التحميل…' : 'Loading…'}</div>}>
           {page === 'home' ? (
             <CustomPageView
               isHome
@@ -575,9 +582,11 @@ export function MaxApp() {
               page={page as 'accounts' | 'home' | 'items' | 'people' | 'reconciliation' | 'transactions'}
             />
           )}
+          </Suspense>
         </main>
       </div>
 
+      <Suspense fallback={null}>
       {commandOpen && <CommandMenu commands={commands} locale={locale} onClose={() => setCommandOpen(false)} />}
       {searchOpen && (
         <UniversalSearchDialog
@@ -622,6 +631,7 @@ export function MaxApp() {
         />
       )}
       {workflowOpen && <WorkflowLauncherDialog locale={locale} onClose={() => setWorkflowOpen(false)} />}
+      </Suspense>
       {recentTxForUndo && (
         <UndoToast
           locale={locale}
