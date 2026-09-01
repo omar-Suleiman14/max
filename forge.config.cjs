@@ -5,18 +5,23 @@ const { readdir, rm } = require('node:fs/promises');
 const { join } = require('node:path');
 
 function trimElectronLocales(buildPath, _electronVersion, platform, _arch, callback) {
-  const localeDirectory = platform === 'darwin'
-    ? join(buildPath, 'Electron.app', 'Contents', 'Frameworks', 'Electron Framework.framework', 'Versions', 'A', 'Resources')
-    : join(buildPath, 'locales');
+  const localeDirectories = platform === 'darwin'
+    ? [
+        join(buildPath, 'Electron.app', 'Contents', 'Resources'),
+        join(buildPath, 'Electron.app', 'Contents', 'Frameworks', 'Electron Framework.framework', 'Versions', 'A', 'Resources'),
+      ]
+    : [join(buildPath, 'locales')];
   const keepLocale = platform === 'darwin'
     ? (name) => name === 'ar.lproj' || name.startsWith('ar_') || name === 'en.lproj' || name.startsWith('en_')
     : (name) => name === 'ar.pak' || name === 'en-US.pak';
 
-  void readdir(localeDirectory, { withFileTypes: true })
-    .then((entries) => Promise.all(entries
+  void Promise.all(localeDirectories.map(async (localeDirectory) => {
+    const entries = await readdir(localeDirectory, { withFileTypes: true });
+    await Promise.all(entries
       .filter((entry) => platform === 'darwin' ? entry.isDirectory() && entry.name.endsWith('.lproj') : entry.isFile() && entry.name.endsWith('.pak'))
       .filter((entry) => !keepLocale(entry.name))
-      .map((entry) => rm(join(localeDirectory, entry.name), { force: true, recursive: entry.isDirectory() }))))
+      .map((entry) => rm(join(localeDirectory, entry.name), { force: true, recursive: entry.isDirectory() })));
+  }))
     .then(() => callback())
     .catch((error) => callback(error));
 }
