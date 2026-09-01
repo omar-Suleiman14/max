@@ -64,6 +64,9 @@ export class DemoDataService {
 
     const cash = this.accounts.createAccount({ accountType: 'cash', initialBalance: 12_500, name: ar ? 'الخزينة الرئيسية' : 'Main Cash Drawer' });
     const wallet = this.accounts.createAccount({ accountType: 'wallet', feeConfig: { feeType: 'percentage', percentage: 1 }, initialBalance: 4_250, name: ar ? 'فودافون كاش' : 'Vodafone Cash' });
+    const etisalat = this.accounts.createAccount({ accountType: 'wallet', feeConfig: { feeType: 'percentage', percentage: 1 }, initialBalance: 2_800, name: 'e& Cash' });
+    const aman = this.accounts.createAccount({ accountType: 'other', feeConfig: { feeType: 'fixed_plus_percentage', fixedAmount: 2, percentage: 0.5 }, initialBalance: 1_500, name: 'Aman' });
+    const instaPay = this.accounts.createAccount({ accountType: 'bank', feeConfig: { feeType: 'percentage', maxFee: 20, minFee: 0.5, percentage: 0.1 }, initialBalance: 18_000, name: 'InstaPay' });
     const bank = this.accounts.createAccount({ accountType: 'bank', initialBalance: 125_000, name: ar ? 'حساب المتجر البنكي' : 'Business Bank' });
     const card = this.accounts.createAccount({ accountType: 'bank', feeConfig: { feeType: 'percentage', percentage: 1.5 }, initialBalance: 8_600, name: ar ? 'نقاط البيع' : 'Card Terminal' });
     const petty = this.accounts.createAccount({ accountType: 'cash', initialBalance: 1_200, name: ar ? 'العهدة النثرية' : 'Petty Cash' });
@@ -94,15 +97,15 @@ export class DemoDataService {
 
     const create = (draft: Parameters<TransactionRepository['createTransaction']>[0]) => this.transactions.createTransaction(draft);
     create({ itemId: items[8]?.id, movements: [{ accountId: cash.id, amount: 700, movementType: 'inflow' }], note: ar ? 'لاصقتا شاشة مع التركيب' : 'Two screen protectors with fitting', paidAmount: 700, personId: people[1]?.id, quantity: 2, totalAmount: 700, transactionType: 'sale' });
-    create({ itemId: items[0]?.id, movements: [{ accountId: bank.id, amount: 30_000, movementType: 'inflow' }], note: ar ? 'دفعة جزئية والباقي آجل' : 'Partial payment; balance due next week', paidAmount: 30_000, personId: people[0]?.id, quantity: 1, totalAmount: 48_000, transactionType: 'sale' });
-    create({ itemId: items[4]?.id, movements: [{ accountId: card.id, amount: 14_250, movementType: 'inflow' }], paidAmount: 14_250, personId: people[2]?.id, providerFee: 213.75, quantity: 1, totalAmount: 14_250, transactionType: 'sale' });
+    create({ itemId: items[0]?.id, movements: [{ accountId: instaPay.id, amount: 30_000, movementType: 'inflow' }], note: ar ? 'دفعة جزئية والباقي آجل' : 'Partial payment; balance due next week', paidAmount: 30_000, personId: people[0]?.id, providerFee: 20, quantity: 1, totalAmount: 48_000, transactionType: 'sale' });
+    create({ itemId: items[4]?.id, movements: [{ accountId: aman.id, amount: 14_250, movementType: 'inflow' }], paidAmount: 14_250, personId: people[2]?.id, providerFee: 73.25, quantity: 1, totalAmount: 14_250, transactionType: 'sale' });
     create({ itemId: items[13]?.id, movements: [{ accountId: wallet.id, amount: 440, movementType: 'inflow' }], paidAmount: 440, personId: people[4]?.id, providerFee: 4.4, quantity: 2, totalAmount: 440, transactionType: 'sale' });
-    create({ itemId: items[15]?.id, movements: [{ accountId: cash.id, amount: 1_650, movementType: 'inflow' }], paidAmount: 1_650, personId: people[3]?.id, quantity: 1, totalAmount: 1_650, transactionType: 'sale' });
+    create({ itemId: items[15]?.id, movements: [{ accountId: card.id, amount: 1_650, movementType: 'inflow' }], paidAmount: 1_650, personId: people[3]?.id, providerFee: 24.75, quantity: 1, totalAmount: 1_650, transactionType: 'sale' });
     create({ itemId: items[1]?.id, movements: [{ accountId: bank.id, amount: 69_000, movementType: 'outflow' }], note: ar ? 'توريد هاتفين' : 'Two-phone stock delivery', paidAmount: 69_000, personId: people[6]?.id, quantity: 2, totalAmount: 69_000, transactionType: 'purchase' });
     create({ itemId: items[11]?.id, movements: [{ accountId: bank.id, amount: 6_200, movementType: 'outflow' }], paidAmount: 6_200, personId: people[5]?.id, quantity: 20, totalAmount: 6_200, transactionType: 'purchase' });
     create({ movements: [{ accountId: cash.id, amount: 8_500, movementType: 'outflow' }], note: ar ? 'إيجار المتجر الشهري' : 'Monthly shop rent', paidAmount: 8_500, totalAmount: 8_500, transactionType: 'expense' });
     create({ movements: [{ accountId: petty.id, amount: 780, movementType: 'outflow' }], note: ar ? 'أدوات تغليف وتنظيف' : 'Packaging and cleaning supplies', paidAmount: 780, totalAmount: 780, transactionType: 'expense' });
-    create({ movements: [{ accountId: wallet.id, amount: 900, movementType: 'inflow' }], note: ar ? 'خدمة إعداد ونقل بيانات' : 'Phone setup and data transfer', paidAmount: 900, serviceFee: 900, totalAmount: 900, transactionType: 'income' });
+    create({ movements: [{ accountId: etisalat.id, amount: 900, movementType: 'inflow' }], note: ar ? 'خدمة إعداد ونقل بيانات' : 'Phone setup and data transfer', paidAmount: 900, providerFee: 9, serviceFee: 900, totalAmount: 900, transactionType: 'income' });
     create({ movements: [{ accountId: cash.id, amount: 450, movementType: 'inflow' }], note: ar ? 'تركيب شاشة وحماية' : 'Screen fitting service', paidAmount: 450, serviceFee: 450, totalAmount: 450, transactionType: 'income' });
     this.transactions.createTransfer({ amount: 5_000, fromAccountId: bank.id, note: ar ? 'تغذية الخزينة' : 'Top up cash drawer', toAccountId: cash.id });
     this.transactions.createTransfer({ amount: 2_000, fromAccountId: wallet.id, note: ar ? 'تحويل حصيلة المحفظة' : 'Wallet settlement', providerFee: 20, toAccountId: bank.id });
@@ -127,6 +130,6 @@ export class DemoDataService {
     }));
 
     this.database.prepare("INSERT INTO app_metadata (key, value, updated_at) VALUES ('demo.seed.version', '2', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").run(new Date().toISOString());
-    return { accounts: 5, items: items.length, pages: pages.length, people: people.length, transactions: 15 };
+    return { accounts: 8, items: items.length, pages: pages.length, people: people.length, transactions: 15 };
   }
 }

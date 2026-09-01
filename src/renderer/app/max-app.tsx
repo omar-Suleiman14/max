@@ -182,7 +182,7 @@ export function MaxApp() {
           }
         }
         if (data.onboardingCompleted) {
-          const migration = await window.maxApi.workspace.migrateV01();
+          const migration = await window.maxApi.workspace.migrateV01(data.locale);
           if (!migration.ok) throw new Error(migration.error.message);
           const [pages, persistedHome, navigation] = await Promise.all([
             loadPersistentCustomPages(),
@@ -290,6 +290,7 @@ export function MaxApp() {
     backupSchedule: BackupSchedule,
     blueprint?: Blueprint,
     includeDemoData?: boolean,
+    templateId?: 'blank' | 'custom' | 'phone-shop',
   ) {
     const res = await window.maxApi.shop.completeOnboarding({
       backupSchedule,
@@ -297,13 +298,14 @@ export function MaxApp() {
       includeDemoData,
       locale: nextLocale,
       shopName: nextShopName,
+      templateId,
     });
     if (res.ok) {
       setShopName(res.value.shopName);
       setLocale(res.value.locale);
       setHomePage(loadHomePage(res.value.locale));
       setOnboardingCompleted(true);
-      const migration = await window.maxApi.workspace.migrateV01();
+      const migration = await window.maxApi.workspace.migrateV01(res.value.locale);
       if (migration.ok) {
         const [pages, persistedHome, navigation] = await Promise.all([
           loadPersistentCustomPages(),
@@ -355,9 +357,9 @@ export function MaxApp() {
         run: () => navigate('settings'),
       },
       {
-        id: 'quick-sale-entry',
+        id: 'quick-operation',
         keywords: ['quick', 'sale', 'fast', 'بيع', 'سريع', 'تسجيل'],
-        label: locale === 'ar' ? 'تسجيل بيع سريع (Ctrl+S)' : 'Quick Sale Entry (Ctrl+S)',
+        label: locale === 'ar' ? 'عملية سريعة (Ctrl+S)' : 'Quick Operation (Ctrl+S)',
         run: () => setQuickEntryOpen(true),
       },
       {

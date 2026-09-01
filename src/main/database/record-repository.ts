@@ -16,6 +16,7 @@ import type { WorkspaceSearchService } from './workspace-search-service';
 
 type RecordRow = Readonly<{
   archived_at: string | null;
+  content_json: string;
   created_at: string;
   database_id: string;
   icon: string | null;
@@ -62,6 +63,15 @@ export class RecordRepository {
   }
 
   createRecord(draft: WorkspaceRecordDraft): WorkspaceRecord {
+    const template = draft.templateId
+      ? this.#database.prepare(`
+          SELECT database_id, icon, defaults_json, content_json
+          FROM workspace_record_templates WHERE id = ? AND archived_at IS NULL
+        `).get(draft.templateId) as { content_json: string; database_id: string; defaults_json: string; icon: string | null } | undefined
+      : undefined;
+    if (draft.templateId && (!template || template.database_id !== draft.databaseId)) {
+      throw new WorkspaceDomainError('invalid-input', 'The selected record template does not belong to this database.');
+    }
     const id = draft.id ?? randomUUID();
     const title = draft.title.trim() || 'Untitled';
     const now = new Date().toISOString();
@@ -75,7 +85,8 @@ export class RecordRepository {
 
     // 2. Create Workspace Node
     this.#workspaceRepo.createNode({
-      icon: draft.icon,
+      contentJson: draft.contentJson ?? template?.content_json ?? '[]',
+      icon: draft.icon ?? template?.icon,
       id,
       kind: 'record',
       parentNodeId: draft.databaseId,
@@ -92,7 +103,10 @@ export class RecordRepository {
       .run(id, draft.databaseId, sequence, positionKey, draft.templateId ?? null, now, now);
 
     // 4. Save properties
-    const properties = draft.properties ?? {};
+    const templateDefaults = template
+      ? parseStoredJson<Readonly<Record<string, unknown>>>(template.defaults_json, {})
+      : {};
+    const properties = { ...templateDefaults, ...(draft.properties ?? {}) };
     this.#savePropertyValues(id, draft.databaseId, properties);
 
     return this.#refreshSearch(id);
@@ -101,7 +115,7 @@ export class RecordRepository {
   getRecord(id: string): WorkspaceRecord | null {
     const row = this.#database
       .prepare(`
-        SELECT r.*, n.title, n.icon, n.parent_node_id, n.revision
+        SELECT r.*, n.title, n.icon, n.content_json, n.parent_node_id, n.revision
         FROM workspace_records r
         JOIN workspace_nodes n ON n.id = r.id
         WHERE r.id = ?
@@ -115,6 +129,7 @@ export class RecordRepository {
 
     return {
       archivedAt: row.archived_at,
+      contentJson: row.content_json,
       createdAt: row.created_at,
       databaseId: row.database_id,
       icon: row.icon,
@@ -132,14 +147,14 @@ export class RecordRepository {
   listRecords(databaseId: string, includeArchived = false): readonly WorkspaceRecord[] {
     const sql = includeArchived
       ? `
-        SELECT r.*, n.title, n.icon, n.parent_node_id, n.revision
+        SELECT r.*, n.title, n.icon, n.content_json, n.parent_node_id, n.revision
         FROM workspace_records r
         JOIN workspace_nodes n ON n.id = r.id
         WHERE r.database_id = ?
         ORDER BY r.position_key ASC
       `
       : `
-        SELECT r.*, n.title, n.icon, n.parent_node_id, n.revision
+        SELECT r.*, n.title, n.icon, n.content_json, n.parent_node_id, n.revision
         FROM workspace_records r
         JOIN workspace_nodes n ON n.id = r.id
         WHERE r.database_id = ? AND r.archived_at IS NULL
@@ -155,6 +170,7 @@ export class RecordRepository {
 
     return rows.map((row) => ({
       archivedAt: row.archived_at,
+      contentJson: row.content_json,
       createdAt: row.created_at,
       databaseId: row.database_id,
       icon: row.icon,

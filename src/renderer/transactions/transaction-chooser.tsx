@@ -15,7 +15,7 @@ import type { TransactionType } from '../../shared/transaction-contract';
 import type { Locale } from '../app/i18n';
 import { FocusedOverlay } from '../ui/focused-overlay';
 
-export type TransactionChoice = 'quick-sale' | Exclude<TransactionType, 'reversal'>;
+export type TransactionChoice = 'quick-operation' | Exclude<TransactionType, 'reversal'>;
 
 type TransactionChooserProps = Readonly<{
   locale: Locale;
@@ -31,7 +31,7 @@ const choices: readonly Readonly<{
   labelAr: string;
   labelEn: string;
 }>[] = [
-  { descriptionAr: 'تسجيل سريع: الصنف ← المبلغ ← طريقة الدفع', descriptionEn: 'Fast Product → Amount → Method flow', icon: Zap, id: 'quick-sale', labelAr: 'بيع سريع', labelEn: 'Quick sale' },
+  { descriptionAr: 'تسجيل سريع: الصنف ← المبلغ ← طريقة الدفع', descriptionEn: 'Fast Product → Amount → Method flow', icon: Zap, id: 'quick-operation', labelAr: 'بيع سريع', labelEn: 'Quick sale' },
   { descriptionAr: 'فاتورة بيع كاملة مع عميل وصنف', descriptionEn: 'Full sale with item and customer details', icon: ReceiptText, id: 'sale', labelAr: 'بيع', labelEn: 'Sale' },
   { descriptionAr: 'شراء مخزون من مورد', descriptionEn: 'Stock purchase from a supplier', icon: ShoppingCart, id: 'purchase', labelAr: 'شراء', labelEn: 'Purchase' },
   { descriptionAr: 'تكلفة تشغيلية أو فاتورة', descriptionEn: 'Operating cost or bill', icon: BanknoteArrowUp, id: 'expense', labelAr: 'مصروف', labelEn: 'Expense' },

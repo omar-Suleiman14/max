@@ -45,6 +45,7 @@ import { WorkflowService } from './workflow-service';
 import { WorkspaceSearchService } from './workspace-search-service';
 import { WorkspaceTemplateService } from './workspace-template-service';
 import { V020MigrationService } from './v020-migration-service';
+import { RecordTemplateRepository } from './record-template-repository';
 
 export class DatabaseService {
   readonly #database: DatabaseSync;
@@ -71,6 +72,7 @@ export class DatabaseService {
   readonly properties: PropertyRepository;
   readonly databases: DatabaseRepository;
   readonly records: RecordRepository;
+  readonly recordTemplates: RecordTemplateRepository;
   readonly relations: RelationRepository;
   readonly dependencies: DependencyService;
   readonly propertySchema: PropertySchemaService;
@@ -135,6 +137,7 @@ export class DatabaseService {
     this.workspaceSearch = new WorkspaceSearchService(this.#database);
     this.workspace = new WorkspaceRepository(this.#database, this.workspaceSearch);
     this.properties = new PropertyRepository(this.#database);
+    this.recordTemplates = new RecordTemplateRepository(this.#database);
     this.records = new RecordRepository(this.#database, this.workspace, this.properties, this.workspaceSearch);
     this.databases = new DatabaseRepository(this.#database, this.workspace, this.properties, this.records);
     this.relations = new RelationRepository(this.#database, this.properties, this.records);
@@ -170,6 +173,7 @@ export class DatabaseService {
       this.views,
       this.workflows,
       this.workspace,
+      this.recordTemplates,
     );
     this.v020Migration = new V020MigrationService(
       this.#database,
@@ -269,6 +273,7 @@ export class DatabaseService {
         includeDemoData: false,
         locale,
         shopName: locale === 'ar' ? 'متجر Max التجريبي' : 'Max Demo Mobile Store',
+        templateId: 'phone-shop',
       });
       this.#database.exec('COMMIT;');
       return summary;
@@ -315,6 +320,10 @@ export class DatabaseService {
     try {
       if (draft.blueprint) this.blueprints.importBlueprint(draft.blueprint);
       if (draft.includeDemoData) this.demoData.seed(draft.locale);
+      this.#database.prepare(`
+        INSERT INTO app_metadata (key, value, updated_at) VALUES ('workspace.template.id', ?, ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+      `).run(draft.templateId ?? (draft.blueprint ? 'custom' : 'blank'), new Date().toISOString());
       const metadata = this.shopMetadata.completeOnboarding(draft);
       this.#database.exec('COMMIT;');
       return metadata;

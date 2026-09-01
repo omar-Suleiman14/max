@@ -517,6 +517,7 @@ export function parseWorkspaceTemplateV2(value: unknown): WorkspaceTemplateV2 {
       assertString(view.name, 'Template view name', { max: 200 });
       if (!isOneOf(view.layout, VIEW_LAYOUTS)) invalid('Template view layout is invalid.');
       if (view.filterAst !== undefined && view.filterAst !== null) assertFilterNode(view.filterAst, 'Template view filter');
+      if (view.group !== undefined && view.group !== null) assertGroupRule(view.group, 'Template view group');
       if (view.sorts !== undefined) assertSortRules(view.sorts, 'Template view sorts');
       if (view.layoutConfig !== undefined) assertJsonObject(view.layoutConfig, 'Template view layout config');
       if (view.propertyKeys !== undefined) {
@@ -543,6 +544,18 @@ export function parseWorkspaceTemplateV2(value: unknown): WorkspaceTemplateV2 {
       assertString(page.title, `Template page ${index} title`, { max: 500 });
       assertString(page.contentJson, `Template page ${index} content`, { max: 2_000_000 });
       assertNullableString(page.icon, `Template page ${index} icon`);
+    });
+  }
+  if (value.recordTemplates !== undefined) {
+    if (!Array.isArray(value.recordTemplates)) invalid('Template record templates must be an array.');
+    value.recordTemplates.forEach((template, index) => {
+      assertObject(template, `Template record template ${index}`);
+      assertString(template.key, `Template record template ${index} key`, { max: 120 });
+      assertString(template.databaseKey, `Template record template ${index} database`, { max: 120 });
+      assertString(template.name, `Template record template ${index} name`, { max: 200 });
+      assertNullableString(template.icon, `Template record template ${index} icon`);
+      if (template.defaults !== undefined) assertJsonObject(template.defaults, `Template record template ${index} defaults`);
+      if (template.contentJson !== undefined) assertString(template.contentJson, `Template record template ${index} content`, { max: 2_000_000 });
     });
   }
   if (value.workflows !== undefined) {

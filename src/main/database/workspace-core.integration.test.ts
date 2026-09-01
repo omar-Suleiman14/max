@@ -411,6 +411,45 @@ describe('Max v0.2.0 Core Workspace Integration Tests', () => {
       expect(importResult.databaseCount).toBeGreaterThan(3);
       expect(importResult.databases.some((d) => d.key === 'db_products')).toBe(true);
 
+      const transactionDb = importResult.databases.find((database) => database.key === 'db_transactions')!;
+      const transactionSchema = db.databases.getSchema(transactionDb.id);
+      const todayView = transactionSchema.views.find(({ name }) => name === 'Today')!;
+      expect(todayView.filterAst).toMatchObject({ operator: 'relative_date', relativePeriod: 'TODAY' });
+      expect(todayView.group).toMatchObject({ dateGranularity: 'day' });
+      expect(transactionSchema.views.map(({ name }) => name)).toEqual(expect.arrayContaining(['Today', 'This Week', 'This Month', 'All Transactions']));
+
+      const quantity = transactionSchema.properties.find(({ name }) => name === 'Quantity')!;
+      const unitPrice = transactionSchema.properties.find(({ name }) => name === 'Unit Price')!;
+      const lineTotal = transactionSchema.properties.find(({ name }) => name === 'Quantity × Price')!;
+      const date = transactionSchema.properties.find(({ name }) => name === 'Date')!;
+      const amount = transactionSchema.properties.find(({ name }) => name === 'Total Amount')!;
+      const today = new Date().toISOString().slice(0, 10);
+      const yesterdayDate = new Date();
+      yesterdayDate.setUTCDate(yesterdayDate.getUTCDate() - 1);
+      db.records.createRecord({ databaseId: transactionDb.id, properties: { [amount.id]: 300, [date.id]: today, [quantity.id]: 2, [unitPrice.id]: 150 }, title: 'Today sale' });
+      db.records.createRecord({ databaseId: transactionDb.id, properties: { [amount.id]: 99, [date.id]: yesterdayDate.toISOString().slice(0, 10) }, title: 'Yesterday sale' });
+      const todayResult = db.databaseQuery.query({ calculations: [{ calculation: 'sum', propertyId: amount.id }], databaseId: transactionDb.id, filter: todayView.filterAst, group: todayView.group });
+      expect(todayResult.records).toHaveLength(1);
+      expect(todayResult.records[0]?.properties[lineTotal.id]).toBe(300);
+      expect(todayResult.calculations[0]?.value).toBe(300);
+
+      const deviceTemplate = db.recordTemplates.list(importResult.databases.find(({ key }) => key === 'db_products')!.id).find(({ name }) => name === 'Device')!;
+      const templatedRecord = db.records.createRecord({ databaseId: deviceTemplate.databaseId, properties: {}, templateId: deviceTemplate.id, title: 'Pixel 10' });
+      expect(templatedRecord.icon).toBe('📱');
+      expect(templatedRecord.contentJson).toContain('Device details');
+
+      const accountDb = importResult.databases.find(({ key }) => key === 'db_accounts')!;
+      const peopleDb = importResult.databases.find(({ key }) => key === 'db_people')!;
+      const account = db.records.createRecord({ databaseId: accountDb.id, title: 'Vodafone Cash' });
+      const customer = db.records.createRecord({ databaseId: peopleDb.id, title: 'Ahmed' });
+      const quickSale = db.workflows.listWorkflows().find(({ name }) => name === 'Quick Sale')!;
+      const saleResult = db.workflows.execute({ inputs: { account: account.id, date: today, fee: 7, person: customer.id, product: templatedRecord.id, quantity: 2, reference: 'SALE-001', unitPrice: 150 }, workflowId: quickSale.id });
+      expect(saleResult.status).toBe('completed');
+      const createdTransaction = db.records.getRecord(saleResult.createdRecordIds[0]!)!;
+      expect(createdTransaction.properties[amount.id]).toBe(300);
+      expect(createdTransaction.properties[transactionSchema.properties.find(({ name }) => name === 'Total Fee')!.id]).toBe(7);
+      expect(createdTransaction.properties[transactionSchema.properties.find(({ name }) => name === 'Net Amount')!.id]).toBe(293);
+
       // Create a product record
       const prodDb = importResult.databases.find((d) => d.key === 'db_products')!;
       const prodRec = db.records.createRecord({
@@ -546,6 +585,13 @@ describe('Max v0.2.0 Core Workspace Integration Tests', () => {
   });
 
   describe('v0.1.1 to v0.2.0 Data Migration Service', () => {
+    it('keeps the Blank onboarding template genuinely blank across migration checks', () => {
+      const db = createTestDb();
+      db.completeOnboarding({ backupSchedule: 'manual', includeDemoData: false, locale: 'en', shopName: 'Blank Max', templateId: 'blank' });
+      expect(db.v020Migration.migrate('en')).toMatchObject({ parityCheckPassed: true, itemsMigrated: 0, transactionsMigrated: 0 });
+      expect(db.workspace.getNavigation().databases).toHaveLength(0);
+    });
+
     it('migrates legacy shop data to generic workspace with 100% financial and inventory parity', () => {
       const db = createTestDb();
 
@@ -569,6 +615,16 @@ describe('Max v0.2.0 Core Workspace Integration Tests', () => {
       expect(summary.accountsMigrated).toBeGreaterThan(0);
       expect(summary.transactionsMigrated).toBeGreaterThan(0);
       expect(db.v020Migration.isMigrated()).toBe(true);
+
+      const transactionsDatabase = db.workspace.getNavigation().databases.find(({ title }) => title === 'Transactions')!;
+      const transactionSchema = db.databases.getSchema(transactionsDatabase.id);
+      const quantity = transactionSchema.properties.find(({ name }) => name === 'Quantity')!;
+      const fee = transactionSchema.properties.find(({ name }) => name === 'Total Fee')!;
+      const paymentMethod = transactionSchema.properties.find(({ name }) => name === 'Payment Method')!;
+      const migratedTransactions = db.databaseQuery.query({ databaseId: transactionsDatabase.id, limit: 200 }).records;
+      expect(migratedTransactions.some((record) => Number(record.properties[quantity.id]) > 0)).toBe(true);
+      expect(migratedTransactions.some((record) => Number(record.properties[fee.id]) > 0)).toBe(true);
+      expect(migratedTransactions.some((record) => typeof record.properties[paymentMethod.id] === 'string')).toBe(true);
     });
   });
 });

@@ -59,6 +59,7 @@ import type {
   WorkspaceRecord,
   WorkspaceRecordDraft,
   WorkspaceRecordPatch,
+  WorkspaceRecordTemplate,
 } from './property-contract';
 import type {
   RelationTargetSummary,
@@ -184,6 +185,7 @@ export const IPC_CHANNELS = {
   workspaceArchiveDatabase: 'max:workspace:databases:archive',
   workspaceDuplicateDatabase: 'max:workspace:databases:duplicate',
   workspaceListProperties: 'max:workspace:properties:list',
+  workspaceListRecordTemplates: 'max:workspace:record-templates:list',
   workspaceCreateProperty: 'max:workspace:properties:create',
   workspaceUpdateProperty: 'max:workspace:properties:update',
   workspaceArchiveProperty: 'max:workspace:properties:archive',
@@ -417,10 +419,11 @@ export type MaxApi = Readonly<{
     importTemplate: (template: WorkspaceTemplateV2) => Promise<WorkspaceMutationResult<TemplateImportResult>>;
     linkRecords: (relationId: string, sourceRecordId: string, targetRecordId: string) => Promise<WorkspaceMutationResult<null>>;
     listProperties: (databaseId: string) => Promise<readonly WorkspaceProperty[]>;
+    listRecordTemplates: (databaseId: string) => Promise<readonly WorkspaceRecordTemplate[]>;
     listRelations: (databaseId: string) => Promise<readonly WorkspaceRelation[]>;
     listViews: (databaseId: string) => Promise<readonly WorkspaceView[]>;
     listWorkflows: () => Promise<readonly WorkspaceWorkflow[]>;
-    migrateV01: () => Promise<WorkspaceMutationResult<MigrationSummary>>;
+    migrateV01: (locale?: 'ar' | 'en') => Promise<WorkspaceMutationResult<MigrationSummary>>;
     previewTypeConversion: (propertyId: string, targetType: PropertyType) => Promise<TypeConversionPreview>;
     queryDatabase: (params: DatabaseQueryParams) => Promise<DatabaseQueryResult>;
     reorderNode: (id: string, targetPositionKey: string, newParentId?: string | null) => Promise<WorkspaceMutationResult<WorkspaceNode>>;

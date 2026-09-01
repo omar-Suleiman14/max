@@ -4,7 +4,7 @@
 
 import type { PropertyType } from './property-contract';
 import type { ViewLayout } from './view-contract';
-import type { FilterNode, SortRule } from './query-contract';
+import type { FilterNode, GroupRule, SortRule } from './query-contract';
 import type { WorkflowInputField, WorkflowStep } from './workflow-contract';
 
 export type TemplateProperty = Readonly<{
@@ -20,12 +20,22 @@ export type TemplateProperty = Readonly<{
 
 export type TemplateView = Readonly<{
   filterAst?: FilterNode | null;
+  group?: GroupRule | null;
   key: string;
   layout: ViewLayout;
   layoutConfig?: Readonly<Record<string, unknown>>;
   name: string;
   propertyKeys?: readonly string[];
   sorts?: readonly SortRule[];
+}>;
+
+export type TemplateRecordTemplate = Readonly<{
+  contentJson?: string;
+  databaseKey: string;
+  defaults?: Readonly<Record<string, unknown>>;
+  icon?: string;
+  key: string;
+  name: string;
 }>;
 
 export type TemplateDatabase = Readonly<{
@@ -70,6 +80,7 @@ export type WorkspaceTemplateV2 = Readonly<{
   description?: string;
   name: string;
   pages?: readonly TemplatePage[];
+  recordTemplates?: readonly TemplateRecordTemplate[];
   relations: readonly TemplateRelation[];
   version: 2;
   workflows?: readonly TemplateWorkflow[];

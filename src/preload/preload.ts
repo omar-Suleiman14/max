@@ -295,14 +295,16 @@ const maxApi: MaxApi = Object.freeze({
       ipcRenderer.invoke(IPC_CHANNELS.workspaceLinkRecords, relationId, sourceRecordId, targetRecordId) as ReturnType<MaxApi['workspace']['linkRecords']>,
     listProperties: (databaseId: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.workspaceListProperties, databaseId) as ReturnType<MaxApi['workspace']['listProperties']>,
+    listRecordTemplates: (databaseId: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceListRecordTemplates, databaseId) as ReturnType<MaxApi['workspace']['listRecordTemplates']>,
     listRelations: (databaseId: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.workspaceListRelations, databaseId) as ReturnType<MaxApi['workspace']['listRelations']>,
     listViews: (databaseId: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.workspaceListViews, databaseId) as ReturnType<MaxApi['workspace']['listViews']>,
     listWorkflows: () =>
       ipcRenderer.invoke(IPC_CHANNELS.workspaceListWorkflows) as ReturnType<MaxApi['workspace']['listWorkflows']>,
-    migrateV01: () =>
-      ipcRenderer.invoke(IPC_CHANNELS.workspaceMigrateV01) as ReturnType<MaxApi['workspace']['migrateV01']>,
+    migrateV01: (locale?: 'ar' | 'en') =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceMigrateV01, locale) as ReturnType<MaxApi['workspace']['migrateV01']>,
     previewTypeConversion: (propertyId: string, targetType: WorkspacePropertyType) =>
       ipcRenderer.invoke(IPC_CHANNELS.workspacePreviewTypeConversion, propertyId, targetType) as ReturnType<MaxApi['workspace']['previewTypeConversion']>,
     queryDatabase: (params: DatabaseQueryParams) =>

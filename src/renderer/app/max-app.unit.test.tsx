@@ -81,7 +81,7 @@ const shopApi = {
   getMetadata: vi.fn(() => Promise.resolve(shopMetadataState)),
   resetDemoData: vi.fn(() => Promise.resolve({
     ok: true as const,
-    value: { accounts: 5, items: 24, pages: 4, people: 8, transactions: 15 },
+    value: { accounts: 8, items: 24, pages: 4, people: 8, transactions: 15 },
   })),
   seedDemoData: vi.fn(() => Promise.resolve({
     ok: true as const,

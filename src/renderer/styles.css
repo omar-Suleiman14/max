@@ -98,7 +98,7 @@
   transform: translateY(-1px);
 }
 
-.transaction-choice[data-choice='quick-sale'] {
+.transaction-choice[data-choice='quick-operation'] {
   grid-column: 1 / -1;
 }
 
@@ -129,7 +129,7 @@
     grid-template-columns: 1fr;
   }
 
-  .transaction-choice[data-choice='quick-sale'] {
+  .transaction-choice[data-choice='quick-operation'] {
     grid-column: auto;
   }
 }
@@ -630,6 +630,13 @@ kbd { display: inline-flex; min-width: 23px; min-height: 20px; align-items: cent
 .onboarding-container { display: flex; min-height: 100vh; padding: 0; background: var(--canvas); }
 .onboarding-card { width: 100%; min-height: 100vh; background: var(--canvas); border: 0; border-radius: 0; box-shadow: none; overflow: hidden; display: flex; flex-direction: column; animation: overlay-in 140ms ease-out; }
 .onboarding-card__header { display: flex; justify-content: space-between; align-items: center; padding: 22px clamp(24px, 5vw, 72px); border-bottom: 1px solid var(--line); background: var(--canvas); }
+.onboarding-brand-symbol { position: relative; width: 38px; height: 38px; overflow: hidden; flex: 0 0 auto; border-radius: 9px; background: #02050a; }
+.onboarding-brand-symbol img { position: absolute; width: 86px; height: 86px; max-width: none; inset-inline-start: -24px; top: -10px; }
+.onboarding-brand-name { color: var(--text); font-size: 20px; letter-spacing: .18em; }
+.onboarding-brand-version { color: var(--muted); font-size: 10px; }
+.onboarding-template-picker { margin-top: 10px; }
+.template-preview-card { padding: 16px 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.template-preview-card p { margin: 6px 0 0; color: var(--muted); line-height: 1.55; }
 .onboarding-steps-indicator { display: flex; gap: 6px; }
 .step-dot { width: 8px; height: 8px; border-radius: 99px; background: var(--line-strong); transition: all 0.2s ease; }
 .step-dot--active { width: 22px; background: var(--accent); }
