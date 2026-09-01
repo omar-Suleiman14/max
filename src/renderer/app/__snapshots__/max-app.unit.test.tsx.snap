@@ -341,6 +341,35 @@ exports[`Max shell > renders the English shell and navigates to Databases worksp
               Daily Reconciliation
             </span>
           </button>
+          <button
+            class="databases-tab text-muted hover:text-foreground"
+            title="Create new database"
+            type="button"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-plus mr-1"
+              fill="none"
+              height="16"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="16"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M5 12h14"
+              />
+              <path
+                d="M12 5v14"
+              />
+            </svg>
+            <span>
+              New Database
+            </span>
+          </button>
         </nav>
       </div>
       <div

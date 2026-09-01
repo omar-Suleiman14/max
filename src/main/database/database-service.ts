@@ -28,6 +28,23 @@ import { QuickEntryService } from './quick-entry-service';
 import { ReconciliationRepository } from './reconciliation-repository';
 import { normalizeSearchText, SearchService } from './search-service';
 import { ViewsPagesRepository } from './views-pages-repository';
+import { DatabaseUnitOfWork } from './database-unit-of-work';
+import { WorkspaceChangeBus } from './workspace-change-bus';
+import { WorkspaceRepository } from './workspace-repository';
+import { PropertyRepository } from './property-repository';
+import { DatabaseRepository } from './database-repository';
+import { RecordRepository } from './record-repository';
+import { RelationRepository } from './relation-repository';
+import { DependencyService } from './dependency-service';
+import { PropertySchemaService } from './property-schema-service';
+import { FormulaParser } from './formula/parser';
+import { ComputedPropertyService } from './computed-property-service';
+import { DatabaseQueryService } from './query/database-query-service';
+import { ViewRepository } from './view-repository';
+import { WorkflowService } from './workflow-service';
+import { WorkspaceSearchService } from './workspace-search-service';
+import { WorkspaceTemplateService } from './workspace-template-service';
+import { V020MigrationService } from './v020-migration-service';
 
 export class DatabaseService {
   readonly #database: DatabaseSync;
@@ -46,6 +63,25 @@ export class DatabaseService {
   readonly templates: TemplateRepository;
   readonly transactions: TransactionRepository;
   readonly viewsPages: ViewsPagesRepository;
+
+  // Max v0.2.0 Workspace Services
+  readonly unitOfWork: DatabaseUnitOfWork;
+  readonly changeBus: WorkspaceChangeBus;
+  readonly workspace: WorkspaceRepository;
+  readonly properties: PropertyRepository;
+  readonly databases: DatabaseRepository;
+  readonly records: RecordRepository;
+  readonly relations: RelationRepository;
+  readonly dependencies: DependencyService;
+  readonly propertySchema: PropertySchemaService;
+  readonly computedProperties: ComputedPropertyService;
+  readonly databaseQuery: DatabaseQueryService;
+  readonly views: ViewRepository;
+  readonly workflows: WorkflowService;
+  readonly workspaceSearch: WorkspaceSearchService;
+  readonly workspaceTemplates: WorkspaceTemplateService;
+  readonly v020Migration: V020MigrationService;
+
   #initialized = false;
 
   constructor(filename: string) {
@@ -91,6 +127,54 @@ export class DatabaseService {
       this.templates,
       this.transactions,
       this.viewsPages,
+    );
+
+    // Max v0.2.0 Core Workspace initialization
+    this.unitOfWork = new DatabaseUnitOfWork(this.#database);
+    this.changeBus = new WorkspaceChangeBus();
+    this.workspace = new WorkspaceRepository(this.#database);
+    this.properties = new PropertyRepository(this.#database);
+    this.databases = new DatabaseRepository(this.#database, this.workspace, this.properties);
+    this.records = new RecordRepository(this.#database, this.workspace, this.properties);
+    this.relations = new RelationRepository(this.#database, this.properties);
+    this.dependencies = new DependencyService(this.#database);
+    this.propertySchema = new PropertySchemaService(this.#database, this.properties, this.dependencies);
+    const formulaParser = new FormulaParser();
+    this.computedProperties = new ComputedPropertyService(
+      this.#database,
+      this.properties,
+      this.records,
+      this.relations,
+      formulaParser,
+    );
+    this.databaseQuery = new DatabaseQueryService(
+      this.#database,
+      this.properties,
+      this.records,
+      this.computedProperties,
+    );
+    this.views = new ViewRepository(this.#database);
+    this.workflows = new WorkflowService(
+      this.#database,
+      this.unitOfWork,
+      this.records,
+      this.relations,
+      this.pricing,
+    );
+    this.workspaceSearch = new WorkspaceSearchService(this.#database);
+    this.workspaceTemplates = new WorkspaceTemplateService(
+      this.unitOfWork,
+      this.databases,
+      this.properties,
+      this.relations,
+    );
+    this.v020Migration = new V020MigrationService(
+      this.#database,
+      this.unitOfWork,
+      this.workspaceTemplates,
+      this.records,
+      this.relations,
+      this.workspace,
     );
 
     if (filename !== ':memory:') {
@@ -189,6 +273,28 @@ export class DatabaseService {
 
   #clearWorkspace(): void {
     const tables = [
+      'workspace_migration_issues',
+      'workspace_migration_map',
+      'workspace_search_index',
+      'workspace_audit_log',
+      'workspace_file_values',
+      'workspace_attachments',
+      'workspace_workflow_runs',
+      'workspace_workflow_revisions',
+      'workspace_workflows',
+      'workspace_dependencies',
+      'workspace_views',
+      'workspace_relation_edges',
+      'workspace_relations',
+      'workspace_multi_select_values',
+      'workspace_property_values',
+      'workspace_records',
+      'workspace_record_templates',
+      'workspace_property_options',
+      'workspace_status_groups',
+      'workspace_properties',
+      'workspace_databases',
+      'workspace_nodes',
       'inventory_movements', 'shop_money_movements', 'shop_daily_sessions', 'shop_transactions', 'pricing_services', 'pricing_profiles', 'shop_accounts', 'pricing_channels', 'pricing_providers',
       'object_property_values', 'object_audit_log', 'object_records', 'shop_templates',
       'object_properties', 'shop_saved_views', 'shop_custom_pages', 'app_metadata',

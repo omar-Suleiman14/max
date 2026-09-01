@@ -29,7 +29,7 @@ describe('PricingCatalogRepository', () => {
     expect(db.pricingCatalog.updateProvider(provider.id, { active: true, name: 'Fawry Egypt' }).name).toBe('Fawry Egypt');
     expect(db.pricingCatalog.updateChannel(channel.id, { active: true, name: 'Counter', providerId: provider.id }).name).toBe('Counter');
     expect(db.pricingCatalog.updateService(service.id, { ...service, inputModes: ['customer_pays', 'customer_receives'] }).inputModes).toEqual(['customer_pays', 'customer_receives']);
-    expect(db.objects.listAudit(service.id).map(({ action }) => action)).toEqual(['created', 'updated']);
+    expect(db.objects.listAudit(service.id).map(({ action }) => action)).toEqual(['updated', 'created']);
     db.pricingCatalog.archiveService(service.id);
     expect(db.pricingCatalog.listServices()).toEqual([]);
     db.close();

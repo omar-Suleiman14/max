@@ -53,6 +53,7 @@ import {
 import type { DatabaseService } from '../database/database-service';
 import type { CloudBackupService } from '../cloud/cloud-backup-service';
 import { ObjectDomainError } from '../database/object-repository';
+import { WorkspaceDomainError } from '../../shared/workspace-contract';
 import type { PlatformAdapter } from '../platform/platform-adapter';
 import { assertTrustedSender } from '../security/trusted-sender';
 
@@ -485,6 +486,12 @@ function mutation<T>(work: () => T): MutationResult<T> {
         ok: false,
       };
     }
+    if (error instanceof WorkspaceDomainError) {
+      return {
+        error: { code: error.code as any, message: error.message },
+        ok: false,
+      };
+    }
     throw error;
   }
 }
@@ -912,6 +919,252 @@ export function registerIpcHandlers({
       database.resetWorkspace();
       return null;
     });
+  });
+
+  // ==========================================
+  // Max v0.2.0 Core Workspace IPC Handlers
+  // ==========================================
+
+  // Nodes & Navigation
+  ipcMain.handle(IPC_CHANNELS.workspaceGetNavigation, (event, _includeArchived?: unknown) => {
+    trust(event);
+    return database.workspace.getNavigation();
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceGetNode, (event, id: unknown) => {
+    trust(event);
+    return database.workspace.getNode(parseId(id));
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceCreateNode, (event, draft: unknown) => {
+    trust(event);
+    return mutation(() => database.workspace.createNode(draft as any));
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceUpdateNode, (event, id: unknown, patch: unknown) => {
+    trust(event);
+    return mutation(() => database.workspace.updateNode(parseId(id), patch as any));
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceArchiveNode, (event, id: unknown) => {
+    trust(event);
+    return mutation(() => {
+      database.workspace.archiveNode(parseId(id));
+      return null;
+    });
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceRestoreNode, (event, id: unknown) => {
+    trust(event);
+    return mutation(() => database.workspace.restoreNode(parseId(id)));
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceReorderNode, (event, id: unknown, targetPosKey: unknown, newParentId: unknown) => {
+    trust(event);
+    return mutation(() =>
+      database.workspace.reorderNode(
+        parseId(id),
+        String(targetPosKey),
+        typeof newParentId === 'string' ? newParentId : null,
+      ),
+    );
+  });
+
+  // Databases
+  ipcMain.handle(IPC_CHANNELS.workspaceGetDatabase, (event, id: unknown) => {
+    trust(event);
+    return database.databases.getDatabase(parseId(id));
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceGetDatabaseSchema, (event, id: unknown) => {
+    trust(event);
+    return database.databases.getSchema(parseId(id));
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceCreateDatabase, (event, draft: unknown) => {
+    trust(event);
+    return mutation(() => database.databases.createDatabase(draft as any));
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceUpdateDatabase, (event, id: unknown, patch: unknown) => {
+    trust(event);
+    return mutation(() => database.databases.updateDatabase(parseId(id), patch as any));
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceArchiveDatabase, (event, id: unknown) => {
+    trust(event);
+    return mutation(() => {
+      database.databases.archiveDatabase(parseId(id));
+      return null;
+    });
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceDuplicateDatabase, (event, id: unknown, options: unknown) => {
+    trust(event);
+    return mutation(() =>
+      database.databases.duplicateDatabase(
+        parseId(id),
+        typeof options === 'string' ? options : (options as any)?.title,
+      ),
+    );
+  });
+
+  // Properties
+  ipcMain.handle(IPC_CHANNELS.workspaceListProperties, (event, databaseId: unknown) => {
+    trust(event);
+    return database.properties.listProperties(parseId(databaseId));
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceCreateProperty, (event, draft: unknown) => {
+    trust(event);
+    return mutation(() => database.properties.createProperty(draft as any));
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceUpdateProperty, (event, id: unknown, patch: unknown) => {
+    trust(event);
+    return mutation(() => database.properties.updateProperty(parseId(id), patch as any));
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceArchiveProperty, (event, id: unknown) => {
+    trust(event);
+    return mutation(() => {
+      database.properties.archiveProperty(parseId(id));
+      return null;
+    });
+  });
+  ipcMain.handle(IPC_CHANNELS.workspacePreviewTypeConversion, (event, propertyId: unknown, targetType: unknown) => {
+    trust(event);
+    return database.propertySchema.previewTypeConversion(parseId(propertyId), targetType as any);
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceApplyTypeConversion, (event, propertyId: unknown, targetType: unknown, strategy: unknown) => {
+    trust(event);
+    return mutation(() => database.propertySchema.applyTypeConversion(parseId(propertyId), targetType as any, strategy as any));
+  });
+
+  // Records
+  ipcMain.handle(IPC_CHANNELS.workspaceGetRecord, (event, id: unknown) => {
+    trust(event);
+    return database.records.getRecord(parseId(id));
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceCreateRecord, (event, draft: unknown) => {
+    trust(event);
+    return mutation(() => database.records.createRecord(draft as any));
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceUpdateRecord, (event, id: unknown, patch: unknown) => {
+    trust(event);
+    return mutation(() => database.records.updateRecord(parseId(id), patch as any));
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceArchiveRecord, (event, id: unknown) => {
+    trust(event);
+    return mutation(() => {
+      database.records.archiveRecord(parseId(id));
+      return null;
+    });
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceBatchCreateRecords, (event, records: unknown) => {
+    trust(event);
+    return mutation(() => database.records.batchCreateRecords(Array.isArray(records) ? records : []));
+  });
+
+  // Relations
+  ipcMain.handle(IPC_CHANNELS.workspaceListRelations, (event, databaseId: unknown) => {
+    trust(event);
+    return database.relations.listRelations(parseId(databaseId));
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceCreateRelation, (event, draft: unknown) => {
+    trust(event);
+    return mutation(() => database.relations.createRelation(draft as any));
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceArchiveRelation, (event, id: unknown) => {
+    trust(event);
+    return mutation(() => {
+      database.relations.archiveRelation(parseId(id));
+      return null;
+    });
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceGetRelatedRecords, (event, recordId: unknown, relationId: unknown) => {
+    trust(event);
+    return database.relations.getRelatedRecords(parseId(recordId), parseId(relationId));
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceLinkRecords, (event, relationId: unknown, sourceRecordId: unknown, targetRecordId: unknown) => {
+    trust(event);
+    return mutation(() => {
+      database.relations.linkRecords(parseId(relationId), parseId(sourceRecordId), parseId(targetRecordId));
+      return null;
+    });
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceUnlinkRecords, (event, relationId: unknown, sourceRecordId: unknown, targetRecordId: unknown) => {
+    trust(event);
+    return mutation(() => {
+      database.relations.unlinkRecords(parseId(relationId), parseId(sourceRecordId), parseId(targetRecordId));
+      return null;
+    });
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceSearchRelationTargets, (event, relationId: unknown, query: unknown, limit: unknown) => {
+    trust(event);
+    return database.relations.searchRelationTargets(
+      parseId(relationId),
+      String(query ?? ''),
+      typeof limit === 'number' ? limit : undefined,
+    );
+  });
+
+  // Views & Queries
+  ipcMain.handle(IPC_CHANNELS.workspaceListViews, (event, databaseId: unknown) => {
+    trust(event);
+    return database.views.listViews(parseId(databaseId));
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceGetView, (event, id: unknown) => {
+    trust(event);
+    return database.views.getView(parseId(id));
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceCreateView, (event, draft: unknown) => {
+    trust(event);
+    return mutation(() => database.views.createView(draft as any));
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceUpdateView, (event, id: unknown, patch: unknown) => {
+    trust(event);
+    return mutation(() => database.views.updateView(parseId(id), patch as any));
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceArchiveView, (event, id: unknown) => {
+    trust(event);
+    return mutation(() => {
+      database.views.archiveView(parseId(id));
+      return null;
+    });
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceQueryDatabase, (event, params: unknown) => {
+    trust(event);
+    return database.databaseQuery.query(params as any);
+  });
+
+  // Workflows
+  ipcMain.handle(IPC_CHANNELS.workspaceListWorkflows, (event) => {
+    trust(event);
+    return database.workflows.listWorkflows();
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceGetWorkflow, (event, id: unknown) => {
+    trust(event);
+    return database.workflows.getWorkflow(parseId(id));
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceCreateWorkflow, (event, draft: unknown) => {
+    trust(event);
+    return mutation(() => database.workflows.createWorkflow(draft as any));
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceUpdateWorkflow, (event, id: unknown, patch: unknown) => {
+    trust(event);
+    return mutation(() => database.workflows.updateWorkflow(parseId(id), patch as any));
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceArchiveWorkflow, (event, id: unknown) => {
+    trust(event);
+    return mutation(() => {
+      database.workflows.archiveWorkflow(parseId(id));
+      return null;
+    });
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceExecuteWorkflow, (event, input: unknown) => {
+    trust(event);
+    return mutation(() => database.workflows.execute(input as any));
+  });
+
+  // Search & Migration
+  ipcMain.handle(IPC_CHANNELS.workspaceSearch, (event, query: unknown, limit: unknown) => {
+    trust(event);
+    return database.workspaceSearch.search(String(query ?? ''), typeof limit === 'number' ? limit : 20);
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceImportTemplate, (event, template: unknown) => {
+    trust(event);
+    return mutation(() => database.workspaceTemplates.importBlueprintV2(template as any));
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceMigrateV01, (event) => {
+    trust(event);
+    return mutation(() => database.v020Migration.migrate());
   });
 }
 

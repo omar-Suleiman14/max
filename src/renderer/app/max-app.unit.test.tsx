@@ -191,6 +191,13 @@ const transactionsApi = {
 
 const quickEntryApi = {
   getSuggestion: vi.fn<() => Promise<QuickEntryPriceSuggestion>>(() => Promise.resolve({ amount: null, source: 'none' as const })),
+  quotePricing: vi.fn((input: any) => {
+    const amt = input?.totalAmount ?? input?.amount;
+    if (!Number.isFinite(amt) || amt <= 0 || !pricingProfiles[0]) {
+      return Promise.resolve({ error: 'invalid-amount', ok: false as const });
+    }
+    return Promise.resolve({ ok: true as const, value: calculatePricing(pricingProfiles[0]!, { ...input, amount: amt }, '2026-08-31') });
+  }),
   submit: vi.fn((draft: QuickEntryDraft) =>
     Promise.resolve({
       ok: true as const,
@@ -215,13 +222,31 @@ const pricingApi = {
     pricingProfiles = pricingProfiles.filter((profile) => profile.id !== id);
     return Promise.resolve({ ok: true as const, value: null });
   }),
+  channels: {
+    archive: vi.fn(() => Promise.resolve({ ok: true as const, value: null })),
+    create: vi.fn((draft: any) => Promise.resolve({ ok: true as const, value: { ...draft, createdAt: '2026-08-31', id: 'chan-1', updatedAt: '2026-08-31' } })),
+    list: vi.fn((): Promise<any[]> => Promise.resolve([])),
+    update: vi.fn((id: string, draft: any) => Promise.resolve({ ok: true as const, value: { ...draft, createdAt: '2026-08-31', id, updatedAt: '2026-08-31' } })),
+  },
   create: vi.fn((draft: PricingProfileDraft) => {
     const profile: PricingProfile = { ...draft, createdAt: '2026-08-31', id: `pricing-${pricingProfiles.length + 1}`, updatedAt: '2026-08-31' };
     pricingProfiles = [...pricingProfiles, profile];
     return Promise.resolve({ ok: true as const, value: profile });
   }),
   list: vi.fn(() => Promise.resolve(pricingProfiles)),
+  providers: {
+    archive: vi.fn(() => Promise.resolve({ ok: true as const, value: null })),
+    create: vi.fn((draft: any) => Promise.resolve({ ok: true as const, value: { ...draft, createdAt: '2026-08-31', id: 'prov-1', updatedAt: '2026-08-31' } })),
+    list: vi.fn((): Promise<any[]> => Promise.resolve([])),
+    update: vi.fn((id: string, draft: any) => Promise.resolve({ ok: true as const, value: { ...draft, createdAt: '2026-08-31', id, updatedAt: '2026-08-31' } })),
+  },
   quote: vi.fn(),
+  services: {
+    archive: vi.fn(() => Promise.resolve({ ok: true as const, value: null })),
+    create: vi.fn((draft: any) => Promise.resolve({ ok: true as const, value: { ...draft, createdAt: '2026-08-31', id: 'serv-1', updatedAt: '2026-08-31' } })),
+    list: vi.fn((): Promise<any[]> => Promise.resolve([])),
+    update: vi.fn((id: string, draft: any) => Promise.resolve({ ok: true as const, value: { ...draft, createdAt: '2026-08-31', id, updatedAt: '2026-08-31' } })),
+  },
   update: vi.fn((id: string, draft: PricingProfileDraft) => {
     const profile: PricingProfile = { ...draft, createdAt: '2026-08-31', id, updatedAt: '2026-08-31' };
     pricingProfiles = pricingProfiles.map((candidate) => candidate.id === id ? profile : candidate);
@@ -676,6 +701,9 @@ describe('Max shell', () => {
       createdAt: '2026-08-31', currency: 'EGP', id: 'recharge', inputMode: 'customer_pays', name: 'Mobile recharge', service: 'Recharge', updatedAt: '2026-08-31',
     };
     pricingProfiles = [recharge];
+    pricingApi.services.list.mockResolvedValue([{
+      active: true, category: 'Recharge', createdAt: '2026-08-31', defaultInputMode: 'customer_pays', id: 'srv-recharge', inputLabel: 'Recharge amount', inputModes: ['customer_pays'], name: 'Mobile Recharge', operation: 'sale', paymentAccountTypes: ['cash'], pricingProfileId: 'recharge', updatedAt: '2026-08-31',
+    }]);
     pricingApi.quote.mockImplementation((_profileId: string, input: PricingQuoteInput) => Promise.resolve({ ok: true as const, value: calculatePricing(recharge, input, '2026-08-31') }));
     accountsApi.list.mockResolvedValue([{
       accountType: 'cash', balance: 0, createdAt: '2026-08-31', id: 'cash', initialBalance: 0, name: 'Cash', position: 0, updatedAt: '2026-08-31',
@@ -684,7 +712,7 @@ describe('Max shell', () => {
     render(<MaxApp />);
     await screen.findByRole('button', { name: 'Home' });
     await user.keyboard('{Control>}s{/Control}');
-    await user.selectOptions(await screen.findByLabelText('Pricing profile'), 'recharge');
+    await user.selectOptions(await screen.findByLabelText('Service'), 'srv-recharge');
     fireEvent.change(screen.getAllByPlaceholderText('0.00')[0]!, { target: { value: '100' } });
 
     expect(await screen.findByText('70.00')).toBeInTheDocument();
