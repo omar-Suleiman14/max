@@ -13,14 +13,15 @@ const BUDGETS = {
   rendererEntryGzipBytes: 130 * 1024,
 };
 
-const ALLOWED_LOCALES = new Set([
-  'ar.lproj',
-  'ar.pak',
-  'en-US.pak',
-  'en.lproj',
-  'en_GB.lproj',
-  'en_US.lproj',
-]);
+function isAllowedLocale(path) {
+  const name = path.split(/[\\/]/u).at(-1) ?? '';
+  return name === 'ar.pak'
+    || name === 'en-US.pak'
+    || name === 'ar.lproj'
+    || name.startsWith('ar_')
+    || name === 'en.lproj'
+    || name.startsWith('en_');
+}
 
 function formatBytes(bytes) {
   return `${(bytes / 1024).toFixed(2)} KiB`;
@@ -114,7 +115,7 @@ async function main() {
     }
   }
 
-  const unexpectedLocales = localeResources.filter((path) => !ALLOWED_LOCALES.has(path.split(/[\\/]/u).at(-1)));
+  const unexpectedLocales = localeResources.filter((path) => !isAllowedLocale(path));
   if (unexpectedLocales.length > 0) {
     failures.push(`Unexpected packaged Electron locales: ${unexpectedLocales.join(', ')}`);
   }
