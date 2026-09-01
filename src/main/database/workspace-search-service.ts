@@ -1,16 +1,9 @@
 import type { DatabaseSync } from 'node:sqlite';
 
 import type { WorkspaceProperty, WorkspaceRecord } from '../../shared/property-contract';
-import type { WorkspaceNode } from '../../shared/workspace-contract';
-
-export type WorkspaceSearchResult = Readonly<{
-  databaseId?: string;
-  displayMetadata?: string;
-  displaySubtitle?: string;
-  displayTitle: string;
-  entityId: string;
-  entityKind: 'page' | 'database' | 'record' | 'view';
-}>;
+import { valueToText } from './value-utils';
+import type { WorkspaceNode, WorkspaceSearchResult } from '../../shared/workspace-contract';
+import type { WorkspaceView } from '../../shared/view-contract';
 
 type FtsRow = Readonly<{
   database_id: string | null;
@@ -62,7 +55,7 @@ export class WorkspaceSearchService {
         if (typeof v === 'object') {
           textPieces.push(JSON.stringify(v));
         } else {
-          textPieces.push(String(v));
+          textPieces.push(valueToText(v));
         }
       }
     }
@@ -77,6 +70,22 @@ export class WorkspaceSearchService {
         ) VALUES (?, 'record', ?, ?, ?, ?, ?)
       `)
       .run(record.id, record.databaseId, title, subtitle, meta, searchText);
+  }
+
+  indexView(view: WorkspaceView, databaseTitle: string): void {
+    this.removeIndex(view.id);
+    this.#database.prepare(`
+      INSERT INTO workspace_search_index (
+        entity_id, entity_kind, database_id, display_title, display_subtitle, display_metadata, search_text
+      ) VALUES (?, 'view', ?, ?, ?, ?, ?)
+    `).run(
+      view.id,
+      view.databaseId,
+      view.name,
+      databaseTitle,
+      JSON.stringify({ layout: view.layout }),
+      `${view.name} ${databaseTitle} ${view.layout}`,
+    );
   }
 
   removeIndex(entityId: string): void {

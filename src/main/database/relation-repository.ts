@@ -10,6 +10,8 @@ import type {
   WorkspaceRelationDraft,
 } from '../../shared/relation-contract';
 import type { PropertyRepository } from './property-repository';
+import type { WorkspaceRecord } from '../../shared/property-contract';
+import type { RecordRepository } from './record-repository';
 
 type RelationRow = Readonly<{
   archived_at: string | null;
@@ -52,13 +54,16 @@ function relationFromRow(row: RelationRow): WorkspaceRelation {
 export class RelationRepository {
   readonly #database: DatabaseSync;
   readonly #propertyRepo: PropertyRepository;
+  readonly #recordRepo: RecordRepository;
 
   constructor(
     database: DatabaseSync,
     propertyRepo: PropertyRepository,
+    recordRepo: RecordRepository,
   ) {
     this.#database = database;
     this.#propertyRepo = propertyRepo;
+    this.#recordRepo = recordRepo;
   }
 
   createRelation(draft: WorkspaceRelationDraft): WorkspaceRelation {
@@ -67,8 +72,16 @@ export class RelationRepository {
     const sourceCard = draft.sourceCardinality ?? 'many';
     const targetCard = draft.targetCardinality ?? 'many';
 
-    let inversePropId: string | null = null;
-    if (draft.inversePropertyName?.trim()) {
+    let inversePropId: string | null = draft.inversePropertyId ?? null;
+    if (inversePropId) {
+      const inverseProperty = this.#propertyRepo.getProperty(inversePropId);
+      if (!inverseProperty || inverseProperty.databaseId !== draft.targetDatabaseId || inverseProperty.type !== 'relation') {
+        throw new WorkspaceDomainError('invalid-input', 'Inverse relation property is invalid.');
+      }
+      this.#propertyRepo.updateProperty(inverseProperty.id, {
+        config: { ...inverseProperty.config, relationId: id },
+      });
+    } else if (draft.inversePropertyName?.trim()) {
       const invProp = this.#propertyRepo.createProperty({
         config: { relationId: id },
         databaseId: draft.targetDatabaseId,
@@ -235,13 +248,16 @@ export class RelationRepository {
     return edges;
   }
 
-  searchTargets(relationId: string, searchTerm: string, limit = 20): readonly RelationTargetSummary[] {
+  searchTargets(relationId: string, searchTerm: string, limit = 20, fromRecordId?: string): readonly RelationTargetSummary[] {
     const rel = this.getRelation(relationId);
     if (!rel) {
       throw new WorkspaceDomainError('not-found', `Relation not found: ${relationId}`);
     }
 
-    const targetDbId = rel.targetDatabaseId;
+    const fromRecord = fromRecordId ? this.#recordRepo.getRecord(fromRecordId) : null;
+    const targetDbId = fromRecord?.databaseId === rel.targetDatabaseId
+      ? rel.sourceDatabaseId
+      : rel.targetDatabaseId;
     const term = `%${searchTerm.trim().toLowerCase()}%`;
 
     const rows = this.#database
@@ -317,48 +333,51 @@ export class RelationRepository {
   }
 
   linkRecords(relationId: string, sourceRecordId: string, targetRecordId: string): void {
-    this.connect(relationId, sourceRecordId, targetRecordId);
+    const relation = this.getRelation(relationId);
+    const sourceRecord = this.#recordRepo.getRecord(sourceRecordId);
+    if (!relation || !sourceRecord) {
+      throw new WorkspaceDomainError('not-found', 'Relation or source record was not found.');
+    }
+    if (sourceRecord.databaseId === relation.targetDatabaseId) {
+      this.connect(relationId, targetRecordId, sourceRecordId);
+    } else {
+      this.connect(relationId, sourceRecordId, targetRecordId);
+    }
   }
 
   unlinkRecords(relationId: string, sourceRecordId: string, targetRecordId: string): void {
-    this.disconnect(relationId, sourceRecordId, targetRecordId);
+    const relation = this.getRelation(relationId);
+    const sourceRecord = this.#recordRepo.getRecord(sourceRecordId);
+    if (!relation || !sourceRecord) {
+      throw new WorkspaceDomainError('not-found', 'Relation or source record was not found.');
+    }
+    if (sourceRecord.databaseId === relation.targetDatabaseId) {
+      this.disconnect(relationId, targetRecordId, sourceRecordId);
+    } else {
+      this.disconnect(relationId, sourceRecordId, targetRecordId);
+    }
   }
 
-  searchRelationTargets(relationId: string, query: string, limit?: number): readonly RelationTargetSummary[] {
-    return this.searchTargets(relationId, query, limit);
+  searchRelationTargets(
+    relationId: string,
+    query: string,
+    limit?: number,
+    fromRecordId?: string,
+  ): readonly RelationTargetSummary[] {
+    return this.searchTargets(relationId, query, limit, fromRecordId);
   }
 
-  getRelatedRecords(recordId: string, relationId: string): readonly any[] {
+  getRelatedRecords(recordId: string, relationId: string): readonly WorkspaceRecord[] {
     const rel = this.getRelation(relationId);
     if (!rel) return [];
 
-    const targetMap = this.getEdgesForRecords(relationId, [recordId], true);
+    const record = this.#recordRepo.getRecord(recordId);
+    if (!record) return [];
+    const asSource = record.databaseId === rel.sourceDatabaseId;
+    const targetMap = this.getEdgesForRecords(relationId, [recordId], asSource);
     const targetIds = targetMap.get(recordId) ?? [];
-    if (targetIds.length === 0) return [];
-
-    const placeholders = targetIds.map(() => '?').join(',');
-    const rows = this.#database
-      .prepare(`
-        SELECT r.*, n.title, n.icon, n.parent_node_id, n.revision
-        FROM workspace_records r
-        JOIN workspace_nodes n ON n.id = r.id
-        WHERE r.id IN (${placeholders}) AND r.archived_at IS NULL
-      `)
-      .all(...targetIds) as any[];
-
-    return rows.map((row) => ({
-      archivedAt: row.archived_at,
-      createdAt: row.created_at,
-      databaseId: row.database_id,
-      icon: row.icon,
-      id: row.id,
-      positionKey: row.position_key,
-      properties: {},
-      revision: row.revision,
-      sequence: row.sequence,
-      templateId: row.template_id,
-      title: row.title,
-      updatedAt: row.updated_at,
-    }));
+    return targetIds
+      .map((targetId) => this.#recordRepo.getRecord(targetId))
+      .filter((target): target is WorkspaceRecord => target !== null && !target.archivedAt);
   }
 }

@@ -93,6 +93,7 @@ export type WorkflowExecutionInput = Readonly<{
 }>;
 
 export type WorkflowExecutionResult = Readonly<{
+  completedAt: string;
   createdRecordIds: readonly string[];
   error?: string;
   result: Readonly<Record<string, unknown>>;

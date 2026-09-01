@@ -1,5 +1,6 @@
 import type { AggregateCalculation, CalculationResult } from '../../../shared/query-contract';
 import type { WorkspaceProperty, WorkspaceRecord } from '../../../shared/property-contract';
+import { dateValueToText } from '../value-utils';
 
 export class CalculationService {
   computeCalculations(
@@ -112,14 +113,14 @@ export class CalculationService {
         }
 
         case 'earliest': {
-          const dateStrs = nonNullValues.map((v) => (typeof v === 'object' && v !== null ? (v as any).start : String(v))).filter(Boolean).sort();
+          const dateStrs = nonNullValues.map(dateValueToText).filter(Boolean).sort();
           value = dateStrs[0] ?? null;
           formattedValue = value ? String(value).slice(0, 10) : '';
           break;
         }
 
         case 'latest': {
-          const dateStrs = nonNullValues.map((v) => (typeof v === 'object' && v !== null ? (v as any).start : String(v))).filter(Boolean).sort();
+          const dateStrs = nonNullValues.map(dateValueToText).filter(Boolean).sort();
           value = dateStrs[dateStrs.length - 1] ?? null;
           formattedValue = value ? String(value).slice(0, 10) : '';
           break;

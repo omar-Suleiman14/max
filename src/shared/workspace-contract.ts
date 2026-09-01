@@ -78,15 +78,18 @@ export class WorkspaceDomainError extends Error {
 
 export type MutationResult<T> =
   | Readonly<{ ok: true; value: T }>
-  | Readonly<{ code?: WorkspaceErrorCode; error: string; ok: false }>;
+  | Readonly<{
+      error: Readonly<{ code: WorkspaceErrorCode; entityId?: string; message: string }>;
+      ok: false;
+    }>;
 
 export type WorkspaceSearchResult = Readonly<{
-  highlightSnippet: string;
-  id: string;
-  kind: 'database' | 'page' | 'record';
-  matchField: string;
-  rank: number;
-  title: string;
+  databaseId?: string;
+  displayMetadata?: string;
+  displaySubtitle?: string;
+  displayTitle: string;
+  entityId: string;
+  entityKind: 'database' | 'page' | 'record' | 'view';
 }>;
 
 export type MigrationSummary = Readonly<{

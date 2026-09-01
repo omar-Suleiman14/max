@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 
 import { WorkspaceDomainError } from '../../shared/workspace-contract';
+import { parseStoredJson } from './value-utils';
 
 export type DependencyRecord = Readonly<{
   dependencyType: string;
@@ -57,7 +58,7 @@ export class DependencyService {
     return rows.map((r) => ({
       dependencyType: r.dependency_type,
       id: r.id,
-      metadata: JSON.parse(r.metadata_json || '{}'),
+      metadata: parseStoredJson<Readonly<Record<string, unknown>>>(r.metadata_json, {}),
       sourceId: r.source_id,
       sourceKind: r.source_kind,
       targetId: r.target_id,

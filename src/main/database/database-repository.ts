@@ -9,8 +9,11 @@ import type {
   WorkspaceDatabaseDraft,
   WorkspaceDatabasePatch,
 } from '../../shared/database-contract';
+import type { FilterNode, GroupRule, SortRule } from '../../shared/query-contract';
+import type { PropertyViewState, ViewLayout, WorkspaceView } from '../../shared/view-contract';
 import type { WorkspaceRepository } from './workspace-repository';
 import type { PropertyRepository } from './property-repository';
+import type { RecordRepository } from './record-repository';
 
 type DatabaseRow = Readonly<{
   created_at: string;
@@ -29,19 +32,31 @@ type FullDatabaseRow = DatabaseRow & Readonly<{
   title: string;
 }>;
 
+function parseJson<T>(value: string | null, fallback: T): T {
+  if (!value) return fallback;
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return fallback;
+  }
+}
+
 export class DatabaseRepository {
   readonly #database: DatabaseSync;
   readonly #workspaceRepo: WorkspaceRepository;
   readonly #propertyRepo: PropertyRepository;
+  readonly #recordRepo: RecordRepository;
 
   constructor(
     database: DatabaseSync,
     workspaceRepo: WorkspaceRepository,
     propertyRepo: PropertyRepository,
+    recordRepo: RecordRepository,
   ) {
     this.#database = database;
     this.#workspaceRepo = workspaceRepo;
     this.#propertyRepo = propertyRepo;
+    this.#recordRepo = recordRepo;
   }
 
   createDatabase(draft: WorkspaceDatabaseDraft): WorkspaceDatabase & { title: string; icon?: string | null } {
@@ -88,7 +103,7 @@ export class DatabaseRepository {
         INSERT INTO workspace_views (
           id, database_id, owner_type, owner_id, name, layout, filter_ast_json, sort_json, group_json,
           property_state_json, layout_config_json, position_key, created_at, updated_at, archived_at
-        ) VALUES (?, ?, 'database', ?, 'All', 'table', NULL, '[]', NULL, '{}', '{}', ?, ?, ?, NULL)
+        ) VALUES (?, ?, 'database', ?, 'All', 'table', NULL, '[]', NULL, '{"columns":[]}', '{}', ?, ?, ?, NULL)
       `)
       .run(defaultViewId, id, id, defaultViewPos, now, now);
 
@@ -159,7 +174,7 @@ export class DatabaseRepository {
         filter_ast_json: string | null;
         group_json: string | null;
         id: string;
-        layout: string;
+        layout: ViewLayout;
         layout_config_json: string;
         name: string;
         owner_id: string;
@@ -170,21 +185,21 @@ export class DatabaseRepository {
         updated_at: string;
       }>[];
 
-    const views = viewRows.map((v) => ({
+    const views: WorkspaceView[] = viewRows.map((v) => ({
       archivedAt: v.archived_at,
       createdAt: v.created_at,
       databaseId: v.database_id,
-      filterAst: v.filter_ast_json ? JSON.parse(v.filter_ast_json) : null,
-      group: v.group_json ? JSON.parse(v.group_json) : null,
+      filterAst: parseJson<FilterNode | null>(v.filter_ast_json, null),
+      group: parseJson<GroupRule | null>(v.group_json, null),
       id: v.id,
-      layout: v.layout as any,
-      layoutConfig: JSON.parse(v.layout_config_json || '{}'),
+      layout: v.layout,
+      layoutConfig: parseJson<Readonly<Record<string, unknown>>>(v.layout_config_json, {}),
       name: v.name,
       ownerId: v.owner_id,
       ownerType: v.owner_type,
       positionKey: v.position_key,
-      propertyState: JSON.parse(v.property_state_json || '{}'),
-      sorts: JSON.parse(v.sort_json || '[]'),
+      propertyState: parseJson<PropertyViewState>(v.property_state_json, { columns: [] }),
+      sorts: parseJson<readonly SortRule[]>(v.sort_json, []),
       updatedAt: v.updated_at,
     }));
 
@@ -265,7 +280,11 @@ export class DatabaseRepository {
     this.#workspaceRepo.archiveNode(id);
   }
 
-  duplicateDatabase(id: string, newTitle?: string): WorkspaceDatabase & { title: string; icon?: string | null } {
+  duplicateDatabase(
+    id: string,
+    newTitle?: string,
+    includeRecords = false,
+  ): WorkspaceDatabase & { title: string; icon?: string | null } {
     const schema = this.getSchema(id);
     const title = newTitle || `${schema.database.title} (Copy)`;
 
@@ -275,22 +294,80 @@ export class DatabaseRepository {
       visibility: schema.database.visibility,
     });
 
-    // Copy custom properties (skip auto-created title)
+    const propertyIdMap = new Map<string, string>();
+    const optionIdMap = new Map<string, string>();
+    const duplicatedTitle = this.#propertyRepo
+      .listProperties(duplicated.id)
+      .find((property) => property.type === 'title');
+    const sourceTitle = schema.properties.find((property) => property.type === 'title');
+    if (duplicatedTitle && sourceTitle) propertyIdMap.set(sourceTitle.id, duplicatedTitle.id);
+
+    // Copy custom properties (skip auto-created title). Explicit ids let option
+    // values be remapped without relying on mutable labels.
     for (const prop of schema.properties) {
       if (prop.type === 'title') continue;
-      this.#propertyRepo.createProperty({
+
+      const statusGroupIdMap = new Map<string, string>();
+      const statusGroups = prop.statusGroups?.map((group) => {
+        const targetId = randomUUID();
+        statusGroupIdMap.set(group.id, targetId);
+        return {
+          category: group.category,
+          id: targetId,
+          label: group.label,
+          positionKey: group.positionKey,
+        };
+      });
+      const options = prop.options?.map((option) => {
+        const targetId = randomUUID();
+        optionIdMap.set(option.id, targetId);
+        return {
+          id: targetId,
+          label: option.label,
+          positionKey: option.positionKey,
+          statusGroupId: option.statusGroupId ? statusGroupIdMap.get(option.statusGroupId) ?? null : null,
+          style: option.style,
+        };
+      });
+
+      const createdProperty = this.#propertyRepo.createProperty({
         config: prop.config,
         databaseId: duplicated.id,
         defaultValueJson: prop.defaultValueJson,
         name: prop.name,
-        options: prop.options?.map((opt) => ({
-          label: opt.label,
-          style: opt.style,
-        })),
+        options,
         required: prop.required,
+        statusGroups,
         type: prop.type,
         uniqueValue: prop.uniqueValue,
       });
+      propertyIdMap.set(prop.id, createdProperty.id);
+    }
+
+    if (includeRecords) {
+      for (const record of this.#recordRepo.listRecords(id)) {
+        const properties: Record<string, unknown> = {};
+        for (const [sourcePropertyId, sourceValue] of Object.entries(record.properties)) {
+          const targetPropertyId = propertyIdMap.get(sourcePropertyId);
+          if (!targetPropertyId) continue;
+          if (typeof sourceValue === 'string' && optionIdMap.has(sourceValue)) {
+            properties[targetPropertyId] = optionIdMap.get(sourceValue);
+          } else if (Array.isArray(sourceValue)) {
+            properties[targetPropertyId] = sourceValue.map((value: unknown): unknown =>
+              typeof value === 'string' ? optionIdMap.get(value) ?? value : value,
+            );
+          } else {
+            properties[targetPropertyId] = sourceValue;
+          }
+        }
+        this.#recordRepo.createRecord({
+          contentJson: record.contentJson,
+          databaseId: duplicated.id,
+          icon: record.icon,
+          properties,
+          title: record.title,
+        });
+      }
     }
 
     return duplicated;

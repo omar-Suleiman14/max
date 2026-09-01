@@ -36,6 +36,7 @@ import type {
 } from './transaction-contract';
 import type {
   MigrationSummary,
+  MutationResult as WorkspaceMutationResult,
   WorkspaceNavigation,
   WorkspaceNode,
   WorkspaceNodeDraft,
@@ -387,24 +388,24 @@ export type MaxApi = Readonly<{
     update: (id: string, draft: SavedViewDraft) => Promise<MutationResult<SavedView>>;
   }>;
   workspace: Readonly<{
-    archiveDatabase: (id: string) => Promise<MutationResult<null>>;
-    archiveNode: (id: string) => Promise<MutationResult<null>>;
-    archiveProperty: (id: string) => Promise<MutationResult<null>>;
-    archiveRecord: (id: string) => Promise<MutationResult<null>>;
-    archiveRelation: (id: string) => Promise<MutationResult<null>>;
-    archiveView: (id: string) => Promise<MutationResult<null>>;
-    archiveWorkflow: (id: string) => Promise<MutationResult<null>>;
-    applyTypeConversion: (propertyId: string, targetType: PropertyType, strategy?: TypeConversionStrategy) => Promise<MutationResult<WorkspaceProperty>>;
-    batchCreateRecords: (records: readonly WorkspaceRecordDraft[]) => Promise<MutationResult<readonly WorkspaceRecord[]>>;
-    createDatabase: (draft: WorkspaceDatabaseDraft) => Promise<MutationResult<WorkspaceDatabase>>;
-    createNode: (draft: WorkspaceNodeDraft) => Promise<MutationResult<WorkspaceNode>>;
-    createProperty: (draft: WorkspacePropertyDraft) => Promise<MutationResult<WorkspaceProperty>>;
-    createRecord: (draft: WorkspaceRecordDraft) => Promise<MutationResult<WorkspaceRecord>>;
-    createRelation: (draft: WorkspaceRelationDraft) => Promise<MutationResult<WorkspaceRelation>>;
-    createView: (draft: WorkspaceViewDraft) => Promise<MutationResult<WorkspaceView>>;
-    createWorkflow: (draft: WorkspaceWorkflowDraft) => Promise<MutationResult<WorkspaceWorkflow>>;
-    duplicateDatabase: (id: string, options?: { includeRecords?: boolean; title?: string }) => Promise<MutationResult<WorkspaceDatabase>>;
-    executeWorkflow: (input: WorkflowExecutionInput) => Promise<MutationResult<WorkflowExecutionResult>>;
+    archiveDatabase: (id: string) => Promise<WorkspaceMutationResult<null>>;
+    archiveNode: (id: string) => Promise<WorkspaceMutationResult<null>>;
+    archiveProperty: (id: string) => Promise<WorkspaceMutationResult<null>>;
+    archiveRecord: (id: string) => Promise<WorkspaceMutationResult<null>>;
+    archiveRelation: (id: string) => Promise<WorkspaceMutationResult<null>>;
+    archiveView: (id: string) => Promise<WorkspaceMutationResult<null>>;
+    archiveWorkflow: (id: string) => Promise<WorkspaceMutationResult<null>>;
+    applyTypeConversion: (propertyId: string, targetType: PropertyType, strategy?: TypeConversionStrategy) => Promise<WorkspaceMutationResult<WorkspaceProperty>>;
+    batchCreateRecords: (records: readonly WorkspaceRecordDraft[]) => Promise<WorkspaceMutationResult<readonly WorkspaceRecord[]>>;
+    createDatabase: (draft: WorkspaceDatabaseDraft) => Promise<WorkspaceMutationResult<WorkspaceDatabase>>;
+    createNode: (draft: WorkspaceNodeDraft) => Promise<WorkspaceMutationResult<WorkspaceNode>>;
+    createProperty: (draft: WorkspacePropertyDraft) => Promise<WorkspaceMutationResult<WorkspaceProperty>>;
+    createRecord: (draft: WorkspaceRecordDraft) => Promise<WorkspaceMutationResult<WorkspaceRecord>>;
+    createRelation: (draft: WorkspaceRelationDraft) => Promise<WorkspaceMutationResult<WorkspaceRelation>>;
+    createView: (draft: WorkspaceViewDraft) => Promise<WorkspaceMutationResult<WorkspaceView>>;
+    createWorkflow: (draft: WorkspaceWorkflowDraft) => Promise<WorkspaceMutationResult<WorkspaceWorkflow>>;
+    duplicateDatabase: (id: string, options?: { includeRecords?: boolean; title?: string }) => Promise<WorkspaceMutationResult<WorkspaceDatabase>>;
+    executeWorkflow: (input: WorkflowExecutionInput) => Promise<WorkspaceMutationResult<WorkflowExecutionResult>>;
     getDatabase: (id: string) => Promise<WorkspaceDatabase | null>;
     getDatabaseSchema: (id: string) => Promise<DatabaseSchema>;
     getNavigation: (includeArchived?: boolean) => Promise<WorkspaceNavigation>;
@@ -413,25 +414,25 @@ export type MaxApi = Readonly<{
     getRelatedRecords: (recordId: string, relationId: string) => Promise<readonly WorkspaceRecord[]>;
     getView: (id: string) => Promise<WorkspaceView | null>;
     getWorkflow: (id: string) => Promise<WorkspaceWorkflow | null>;
-    importTemplate: (template: WorkspaceTemplateV2) => Promise<MutationResult<TemplateImportResult>>;
-    linkRecords: (relationId: string, sourceRecordId: string, targetRecordId: string) => Promise<MutationResult<null>>;
+    importTemplate: (template: WorkspaceTemplateV2) => Promise<WorkspaceMutationResult<TemplateImportResult>>;
+    linkRecords: (relationId: string, sourceRecordId: string, targetRecordId: string) => Promise<WorkspaceMutationResult<null>>;
     listProperties: (databaseId: string) => Promise<readonly WorkspaceProperty[]>;
     listRelations: (databaseId: string) => Promise<readonly WorkspaceRelation[]>;
     listViews: (databaseId: string) => Promise<readonly WorkspaceView[]>;
     listWorkflows: () => Promise<readonly WorkspaceWorkflow[]>;
-    migrateV01: () => Promise<MutationResult<MigrationSummary>>;
+    migrateV01: () => Promise<WorkspaceMutationResult<MigrationSummary>>;
     previewTypeConversion: (propertyId: string, targetType: PropertyType) => Promise<TypeConversionPreview>;
     queryDatabase: (params: DatabaseQueryParams) => Promise<DatabaseQueryResult>;
-    reorderNode: (id: string, targetPositionKey: string, newParentId?: string | null) => Promise<MutationResult<WorkspaceNode>>;
-    restoreNode: (id: string) => Promise<MutationResult<WorkspaceNode>>;
-    searchRelationTargets: (relationId: string, query: string, limit?: number) => Promise<readonly RelationTargetSummary[]>;
+    reorderNode: (id: string, targetPositionKey: string, newParentId?: string | null) => Promise<WorkspaceMutationResult<WorkspaceNode>>;
+    restoreNode: (id: string) => Promise<WorkspaceMutationResult<WorkspaceNode>>;
+    searchRelationTargets: (relationId: string, query: string, limit?: number, fromRecordId?: string) => Promise<readonly RelationTargetSummary[]>;
     searchWorkspace: (query: string, limit?: number) => Promise<readonly WorkspaceSearchResult[]>;
-    unlinkRecords: (relationId: string, sourceRecordId: string, targetRecordId: string) => Promise<MutationResult<null>>;
-    updateDatabase: (id: string, patch: WorkspaceDatabasePatch) => Promise<MutationResult<WorkspaceDatabase>>;
-    updateNode: (id: string, patch: WorkspaceNodePatch) => Promise<MutationResult<WorkspaceNode>>;
-    updateProperty: (id: string, patch: WorkspacePropertyPatch) => Promise<MutationResult<WorkspaceProperty>>;
-    updateRecord: (id: string, patch: WorkspaceRecordPatch) => Promise<MutationResult<WorkspaceRecord>>;
-    updateView: (id: string, patch: WorkspaceViewPatch) => Promise<MutationResult<WorkspaceView>>;
-    updateWorkflow: (id: string, patch: Partial<WorkspaceWorkflowDraft>) => Promise<MutationResult<WorkspaceWorkflow>>;
+    unlinkRecords: (relationId: string, sourceRecordId: string, targetRecordId: string) => Promise<WorkspaceMutationResult<null>>;
+    updateDatabase: (id: string, patch: WorkspaceDatabasePatch) => Promise<WorkspaceMutationResult<WorkspaceDatabase>>;
+    updateNode: (id: string, patch: WorkspaceNodePatch) => Promise<WorkspaceMutationResult<WorkspaceNode>>;
+    updateProperty: (id: string, patch: WorkspacePropertyPatch) => Promise<WorkspaceMutationResult<WorkspaceProperty>>;
+    updateRecord: (id: string, patch: WorkspaceRecordPatch) => Promise<WorkspaceMutationResult<WorkspaceRecord>>;
+    updateView: (id: string, patch: WorkspaceViewPatch) => Promise<WorkspaceMutationResult<WorkspaceView>>;
+    updateWorkflow: (id: string, patch: Partial<WorkspaceWorkflowDraft>) => Promise<WorkspaceMutationResult<WorkspaceWorkflow>>;
   }>;
 }>;

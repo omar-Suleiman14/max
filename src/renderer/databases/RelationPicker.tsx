@@ -8,6 +8,7 @@ type RelationPickerProps = Readonly<{
   onClose: () => void;
   onLink: (targetRecordId: string) => Promise<void>;
   onUnlink: (targetRecordId: string) => Promise<void>;
+  recordId: string;
   relationId: string;
   selectedTargetIds: readonly string[];
   title?: string;
@@ -18,6 +19,7 @@ export function RelationPicker({
   onClose,
   onLink,
   onUnlink,
+  recordId,
   relationId,
   selectedTargetIds,
   title = 'Link Records',
@@ -36,14 +38,14 @@ export function RelationPicker({
     if (!relationId) return;
     setLoading(true);
     try {
-      const results = await window.maxApi.workspace.searchRelationTargets(relationId, q, 30);
+      const results = await window.maxApi.workspace.searchRelationTargets(relationId, q, 30, recordId);
       setTargets(results);
     } catch {
       setTargets([]);
     } finally {
       setLoading(false);
     }
-  }, [relationId]);
+  }, [recordId, relationId]);
 
   useEffect(() => {
     if (isOpen) {

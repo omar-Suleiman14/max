@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import type { DatabaseSchema } from '../../shared/database-contract';
 import type { WorkspaceProperty, WorkspacePropertyDraft, WorkspacePropertyPatch, WorkspaceRecord, WorkspaceRecordDraft, WorkspaceRecordPatch } from '../../shared/property-contract';
-import type { AggregateCalculation, DatabaseQueryParams, FilterNode, QueryCalculationResult, SortRule } from '../../shared/query-contract';
+import type { AggregateCalculation, DatabaseQueryParams, FilterNode, GroupRule, QueryCalculationResult, RecordGroup, SortRule } from '../../shared/query-contract';
 import type { WorkspaceView, WorkspaceViewDraft, WorkspaceViewPatch } from '../../shared/view-contract';
 
 export type UseDatabaseQueryResult = Readonly<{
@@ -16,6 +16,8 @@ export type UseDatabaseQueryResult = Readonly<{
   createView: (draft: WorkspaceViewDraft) => Promise<WorkspaceView | null>;
   error: string | null;
   filterAst: FilterNode | null;
+  group: GroupRule | null;
+  groups: readonly RecordGroup[];
   loading: boolean;
   page: number;
   pageSize: number;
@@ -25,6 +27,7 @@ export type UseDatabaseQueryResult = Readonly<{
   searchQuery: string;
   setActiveView: (view: WorkspaceView | null) => void;
   setFilterAst: (filter: FilterNode | null) => void;
+  setGroup: (group: GroupRule | null) => void;
   setPage: (page: number) => void;
   setSearchQuery: (query: string) => void;
   setSorts: (sorts: readonly SortRule[]) => void;
@@ -36,7 +39,7 @@ export type UseDatabaseQueryResult = Readonly<{
   views: readonly WorkspaceView[];
 }>;
 
-export function useDatabaseQuery(databaseId: string): UseDatabaseQueryResult {
+export function useDatabaseQuery(databaseId: string, initialViewId?: string): UseDatabaseQueryResult {
   const [schema, setSchema] = useState<DatabaseSchema | null>(null);
   const [views, setViews] = useState<readonly WorkspaceView[]>([]);
   const [activeView, setActiveView] = useState<WorkspaceView | null>(null);
@@ -48,6 +51,8 @@ export function useDatabaseQuery(databaseId: string): UseDatabaseQueryResult {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [filterAst, setFilterAst] = useState<FilterNode | null>(null);
   const [sorts, setSorts] = useState<readonly SortRule[]>([]);
+  const [group, setGroup] = useState<GroupRule | null>(null);
+  const [groups, setGroups] = useState<readonly RecordGroup[]>([]);
   const [page, setPage] = useState<number>(0);
   const pageSize = 50;
 
@@ -63,7 +68,9 @@ export function useDatabaseQuery(databaseId: string): UseDatabaseQueryResult {
       setViews(fetchedViews);
 
       if (fetchedViews.length > 0) {
-        const defaultView = fetchedViews.find((v) => v.id === fetchedSchema.database.defaultViewId) || fetchedViews[0];
+        const defaultView = fetchedViews.find((view) => view.id === initialViewId)
+          ?? fetchedViews.find((view) => view.id === fetchedSchema.database.defaultViewId)
+          ?? fetchedViews[0];
         setActiveView((prev) => prev || defaultView || null);
         if (defaultView?.filterAst) {
           setFilterAst(defaultView.filterAst);
@@ -71,11 +78,12 @@ export function useDatabaseQuery(databaseId: string): UseDatabaseQueryResult {
         if (defaultView?.sorts) {
           setSorts(defaultView.sorts);
         }
+        setGroup(defaultView?.group ?? null);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load database schema.');
     }
-  }, [databaseId]);
+  }, [databaseId, initialViewId]);
 
   // 2. Query Records based on current filters, sorts, pagination
   const fetchRecords = useCallback(async () => {
@@ -97,6 +105,7 @@ export function useDatabaseQuery(databaseId: string): UseDatabaseQueryResult {
         cursor: page > 0 ? String(page * pageSize) : undefined,
         databaseId,
         filter: filterAst || undefined,
+        group: group ?? undefined,
         limit: pageSize,
         search: searchQuery.trim() || undefined,
         sorts: sorts.length > 0 ? sorts : undefined,
@@ -106,12 +115,13 @@ export function useDatabaseQuery(databaseId: string): UseDatabaseQueryResult {
       setRecords(res.records);
       setTotalCount(res.totalCount);
       setCalculations(res.calculations);
+      setGroups(res.groups ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to query database.');
     } finally {
       setLoading(false);
     }
-  }, [activeView, databaseId, filterAst, page, pageSize, searchQuery, sorts]);
+  }, [activeView, databaseId, filterAst, group, page, pageSize, searchQuery, sorts]);
 
   useEffect(() => {
     void loadMetadata();
@@ -127,6 +137,7 @@ export function useDatabaseQuery(databaseId: string): UseDatabaseQueryResult {
     if (view) {
       setFilterAst(view.filterAst || null);
       setSorts(view.sorts || []);
+      setGroup(view.group ?? null);
       setPage(0);
     }
   }, []);
@@ -290,6 +301,8 @@ export function useDatabaseQuery(databaseId: string): UseDatabaseQueryResult {
     createView,
     error,
     filterAst,
+    group,
+    groups,
     loading,
     page,
     pageSize,
@@ -299,6 +312,7 @@ export function useDatabaseQuery(databaseId: string): UseDatabaseQueryResult {
     searchQuery,
     setActiveView: handleSetActiveView,
     setFilterAst,
+    setGroup,
     setPage,
     setSearchQuery,
     setSorts,
@@ -319,6 +333,8 @@ export function useDatabaseQuery(databaseId: string): UseDatabaseQueryResult {
     createView,
     error,
     filterAst,
+    group,
+    groups,
     handleSetActiveView,
     loading,
     page,

@@ -20,10 +20,20 @@ import { searchCopy } from './search-i18n';
 type UniversalSearchDialogProps = Readonly<{
   locale: Locale;
   onClose: () => void;
-  onSelect: (result: SearchResult) => void;
+  onSelect: (result: UniversalSearchResult) => void;
 }>;
 
-function resultIcon(kind: SearchResultKind) {
+export type UniversalSearchResult = SearchResult | Readonly<{
+  databaseId?: string;
+  id: string;
+  kind: 'database' | 'record';
+  matchScore: number;
+  metadata?: string;
+  subtitle?: string;
+  title: string;
+}>;
+
+function resultIcon(kind: SearchResultKind | 'database' | 'record') {
   switch (kind) {
     case 'item':
       return <Package aria-hidden="true" size={16} />;
@@ -35,6 +45,10 @@ function resultIcon(kind: SearchResultKind) {
       return <Receipt aria-hidden="true" size={16} />;
     case 'view':
       return <Bookmark aria-hidden="true" size={16} />;
+    case 'database':
+      return <Layout aria-hidden="true" size={16} />;
+    case 'record':
+      return <FileText aria-hidden="true" size={16} />;
     case 'page':
       return <Layout aria-hidden="true" size={16} />;
     default:
@@ -44,7 +58,7 @@ function resultIcon(kind: SearchResultKind) {
 
 export function UniversalSearchDialog({ locale, onClose, onSelect }: UniversalSearchDialogProps) {
   const [term, setTerm] = useState('');
-  const [results, setResults] = useState<readonly SearchResult[]>([]);
+  const [results, setResults] = useState<readonly UniversalSearchResult[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [loading, setLoading] = useState(false);
 
@@ -68,9 +82,22 @@ export function UniversalSearchDialog({ locale, onClose, onSelect }: UniversalSe
     const timer = setTimeout(() => {
       void (async () => {
         try {
-          const res = await window.maxApi.search.query(trimmed);
+          const [legacyResults, workspaceResults] = await Promise.all([
+            window.maxApi.search.query(trimmed),
+            window.maxApi.workspace.searchWorkspace(trimmed, 40),
+          ]);
           if (active) {
-            setResults(res);
+            const genericResults: readonly UniversalSearchResult[] = workspaceResults.map((result) => ({
+              databaseId: result.databaseId,
+              id: result.entityId,
+              kind: result.entityKind,
+              matchScore: 1,
+              metadata: result.displayMetadata,
+              subtitle: result.displaySubtitle,
+              title: result.displayTitle,
+            }));
+            const genericIds = new Set(genericResults.map((result) => result.id));
+            setResults([...genericResults, ...legacyResults.filter((result) => !genericIds.has(result.id))]);
             setSelectedIndex(0);
           }
         } catch {

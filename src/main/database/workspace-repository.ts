@@ -10,6 +10,7 @@ import {
   type WorkspaceNodeDraft,
   type WorkspaceNodePatch,
 } from '../../shared/workspace-contract';
+import type { WorkspaceSearchService } from './workspace-search-service';
 
 type NodeRow = Readonly<{
   archived_at: string | null;
@@ -44,9 +45,11 @@ function nodeFromRow(row: NodeRow): WorkspaceNode {
 
 export class WorkspaceRepository {
   readonly #database: DatabaseSync;
+  readonly #search?: WorkspaceSearchService;
 
-  constructor(database: DatabaseSync) {
+  constructor(database: DatabaseSync, search?: WorkspaceSearchService) {
     this.#database = database;
+    this.#search = search;
   }
 
   createNode(draft: WorkspaceNodeDraft): WorkspaceNode {
@@ -68,7 +71,7 @@ export class WorkspaceRepository {
       `)
       .run(id, draft.kind, draft.parentNodeId ?? null, title, draft.icon ?? null, contentJson, positionKey, now, now);
 
-    return {
+    const node: WorkspaceNode = {
       archivedAt: null,
       contentJson,
       createdAt: now,
@@ -81,6 +84,8 @@ export class WorkspaceRepository {
       title,
       updatedAt: now,
     };
+    this.#search?.indexNode(node);
+    return node;
   }
 
   getNode(id: string): WorkspaceNode | null {
@@ -117,7 +122,7 @@ export class WorkspaceRepository {
       `)
       .run(title, icon ?? null, contentJson, parentNodeId ?? null, positionKey, revision, now, id);
 
-    return {
+    const node: WorkspaceNode = {
       archivedAt: current.archivedAt,
       contentJson,
       createdAt: current.createdAt,
@@ -130,6 +135,8 @@ export class WorkspaceRepository {
       title,
       updatedAt: now,
     };
+    this.#search?.indexNode(node);
+    return node;
   }
 
   archiveNode(id: string): void {
@@ -142,9 +149,10 @@ export class WorkspaceRepository {
     this.#database
       .prepare('UPDATE workspace_nodes SET archived_at = ?, updated_at = ? WHERE id = ?')
       .run(now, now, id);
+    this.#search?.removeIndex(id);
   }
 
-  restoreNode(id: string): void {
+  restoreNode(id: string): WorkspaceNode {
     const current = this.getNode(id);
     if (!current) {
       throw new WorkspaceDomainError('not-found', `Workspace node not found: ${id}`);
@@ -154,6 +162,10 @@ export class WorkspaceRepository {
     this.#database
       .prepare('UPDATE workspace_nodes SET archived_at = NULL, updated_at = ? WHERE id = ?')
       .run(now, id);
+
+    const restored = this.getNode(id)!;
+    this.#search?.indexNode(restored);
+    return restored;
   }
 
   reorderNode(id: string, targetPositionKey: string, newParentNodeId?: string | null): WorkspaceNode {
@@ -171,22 +183,24 @@ export class WorkspaceRepository {
     return this.getNode(id)!;
   }
 
-  getNavigation(): WorkspaceNavigation {
+  getNavigation(includeArchived = false): WorkspaceNavigation {
+    const archivedFilter = includeArchived ? '' : ' AND archived_at IS NULL';
     const pageRows = (this.#database
       .prepare(`
         SELECT id, kind, parent_node_id, title, icon, position_key, archived_at
         FROM workspace_nodes
-        WHERE kind = 'page' AND archived_at IS NULL
+        WHERE kind = 'page'${archivedFilter}
         ORDER BY position_key ASC
       `)
       .all() as unknown) as NodeRow[];
 
+    const databaseArchivedFilter = includeArchived ? '' : ' AND n.archived_at IS NULL';
     const databaseRows = this.#database
       .prepare(`
         SELECT n.id, n.kind, n.parent_node_id, n.title, n.icon, n.position_key, n.archived_at, d.visibility
         FROM workspace_nodes n
         JOIN workspace_databases d ON d.id = n.id
-        WHERE n.kind = 'database' AND n.archived_at IS NULL
+        WHERE n.kind = 'database'${databaseArchivedFilter}
         ORDER BY n.position_key ASC
       `)
       .all() as NodeRow[];

@@ -71,6 +71,27 @@ export function RecordDrawer({
     }
   }, [record]);
 
+  useEffect(() => {
+    if (!isOpen || !record || !schema) return;
+    const relationProperties = schema.properties.filter(
+      (property) => property.type === 'relation' && typeof property.config.relationId === 'string',
+    );
+    void Promise.all(relationProperties.map(async (property) => {
+      const relationId = property.config.relationId;
+      if (typeof relationId !== 'string') return null;
+      const related = await window.maxApi.workspace.getRelatedRecords(record.id, relationId);
+      return { ids: related.map((candidate) => candidate.id), propertyId: property.id };
+    })).then((results) => {
+      setProperties((current) => {
+        const next = { ...current };
+        for (const result of results) {
+          if (result) next[result.propertyId] = result.ids;
+        }
+        return next;
+      });
+    });
+  }, [isOpen, record, schema]);
+
   if (!isOpen || !record || !schema) return null;
 
   const handleTitleBlur = () => {
@@ -94,21 +115,26 @@ export function RecordDrawer({
     if (!activeRelationProp) return;
     const relationId = activeRelationProp.config.relationId;
     if (!relationId || typeof relationId !== 'string') return;
-    await window.maxApi.workspace.linkRecords(relationId, record.id, targetId);
-    // Refresh properties
-    const current = (properties[activeRelationProp.id] as string[]) || [];
-    if (!current.includes(targetId)) {
-      handlePropertyChange(activeRelationProp.id, [...current, targetId]);
-    }
+    const result = await window.maxApi.workspace.linkRecords(relationId, record.id, targetId);
+    if (!result.ok) throw new Error(result.error.message);
+    const related = await window.maxApi.workspace.getRelatedRecords(record.id, relationId);
+    setProperties((current) => ({
+      ...current,
+      [activeRelationProp.id]: related.map((candidate) => candidate.id),
+    }));
   };
 
   const handleUnlinkRecord = async (targetId: string) => {
     if (!activeRelationProp) return;
     const relationId = activeRelationProp.config.relationId;
     if (!relationId || typeof relationId !== 'string') return;
-    await window.maxApi.workspace.unlinkRecords(relationId, record.id, targetId);
-    const current = (properties[activeRelationProp.id] as string[]) || [];
-    handlePropertyChange(activeRelationProp.id, current.filter((id) => id !== targetId));
+    const result = await window.maxApi.workspace.unlinkRecords(relationId, record.id, targetId);
+    if (!result.ok) throw new Error(result.error.message);
+    const related = await window.maxApi.workspace.getRelatedRecords(record.id, relationId);
+    setProperties((current) => ({
+      ...current,
+      [activeRelationProp.id]: related.map((candidate) => candidate.id),
+    }));
   };
 
   return (
@@ -296,6 +322,7 @@ export function RecordDrawer({
             setActiveRelationProp(null);
           }}
           relationId={activeRelationProp.config.relationId}
+          recordId={record.id}
           selectedTargetIds={Array.isArray(properties[activeRelationProp.id]) ? (properties[activeRelationProp.id] as string[]) : []}
           onLink={handleLinkRecord}
           onUnlink={handleUnlinkRecord}

@@ -11,6 +11,8 @@ import type {
 } from '../../shared/property-contract';
 import type { WorkspaceRepository } from './workspace-repository';
 import type { PropertyRepository } from './property-repository';
+import { parseStoredJson, valueToText } from './value-utils';
+import type { WorkspaceSearchService } from './workspace-search-service';
 
 type RecordRow = Readonly<{
   archived_at: string | null;
@@ -45,15 +47,18 @@ export class RecordRepository {
   readonly #database: DatabaseSync;
   readonly #workspaceRepo: WorkspaceRepository;
   readonly #propertyRepo: PropertyRepository;
+  readonly #search?: WorkspaceSearchService;
 
   constructor(
     database: DatabaseSync,
     workspaceRepo: WorkspaceRepository,
     propertyRepo: PropertyRepository,
+    search?: WorkspaceSearchService,
   ) {
     this.#database = database;
     this.#workspaceRepo = workspaceRepo;
     this.#propertyRepo = propertyRepo;
+    this.#search = search;
   }
 
   createRecord(draft: WorkspaceRecordDraft): WorkspaceRecord {
@@ -90,7 +95,7 @@ export class RecordRepository {
     const properties = draft.properties ?? {};
     this.#savePropertyValues(id, draft.databaseId, properties);
 
-    return this.getRecord(id)!;
+    return this.#refreshSearch(id);
   }
 
   getRecord(id: string): WorkspaceRecord | null {
@@ -190,7 +195,7 @@ export class RecordRepository {
       this.#savePropertyValues(id, current.databaseId, patch.properties, false);
     }
 
-    return this.getRecord(id)!;
+    return this.#refreshSearch(id);
   }
 
   updateProperty(recordId: string, propertyId: string, value: unknown): WorkspaceRecord {
@@ -205,9 +210,9 @@ export class RecordRepository {
     }
 
     if (property.type === 'title') {
-      const titleStr = typeof value === 'string' ? value.trim() : String(value ?? '').trim();
+      const titleStr = valueToText(value).trim();
       this.#workspaceRepo.updateNode(recordId, { title: titleStr || 'Untitled' });
-      return this.getRecord(recordId)!;
+      return this.#refreshSearch(recordId);
     }
 
     this.#saveSinglePropertyValue(recordId, property, value);
@@ -217,7 +222,7 @@ export class RecordRepository {
       .prepare('UPDATE workspace_records SET updated_at = ? WHERE id = ?')
       .run(now, recordId);
 
-    return this.getRecord(recordId)!;
+    return this.#refreshSearch(recordId);
   }
 
   archiveRecord(id: string): void {
@@ -238,10 +243,20 @@ export class RecordRepository {
     const now = new Date().toISOString();
     this.#database.prepare('UPDATE workspace_records SET archived_at = NULL, updated_at = ? WHERE id = ?').run(now, id);
     this.#workspaceRepo.restoreNode(id);
+    this.#refreshSearch(id);
   }
 
   batchCreateRecords(drafts: readonly WorkspaceRecordDraft[]): readonly WorkspaceRecord[] {
     return drafts.map((d) => this.createRecord(d));
+  }
+
+  #refreshSearch(id: string): WorkspaceRecord {
+    const record = this.getRecord(id)!;
+    if (this.#search) {
+      const databaseTitle = this.#workspaceRepo.getNode(record.databaseId)?.title ?? '';
+      this.#search.indexRecord(record, this.#propertyRepo.listProperties(record.databaseId), databaseTitle);
+    }
+    return record;
   }
 
   batchLoadProperties(
@@ -340,6 +355,12 @@ export class RecordRepository {
     overwriteAll = true,
   ): void {
     const propertyDefs = this.#propertyRepo.listProperties(databaseId);
+    const propertyIds = new Set(propertyDefs.map((property) => property.id));
+    for (const propertyId of Object.keys(properties)) {
+      if (!propertyIds.has(propertyId)) {
+        throw new WorkspaceDomainError('invalid-input', `Property ${propertyId} does not belong to database ${databaseId}.`, propertyId);
+      }
+    }
 
     for (const prop of propertyDefs) {
       if (prop.type === 'title') continue;
@@ -347,18 +368,27 @@ export class RecordRepository {
       if (properties[prop.id] !== undefined) {
         this.#saveSinglePropertyValue(recordId, prop, properties[prop.id]);
       } else if (overwriteAll && prop.defaultValueJson) {
-        try {
-          const defaultVal = JSON.parse(prop.defaultValueJson);
-          this.#saveSinglePropertyValue(recordId, prop, defaultVal);
-        } catch {
-          // Ignore invalid default json
-        }
+        const defaultVal = parseStoredJson<unknown>(prop.defaultValueJson, null);
+        this.#saveSinglePropertyValue(recordId, prop, defaultVal);
+      } else if (overwriteAll && prop.required && !['formula', 'relation', 'rollup'].includes(prop.type)) {
+        throw new WorkspaceDomainError('constraint-violation', `${prop.name} is required.`, prop.id);
       }
     }
   }
 
   #saveSinglePropertyValue(recordId: string, property: WorkspaceProperty, value: unknown): void {
     const now = new Date().toISOString();
+
+    if (['relation', 'rollup', 'formula', 'created_time', 'created_by', 'last_edited_time', 'last_edited_by'].includes(property.type)) {
+      if (value !== undefined && value !== null && value !== '') {
+        throw new WorkspaceDomainError(
+          'constraint-violation',
+          `${property.name} is derived or managed through its dedicated API and cannot be stored directly.`,
+          property.id,
+        );
+      }
+      return;
+    }
 
     if (property.required && (value === undefined || value === null || value === '')) {
       throw new WorkspaceDomainError('constraint-violation', `${property.name} is required.`);
@@ -372,6 +402,10 @@ export class RecordRepository {
       if (Array.isArray(value)) {
         for (const [idx, optId] of value.entries()) {
           if (typeof optId === 'string' && optId.trim()) {
+            const option = this.#database.prepare(
+              'SELECT 1 FROM workspace_property_options WHERE id = ? AND property_id = ? AND archived_at IS NULL',
+            ).get(optId.trim(), property.id);
+            if (!option) throw new WorkspaceDomainError('invalid-input', `Invalid option for ${property.name}.`, property.id);
             const pos = generateOrderKey(idx > 0 ? String(idx - 1) : null, null);
             this.#database
               .prepare(`
@@ -424,19 +458,25 @@ export class RecordRepository {
         case 'select':
         case 'status':
           optionId = typeof value === 'string' ? value : null;
+          if (optionId) {
+            const option = this.#database.prepare(
+              'SELECT 1 FROM workspace_property_options WHERE id = ? AND property_id = ? AND archived_at IS NULL',
+            ).get(optionId, property.id);
+            if (!option) throw new WorkspaceDomainError('invalid-input', `Invalid option for ${property.name}.`, property.id);
+          }
           break;
         case 'text':
         case 'url':
         case 'email':
         case 'phone':
         case 'auto_id':
-          textVal = String(value);
+          textVal = valueToText(value);
           break;
         default:
           if (typeof value === 'object') {
             jsonVal = JSON.stringify(value);
           } else {
-            textVal = String(value);
+            textVal = valueToText(value);
           }
       }
     }

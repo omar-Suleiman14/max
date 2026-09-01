@@ -6,6 +6,7 @@ import { WorkspaceDomainError } from '../../shared/workspace-contract';
 import type {
   WorkflowExecutionInput,
   WorkflowExecutionResult,
+  WorkflowInputSchema,
   WorkflowStep,
   WorkspaceWorkflow,
   WorkspaceWorkflowDraft,
@@ -17,6 +18,7 @@ import type { PricingRepository } from './pricing-repository';
 import { calculatePricing } from '../../shared/pricing-contract';
 import { FormulaParser } from './formula/parser';
 import { evaluateFormula } from './formula/evaluator';
+import { parseStoredJson, valueToText } from './value-utils';
 
 type WorkflowRow = Readonly<{
   archived_at: string | null;
@@ -39,12 +41,12 @@ function workflowFromRow(row: WorkflowRow): WorkspaceWorkflow {
     createdAt: row.created_at,
     icon: row.icon,
     id: row.id,
-    inputSchema: JSON.parse(row.input_schema_json || '{"fields":[]}'),
+    inputSchema: parseStoredJson<WorkflowInputSchema>(row.input_schema_json, { fields: [] }),
     kind: row.kind,
     name: row.name,
     positionKey: row.position_key,
-    resultSchema: row.result_schema_json ? JSON.parse(row.result_schema_json) : undefined,
-    steps: JSON.parse(row.steps_json || '[]'),
+    resultSchema: parseStoredJson<Readonly<Record<string, unknown>> | undefined>(row.result_schema_json, undefined),
+    steps: parseStoredJson<readonly WorkflowStep[]>(row.steps_json, []),
     updatedAt: row.updated_at,
     version: row.version,
   };
@@ -196,9 +198,14 @@ export class WorkflowService {
     const runId = randomUUID();
     const startedAt = new Date().toISOString();
     const actorId = input.actorId ?? 'local-user';
+    for (const field of workflow.inputSchema.fields) {
+      const key = field.key ?? field.id;
+      if (field.required && key && (input.inputs[key] === undefined || input.inputs[key] === null || input.inputs[key] === '')) {
+        throw new WorkspaceDomainError('invalid-input', `${field.label} is required.`);
+      }
+    }
 
-    return this.#unitOfWork.run(() => {
-      try {
+    const perform = (persistRun: boolean): WorkflowExecutionResult => {
         const variables: Record<string, unknown> = {
           ...input.inputs,
           actor_id: actorId,
@@ -216,8 +223,7 @@ export class WorkflowService {
 
         const completedAt = new Date().toISOString();
 
-        // Record successful run
-        this.#database
+        if (persistRun) this.#database
           .prepare(`
             INSERT INTO workspace_workflow_runs (
               id, workflow_id, workflow_version, status, input_json, result_json, actor_id, started_at, completed_at, error_json
@@ -243,33 +249,51 @@ export class WorkflowService {
           createdRecordIds,
           result: resultObj,
           runId,
-          status: 'completed',
+          status: persistRun ? 'completed' : 'rolled_back',
           workflowId: workflow.id,
         };
-      } catch (error) {
+    };
+
+    if (input.testMode) {
+      const savepoint = `workflow_test_${runId.replaceAll('-', '')}`;
+      this.#database.exec(`SAVEPOINT ${savepoint};`);
+      try {
+        const result = perform(false);
+        this.#database.exec(`ROLLBACK TO ${savepoint}; RELEASE ${savepoint};`);
         const completedAt = new Date().toISOString();
-        const errMessage = error instanceof Error ? error.message : String(error);
-
-        this.#database
-          .prepare(`
-            INSERT INTO workspace_workflow_runs (
-              id, workflow_id, workflow_version, status, input_json, result_json, actor_id, started_at, completed_at, error_json
-            ) VALUES (?, ?, ?, 'failed', ?, NULL, ?, ?, ?, ?)
-          `)
-          .run(
-            runId,
-            workflow.id,
-            workflow.version,
-            JSON.stringify(input.inputs),
-            actorId,
-            startedAt,
-            completedAt,
-            JSON.stringify({ message: errMessage }),
-          );
-
+        this.#database.prepare(`
+          INSERT INTO workspace_workflow_runs (
+            id, workflow_id, workflow_version, status, input_json, result_json, actor_id, started_at, completed_at, error_json
+          ) VALUES (?, ?, ?, 'rolled_back', ?, ?, ?, ?, ?, NULL)
+        `).run(runId, workflow.id, workflow.version, JSON.stringify(input.inputs), JSON.stringify(result.result), actorId, startedAt, completedAt);
+        return { ...result, completedAt };
+      } catch (error) {
+        this.#database.exec(`ROLLBACK TO ${savepoint}; RELEASE ${savepoint};`);
         throw error;
       }
-    });
+    }
+
+    try {
+      return this.#unitOfWork.run(() => perform(true));
+    } catch (error) {
+      const completedAt = new Date().toISOString();
+      const errMessage = error instanceof Error ? error.message : String(error);
+      this.#database.prepare(`
+        INSERT INTO workspace_workflow_runs (
+          id, workflow_id, workflow_version, status, input_json, result_json, actor_id, started_at, completed_at, error_json
+        ) VALUES (?, ?, ?, 'failed', ?, NULL, ?, ?, ?, ?)
+      `).run(
+        runId,
+        workflow.id,
+        workflow.version,
+        JSON.stringify(input.inputs),
+        actorId,
+        startedAt,
+        completedAt,
+        JSON.stringify({ message: errMessage }),
+      );
+      throw error;
+    }
   }
 
   #executeSteps(
@@ -339,7 +363,7 @@ export class WorkflowService {
           const created = this.#recordRepo.createRecord({
             databaseId,
             properties: props,
-            title: String(title || 'Untitled'),
+            title: valueToText(title) || 'Untitled',
           });
 
           createdRecordIds.push(created.id);
@@ -356,7 +380,7 @@ export class WorkflowService {
         const expression = config.expression as string | undefined;
 
         if (recordIdVariable && propertyId && expression) {
-          const recId = String(variables[recordIdVariable] ?? '');
+          const recId = valueToText(variables[recordIdVariable]);
           const val = this.#resolveValue(expression, variables);
           if (recId) {
             this.#recordRepo.updateProperty(recId, propertyId, val);
@@ -371,8 +395,8 @@ export class WorkflowService {
         const targetRecordVariable = config.targetRecordVariable as string | undefined;
 
         if (relationId && sourceRecordVariable && targetRecordVariable) {
-          const srcId = String(variables[sourceRecordVariable] ?? '');
-          const tgtId = String(variables[targetRecordVariable] ?? '');
+          const srcId = valueToText(variables[sourceRecordVariable]);
+          const tgtId = valueToText(variables[targetRecordVariable]);
           if (srcId && tgtId) {
             this.#relationRepo.connect(relationId, srcId, tgtId);
           }
@@ -386,8 +410,8 @@ export class WorkflowService {
         const targetRecordVariable = config.targetRecordVariable as string | undefined;
 
         if (relationId && sourceRecordVariable && targetRecordVariable) {
-          const srcId = String(variables[sourceRecordVariable] ?? '');
-          const tgtId = String(variables[targetRecordVariable] ?? '');
+          const srcId = valueToText(variables[sourceRecordVariable]);
+          const tgtId = valueToText(variables[targetRecordVariable]);
           if (srcId && tgtId) {
             this.#relationRepo.disconnect(relationId, srcId, tgtId);
           }
@@ -398,7 +422,7 @@ export class WorkflowService {
       case 'ARCHIVE_RECORD': {
         const recordIdVariable = config.recordIdVariable as string | undefined;
         if (recordIdVariable) {
-          const recId = String(variables[recordIdVariable] ?? '');
+          const recId = valueToText(variables[recordIdVariable]);
           if (recId) {
             this.#recordRepo.archiveRecord(recId);
           }
@@ -408,7 +432,7 @@ export class WorkflowService {
 
       case 'CALCULATE_FEES': {
         const baseAmount = Number(variables.baseAmount ?? variables.amount ?? 0);
-        const profileId = String(variables.pricingProfileId ?? '');
+        const profileId = valueToText(variables.pricingProfileId);
         const profile = profileId ? this.#pricingRepo.getProfile(profileId) : null;
 
         if (profile) {
@@ -417,12 +441,12 @@ export class WorkflowService {
             {
               amount: baseAmount,
               context: {
-                channel: String(variables.channelId ?? ''),
-                destinationProvider: String(variables.providerId ?? ''),
-                service: String(variables.serviceId ?? ''),
+                channel: valueToText(variables.channelId),
+                destinationProvider: valueToText(variables.providerId),
+                service: valueToText(variables.serviceId),
               },
             },
-            String(variables.now ?? new Date().toISOString()),
+            valueToText(variables.now) || new Date().toISOString(),
           );
           variables.calculatedFee = quote.totals.customerFee;
           variables.netAmount = quote.totals.customerTotal;

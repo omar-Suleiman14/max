@@ -1,4 +1,5 @@
 import type { FormulaNode } from './parser';
+import { valueToText } from '../value-utils';
 
 export type FormulaEvaluationContext = Readonly<{
   now?: string;
@@ -37,7 +38,7 @@ export function evaluateFormula(node: FormulaNode, context: FormulaEvaluationCon
       switch (op) {
         case '+':
           if (typeof left === 'string' || typeof right === 'string') {
-            return String(left ?? '') + String(right ?? '');
+            return valueToText(left) + valueToText(right);
           }
           return (Number(left) || 0) + (Number(right) || 0);
         case '-':
@@ -122,22 +123,22 @@ export function evaluateFormula(node: FormulaNode, context: FormulaEvaluationCon
         }
 
         case 'concat':
-          return args.map((a) => String(a ?? '')).join('');
+          return args.map(valueToText).join('');
 
         case 'lower':
-          return String(args[0] ?? '').toLowerCase();
+          return valueToText(args[0]).toLowerCase();
 
         case 'upper':
-          return String(args[0] ?? '').toUpperCase();
+          return valueToText(args[0]).toUpperCase();
 
         case 'trim':
-          return String(args[0] ?? '').trim();
+          return valueToText(args[0]).trim();
 
         case 'length':
-          return String(args[0] ?? '').length;
+          return valueToText(args[0]).length;
 
         case 'contains':
-          return String(args[0] ?? '').toLowerCase().includes(String(args[1] ?? '').toLowerCase());
+          return valueToText(args[0]).toLowerCase().includes(valueToText(args[1]).toLowerCase());
 
         case 'today':
           return (context.now ?? new Date().toISOString()).slice(0, 10);
@@ -169,7 +170,7 @@ export function evaluateFormula(node: FormulaNode, context: FormulaEvaluationCon
           const d = parseDate(args[0]);
           if (!d) return null;
           const amount = Number(args[1]) || 0;
-          const unit = String(args[2] ?? 'day').toLowerCase();
+          const unit = valueToText(args[2]) || 'day';
           const next = new Date(d);
           if (unit === 'day' || unit === 'days') next.setUTCDate(next.getUTCDate() + amount);
           else if (unit === 'month' || unit === 'months') next.setUTCMonth(next.getUTCMonth() + amount);
@@ -181,7 +182,7 @@ export function evaluateFormula(node: FormulaNode, context: FormulaEvaluationCon
           const d = parseDate(args[0]);
           if (!d) return null;
           const amount = Number(args[1]) || 0;
-          const unit = String(args[2] ?? 'day').toLowerCase();
+          const unit = valueToText(args[2]) || 'day';
           const next = new Date(d);
           if (unit === 'day' || unit === 'days') next.setUTCDate(next.getUTCDate() - amount);
           else if (unit === 'month' || unit === 'months') next.setUTCMonth(next.getUTCMonth() - amount);
@@ -193,7 +194,7 @@ export function evaluateFormula(node: FormulaNode, context: FormulaEvaluationCon
           const d1 = parseDate(args[0]);
           const d2 = parseDate(args[1]);
           if (!d1 || !d2) return 0;
-          const unit = String(args[2] ?? 'day').toLowerCase();
+          const unit = valueToText(args[2]) || 'day';
           const diffMs = d1.getTime() - d2.getTime();
           if (unit === 'day' || unit === 'days') return Math.floor(diffMs / (1000 * 60 * 60 * 24));
           if (unit === 'hour' || unit === 'hours') return Math.floor(diffMs / (1000 * 60 * 60));

@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 
-import type { DatabaseQueryParams, DatabaseQueryResult, RecordGroup } from '../../../shared/query-contract';
+import type { AggregateCalculation, DatabaseQueryParams, DatabaseQueryResult, GroupRule, RecordGroup } from '../../../shared/query-contract';
 import type { WorkspaceProperty, WorkspaceRecord } from '../../../shared/property-contract';
 import type { PropertyRepository } from '../property-repository';
 import type { RecordRepository } from '../record-repository';
@@ -8,6 +8,7 @@ import type { ComputedPropertyService } from '../computed-property-service';
 import { FilterCompiler } from './filter-compiler';
 import { SortCompiler } from './sort-compiler';
 import { CalculationService } from './calculation-service';
+import { dateValueToText, valueToText } from '../value-utils';
 
 type RecordRow = Readonly<{
   archived_at: string | null;
@@ -54,6 +55,23 @@ export class DatabaseQueryService {
 
     const limit = Math.min(params.limit ?? 50, 200);
     const offset = params.cursor ? Number(params.cursor) || 0 : 0;
+    const searchText = params.search?.trim();
+    const searchClause = searchText
+      ? `AND (
+          max_search_normalize(n.title) LIKE max_search_normalize(?) OR EXISTS (
+            SELECT 1 FROM workspace_property_values search_value
+            WHERE search_value.record_id = r.id AND (
+              max_search_normalize(COALESCE(search_value.text_value, '')) LIKE max_search_normalize(?) OR
+              max_search_normalize(COALESCE(search_value.json_value, '')) LIKE max_search_normalize(?) OR
+              CAST(search_value.number_value AS TEXT) LIKE ? OR
+              CAST(search_value.money_minor_value AS TEXT) LIKE ?
+            )
+          )
+        )`
+      : '';
+    const searchParams = searchText
+      ? [`%${searchText}%`, `%${searchText}%`, `%${searchText}%`, `%${searchText}%`, `%${searchText}%`]
+      : [];
 
     // 1. Get total matching count
     const countSql = `
@@ -61,10 +79,11 @@ export class DatabaseQueryService {
       FROM workspace_records r
       JOIN workspace_nodes n ON n.id = r.id
       WHERE r.database_id = ? AND r.archived_at IS NULL AND (${compiledFilter.whereSql})
+      ${searchClause}
     `;
     const countRow = this.#database
       .prepare(countSql)
-      .get(params.databaseId, ...(compiledFilter.params as any)) as { total_count: number };
+      .get(params.databaseId, ...compiledFilter.params, ...searchParams) as { total_count: number };
     const totalCount = countRow.total_count;
 
     // 2. Fetch page records
@@ -73,12 +92,13 @@ export class DatabaseQueryService {
       FROM workspace_records r
       JOIN workspace_nodes n ON n.id = r.id
       WHERE r.database_id = ? AND r.archived_at IS NULL AND (${compiledFilter.whereSql})
+      ${searchClause}
       ORDER BY ${orderClause}
       LIMIT ? OFFSET ?
     `;
     const rows = this.#database
       .prepare(recordSql)
-      .all(params.databaseId, ...(compiledFilter.params as any), limit, offset) as RecordRow[];
+      .all(params.databaseId, ...compiledFilter.params, ...searchParams, limit, offset) as RecordRow[];
 
     if (rows.length === 0) {
       return {
@@ -126,7 +146,7 @@ export class DatabaseQueryService {
     // 4. Compute groups if requested
     let groups: RecordGroup[] | undefined;
     if (params.group) {
-      groups = this.#groupRecords(records, params.group.propertyId, propertyDefs, params.calculations);
+      groups = this.#groupRecords(records, params.group, propertyDefs, params.calculations);
     }
 
     const hasMore = offset + records.length < totalCount;
@@ -145,10 +165,11 @@ export class DatabaseQueryService {
 
   #groupRecords(
     records: readonly WorkspaceRecord[],
-    groupPropertyId: string,
+    group: GroupRule,
     propertyDefs: readonly WorkspaceProperty[],
-    calculations?: readonly any[],
+    calculations?: readonly AggregateCalculation[],
   ): RecordGroup[] {
+    const groupPropertyId = group.propertyId;
     const prop = propertyDefs.find((p) => p.id === groupPropertyId);
     const groupMap = new Map<string, { displayLabel: string; groupKey: string; records: WorkspaceRecord[] }>();
 
@@ -163,14 +184,30 @@ export class DatabaseQueryService {
       if (val !== undefined && val !== null && val !== '') {
         if (prop?.options) {
           const opt = prop.options.find((o) => o.id === val);
-          key = String(val);
-          label = opt ? opt.label : String(val);
+          key = valueToText(val);
+          label = opt ? opt.label : valueToText(val);
+        } else if (prop?.type === 'date' && group.dateGranularity) {
+          const dateText = dateValueToText(val);
+          const date = new Date(dateText);
+          if (!Number.isNaN(date.getTime())) {
+            const year = date.getUTCFullYear();
+            const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+            const day = String(date.getUTCDate()).padStart(2, '0');
+            if (group.dateGranularity === 'year') key = `${year}`;
+            else if (group.dateGranularity === 'quarter') key = `${year}-Q${Math.floor(date.getUTCMonth() / 3) + 1}`;
+            else if (group.dateGranularity === 'month') key = `${year}-${month}`;
+            else if (group.dateGranularity === 'week') {
+              const weekStart = new Date(Date.UTC(year, date.getUTCMonth(), date.getUTCDate() - date.getUTCDay()));
+              key = weekStart.toISOString().slice(0, 10);
+            } else key = `${year}-${month}-${day}`;
+            label = key;
+          }
         } else if (typeof val === 'boolean') {
           key = val ? 'true' : 'false';
           label = val ? 'Yes' : 'No';
         } else {
-          key = String(val);
-          label = String(val);
+          key = valueToText(val);
+          label = valueToText(val);
         }
       }
 

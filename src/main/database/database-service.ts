@@ -132,11 +132,12 @@ export class DatabaseService {
     // Max v0.2.0 Core Workspace initialization
     this.unitOfWork = new DatabaseUnitOfWork(this.#database);
     this.changeBus = new WorkspaceChangeBus();
-    this.workspace = new WorkspaceRepository(this.#database);
+    this.workspaceSearch = new WorkspaceSearchService(this.#database);
+    this.workspace = new WorkspaceRepository(this.#database, this.workspaceSearch);
     this.properties = new PropertyRepository(this.#database);
-    this.databases = new DatabaseRepository(this.#database, this.workspace, this.properties);
-    this.records = new RecordRepository(this.#database, this.workspace, this.properties);
-    this.relations = new RelationRepository(this.#database, this.properties);
+    this.records = new RecordRepository(this.#database, this.workspace, this.properties, this.workspaceSearch);
+    this.databases = new DatabaseRepository(this.#database, this.workspace, this.properties, this.records);
+    this.relations = new RelationRepository(this.#database, this.properties, this.records);
     this.dependencies = new DependencyService(this.#database);
     this.propertySchema = new PropertySchemaService(this.#database, this.properties, this.dependencies);
     const formulaParser = new FormulaParser();
@@ -153,7 +154,7 @@ export class DatabaseService {
       this.records,
       this.computedProperties,
     );
-    this.views = new ViewRepository(this.#database);
+    this.views = new ViewRepository(this.#database, this.workspaceSearch, this.workspace);
     this.workflows = new WorkflowService(
       this.#database,
       this.unitOfWork,
@@ -161,12 +162,14 @@ export class DatabaseService {
       this.relations,
       this.pricing,
     );
-    this.workspaceSearch = new WorkspaceSearchService(this.#database);
     this.workspaceTemplates = new WorkspaceTemplateService(
       this.unitOfWork,
       this.databases,
       this.properties,
       this.relations,
+      this.views,
+      this.workflows,
+      this.workspace,
     );
     this.v020Migration = new V020MigrationService(
       this.#database,
@@ -175,6 +178,10 @@ export class DatabaseService {
       this.records,
       this.relations,
       this.workspace,
+      this.properties,
+      this.views,
+      this.backups,
+      filename !== ':memory:',
     );
 
     if (filename !== ':memory:') {

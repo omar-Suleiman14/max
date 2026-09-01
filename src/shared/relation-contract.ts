@@ -19,6 +19,7 @@ export type WorkspaceRelation = Readonly<{
 
 export type WorkspaceRelationDraft = Readonly<{
   id?: string;
+  inversePropertyId?: string | null;
   inversePropertyName?: string | null;
   sourceCardinality?: RelationCardinality;
   sourceDatabaseId: string;

@@ -374,6 +374,31 @@ describe('Max v0.2.0 Core Workspace Integration Tests', () => {
       expect(createdRecord?.title).toBe('Ahmed Omar');
       expect(createdRecord?.properties[totalProp.id]).toBe(215);
     });
+
+    it('rolls back test runs and failed multi-step workflows without partial records', () => {
+      const db = createTestDb();
+      const target = db.databases.createDatabase({ title: 'Atomic target' });
+      const workflow = db.workflows.createWorkflow({
+        inputSchema: { fields: [] },
+        name: 'Atomic workflow',
+        steps: [
+          { config: { databaseId: target.id, title: "'Temporary'" }, type: 'CREATE_RECORD' },
+          { config: { condition: 'false', errorMessage: 'Stop' }, type: 'VALIDATE' },
+        ],
+      });
+
+      expect(() => db.workflows.execute({ inputs: {}, workflowId: workflow.id })).toThrow('Stop');
+      expect(db.records.listRecords(target.id)).toHaveLength(0);
+
+      const testWorkflow = db.workflows.createWorkflow({
+        inputSchema: { fields: [] },
+        name: 'Dry run',
+        steps: [{ config: { databaseId: target.id, title: "'Dry run record'" }, type: 'CREATE_RECORD' }],
+      });
+      const result = db.workflows.execute({ inputs: {}, testMode: true, workflowId: testWorkflow.id });
+      expect(result.status).toBe('rolled_back');
+      expect(db.records.listRecords(target.id)).toHaveLength(0);
+    });
   });
 
   describe('Retail Workspace Template & Universal Search', () => {
@@ -394,14 +419,129 @@ describe('Max v0.2.0 Core Workspace Integration Tests', () => {
         title: 'MacBook Air M3 Midnight 16GB',
       });
 
-      // Update Search Index
-      const node = db.workspace.getNode(prodRec.id)!;
-      db.workspaceSearch.indexNode(node, 'Midnight Edition 512GB SSD');
-
       // Universal FTS5 search query
       const searchResults = db.workspaceSearch.search('MacBook Air', 10);
       expect(searchResults.length).toBeGreaterThanOrEqual(1);
       expect(searchResults[0]!.displayTitle).toContain('MacBook');
+
+      db.records.updateRecord(prodRec.id, { title: 'MacBook Air M3 Midnight Edition 512GB SSD' });
+      expect(db.workspaceSearch.search('Midnight Edition', 10)[0]?.entityId).toBe(prodRec.id);
+    });
+
+    it('imports real pages, views, workflows, and inverse relations from Blueprint v2', () => {
+      const db = createTestDb();
+      const result = db.workspaceTemplates.importBlueprintV2({
+        databases: [
+          {
+            defaultViewKey: 'view_repairs',
+            key: 'db_repairs',
+            properties: [
+              { key: 'prop_repair_title', name: 'Repair', type: 'title' },
+              { key: 'prop_repair_customer', name: 'Customer', type: 'relation' },
+            ],
+            title: 'Repairs',
+            views: [{ key: 'view_repairs', layout: 'table', name: 'All Repairs' }],
+          },
+          {
+            key: 'db_people',
+            properties: [
+              { key: 'prop_person_title', name: 'Name', type: 'title' },
+              { key: 'prop_person_repairs', name: 'Repairs', type: 'relation' },
+            ],
+            title: 'People',
+            views: [],
+          },
+        ],
+        name: 'Repair Shop',
+        pages: [{ contentJson: '[]', key: 'page_home', title: 'Repair Dashboard' }],
+        relations: [{
+          inversePropertyKey: 'prop_person_repairs',
+          key: 'rel_customer_repairs',
+          sourceDatabaseKey: 'db_repairs',
+          sourcePropertyKey: 'prop_repair_customer',
+          targetDatabaseKey: 'db_people',
+        }],
+        version: 2,
+        workflows: [{
+          inputSchema: { fields: [] },
+          key: 'workflow_new_repair',
+          name: 'New Repair',
+          steps: [{ config: { status: 'ready' }, id: 'return', type: 'RETURN_RESULT' }],
+        }],
+      });
+
+      expect(result.pageCount).toBe(1);
+      expect(result.workflowCount).toBe(1);
+      expect(db.workspace.getNode(result.pages[0]!.id)?.title).toBe('Repair Dashboard');
+      expect(db.workflows.listWorkflows().map((workflow) => workflow.name)).toContain('New Repair');
+
+      const repairsId = result.databases.find((database) => database.key === 'db_repairs')!.id;
+      const repairsSchema = db.databases.getSchema(repairsId);
+      expect(repairsSchema.database.defaultViewId).toBe(
+        repairsSchema.views.find((view) => view.name === 'All Repairs')?.id,
+      );
+      const relationProperty = repairsSchema.properties.find((property) => property.name === 'Customer')!;
+      const relation = db.relations.getRelationByPropertyId(relationProperty.id)!;
+      expect(relation.inversePropertyId).toBeTruthy();
+    });
+
+    it('queries property text, groups dates by month, and duplicates records with remapped options', () => {
+      const db = createTestDb();
+      const repairs = db.databases.createDatabase({ title: 'Repairs' });
+      const note = db.properties.createProperty({ databaseId: repairs.id, name: 'Problem', type: 'text' });
+      const date = db.properties.createProperty({ databaseId: repairs.id, name: 'Date', type: 'date' });
+      const status = db.properties.createProperty({
+        databaseId: repairs.id,
+        name: 'Status',
+        options: [{ label: 'Open' }, { label: 'Done' }],
+        type: 'select',
+      });
+      const openOptionId = status.options![0]!.id;
+      db.records.createRecord({
+        databaseId: repairs.id,
+        properties: { [date.id]: '2026-08-04', [note.id]: 'needle in charging port', [status.id]: openOptionId },
+        title: 'Phone repair',
+      });
+
+      const query = db.databaseQuery.query({
+        databaseId: repairs.id,
+        group: { dateGranularity: 'month', propertyId: date.id },
+        search: 'needle',
+      });
+      expect(query.records).toHaveLength(1);
+      expect(query.groups?.[0]?.groupKey).toBe('2026-08');
+
+      const duplicate = db.databases.duplicateDatabase(repairs.id, 'Repairs Copy', true);
+      const duplicateSchema = db.databases.getSchema(duplicate.id);
+      const duplicateStatus = duplicateSchema.properties.find((property) => property.name === 'Status')!;
+      const duplicateRecord = db.records.listRecords(duplicate.id)[0]!;
+      expect(duplicateRecord.title).toBe('Phone repair');
+      expect(duplicateRecord.properties[duplicateStatus.id]).toBe(duplicateStatus.options![0]!.id);
+      expect(duplicateRecord.properties[duplicateStatus.id]).not.toBe(openOptionId);
+    });
+
+    it('uses one canonical relation edge from either side and rejects copied relation values', () => {
+      const db = createTestDb();
+      const repairs = db.databases.createDatabase({ title: 'Repairs' });
+      const people = db.databases.createDatabase({ title: 'People' });
+      const customer = db.properties.createProperty({ databaseId: repairs.id, name: 'Customer', type: 'relation' });
+      const inverse = db.properties.createProperty({ databaseId: people.id, name: 'Repairs', type: 'relation' });
+      const relation = db.relations.createRelation({
+        inversePropertyId: inverse.id,
+        sourceDatabaseId: repairs.id,
+        sourcePropertyId: customer.id,
+        targetDatabaseId: people.id,
+      });
+      const repair = db.records.createRecord({ databaseId: repairs.id, title: 'Screen replacement' });
+      const person = db.records.createRecord({ databaseId: people.id, title: 'Ahmed' });
+
+      db.relations.linkRecords(relation.id, person.id, repair.id);
+      expect(db.relations.getRelatedRecords(repair.id, relation.id)[0]?.title).toBe('Ahmed');
+      expect(db.relations.getRelatedRecords(person.id, relation.id)[0]?.title).toBe('Screen replacement');
+      expect(() => db.records.updateProperty(repair.id, customer.id, [person.id])).toThrow(/dedicated API/);
+
+      db.relations.unlinkRecords(relation.id, person.id, repair.id);
+      expect(db.relations.getRelatedRecords(repair.id, relation.id)).toHaveLength(0);
     });
   });
 

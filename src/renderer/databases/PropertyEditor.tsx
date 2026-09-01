@@ -20,17 +20,19 @@ import type {
   PropertyOptionDraft,
   PropertyType,
   RollupAggregation,
+  TypeConversionStrategy,
   TypeConversionPreview,
   WorkspaceProperty,
   WorkspacePropertyDraft,
   WorkspacePropertyPatch,
 } from '../../shared/property-contract';
+import type { NavigationItem } from '../../shared/workspace-contract';
 
 type PropertyEditorProps = Readonly<{
   databaseId: string;
   isOpen: boolean;
   onClose: () => void;
-  onSave: (draft: WorkspacePropertyDraft | WorkspacePropertyPatch) => Promise<void>;
+  onSave: (draft: WorkspacePropertyDraft | WorkspacePropertyPatch) => Promise<WorkspaceProperty | null>;
   property?: WorkspaceProperty | null;
   schema: DatabaseSchema | null;
 }>;
@@ -89,6 +91,10 @@ export function PropertyEditor({
   const [rollupAggregation, setRollupAggregation] = useState<RollupAggregation>(
     () => property?.config?.rollup?.aggregation || 'sum',
   );
+  const [databases, setDatabases] = useState<readonly NavigationItem[]>([]);
+  const [relationTargetDatabaseId, setRelationTargetDatabaseId] = useState('');
+  const [inversePropertyName, setInversePropertyName] = useState('');
+  const [conversionStrategy, setConversionStrategy] = useState<TypeConversionStrategy>('convert_all');
 
   // Type Conversion Preview
   const [preview, setPreview] = useState<TypeConversionPreview | null>(null);
@@ -128,12 +134,23 @@ export function PropertyEditor({
     setError(null);
   }, [property, isOpen]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    void window.maxApi.workspace.getNavigation().then((navigation) => {
+      setDatabases(navigation.databases);
+      setRelationTargetDatabaseId((current) => current || navigation.databases[0]?.id || databaseId);
+    });
+  }, [databaseId, isOpen]);
+
   // Check type conversion preview if editing existing property and type changes
   useEffect(() => {
     if (isEditing && property && property.type !== type) {
       void window.maxApi.workspace
         .previewTypeConversion(property.id, type)
-        .then((res) => setPreview(res))
+        .then((res) => {
+          setPreview(res);
+          setConversionStrategy(res.invalidCount > 0 ? 'set_null' : 'convert_all');
+        })
         .catch(() => setPreview(null));
     } else {
       setPreview(null);
@@ -190,6 +207,10 @@ export function PropertyEditor({
       }
 
       if (isEditing && property) {
+        if (property.type !== type) {
+          const conversion = await window.maxApi.workspace.applyTypeConversion(property.id, type, conversionStrategy);
+          if (!conversion.ok) throw new Error(conversion.error.message);
+        }
         await onSave({
           config,
           name: name.trim(),
@@ -198,7 +219,7 @@ export function PropertyEditor({
           uniqueValue,
         });
       } else {
-        await onSave({
+        const createdProperty = await onSave({
           config,
           databaseId,
           name: name.trim(),
@@ -207,6 +228,21 @@ export function PropertyEditor({
           type,
           uniqueValue,
         });
+        if (type === 'relation') {
+          if (!createdProperty || !relationTargetDatabaseId) {
+            throw new Error('A target database is required for a relation.');
+          }
+          const relation = await window.maxApi.workspace.createRelation({
+            inversePropertyName: inversePropertyName.trim() || null,
+            sourceDatabaseId: databaseId,
+            sourcePropertyId: createdProperty.id,
+            targetDatabaseId: relationTargetDatabaseId,
+          });
+          if (!relation.ok) {
+            await window.maxApi.workspace.archiveProperty(createdProperty.id);
+            throw new Error(relation.error.message);
+          }
+        }
       }
 
       onClose();
@@ -285,6 +321,43 @@ export function PropertyEditor({
                 <strong>Type Conversion Notice:</strong> {preview.invalidCount} of {preview.totalRecords} records cannot be cleanly converted to <code>{type}</code>.
                 <div className="text-danger font-semibold mt-1">
                   Warning: Incompatible values may be set to null.
+                </div>
+                <select
+                  className="select-field mt-2"
+                  value={conversionStrategy}
+                  onChange={(event) => setConversionStrategy(event.target.value as TypeConversionStrategy)}
+                >
+                  {preview.availableStrategies.filter((strategy) => strategy !== 'cancel').map((strategy) => (
+                    <option key={strategy} value={strategy}>{strategy.replaceAll('_', ' ')}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {type === 'relation' && !isEditing && (
+              <div className="space-y-3">
+                <div className="form-group">
+                  <label className="form-label">Target Database</label>
+                  <select
+                    className="select-field"
+                    onChange={(event) => setRelationTargetDatabaseId(event.target.value)}
+                    required
+                    value={relationTargetDatabaseId}
+                  >
+                    {databases.map((database) => (
+                      <option key={database.id} value={database.id}>{database.title}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Inverse Property Name (optional)</label>
+                  <input
+                    className="input-field"
+                    onChange={(event) => setInversePropertyName(event.target.value)}
+                    placeholder="e.g. Repairs"
+                    type="text"
+                    value={inversePropertyName}
+                  />
                 </div>
               </div>
             )}

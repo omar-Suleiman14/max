@@ -1,9 +1,12 @@
+import type { SQLInputValue } from 'node:sqlite';
+
 import type { FilterNode, PropertyFilterNode, RelationFilterNode } from '../../../shared/query-contract';
 import type { WorkspaceProperty } from '../../../shared/property-contract';
 import { resolveRelativeDate } from './date-resolver';
+import { valueToText } from '../value-utils';
 
 export type CompiledFilter = Readonly<{
-  params: readonly unknown[];
+  params: readonly SQLInputValue[];
   whereSql: string;
 }>;
 
@@ -116,7 +119,7 @@ export class FilterCompiler {
       }
 
       case 'before_date': {
-        const dStr = String(node.value ?? '');
+        const dStr = valueToText(node.value);
         return {
           params: [propId, dStr],
           whereSql: `EXISTS (
@@ -127,7 +130,7 @@ export class FilterCompiler {
       }
 
       case 'after_date': {
-        const dStr = String(node.value ?? '');
+        const dStr = valueToText(node.value);
         return {
           params: [propId, dStr],
           whereSql: `EXISTS (
@@ -138,8 +141,8 @@ export class FilterCompiler {
       }
 
       case 'between_dates': {
-        const start = String(node.value ?? '');
-        const end = String(node.valueTo ?? '');
+        const start = valueToText(node.value);
+        const end = valueToText(node.valueTo);
         return {
           params: [propId, start, end],
           whereSql: `EXISTS (
@@ -150,7 +153,7 @@ export class FilterCompiler {
       }
 
       case 'in_options': {
-        const options = Array.isArray(node.value) ? node.value : [node.value];
+        const options = (Array.isArray(node.value) ? node.value : [node.value]).map(valueToText);
         if (options.length === 0) return { params: [], whereSql: '1 = 0' };
         const placeholders = options.map(() => '?').join(',');
         return {
@@ -163,7 +166,7 @@ export class FilterCompiler {
       }
 
       case 'not_in_options': {
-        const options = Array.isArray(node.value) ? node.value : [node.value];
+        const options = (Array.isArray(node.value) ? node.value : [node.value]).map(valueToText);
         if (options.length === 0) return { params: [], whereSql: '1 = 1' };
         const placeholders = options.map(() => '?').join(',');
         return {
@@ -207,7 +210,7 @@ export class FilterCompiler {
 
     // Text / Select / Status comparisons
     if (node.operator === 'contains') {
-      const term = `%${String(node.value ?? '').toLowerCase()}%`;
+      const term = `%${valueToText(node.value).toLowerCase()}%`;
       return {
         params: [propId, term],
         whereSql: `EXISTS (
@@ -218,7 +221,7 @@ export class FilterCompiler {
     }
 
     if (node.operator === 'not_contains') {
-      const term = `%${String(node.value ?? '').toLowerCase()}%`;
+      const term = `%${valueToText(node.value).toLowerCase()}%`;
       return {
         params: [propId, term],
         whereSql: `NOT EXISTS (
@@ -229,7 +232,7 @@ export class FilterCompiler {
     }
 
     if (node.operator === 'starts_with') {
-      const term = `${String(node.value ?? '').toLowerCase()}%`;
+      const term = `${valueToText(node.value).toLowerCase()}%`;
       return {
         params: [propId, term],
         whereSql: `EXISTS (
@@ -240,7 +243,7 @@ export class FilterCompiler {
     }
 
     if (node.operator === 'ends_with') {
-      const term = `%${String(node.value ?? '').toLowerCase()}`;
+      const term = `%${valueToText(node.value).toLowerCase()}`;
       return {
         params: [propId, term],
         whereSql: `EXISTS (
@@ -252,7 +255,7 @@ export class FilterCompiler {
 
     if (node.operator === 'not_equals') {
       return {
-        params: [propId, String(node.value ?? ''), String(node.value ?? '')],
+        params: [propId, valueToText(node.value), valueToText(node.value)],
         whereSql: `NOT EXISTS (
           SELECT 1 FROM workspace_property_values pv
           WHERE pv.record_id = r.id AND pv.property_id = ? AND (pv.text_value = ? OR pv.option_id = ?)
@@ -262,7 +265,7 @@ export class FilterCompiler {
 
     // Default equality (equals)
     return {
-      params: [propId, String(node.value ?? ''), String(node.value ?? '')],
+      params: [propId, valueToText(node.value), valueToText(node.value)],
       whereSql: `EXISTS (
         SELECT 1 FROM workspace_property_values pv
         WHERE pv.record_id = r.id AND pv.property_id = ? AND (pv.text_value = ? OR pv.option_id = ?)
@@ -274,27 +277,27 @@ export class FilterCompiler {
     switch (node.operator) {
       case 'contains':
         return {
-          params: [`%${String(node.value ?? '').toLowerCase()}%`],
+          params: [`%${valueToText(node.value).toLowerCase()}%`],
           whereSql: 'lower(n.title) LIKE ?',
         };
       case 'not_contains':
         return {
-          params: [`%${String(node.value ?? '').toLowerCase()}%`],
+          params: [`%${valueToText(node.value).toLowerCase()}%`],
           whereSql: 'lower(n.title) NOT LIKE ?',
         };
       case 'starts_with':
         return {
-          params: [`${String(node.value ?? '').toLowerCase()}%`],
+          params: [`${valueToText(node.value).toLowerCase()}%`],
           whereSql: 'lower(n.title) LIKE ?',
         };
       case 'ends_with':
         return {
-          params: [`%${String(node.value ?? '').toLowerCase()}`],
+          params: [`%${valueToText(node.value).toLowerCase()}`],
           whereSql: 'lower(n.title) LIKE ?',
         };
       case 'not_equals':
         return {
-          params: [String(node.value ?? '')],
+          params: [valueToText(node.value)],
           whereSql: 'n.title != ?',
         };
       case 'is_empty':
@@ -303,7 +306,7 @@ export class FilterCompiler {
         return { params: [], whereSql: "trim(n.title) != ''" };
       default:
         return {
-          params: [String(node.value ?? '')],
+          params: [valueToText(node.value)],
           whereSql: 'n.title = ?',
         };
     }
@@ -312,7 +315,7 @@ export class FilterCompiler {
   #compileRelationFilter(node: RelationFilterNode): CompiledFilter {
     const relationProp = this.#propertiesMap.get(node.relationPropertyId);
     const relId = relationProp?.config?.relationId;
-    if (!relId) {
+    if (typeof relId !== 'string' || !relId) {
       return { params: [], whereSql: '1 = 1' };
     }
 

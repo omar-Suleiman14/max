@@ -12,10 +12,10 @@ import {
   Table as TableIcon,
   X,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import type { Locale } from '../app/i18n';
-import type { WorkspaceRecord } from '../../shared/property-contract';
+import type { WorkspaceProperty, WorkspaceRecord } from '../../shared/property-contract';
 import type { ViewLayout } from '../../shared/view-contract';
 import { DatabaseViewHost } from './DatabaseViewHost';
 import { FilterBuilder } from './FilterBuilder';
@@ -26,20 +26,24 @@ import { useDatabaseQuery } from './useDatabaseQuery';
 
 type DatabasePageProps = Readonly<{
   databaseId: string;
+  initialViewId?: string;
   locale?: Locale;
   onOpenRecordId?: string | null;
 }>;
 
-export function DatabasePage({ databaseId, locale = 'en', onOpenRecordId }: DatabasePageProps) {
+export function DatabasePage({ databaseId, initialViewId, locale = 'en', onOpenRecordId }: DatabasePageProps) {
   const {
     activeView,
     archiveRecord,
+    archiveProperty,
     calculations,
     createProperty,
     createRecord,
     createView,
     error,
     filterAst,
+    group,
+    groups,
     loading,
     records,
     refresh,
@@ -47,14 +51,16 @@ export function DatabasePage({ databaseId, locale = 'en', onOpenRecordId }: Data
     searchQuery,
     setActiveView,
     setFilterAst,
+    setGroup,
     setSearchQuery,
     setSorts,
     sorts,
     totalCount,
     updateRecord,
+    updateProperty,
     updateView,
     views,
-  } = useDatabaseQuery(databaseId);
+  } = useDatabaseQuery(databaseId, initialViewId);
 
   // Modals & Drawers
   const [selectedRecord, setSelectedRecord] = useState<WorkspaceRecord | null>(null);
@@ -62,20 +68,20 @@ export function DatabasePage({ databaseId, locale = 'en', onOpenRecordId }: Data
   const [filterModalOpen, setFilterModalOpen] = useState(false);
   const [sortModalOpen, setSortModalOpen] = useState(false);
   const [propertyModalOpen, setPropertyModalOpen] = useState(false);
+  const [propertyManagerOpen, setPropertyManagerOpen] = useState(false);
+  const [editingProperty, setEditingProperty] = useState<WorkspaceProperty | null>(null);
   const [addViewModalOpen, setAddViewModalOpen] = useState(false);
   const [newViewName, setNewViewName] = useState('');
   const [newViewLayout, setNewViewLayout] = useState<ViewLayout>('table');
 
-  // Open drawer if onOpenRecordId is provided
-  useState(() => {
-    if (onOpenRecordId) {
-      const rec = records.find((r) => r.id === onOpenRecordId);
-      if (rec) {
-        setSelectedRecord(rec);
-        setRecordDrawerOpen(true);
-      }
+  useEffect(() => {
+    if (!onOpenRecordId) return;
+    const record = records.find((candidate) => candidate.id === onOpenRecordId);
+    if (record) {
+      setSelectedRecord(record);
+      setRecordDrawerOpen(true);
     }
-  });
+  }, [onOpenRecordId, records]);
 
   const handleOpenRecord = (record: WorkspaceRecord) => {
     setSelectedRecord(record);
@@ -134,10 +140,38 @@ export function DatabasePage({ databaseId, locale = 'en', onOpenRecordId }: Data
           </div>
 
           <div className="flex items-center gap-2">
+            <select
+              aria-label={locale === 'ar' ? 'تجميع حسب' : 'Group by'}
+              className="input-field text-xs"
+              onChange={(event) => {
+                const propertyId = event.target.value;
+                const next = propertyId ? { propertyId } : null;
+                setGroup(next);
+                if (activeView) void updateView(activeView.id, { group: next });
+              }}
+              value={group?.propertyId ?? ''}
+            >
+              <option value="">{locale === 'ar' ? 'بدون تجميع' : 'No grouping'}</option>
+              {schema?.properties.filter((property) => !['formula', 'relation', 'rollup'].includes(property.type)).map((property) => <option key={property.id} value={property.id}>{property.name}</option>)}
+            </select>
+            {group && schema?.properties.find((property) => property.id === group.propertyId)?.type === 'date' && (
+              <select
+                aria-label={locale === 'ar' ? 'دقة التاريخ' : 'Date grouping'}
+                className="input-field text-xs"
+                onChange={(event) => {
+                  const next = { ...group, dateGranularity: event.target.value as 'day' | 'week' | 'month' | 'quarter' | 'year' };
+                  setGroup(next);
+                  if (activeView) void updateView(activeView.id, { group: next });
+                }}
+                value={group.dateGranularity ?? 'month'}
+              >
+                {(['day', 'week', 'month', 'quarter', 'year'] as const).map((period) => <option key={period} value={period}>{period}</option>)}
+              </select>
+            )}
             <button
               type="button"
               className="btn btn-secondary btn-sm"
-              onClick={() => setPropertyModalOpen(true)}
+              onClick={() => setPropertyManagerOpen(true)}
             >
               <Settings size={14} className="mr-1.5" /> Customize Properties
             </button>
@@ -257,6 +291,7 @@ export function DatabasePage({ databaseId, locale = 'en', onOpenRecordId }: Data
           activeView={activeView}
           calculations={calculations}
           databaseId={databaseId}
+          groups={groups}
           onArchiveRecord={archiveRecord}
           onCreateRecord={createRecord}
           onOpenRecord={handleOpenRecord}
@@ -309,14 +344,74 @@ export function DatabasePage({ databaseId, locale = 'en', onOpenRecordId }: Data
       <PropertyEditor
         databaseId={databaseId}
         isOpen={propertyModalOpen}
-        onClose={() => setPropertyModalOpen(false)}
+        onClose={() => {
+          setPropertyModalOpen(false);
+          setEditingProperty(null);
+        }}
         onSave={async (draftOrPatch) => {
           if ('databaseId' in draftOrPatch) {
-            await createProperty(draftOrPatch);
+            return createProperty(draftOrPatch);
           }
+          if (editingProperty) await updateProperty(editingProperty.id, draftOrPatch);
+          return null;
         }}
+        property={editingProperty}
         schema={schema}
       />
+
+      {propertyManagerOpen && (
+        <div className="modal-backdrop" onClick={() => setPropertyManagerOpen(false)} role="dialog" aria-modal="true">
+          <div className="modal-container modal-sm" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <h3>{locale === 'ar' ? 'خصائص قاعدة البيانات' : 'Database properties'}</h3>
+              <button type="button" className="btn-icon" onClick={() => setPropertyManagerOpen(false)} aria-label="Close">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="modal-body space-y-2">
+              {schema?.properties.map((property) => (
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-neutral-700 p-3" key={property.id}>
+                  <button
+                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                    onClick={() => {
+                      setEditingProperty(property);
+                      setPropertyManagerOpen(false);
+                      setPropertyModalOpen(true);
+                    }}
+                    type="button"
+                  >
+                    <span className="truncate font-medium">{property.name}</span>
+                    <span className="badge badge-secondary text-2xs">{property.type}</span>
+                  </button>
+                  {property.type !== 'title' && (
+                    <button
+                      className="btn btn-ghost btn-xs text-danger"
+                      onClick={() => void archiveProperty(property.id)}
+                      type="button"
+                    >
+                      {locale === 'ar' ? 'أرشفة' : 'Archive'}
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="modal-footer">
+              <button
+                className="btn btn-primary"
+                onClick={() => {
+                  setEditingProperty(null);
+                  setPropertyManagerOpen(false);
+                  setPropertyModalOpen(true);
+                }}
+                type="button"
+              >
+                <Plus size={14} className="mr-1.5" />
+                {locale === 'ar' ? 'خاصية جديدة' : 'New property'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add View Modal */}
       {addViewModalOpen && (

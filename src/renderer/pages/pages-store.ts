@@ -1,14 +1,15 @@
 import type { CustomPage } from '../app/app-types';
 import type { NotionBlock } from '../ui/notion-block-editor';
-import type { CustomPage as DatabaseCustomPage } from '../../shared/views-search-contract';
+import type { WorkspaceNode } from '../../shared/workspace-contract';
 
 const CUSTOM_PAGES_KEY = 'max:custom_pages';
 const LEGACY_TRASHED_PAGES_KEY = 'max:trashed_pages';
 
-function fromDatabasePage(page: DatabaseCustomPage): CustomPage {
+function fromWorkspacePage(page: WorkspaceNode): CustomPage {
   let layout: { blocks?: readonly NotionBlock[]; favorite?: boolean; wiki?: boolean } = {};
   try {
-    layout = JSON.parse(page.layoutJson) as typeof layout;
+    const parsed = JSON.parse(page.contentJson) as unknown;
+    layout = Array.isArray(parsed) ? { blocks: parsed as readonly NotionBlock[] } : parsed as typeof layout;
   } catch {
     // A damaged layout remains recoverable as an empty page.
   }
@@ -18,55 +19,81 @@ function fromDatabasePage(page: DatabaseCustomPage): CustomPage {
     favorite: layout.favorite,
     icon: page.icon ?? 'lucide:FileText',
     id: page.id,
-    title: page.name,
+    title: page.title,
     updatedAt: page.updatedAt,
     wiki: layout.wiki,
   };
 }
 
-function toDatabaseDraft(page: CustomPage, position: number) {
+function toWorkspacePatch(page: CustomPage) {
   return {
+    contentJson: JSON.stringify({ blocks: page.blocks, favorite: page.favorite ?? false, wiki: page.wiki ?? false }),
     icon: page.icon,
-    layoutJson: JSON.stringify({ blocks: page.blocks, favorite: page.favorite ?? false, wiki: page.wiki ?? false }),
-    name: page.title.trim() || 'Untitled',
-    position,
+    title: page.title.trim() || 'Untitled',
   };
 }
 
 export async function loadPersistentCustomPages(): Promise<readonly CustomPage[]> {
-  return (await window.maxApi.pages.list()).map(fromDatabasePage);
+  const navigation = await window.maxApi.workspace.getNavigation();
+  const nodes = await Promise.all(
+    navigation.pages.filter((page) => page.id !== 'home').map((page) => window.maxApi.workspace.getNode(page.id)),
+  );
+  return nodes.filter((node): node is WorkspaceNode => node !== null).map(fromWorkspacePage);
 }
 
 export async function createPersistentCustomPage(title = 'Untitled', icon = 'lucide:FileText', position = 0): Promise<CustomPage | undefined> {
   const blocks: readonly NotionBlock[] = [{ content: '', id: `block_${crypto.randomUUID()}`, type: 'text' }];
-  const result = await window.maxApi.pages.create({
+  const result = await window.maxApi.workspace.createNode({
+    contentJson: JSON.stringify({ blocks, favorite: false, wiki: false }),
     icon,
-    layoutJson: JSON.stringify({ blocks, favorite: false, wiki: false }),
-    name: title.trim() || 'Untitled',
-    position,
+    kind: 'page',
+    positionKey: `p${String(position).padStart(8, '0')}`,
+    title: title.trim() || 'Untitled',
   });
-  return result.ok ? fromDatabasePage(result.value) : undefined;
+  return result.ok ? fromWorkspacePage(result.value) : undefined;
 }
 
 export async function updatePersistentCustomPage(page: CustomPage, position: number): Promise<void> {
-  await window.maxApi.pages.update(page.id, toDatabaseDraft(page, position));
+  void position;
+  await window.maxApi.workspace.updateNode(page.id, toWorkspacePatch(page));
 }
 
 export async function archivePersistentCustomPage(page: CustomPage): Promise<void> {
-  await window.maxApi.pages.archive(page.id);
+  await window.maxApi.workspace.archiveNode(page.id);
 }
 
 export async function loadTrashedPages(): Promise<readonly CustomPage[]> {
-  return (await window.maxApi.pages.listArchived()).map(fromDatabasePage);
+  const navigation = await window.maxApi.workspace.getNavigation(true);
+  const nodes = await Promise.all(
+    navigation.pages.filter((page) => page.archivedAt && page.id !== 'home').map((page) => window.maxApi.workspace.getNode(page.id)),
+  );
+  return nodes.filter((node): node is WorkspaceNode => node !== null).map(fromWorkspacePage);
 }
 
 export async function restoreTrashedPage(id: string): Promise<CustomPage | undefined> {
-  const restored = await window.maxApi.pages.restore(id);
-  return restored.ok ? fromDatabasePage(restored.value) : undefined;
+  const restored = await window.maxApi.workspace.restoreNode(id);
+  return restored.ok ? fromWorkspacePage(restored.value) : undefined;
 }
 
 export async function emptyPageTrash(): Promise<void> {
-  await window.maxApi.pages.emptyTrash();
+  // Workspace pages retain auditable history. Archived pages are intentionally
+  // kept until a dedicated audited permanent-delete operation exists.
+}
+
+export async function loadPersistentHomePage(locale: 'ar' | 'en' = 'en'): Promise<CustomPage> {
+  const existing = await window.maxApi.workspace.getNode('home');
+  if (existing) return fromWorkspacePage(existing);
+
+  const local = loadHomePage(locale);
+  const created = await window.maxApi.workspace.createNode({
+    contentJson: JSON.stringify({ blocks: local.blocks, favorite: false, wiki: false }),
+    icon: local.icon,
+    id: 'home',
+    kind: 'page',
+    positionKey: 'p00000000',
+    title: local.title,
+  });
+  return created.ok ? fromWorkspacePage(created.value) : local;
 }
 
 export const defaultHomeBlocks: readonly NotionBlock[] = [
@@ -260,4 +287,9 @@ export function saveHomePage(page: Pick<CustomPage, 'blocks' | 'icon' | 'title'>
   } catch {
     // ignore
   }
+  void window.maxApi.workspace.updateNode('home', {
+    contentJson: JSON.stringify({ blocks: page.blocks, favorite: false, wiki: false }),
+    icon: page.icon,
+    title: page.title.trim() || 'Home',
+  });
 }

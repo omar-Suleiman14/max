@@ -2,6 +2,7 @@ import {
   Check,
   Columns,
   CreditCard,
+  Database,
   FileText,
   GripVertical,
   Heading1,
@@ -18,13 +19,15 @@ import {
   Users,
   type LucideIcon,
 } from 'lucide-react';
-import React, { useRef, useState, type KeyboardEvent } from 'react';
+import React, { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 
 import { AccountsWorkspace } from '../accounts/accounts-workspace';
 import type { Locale } from '../app/i18n';
 import { ObjectWorkspace } from '../objects/object-workspace';
 import { ReconciliationWorkspace } from '../reconciliation/reconciliation-workspace';
 import { TransactionsWorkspace } from '../transactions/transactions-workspace';
+import type { NavigationItem } from '../../shared/workspace-contract';
+import { DatabasePage } from '../databases/DatabasePage';
 
 export type BlockType =
   | 'bullet'
@@ -45,9 +48,11 @@ export type NotionBlock = {
   col1Blocks?: readonly NotionBlock[]; // For columns block (left)
   col2Blocks?: readonly NotionBlock[]; // For columns block (right)
   content: string;
+  databaseId?: string;
   databaseKind?: 'accounts' | 'items' | 'people' | 'reconciliation' | 'transactions';
   id: string;
   type: BlockType;
+  viewId?: string;
 };
 
 type NotionBlockEditorProps = Readonly<{
@@ -77,8 +82,19 @@ export function NotionBlockEditor({ blocks, locale, onChange }: NotionBlockEdito
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [dragOverEdge, setDragOverEdge] = useState<'after' | 'before'>('before');
   const [blockMenuId, setBlockMenuId] = useState<string | null>(null);
+  const [workspaceDatabases, setWorkspaceDatabases] = useState<readonly NavigationItem[]>([]);
 
   const inputRefs = useRef<Map<string, HTMLTextAreaElement | HTMLInputElement>>(new Map());
+
+  useEffect(() => {
+    let active = true;
+    const workspace = window.maxApi?.workspace;
+    if (!workspace) return () => { active = false; };
+    void workspace.getNavigation().then((navigation) => {
+      if (active) setWorkspaceDatabases(navigation.databases);
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, []);
 
   // Focus management helper
   function focusBlock(id: string, cursorAtEnd = true) {
@@ -457,6 +473,63 @@ export function NotionBlockEditor({ blocks, locale, onChange }: NotionBlockEdito
     // Databases
     {
       category: 'database',
+      description: 'Create a new inline database in this page',
+      descriptionAr: 'إنشاء قاعدة بيانات جديدة داخل هذه الصفحة',
+      icon: Database,
+      id: 'db_new',
+      keywords: ['new database', 'inline database', 'قاعدة بيانات جديدة'],
+      label: 'New database',
+      labelAr: 'قاعدة بيانات جديدة',
+      run: (bId) => {
+        const title = window.prompt(locale === 'ar' ? 'اسم قاعدة البيانات' : 'Database name');
+        if (!title?.trim()) return;
+        void window.maxApi.workspace.createDatabase({ title: title.trim(), visibility: 'normal' }).then(async (result) => {
+          if (!result.ok) return;
+          const views = await window.maxApi.workspace.listViews(result.value.id);
+          updateBlock(bId, { content: '', databaseId: result.value.id, databaseKind: undefined, type: 'database-view', viewId: views[0]?.id });
+          const navigation = await window.maxApi.workspace.getNavigation();
+          setWorkspaceDatabases(navigation.databases);
+        });
+        setActiveSlashBlockId(null);
+      },
+    },
+    ...workspaceDatabases.map((database) => ({
+      category: 'database' as const,
+      description: `Linked view of ${database.title}`,
+      descriptionAr: `عرض مرتبط من ${database.title}`,
+      icon: Database,
+      id: `db_link_${database.id}`,
+      keywords: ['linked database', database.title, 'قاعدة مرتبطة'],
+      label: `Linked database: ${database.title}`,
+      labelAr: `قاعدة مرتبطة: ${database.title}`,
+      run: (bId: string) => {
+        void window.maxApi.workspace.listViews(database.id).then(async (views) => {
+          const source = views[0];
+          const linked = await window.maxApi.workspace.createView({
+            databaseId: database.id,
+            filterAst: source?.filterAst,
+            group: source?.group,
+            layout: source?.layout ?? 'table',
+            layoutConfig: source?.layoutConfig,
+            name: source?.name ?? database.title,
+            ownerId: bId,
+            ownerType: 'block',
+            propertyState: source?.propertyState,
+            sorts: source?.sorts,
+          });
+          updateBlock(bId, {
+            content: '',
+            databaseId: database.id,
+            databaseKind: undefined,
+            type: 'database-view',
+            viewId: linked.ok ? linked.value.id : source?.id,
+          });
+        });
+        setActiveSlashBlockId(null);
+      },
+    })),
+    {
+      category: 'database',
       description: 'Live interactive Items & Inventory table',
       descriptionAr: 'جدول الأصناف والمخزون التفاعلي المباشر',
       icon: Package,
@@ -820,13 +893,15 @@ export function NotionBlockEditor({ blocks, locale, onChange }: NotionBlockEdito
               {block.type === 'database-view' && (
                 <div className="notion-embedded-db-card">
                   <div className="notion-embedded-db-content">
-                    {block.databaseKind === 'items' ? (
+                    {block.databaseId ? (
+                      <DatabasePage databaseId={block.databaseId} initialViewId={block.viewId} locale={locale} />
+                    ) : (block.databaseKind ?? block.content) === 'items' ? (
                       <ObjectWorkspace createRequest={0} locale={locale} objectKind="item" />
-                    ) : block.databaseKind === 'people' ? (
+                    ) : (block.databaseKind ?? block.content) === 'people' ? (
                       <ObjectWorkspace createRequest={0} locale={locale} objectKind="person" />
-                    ) : block.databaseKind === 'transactions' ? (
+                    ) : (block.databaseKind ?? block.content) === 'transactions' ? (
                       <TransactionsWorkspace createRequest={0} locale={locale} />
-                    ) : block.databaseKind === 'accounts' ? (
+                    ) : (block.databaseKind ?? block.content) === 'accounts' ? (
                       <AccountsWorkspace createRequest={0} locale={locale} />
                     ) : (
                       <ReconciliationWorkspace locale={locale} />

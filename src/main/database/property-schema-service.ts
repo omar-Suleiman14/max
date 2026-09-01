@@ -3,6 +3,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import type { PropertyType, TypeConversionPreview, WorkspaceProperty } from '../../shared/property-contract';
 import { WorkspaceDomainError } from '../../shared/workspace-contract';
 import type { PropertyRepository } from './property-repository';
+import { dateValueToText, valueToText } from './value-utils';
 import type { DependencyService } from './dependency-service';
 
 type RawValueRow = Readonly<{
@@ -187,7 +188,7 @@ export class PropertySchemaService {
     }
 
     if (toType === 'date') {
-      const d = new Date(String(val));
+      const d = new Date(dateValueToText(val));
       return !Number.isNaN(d.getTime());
     }
 
@@ -198,7 +199,7 @@ export class PropertySchemaService {
     if (val === null || val === undefined) return null;
 
     if (toType === 'text' || toType === 'url' || toType === 'email' || toType === 'phone') {
-      return String(val);
+      return valueToText(val);
     }
 
     if (toType === 'number') {
@@ -216,7 +217,7 @@ export class PropertySchemaService {
     }
 
     if (toType === 'date') {
-      const d = new Date(String(val));
+      const d = new Date(dateValueToText(val));
       return !Number.isNaN(d.getTime()) ? d.toISOString().slice(0, 10) : null;
     }
 
@@ -234,8 +235,8 @@ export class PropertySchemaService {
       if (targetType === 'number') numVal = Number(val);
       else if (targetType === 'money') moneyMinor = Math.round(Number(val) * 100);
       else if (targetType === 'checkbox') boolVal = val ? 1 : 0;
-      else if (targetType === 'date') dateStart = String(val);
-      else textVal = String(val);
+      else if (targetType === 'date') dateStart = dateValueToText(val);
+      else textVal = valueToText(val);
     }
 
     this.#database

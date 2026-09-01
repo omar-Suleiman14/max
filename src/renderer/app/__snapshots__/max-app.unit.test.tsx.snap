@@ -62,6 +62,51 @@ exports[`Max shell > renders the English shell and navigates to Databases worksp
         </kbd>
       </button>
       <button
+        class="button button--ghost"
+        type="button"
+      >
+        <span
+          class="button__icon"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-workflow"
+            fill="none"
+            height="16"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="16"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <rect
+              height="8"
+              rx="2"
+              width="8"
+              x="3"
+              y="3"
+            />
+            <path
+              d="M7 11v4a2 2 0 0 0 2 2h4"
+            />
+            <rect
+              height="8"
+              rx="2"
+              width="8"
+              x="13"
+              y="13"
+            />
+          </svg>
+        </span>
+        <span
+          class="button__label"
+        >
+          Workflows
+        </span>
+      </button>
+      <button
         class="button button--ghost quick-entry-trigger"
         type="button"
       >
@@ -792,6 +837,51 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
           Ctrl
            F
         </kbd>
+      </button>
+      <button
+        class="button button--ghost"
+        type="button"
+      >
+        <span
+          class="button__icon"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-workflow"
+            fill="none"
+            height="16"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="16"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <rect
+              height="8"
+              rx="2"
+              width="8"
+              x="3"
+              y="3"
+            />
+            <path
+              d="M7 11v4a2 2 0 0 0 2 2h4"
+            />
+            <rect
+              height="8"
+              rx="2"
+              width="8"
+              x="13"
+              y="13"
+            />
+          </svg>
+        </span>
+        <span
+          class="button__label"
+        >
+          سير العمل
+        </span>
       </button>
       <button
         class="button button--ghost quick-entry-trigger"
@@ -1608,127 +1698,327 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
                 <div
                   class="notion-embedded-db-content"
                 >
-                  <div
-                    class="reconciliation-workspace"
+                  <section
+                    class="object-workspace"
                   >
                     <div
-                      class="reconciliation-toolbar"
-                    >
-                      <div>
-                        <h2>
-                          مطابقة الخزينة اليومية
-                        </h2>
-                        <p
-                          class="step-subtitle"
-                        >
-                          نقدية البداية + المقبوضات والمبيعات - المصروفات = النقدية المتوقعة. طابق النقدية الفعلية بعد الجرد.
-                        </p>
-                      </div>
-                      <button
-                        class="button button--primary"
-                        type="button"
-                      >
-                        <span
-                          class="button__icon"
-                        >
-                          <svg
-                            aria-hidden="true"
-                            class="lucide lucide-lock-open"
-                            fill="none"
-                            height="16"
-                            stroke="currentColor"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            viewBox="0 0 24 24"
-                            width="16"
-                            xmlns="http://www.w3.org/2000/svg"
-                          >
-                            <rect
-                              height="11"
-                              rx="2"
-                              ry="2"
-                              width="18"
-                              x="3"
-                              y="11"
-                            />
-                            <path
-                              d="M7 11V7a5 5 0 0 1 9.9-1"
-                            />
-                          </svg>
-                        </span>
-                        <span
-                          class="button__label"
-                        >
-                          بدء اليوم / فتح الخزينة
-                        </span>
-                      </button>
-                    </div>
-                    <section
-                      aria-busy="false"
-                      class="active-drawer-card"
+                      class="object-layout"
                     >
                       <div
-                        class="active-drawer-head"
+                        aria-busy="false"
+                        class="record-panel"
                       >
                         <div
-                          class="drawer-status-pill"
-                          data-open="false"
+                          class="notion-view-bar"
                         >
-                          <svg
-                            aria-hidden="true"
-                            class="lucide lucide-lock"
-                            fill="none"
-                            height="16"
-                            stroke="currentColor"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            viewBox="0 0 24 24"
-                            width="16"
-                            xmlns="http://www.w3.org/2000/svg"
+                          <div
+                            class="notion-view-bar__tabs"
                           >
-                            <rect
-                              height="11"
-                              rx="2"
-                              ry="2"
-                              width="18"
-                              x="3"
-                              y="11"
-                            />
-                            <path
-                              d="M7 11V7a5 5 0 0 1 10 0v4"
-                            />
-                          </svg>
-                          <strong>
-                            مغلقة
-                          </strong>
+                            <div
+                              class="notion-view-tab-wrapper"
+                            >
+                              <button
+                                class="notion-view-tab"
+                                data-active="true"
+                                type="button"
+                              >
+                                <svg
+                                  aria-hidden="true"
+                                  class="lucide lucide-table-properties"
+                                  fill="none"
+                                  height="14"
+                                  stroke="currentColor"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  stroke-width="2"
+                                  viewBox="0 0 24 24"
+                                  width="14"
+                                  xmlns="http://www.w3.org/2000/svg"
+                                >
+                                  <path
+                                    d="M15 3v18"
+                                  />
+                                  <rect
+                                    height="18"
+                                    rx="2"
+                                    width="18"
+                                    x="3"
+                                    y="3"
+                                  />
+                                  <path
+                                    d="M21 9H3"
+                                  />
+                                  <path
+                                    d="M21 15H3"
+                                  />
+                                </svg>
+                                <span>
+                                  طريقة العرض الافتراضية
+                                </span>
+                              </button>
+                              <button
+                                aria-label="خيارات العرض"
+                                class="notion-view-tab-menu"
+                                type="button"
+                              >
+                                <svg
+                                  aria-hidden="true"
+                                  class="lucide lucide-chevron-down"
+                                  fill="none"
+                                  height="12"
+                                  stroke="currentColor"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  stroke-width="2"
+                                  viewBox="0 0 24 24"
+                                  width="12"
+                                  xmlns="http://www.w3.org/2000/svg"
+                                >
+                                  <path
+                                    d="m6 9 6 6 6-6"
+                                  />
+                                </svg>
+                              </button>
+                            </div>
+                            <button
+                              aria-label="حفظ طريقة العرض"
+                              class="notion-view-tab-add"
+                              title="حفظ طريقة العرض"
+                              type="button"
+                            >
+                              <svg
+                                aria-hidden="true"
+                                class="lucide lucide-plus"
+                                fill="none"
+                                height="14"
+                                stroke="currentColor"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                viewBox="0 0 24 24"
+                                width="14"
+                                xmlns="http://www.w3.org/2000/svg"
+                              >
+                                <path
+                                  d="M5 12h14"
+                                />
+                                <path
+                                  d="M12 5v14"
+                                />
+                              </svg>
+                            </button>
+                          </div>
+                          <div
+                            class="notion-view-bar__actions"
+                          >
+                            <button
+                              aria-expanded="false"
+                              class="notion-db-tool-btn"
+                              data-active="false"
+                              title="تصفية"
+                              type="button"
+                            >
+                              <svg
+                                aria-hidden="true"
+                                class="lucide lucide-funnel"
+                                fill="none"
+                                height="14"
+                                stroke="currentColor"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                viewBox="0 0 24 24"
+                                width="14"
+                                xmlns="http://www.w3.org/2000/svg"
+                              >
+                                <path
+                                  d="M10 20a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341L21.74 4.67A1 1 0 0 0 21 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14z"
+                                />
+                              </svg>
+                              <span>
+                                تصفية
+                              </span>
+                            </button>
+                            <button
+                              aria-expanded="false"
+                              class="notion-db-tool-btn"
+                              data-active="false"
+                              title="ترتيب"
+                              type="button"
+                            >
+                              <svg
+                                aria-hidden="true"
+                                class="lucide lucide-arrow-up-down"
+                                fill="none"
+                                height="14"
+                                stroke="currentColor"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                viewBox="0 0 24 24"
+                                width="14"
+                                xmlns="http://www.w3.org/2000/svg"
+                              >
+                                <path
+                                  d="m21 16-4 4-4-4"
+                                />
+                                <path
+                                  d="M17 20V4"
+                                />
+                                <path
+                                  d="m3 8 4-4 4 4"
+                                />
+                                <path
+                                  d="M7 4v16"
+                                />
+                              </svg>
+                              <span>
+                                ترتيب
+                              </span>
+                            </button>
+                            <button
+                              aria-label="خيارات الخصائص"
+                              class="notion-db-tool-btn"
+                              title="الخصائص"
+                              type="button"
+                            >
+                              <svg
+                                aria-hidden="true"
+                                class="lucide lucide-sliders-horizontal"
+                                fill="none"
+                                height="14"
+                                stroke="currentColor"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                viewBox="0 0 24 24"
+                                width="14"
+                                xmlns="http://www.w3.org/2000/svg"
+                              >
+                                <path
+                                  d="M10 5H3"
+                                />
+                                <path
+                                  d="M12 19H3"
+                                />
+                                <path
+                                  d="M14 3v4"
+                                />
+                                <path
+                                  d="M16 17v4"
+                                />
+                                <path
+                                  d="M21 12h-9"
+                                />
+                                <path
+                                  d="M21 19h-5"
+                                />
+                                <path
+                                  d="M21 5h-7"
+                                />
+                                <path
+                                  d="M8 10v4"
+                                />
+                                <path
+                                  d="M8 12H3"
+                                />
+                              </svg>
+                              <span>
+                                الخصائص
+                              </span>
+                            </button>
+                            <button
+                              class="notion-db-tool-btn"
+                              title="القوالب"
+                              type="button"
+                            >
+                              <svg
+                                aria-hidden="true"
+                                class="lucide lucide-file-text"
+                                fill="none"
+                                height="14"
+                                stroke="currentColor"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                viewBox="0 0 24 24"
+                                width="14"
+                                xmlns="http://www.w3.org/2000/svg"
+                              >
+                                <path
+                                  d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+                                />
+                                <path
+                                  d="M14 2v5a1 1 0 0 0 1 1h5"
+                                />
+                                <path
+                                  d="M10 9H8"
+                                />
+                                <path
+                                  d="M16 13H8"
+                                />
+                                <path
+                                  d="M16 17H8"
+                                />
+                              </svg>
+                              <span>
+                                القوالب
+                              </span>
+                            </button>
+                            <div
+                              class="notion-db-new-split-btn"
+                            >
+                              <button
+                                class="notion-db-new-btn"
+                                type="button"
+                              >
+                                <span>
+                                  جديد
+                                </span>
+                              </button>
+                              <button
+                                aria-label="New options"
+                                class="notion-db-new-dropdown-btn"
+                                type="button"
+                              >
+                                <svg
+                                  aria-hidden="true"
+                                  class="lucide lucide-chevron-down"
+                                  fill="none"
+                                  height="13"
+                                  stroke="currentColor"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  stroke-width="2.5"
+                                  viewBox="0 0 24 24"
+                                  width="13"
+                                  xmlns="http://www.w3.org/2000/svg"
+                                >
+                                  <path
+                                    d="m6 9 6 6 6-6"
+                                  />
+                                </svg>
+                              </button>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                      <div
-                        class="drawer-closed-banner"
-                      >
-                        <p>
-                          ابدأ اليوم بتأكيد رصيد الخزينة الافتتاحي ومتابعة العمليات.
-                        </p>
-                        <button
-                          class="button button--primary"
-                          type="button"
+                        <div
+                          class="object-empty"
                         >
-                          <span
-                            class="button__icon"
+                          <div
+                            class="empty-state__icon"
                           >
                             <svg
                               aria-hidden="true"
                               class="lucide lucide-plus"
                               fill="none"
-                              height="16"
+                              height="25"
                               stroke="currentColor"
                               stroke-linecap="round"
                               stroke-linejoin="round"
                               stroke-width="2"
                               viewBox="0 0 24 24"
-                              width="16"
+                              width="25"
                               xmlns="http://www.w3.org/2000/svg"
                             >
                               <path
@@ -1738,86 +2028,27 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
                                 d="M12 5v14"
                               />
                             </svg>
-                          </span>
-                          <span
-                            class="button__label"
+                          </div>
+                          <h2>
+                            لا توجد أصناف بعد
+                          </h2>
+                          <p>
+                            أضف أول سجل، أو جهّز الحقول التي تريد ظهورها في قاعدة البيانات.
+                          </p>
+                          <button
+                            class="button button--primary"
+                            type="button"
                           >
-                            بدء اليوم / فتح الخزينة
-                          </span>
-                        </button>
+                            <span
+                              class="button__label"
+                            >
+                              إضافة صنف
+                            </span>
+                          </button>
+                        </div>
                       </div>
-                    </section>
-                    <section
-                      class="reconciliation-history-section"
-                    >
-                      <div
-                        class="section-title"
-                      >
-                        <svg
-                          aria-hidden="true"
-                          class="lucide lucide-rotate-ccw-clock"
-                          fill="none"
-                          height="18"
-                          stroke="currentColor"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          viewBox="0 0 24 24"
-                          width="18"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path
-                            d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"
-                          />
-                          <path
-                            d="M3 3v5h5"
-                          />
-                          <path
-                            d="M12 7v5l4 2"
-                          />
-                        </svg>
-                        <h3>
-                          سجل المطابقات اليومية
-                        </h3>
-                      </div>
-                      <div
-                        class="object-empty"
-                      >
-                        <svg
-                          aria-hidden="true"
-                          class="lucide lucide-scale"
-                          fill="none"
-                          height="24"
-                          stroke="currentColor"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          viewBox="0 0 24 24"
-                          width="24"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path
-                            d="M12 3v18"
-                          />
-                          <path
-                            d="m19 8 3 8a5 5 0 0 1-6 0zV7"
-                          />
-                          <path
-                            d="M3 7h1a17 17 0 0 0 8-2 17 17 0 0 0 8 2h1"
-                          />
-                          <path
-                            d="m5 8 3 8a5 5 0 0 1-6 0zV7"
-                          />
-                          <path
-                            d="M7 21h10"
-                          />
-                        </svg>
-                        <p>
-                          لا توجد جلسات مطابقة سابقة.
-                        </p>
-                      </div>
-                    </section>
-                  </div>
+                    </div>
+                  </section>
                 </div>
               </div>
             </div>
