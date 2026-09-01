@@ -1,5 +1,6 @@
-import * as LucideIcons from 'lucide-react';
-import type { ComponentType, CSSProperties } from 'react';
+import type { CSSProperties } from 'react';
+
+import { PAGE_ICON_COMPONENTS } from './page-icon-registry';
 
 type PageIconRendererProps = Readonly<{
   className?: string;
@@ -27,9 +28,7 @@ export function PageIconRenderer({
   if (icon.startsWith('lucide:')) {
     const raw = icon.slice(7);
     const [iconName, colorHex] = raw.split('#');
-    const IconComponent = (LucideIcons as Record<string, unknown>)[iconName ?? ''] as
-      | ComponentType<{ className?: string; size?: number; strokeWidth?: number; style?: CSSProperties }>
-      | undefined;
+    const IconComponent = PAGE_ICON_COMPONENTS[iconName ?? ''];
 
     if (IconComponent) {
       const iconStyle: CSSProperties = {

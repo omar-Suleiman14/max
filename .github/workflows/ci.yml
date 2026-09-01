@@ -61,3 +61,6 @@ jobs:
 
       - name: Build native application bundle
         run: npm run build
+
+      - name: Verify production size budgets
+        run: npm run verify:size

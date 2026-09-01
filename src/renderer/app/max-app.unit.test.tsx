@@ -543,7 +543,7 @@ describe('Max shell', () => {
     expect(document.documentElement).toHaveAttribute('dir', 'ltr');
 
     await user.click(screen.getByRole('button', { name: 'Databases' }));
-    expect(screen.getAllByRole('heading', { name: 'Databases' })[0]).toBeInTheDocument();
+    expect((await screen.findAllByRole('heading', { name: 'Databases' }))[0]).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: 'Filter' })).toBeInTheDocument();
     expect(container.querySelector('.app-frame')).toMatchSnapshot();
   });
@@ -553,7 +553,7 @@ describe('Max shell', () => {
     const { container } = render(<MaxApp />);
     await screen.findByRole('button', { name: 'Home' });
     await user.click(screen.getByRole('button', { name: 'Settings' }));
-    await user.click(screen.getByRole('radio', { name: /^العربية/ }));
+    await user.click(await screen.findByRole('radio', { name: /^العربية/ }));
 
     expect(document.documentElement).toHaveAttribute('lang', 'ar');
     expect(document.documentElement).toHaveAttribute('dir', 'rtl');
@@ -574,7 +574,7 @@ describe('Max shell', () => {
     fireEvent.keyDown(document, { ctrlKey: true, key: 'k' });
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     fireEvent.keyDown(document, { ctrlKey: true, key: 'f' });
-    const search = screen.getByRole('searchbox', { name: 'Universal Search' });
+    const search = await screen.findByRole('searchbox', { name: 'Universal Search' });
     expect(search).toHaveFocus();
     await user.keyboard('{Escape}');
     expect(search).not.toBeInTheDocument();
@@ -587,12 +587,12 @@ describe('Max shell', () => {
 
     const settings = screen.getByRole('button', { name: 'Settings' });
     await user.click(settings);
-    expect(screen.getAllByRole('button', { name: 'Back to app' })[0]).toBeInTheDocument();
-    expect(screen.getByRole('navigation', { name: 'Settings sections' })).toBeInTheDocument();
+    expect((await screen.findAllByRole('button', { name: 'Back to app' }))[0]).toBeInTheDocument();
+    expect(await screen.findByRole('navigation', { name: 'Settings sections' })).toBeInTheDocument();
     const appearanceSection = screen.getByRole('button', { name: 'Appearance' });
     await user.click(appearanceSection);
     expect(appearanceSection).toHaveAttribute('aria-current', 'page');
-    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' }));
     await user.click(screen.getByRole('button', { name: 'Prepare demo store' }));
     await user.click(screen.getByRole('button', { name: 'Confirm reset' }));
     await waitFor(() => expect(shopApi.resetDemoData).toHaveBeenCalledWith('en'));
