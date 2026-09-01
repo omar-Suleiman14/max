@@ -56,7 +56,7 @@ import type { CompleteOnboardingDraft, ShopMetadata } from '../../shared/bluepri
 import type { QuickEntryDraft, QuickEntryPriceSuggestion } from '../../shared/quick-entry-contract';
 import type { AccountDefinition } from '../../shared/account-contract';
 import type { ConfigurableRecord, PropertyDefinition, PropertyDraft } from '../../shared/object-contract';
-import { calculatePricing, type PricingProfile, type PricingProfileDraft, type PricingQuoteInput } from '../../shared/pricing-contract';
+import { calculatePricing, type PricingProfile, type PricingProfileDraft, type PricingService } from '../../shared/pricing-contract';
 
 let shopMetadataState: ShopMetadata = {
   backupSchedule: 'daily',
@@ -191,12 +191,18 @@ const transactionsApi = {
 
 const quickEntryApi = {
   getSuggestion: vi.fn<() => Promise<QuickEntryPriceSuggestion>>(() => Promise.resolve({ amount: null, source: 'none' as const })),
-  quotePricing: vi.fn((input: any) => {
-    const amt = input?.totalAmount ?? input?.amount;
-    if (!Number.isFinite(amt) || amt <= 0 || !pricingProfiles[0]) {
-      return Promise.resolve({ error: 'invalid-amount', ok: false as const });
-    }
-    return Promise.resolve({ ok: true as const, value: calculatePricing(pricingProfiles[0]!, { ...input, amount: amt }, '2026-08-31') });
+  quotePricing: vi.fn((draft: QuickEntryDraft) => {
+    const profile = pricingProfiles.find(({ id }) => id === draft.pricingProfileId);
+    if (!profile) return Promise.resolve({ ok: true as const, value: null });
+    return Promise.resolve({
+      ok: true as const,
+      value: calculatePricing(profile, {
+        amount: draft.totalAmount,
+        inputMode: draft.pricingInputMode,
+        overrides: draft.pricingOverrides,
+        providerCost: draft.providerCost,
+      }, '2026-08-31'),
+    });
   }),
   submit: vi.fn((draft: QuickEntryDraft) =>
     Promise.resolve({
@@ -217,35 +223,30 @@ const quickEntryApi = {
 };
 
 let pricingProfiles: PricingProfile[] = [];
+let pricingServices: PricingService[] = [];
+const emptyCatalogApi = {
+  archive: vi.fn(() => Promise.resolve({ ok: true as const, value: null })),
+  create: vi.fn(),
+  list: vi.fn(() => Promise.resolve([])),
+  update: vi.fn(),
+};
 const pricingApi = {
   archive: vi.fn((id: string) => {
     pricingProfiles = pricingProfiles.filter((profile) => profile.id !== id);
     return Promise.resolve({ ok: true as const, value: null });
   }),
-  channels: {
-    archive: vi.fn(() => Promise.resolve({ ok: true as const, value: null })),
-    create: vi.fn((draft: any) => Promise.resolve({ ok: true as const, value: { ...draft, createdAt: '2026-08-31', id: 'chan-1', updatedAt: '2026-08-31' } })),
-    list: vi.fn((): Promise<any[]> => Promise.resolve([])),
-    update: vi.fn((id: string, draft: any) => Promise.resolve({ ok: true as const, value: { ...draft, createdAt: '2026-08-31', id, updatedAt: '2026-08-31' } })),
-  },
   create: vi.fn((draft: PricingProfileDraft) => {
     const profile: PricingProfile = { ...draft, createdAt: '2026-08-31', id: `pricing-${pricingProfiles.length + 1}`, updatedAt: '2026-08-31' };
     pricingProfiles = [...pricingProfiles, profile];
     return Promise.resolve({ ok: true as const, value: profile });
   }),
   list: vi.fn(() => Promise.resolve(pricingProfiles)),
-  providers: {
-    archive: vi.fn(() => Promise.resolve({ ok: true as const, value: null })),
-    create: vi.fn((draft: any) => Promise.resolve({ ok: true as const, value: { ...draft, createdAt: '2026-08-31', id: 'prov-1', updatedAt: '2026-08-31' } })),
-    list: vi.fn((): Promise<any[]> => Promise.resolve([])),
-    update: vi.fn((id: string, draft: any) => Promise.resolve({ ok: true as const, value: { ...draft, createdAt: '2026-08-31', id, updatedAt: '2026-08-31' } })),
-  },
+  channels: emptyCatalogApi,
+  providers: emptyCatalogApi,
   quote: vi.fn(),
   services: {
-    archive: vi.fn(() => Promise.resolve({ ok: true as const, value: null })),
-    create: vi.fn((draft: any) => Promise.resolve({ ok: true as const, value: { ...draft, createdAt: '2026-08-31', id: 'serv-1', updatedAt: '2026-08-31' } })),
-    list: vi.fn((): Promise<any[]> => Promise.resolve([])),
-    update: vi.fn((id: string, draft: any) => Promise.resolve({ ok: true as const, value: { ...draft, createdAt: '2026-08-31', id, updatedAt: '2026-08-31' } })),
+    ...emptyCatalogApi,
+    list: vi.fn(() => Promise.resolve(pricingServices)),
   },
   update: vi.fn((id: string, draft: PricingProfileDraft) => {
     const profile: PricingProfile = { ...draft, createdAt: '2026-08-31', id, updatedAt: '2026-08-31' };
@@ -428,13 +429,25 @@ beforeEach(() => {
   shopApi.seedDemoData.mockClear();
   accountsApi.list.mockClear();
   accountsApi.list.mockResolvedValue([]);
+  objectApi.listProperties.mockResolvedValue([]);
+  objectApi.listRecords.mockResolvedValue([]);
   transactionsApi.list.mockClear();
+  quickEntryApi.getSuggestion.mockReset();
+  quickEntryApi.getSuggestion.mockResolvedValue({ amount: null, source: 'none' as const });
+  quickEntryApi.quotePricing.mockClear();
   quickEntryApi.submit.mockClear();
   pricingProfiles = [];
+  pricingServices = [];
   pricingApi.archive.mockClear();
   pricingApi.create.mockClear();
   pricingApi.list.mockClear();
   pricingApi.quote.mockClear();
+  pricingApi.services.list.mockClear();
+  pricingApi.services.list.mockImplementation(() => Promise.resolve(pricingServices));
+  pricingApi.providers.list.mockClear();
+  pricingApi.providers.list.mockResolvedValue([]);
+  pricingApi.channels.list.mockClear();
+  pricingApi.channels.list.mockResolvedValue([]);
   pricingApi.update.mockClear();
   searchApi.query.mockClear();
   reconciliationApi.getCurrentSession.mockClear();
@@ -678,7 +691,7 @@ describe('Max shell', () => {
   it('prefills a selected sale item note and suggested amount', async () => {
     const user = userEvent.setup();
     const item = { createdAt: '2026-08-30', id: 'priced-item', label: 'Screen Protector', objectKind: 'item' as const, updatedAt: '2026-08-30', values: {} };
-    objectApi.listRecords.mockResolvedValueOnce([item]).mockResolvedValueOnce([]);
+    objectApi.listRecords.mockResolvedValue([item]);
     accountsApi.list.mockResolvedValueOnce([{ accountType: 'cash', balance: 0, createdAt: '2026-08-30', id: 'cash', initialBalance: 0, name: 'Cash', position: 0, updatedAt: '2026-08-30' }]);
     quickEntryApi.getSuggestion.mockResolvedValueOnce({ amount: 75, source: 'item-price' as const });
     render(<MaxApp />);
@@ -701,10 +714,11 @@ describe('Max shell', () => {
       createdAt: '2026-08-31', currency: 'EGP', id: 'recharge', inputMode: 'customer_pays', name: 'Mobile recharge', service: 'Recharge', updatedAt: '2026-08-31',
     };
     pricingProfiles = [recharge];
-    pricingApi.services.list.mockResolvedValue([{
-      active: true, category: 'Recharge', createdAt: '2026-08-31', defaultInputMode: 'customer_pays', id: 'srv-recharge', inputLabel: 'Recharge amount', inputModes: ['customer_pays'], name: 'Mobile Recharge', operation: 'sale', paymentAccountTypes: ['cash'], pricingProfileId: 'recharge', updatedAt: '2026-08-31',
-    }]);
-    pricingApi.quote.mockImplementation((_profileId: string, input: PricingQuoteInput) => Promise.resolve({ ok: true as const, value: calculatePricing(recharge, input, '2026-08-31') }));
+    pricingServices = [{
+      active: true, category: 'Recharge', createdAt: '2026-08-31', defaultInputMode: 'customer_pays', id: 'recharge-service',
+      inputLabel: 'Customer payment', inputModes: ['customer_pays'], name: 'Mobile recharge', operation: 'sale',
+      paymentAccountTypes: ['cash'], pricingProfileId: recharge.id, updatedAt: '2026-08-31',
+    }];
     accountsApi.list.mockResolvedValue([{
       accountType: 'cash', balance: 0, createdAt: '2026-08-31', id: 'cash', initialBalance: 0, name: 'Cash', position: 0, updatedAt: '2026-08-31',
     }]);
@@ -712,7 +726,7 @@ describe('Max shell', () => {
     render(<MaxApp />);
     await screen.findByRole('button', { name: 'Home' });
     await user.keyboard('{Control>}s{/Control}');
-    await user.selectOptions(await screen.findByLabelText('Service'), 'srv-recharge');
+    await user.selectOptions(await screen.findByLabelText('Service'), 'recharge-service');
     fireEvent.change(screen.getAllByPlaceholderText('0.00')[0]!, { target: { value: '100' } });
 
     expect(await screen.findByText('70.00')).toBeInTheDocument();
@@ -721,6 +735,7 @@ describe('Max shell', () => {
     await waitFor(() => expect(quickEntryApi.submit).toHaveBeenCalledWith(expect.objectContaining({
       pricingInputMode: 'customer_pays',
       pricingProfileId: 'recharge',
+      pricingServiceId: 'recharge-service',
       totalAmount: 100,
     })));
   });
