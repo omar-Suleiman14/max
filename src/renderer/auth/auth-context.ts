@@ -2,6 +2,7 @@ import { createContext, useContext } from 'react';
 
 export type AuthContextValue = {
   getToken: () => Promise<string | null>;
+  isAvailable: boolean;
   isConfigured: boolean;
   isSignedIn: boolean;
   userEmail?: string;
@@ -11,6 +12,7 @@ export type AuthContextValue = {
 
 export const AuthContext = createContext<AuthContextValue>({
   getToken: () => Promise.resolve(null),
+  isAvailable: false,
   isConfigured: false,
   isSignedIn: false,
 });

@@ -1,4 +1,5 @@
 const { copyFileSync, existsSync, mkdirSync, readdirSync } = require('node:fs');
+const { homedir } = require('node:os');
 const { dirname, join } = require('node:path');
 const { spawnSync } = require('node:child_process');
 
@@ -66,7 +67,14 @@ function prepareElectronArchive() {
   const stableArchive = join(electronZipRoot, archiveName);
   if (existsSync(stableArchive)) return;
 
-  const cachedArchive = findFile(electronCacheRoot, archiveName);
+  const platformCacheRoot = process.platform === 'win32'
+    ? process.env.LOCALAPPDATA && join(process.env.LOCALAPPDATA, 'electron', 'Cache')
+    : process.platform === 'darwin'
+      ? join(homedir(), 'Library', 'Caches', 'electron')
+      : join(process.env.XDG_CACHE_HOME ?? join(homedir(), '.cache'), 'electron');
+  const cacheRoots = [electronCacheRoot, process.env.ELECTRON_CACHE, platformCacheRoot]
+    .filter((value, index, values) => typeof value === 'string' && values.indexOf(value) === index);
+  const cachedArchive = cacheRoots.map((root) => findFile(root, archiveName)).find(Boolean);
   if (!cachedArchive) {
     throw new Error(`Electron archive ${archiveName} is missing after runtime setup.`);
   }
