@@ -198,6 +198,18 @@ export type WorkspaceRecordDraft = Readonly<{
   title: string;
 }>;
 
+export type WorkspaceRecordTemplate = Readonly<{
+  contentJson: string;
+  createdAt: string;
+  databaseId: string;
+  defaults: Readonly<Record<string, unknown>>;
+  icon?: string | null;
+  id: string;
+  name: string;
+  positionKey: string;
+  updatedAt: string;
+}>;
+
 export type WorkspaceRecordPatch = Readonly<{
   contentJson?: string | null;
   icon?: string | null;

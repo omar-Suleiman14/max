@@ -15,6 +15,8 @@ import { useCallback, useEffect, useState } from 'react';
 import type { BackupMetadata, BackupVerificationResult, CloudBackupMetadata, CloudBackupStatus } from '../../shared/backup-contract';
 import type { Locale } from '../app/i18n';
 import { useAuth } from '../auth/auth-context';
+import { AuthWidget } from '../auth/auth-provider';
+import { readCloudBackupEnabled, writeCloudBackupEnabled } from '../auth/cloud-backup-preference';
 import { Button } from '../ui/button';
 import { FocusedOverlay } from '../ui/focused-overlay';
 import { backupCopy } from './backup-i18n';
@@ -41,6 +43,7 @@ export function BackupManager({ locale }: BackupManagerProps) {
   const [notice, setNotice] = useState<{ message: string; type: 'error' | 'success' }>();
   const [cloudBackups, setCloudBackups] = useState<readonly CloudBackupMetadata[]>([]);
   const [cloudStatus, setCloudStatus] = useState<CloudBackupStatus>({ configured: false });
+  const [cloudEnabled, setCloudEnabled] = useState(() => readCloudBackupEnabled(window.localStorage));
   const [restoreConfirmCloud, setRestoreConfirmCloud] = useState<CloudBackupMetadata>();
 
   const loadBackups = useCallback(async () => {
@@ -62,16 +65,19 @@ export function BackupManager({ locale }: BackupManagerProps) {
   const loadCloud = useCallback(async () => {
     const status = await window.maxApi.cloudBackups.getStatus();
     setCloudStatus(status);
-    if (!status.configured || !auth.isSignedIn) return;
+    if (!cloudEnabled || !status.configured || !auth.isSignedIn) {
+      setCloudBackups([]);
+      return;
+    }
     const token = await auth.getToken();
     if (!token) return;
     const result = await window.maxApi.cloudBackups.list(token);
     if (result.ok) setCloudBackups(result.value);
-  }, [auth]);
+  }, [auth, cloudEnabled]);
 
   useEffect(() => {
     void loadCloud();
-    if (!auth.isSignedIn) return;
+    if (!cloudEnabled || !auth.isSignedIn) return;
     void Promise.all([auth.getToken(), window.maxApi.shop.getMetadata()]).then(async ([token, metadata]) => {
       if (!token) return;
       const result = await window.maxApi.cloudBackups.runScheduled(token, metadata.backupSchedule);
@@ -80,13 +86,13 @@ export function BackupManager({ locale }: BackupManagerProps) {
         await loadCloud();
       }
     }).catch(() => undefined);
-  }, [auth, loadBackups, loadCloud]);
+  }, [auth, cloudEnabled, loadBackups, loadCloud]);
 
   async function handleCreateBackup() {
     setCreating(true);
     setNotice(undefined);
     try {
-      const token = cloudStatus.configured && auth.isSignedIn ? await auth.getToken() : null;
+      const token = cloudEnabled && cloudStatus.configured && auth.isSignedIn ? await auth.getToken() : null;
       if (token) {
         const result = await window.maxApi.cloudBackups.create(token, 'manual');
         if (!result.ok) {
@@ -269,19 +275,47 @@ export function BackupManager({ locale }: BackupManagerProps) {
       </div>
 
       <div className="backup-history backup-history--cloud">
-        <div className="section-title">
-          <Cloud aria-hidden="true" size={16} />
-          <h4>{locale === 'ar' ? 'Max للنسخ السحابي' : 'Max Cloud Backup'}</h4>
+        <div className="cloud-backup-heading">
+          <div className="section-title">
+            <Cloud aria-hidden="true" size={16} />
+            <div>
+              <h4>{locale === 'ar' ? 'النسخ الاحتياطي السحابي' : 'Cloud backup'}</h4>
+              <small>{locale === 'ar' ? 'اختياري. تظل قاعدة البيانات المحلية هي المصدر الأساسي.' : 'Optional. Your local database remains authoritative.'}</small>
+            </div>
+          </div>
+          <button
+            aria-checked={cloudEnabled}
+            aria-label={locale === 'ar' ? 'تفعيل النسخ الاحتياطي السحابي' : 'Enable cloud backup'}
+            className="settings-switch"
+            data-checked={cloudEnabled}
+            disabled={!cloudStatus.configured}
+            onClick={() => {
+              const next = !cloudEnabled;
+              setCloudEnabled(next);
+              writeCloudBackupEnabled(next);
+            }}
+            role="switch"
+            type="button"
+          >
+            <span />
+          </button>
         </div>
-        <p className="settings-muted">
-          {!cloudStatus.configured
-            ? (locale === 'ar' ? 'النسخ السحابي غير مفعّل في هذا الإصدار. النسخ المحلية تعمل كالمعتاد.' : 'Cloud backup is not enabled in this build. Local backups continue to work normally.')
-            : !auth.isSignedIn
-              ? (locale === 'ar' ? 'سجّل الدخول من الشريط الجانبي لتفعيل النسخ السحابي.' : 'Sign in from the sidebar to enable cloud backup.')
-              : (locale === 'ar' ? 'جاهز. كل نسخة سحابية تخص حسابك فقط.' : 'Ready. Cloud backups are private to your account.')}
-          {cloudStatus.lastSuccessfulCloudBackupAt && ` ${locale === 'ar' ? 'آخر نسخة:' : 'Last backup:'} ${new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(cloudStatus.lastSuccessfulCloudBackupAt))}`}
-        </p>
-        {cloudBackups.length > 0 && (
+        {!cloudStatus.configured || !auth.isAvailable ? (
+          <p className="settings-muted">{locale === 'ar' ? 'هذه النسخة غير مهيأة للنسخ السحابي. تظل النسخ المحلية متاحة بالكامل.' : 'This build is not configured for cloud backup. Local backup remains fully available.'}</p>
+        ) : !cloudEnabled ? (
+          <p className="settings-muted">{locale === 'ar' ? 'لن يطلب Max حسابًا ولن يتصل بخدمة السحابة حتى تفعّل هذا الخيار.' : 'Max will not ask for an account or contact the cloud until you turn this on.'}</p>
+        ) : (
+          <div className="cloud-backup-auth">
+            <AuthWidget locale={locale} />
+            <p className="settings-muted">
+              {auth.isSignedIn
+                ? (locale === 'ar' ? 'جاهز. النسخ السحابية مشفرة وخاصة بحسابك.' : 'Ready. Cloud backups are encrypted and private to your account.')
+                : (locale === 'ar' ? 'سجّل الدخول لتوصيل هذه المساحة بالنسخ السحابي.' : 'Sign in to connect this workspace to cloud backup.')}
+              {cloudStatus.lastSuccessfulCloudBackupAt && ` ${locale === 'ar' ? 'آخر نسخة:' : 'Last backup:'} ${new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(cloudStatus.lastSuccessfulCloudBackupAt))}`}
+            </p>
+          </div>
+        )}
+        {cloudEnabled && auth.isSignedIn && cloudBackups.length > 0 && (
           <div className="settings-trash-list">
             {cloudBackups.map((backup) => (
               <div key={backup.id}>

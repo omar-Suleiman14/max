@@ -15,7 +15,7 @@ import {
 import { useEffect, useState } from 'react';
 
 import type { Locale } from '../app/i18n';
-import type { WorkspaceProperty, WorkspaceRecord } from '../../shared/property-contract';
+import type { WorkspaceProperty, WorkspaceRecord, WorkspaceRecordTemplate } from '../../shared/property-contract';
 import type { ViewLayout } from '../../shared/view-contract';
 import { DatabaseViewHost } from './DatabaseViewHost';
 import { FilterBuilder } from './FilterBuilder';
@@ -73,6 +73,15 @@ export function DatabasePage({ databaseId, initialViewId, locale = 'en', onOpenR
   const [addViewModalOpen, setAddViewModalOpen] = useState(false);
   const [newViewName, setNewViewName] = useState('');
   const [newViewLayout, setNewViewLayout] = useState<ViewLayout>('table');
+  const [recordTemplates, setRecordTemplates] = useState<readonly WorkspaceRecordTemplate[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    void window.maxApi.workspace.listRecordTemplates(databaseId).then((templates) => {
+      if (active) setRecordTemplates(templates);
+    });
+    return () => { active = false; };
+  }, [databaseId]);
 
   useEffect(() => {
     if (!onOpenRecordId) return;
@@ -175,21 +184,26 @@ export function DatabasePage({ databaseId, initialViewId, locale = 'en', onOpenR
             >
               <Settings size={14} className="mr-1.5" /> Customize Properties
             </button>
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
-              onClick={() =>
+            <select
+              aria-label={locale === 'ar' ? 'إنشاء سجل من قالب' : 'Create record from template'}
+              className="input-field text-xs"
+              onChange={(event) => {
+                const template = recordTemplates.find(({ id }) => id === event.target.value);
+                event.target.value = '';
                 void createRecord({
                   databaseId,
                   properties: {},
-                  title: 'Untitled',
-                }).then((rec) => {
-                  if (rec) handleOpenRecord(rec);
-                })
-              }
+                  templateId: template?.id,
+                  title: template ? `${template.name}` : (locale === 'ar' ? 'بدون عنوان' : 'Untitled'),
+                }).then((record) => { if (record) handleOpenRecord(record); });
+              }}
+              value=""
             >
-              <Plus size={14} className="mr-1.5" /> New Record
-            </button>
+              <option value="">＋ {locale === 'ar' ? 'سجل فارغ' : 'Blank record'}</option>
+              {recordTemplates.map((template) => (
+                <option key={template.id} value={template.id}>{template.icon ?? '◫'} {template.name}</option>
+              ))}
+            </select>
           </div>
         </div>
 

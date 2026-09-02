@@ -55,4 +55,5 @@ export type CompleteOnboardingDraft = Readonly<{
   includeDemoData?: boolean;
   locale: 'ar' | 'en';
   shopName: string;
+  templateId?: 'blank' | 'custom' | 'phone-shop';
 }>;

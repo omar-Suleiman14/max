@@ -124,6 +124,10 @@ export class V020MigrationService {
 
   migrate(locale: 'ar' | 'en' = 'en'): MigrationSummary {
     if (this.isMigrated()) return this.#migrationSummary(true);
+    const templateSelection = this.#database.prepare("SELECT value FROM app_metadata WHERE key = 'workspace.template.id'").get() as { value: string } | undefined;
+    if (templateSelection?.value === 'blank') {
+      return { accountsMigrated: 0, inventoryMovementsMigrated: 0, itemsMigrated: 0, moneyMovementsMigrated: 0, pagesMigrated: 0, parityCheckPassed: true, peopleMigrated: 0, transactionsMigrated: 0, viewsMigrated: 0 };
+    }
     if (this.#persistent) this.#backupService.createBackup('pre-migration');
     return this.#unitOfWork.run(() => {
       // 1. Install Retail Template structure if databases not already created
@@ -367,11 +371,16 @@ export class V020MigrationService {
         .all() as {
           archived_at: string | null;
           customer_fee: number;
+          customer_total: number;
           created_at: string;
           id: string;
+          item_id: string | null;
           net_profit: number;
           note: string | null;
           person_id: string | null;
+          provider_fee: number;
+          quantity: number | null;
+          service_fee: number;
           shop_net_cost: number;
           total_amount: number;
           transaction_type: string;
@@ -381,26 +390,56 @@ export class V020MigrationService {
       const txAmountPropId = propertyMap.get('prop_tx_amount');
       const txFeePropId = propertyMap.get('prop_tx_fee');
       const txNetPropId = propertyMap.get('prop_tx_net');
+      const txQuantityPropId = propertyMap.get('prop_tx_quantity');
+      const txUnitPricePropId = propertyMap.get('prop_tx_unit_price');
+      const txPaymentMethodProperty = this.#propertyRepo.getProperty(propertyMap.get('prop_tx_payment_method')!);
       const txTypeProperty = this.#propertyRepo.getProperty(propertyMap.get('prop_tx_type')!);
       const relTxPerson = this.#relationRepo.getRelationByPropertyId(propertyMap.get('prop_tx_person_rel')!);
+      const relTxAccount = this.#relationRepo.getRelationByPropertyId(propertyMap.get('prop_tx_acc_rel')!);
+      const relTxProduct = this.#relationRepo.getRelationByPropertyId(propertyMap.get('prop_tx_product_rel')!);
+      const txAccountRows = this.#database.prepare(`
+        SELECT m.transaction_id, m.account_id, a.name, a.account_type
+        FROM shop_money_movements m JOIN shop_accounts a ON a.id = m.account_id
+        WHERE m.archived_at IS NULL ORDER BY m.id
+      `).all() as { account_id: string; account_type: string; name: string; transaction_id: string }[];
+      const accountByTransaction = new Map<string, (typeof txAccountRows)[number]>();
+      for (const row of txAccountRows) if (!accountByTransaction.has(row.transaction_id)) accountByTransaction.set(row.transaction_id, row);
 
       for (const tx of legacyTx) {
         const typeOptionId = txTypeProperty?.options?.[
           ['sale', 'purchase', 'expense', 'transfer', 'income', 'adjustment', 'reversal'].indexOf(tx.transaction_type)
         ]?.id;
+        const paymentAccount = accountByTransaction.get(tx.id);
+        const paymentLabel = paymentAccount?.name.includes('Vodafone') ? 'Vodafone Cash'
+          : paymentAccount?.name.includes('e&') ? 'e& Cash'
+            : paymentAccount?.name.includes('Aman') ? 'Aman'
+              : paymentAccount?.name.includes('InstaPay') ? 'InstaPay'
+                : paymentAccount?.name.includes('Card') || paymentAccount?.name.includes('نقاط') ? (locale === 'ar' ? 'بطاقة' : 'Card')
+                  : paymentAccount?.account_type === 'cash' ? (locale === 'ar' ? 'نقدي' : 'Cash')
+                    : paymentAccount?.account_type === 'bank' ? (locale === 'ar' ? 'تحويل بنكي' : 'Bank Transfer')
+                      : undefined;
+        const paymentOptionId = txPaymentMethodProperty?.options?.find(({ label }) => label === paymentLabel)?.id;
+        const quantity = tx.quantity && tx.quantity > 0 ? tx.quantity : undefined;
+        const totalFee = tx.provider_fee + tx.customer_fee + tx.service_fee;
+        const netAmount = (tx.customer_total || tx.total_amount) - tx.provider_fee;
         const txRecord = this.#recordRepo.createRecord({
           databaseId: txDbId,
           id: tx.id,
           properties: {
             ...(typeOptionId ? { [txTypeProperty.id]: typeOptionId } : {}),
+            ...(paymentOptionId && txPaymentMethodProperty ? { [txPaymentMethodProperty.id]: paymentOptionId } : {}),
             [txAmountPropId!]: tx.total_amount,
             [txDatePropId!]: tx.created_at,
-            [txFeePropId!]: tx.customer_fee,
-            [txNetPropId!]: tx.net_profit || tx.shop_net_cost,
+            [txFeePropId!]: totalFee,
+            [txNetPropId!]: netAmount,
+            ...(quantity && txQuantityPropId ? { [txQuantityPropId]: quantity } : {}),
+            ...(quantity && txUnitPricePropId ? { [txUnitPricePropId]: tx.total_amount / quantity } : {}),
           },
           title: tx.note?.trim() || `TX-${tx.id.slice(0, 8)}`,
         });
         if (relTxPerson && tx.person_id) this.#relationRepo.connect(relTxPerson.id, txRecord.id, tx.person_id);
+        if (relTxProduct && tx.item_id) this.#relationRepo.connect(relTxProduct.id, txRecord.id, tx.item_id);
+        if (relTxAccount && paymentAccount) this.#relationRepo.connect(relTxAccount.id, txRecord.id, paymentAccount.account_id);
         if (tx.archived_at) this.#recordRepo.archiveRecord(txRecord.id);
         insertMap.run('transaction', tx.id, 'record', txRecord.id, now);
         transactionsMigrated++;

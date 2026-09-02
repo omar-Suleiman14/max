@@ -98,7 +98,7 @@
   transform: translateY(-1px);
 }
 
-.transaction-choice[data-choice='quick-sale'] {
+.transaction-choice[data-choice='quick-operation'] {
   grid-column: 1 / -1;
 }
 
@@ -129,7 +129,7 @@
     grid-template-columns: 1fr;
   }
 
-  .transaction-choice[data-choice='quick-sale'] {
+  .transaction-choice[data-choice='quick-operation'] {
     grid-column: auto;
   }
 }
@@ -630,6 +630,13 @@ kbd { display: inline-flex; min-width: 23px; min-height: 20px; align-items: cent
 .onboarding-container { display: flex; min-height: 100vh; padding: 0; background: var(--canvas); }
 .onboarding-card { width: 100%; min-height: 100vh; background: var(--canvas); border: 0; border-radius: 0; box-shadow: none; overflow: hidden; display: flex; flex-direction: column; animation: overlay-in 140ms ease-out; }
 .onboarding-card__header { display: flex; justify-content: space-between; align-items: center; padding: 22px clamp(24px, 5vw, 72px); border-bottom: 1px solid var(--line); background: var(--canvas); }
+.onboarding-brand-symbol { position: relative; width: 38px; height: 38px; overflow: hidden; flex: 0 0 auto; border-radius: 9px; background: #02050a; }
+.onboarding-brand-symbol img { position: absolute; width: 86px; height: 86px; max-width: none; inset-inline-start: -24px; top: -10px; }
+.onboarding-brand-name { color: var(--text); font-size: 20px; letter-spacing: .18em; }
+.onboarding-brand-version { color: var(--muted); font-size: 10px; }
+.onboarding-template-picker { margin-top: 10px; }
+.template-preview-card { padding: 16px 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.template-preview-card p { margin: 6px 0 0; color: var(--muted); line-height: 1.55; }
 .onboarding-steps-indicator { display: flex; gap: 6px; }
 .step-dot { width: 8px; height: 8px; border-radius: 99px; background: var(--line-strong); transition: all 0.2s ease; }
 .step-dot--active { width: 22px; background: var(--accent); }
@@ -4298,3 +4305,56 @@ kbd { display: inline-flex; min-width: 23px; min-height: 20px; align-items: cent
   gap: 0.5rem;
   margin-bottom: 0.5rem;
 }
+
+.cloud-backup-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.cloud-backup-heading .section-title { display: flex; align-items: flex-start; gap: 0.625rem; margin: 0; }
+.cloud-backup-heading .section-title > div { display: grid; gap: 0.125rem; }
+.cloud-backup-heading small { color: var(--muted); font-size: 0.625rem; font-weight: 500; }
+.cloud-backup-auth { display: grid; gap: 0.5rem; margin-block-start: 0.75rem; }
+.cloud-backup-auth .auth-widget { width: min(100%, 22.5rem); margin: 0; }
+
+.settings-switch {
+  position: relative;
+  width: 2.375rem;
+  height: 1.375rem;
+  flex: 0 0 auto;
+  padding: 0.125rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--line-strong);
+  cursor: pointer;
+}
+
+.settings-switch span {
+  display: block;
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+  transition: transform 130ms ease;
+}
+
+.settings-switch[data-checked="true"] { background: var(--accent); }
+.settings-switch[data-checked="true"] span { transform: translateX(1rem); }
+[dir="rtl"] .settings-switch[data-checked="true"] span { transform: translateX(-1rem); }
+.settings-switch:disabled { opacity: 0.4; cursor: default; }
+
+.settings-backup-manager .table-wrapper { width: 100%; overflow-x: auto; }
+.settings-backup-manager .data-table { width: 100%; min-width: 47.5rem; table-layout: fixed; }
+.settings-backup-manager .data-table th,
+.settings-backup-manager .data-table td { padding: 0.5625rem 0.625rem; vertical-align: middle; }
+.settings-backup-manager .data-table th:nth-child(1) { width: 31%; }
+.settings-backup-manager .data-table th:nth-child(2) { width: 14%; }
+.settings-backup-manager .data-table th:nth-child(3) { width: 11%; }
+.settings-backup-manager .data-table th:nth-child(4) { width: 15%; }
+.settings-backup-manager .data-table th:nth-child(5) { width: 29%; }
+.settings-backup-manager .data-table td strong,
+.settings-backup-manager .data-table td small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.settings-backup-manager .data-table td > div { flex-wrap: wrap; }

@@ -26,6 +26,7 @@ import { type Locale, translate } from '../app/i18n';
 import type { CustomPage, SettingsSectionId } from '../app/app-types';
 import type { ThemePreference } from '../app/preferences';
 import { BackupManager } from '../backup/backup-manager';
+import { AppAuthProvider } from '../auth/auth-provider';
 import { PricingSettings } from '../pricing/pricing-settings';
 import { BlueprintDialog } from '../blueprints/blueprint-dialog';
 import { emptyPageTrash, loadTrashedPages, restoreTrashedPage } from '../pages/pages-store';
@@ -317,7 +318,9 @@ export function SettingsPage({
                 ))}
               </div>
             </div>
-            <div className="settings-backup-manager"><BackupManager locale={locale} /></div>
+            <div className="settings-backup-manager">
+              <AppAuthProvider><BackupManager locale={locale} /></AppAuthProvider>
+            </div>
           </section>
 
           <section className="settings-section settings-scroll-section" id="settings-archive" tabIndex={-1} aria-labelledby="settings-archive-title">

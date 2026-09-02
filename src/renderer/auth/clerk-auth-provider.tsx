@@ -17,6 +17,7 @@ function ClerkAuthBridge({ children }: { children: ReactNode }) {
 
   const value = useMemo<AuthContextValue>(() => ({
     getToken,
+    isAvailable: true,
     isConfigured: true,
     isSignedIn: Boolean(isLoaded && isSignedIn),
     userEmail: user?.primaryEmailAddress?.emailAddress,

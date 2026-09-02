@@ -3,10 +3,7 @@ import {
   ArrowRight,
   CheckCircle2,
   Database,
-  FileCode,
-  Layers,
   Sparkles,
-  Store,
 } from 'lucide-react';
 import { useState, type ChangeEvent, type FormEvent } from 'react';
 
@@ -15,10 +12,11 @@ import type { Locale } from '../app/i18n';
 import { phoneShopBlueprint } from '../blueprints/starter-blueprints';
 import { Button } from '../ui/button';
 import { onboardingCopy } from './onboarding-i18n';
+import maxLogoReference from '../assets/max-logo-reference.jpg';
 
 type OnboardingProps = Readonly<{
   initialLocale: Locale;
-  onComplete: (shopName: string, locale: Locale, backupSchedule: BackupSchedule, blueprint?: Blueprint, includeDemoData?: boolean) => Promise<void>;
+  onComplete: (shopName: string, locale: Locale, backupSchedule: BackupSchedule, blueprint?: Blueprint, includeDemoData?: boolean, templateId?: 'blank' | 'custom' | 'phone-shop') => Promise<void>;
   onClose?: () => void;
   preview?: boolean;
 }>;
@@ -72,7 +70,7 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
     event.preventDefault();
     setSubmitting(true);
     try {
-      await onComplete(shopName.trim() || 'My Shop', locale, backupSchedule, selectedBlueprint, blueprintChoice === 'phone' && includeDemoData);
+      await onComplete(shopName.trim() || 'My Shop', locale, backupSchedule, selectedBlueprint, blueprintChoice === 'phone' && includeDemoData, blueprintChoice === 'phone' ? 'phone-shop' : blueprintChoice);
     } finally {
       setSubmitting(false);
     }
@@ -87,11 +85,9 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
       <div className="onboarding-card">
         <header className="onboarding-card__header">
           <div className="brand" aria-label="Max">
-            <span className="brand__mark">M</span>
-            <span className="brand__wordmark">
-              <strong>MAX</strong>
-              <small>v0.1</small>
-            </span>
+            <span className="onboarding-brand-symbol"><img alt="" src={maxLogoReference} /></span>
+            <strong className="onboarding-brand-name">MAX</strong>
+            <small className="onboarding-brand-version">v0.2.6</small>
           </div>
           <div className="onboarding-steps-indicator" aria-label={`Step ${step} of 5`}>
             {[1, 2, 3, 4, 5].map((i) => (
@@ -174,57 +170,20 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
               <h2>{onboardingCopy(locale, 'chooseBlueprintTitle')}</h2>
               <p className="step-subtitle">{onboardingCopy(locale, 'chooseBlueprintSubtitle')}</p>
 
-              <div className="choice-stack" role="radiogroup">
-                <button
-                  aria-checked={blueprintChoice === 'phone'}
-                  className="choice-card choice-card--row"
-                  data-selected={blueprintChoice === 'phone'}
-                  onClick={() => setBlueprintChoice('phone')}
-                  role="radio"
-                  type="button"
-                >
-                  <div className="choice-card__icon">
-                    <Store aria-hidden="true" size={24} />
-                  </div>
-                  <div>
-                    <strong className="choice-card__title">{onboardingCopy(locale, 'phoneShopTitle')}</strong>
-                    <p className="choice-card__desc">{onboardingCopy(locale, 'phoneShopSubtitle')}</p>
-                  </div>
-                </button>
+              <label className="field onboarding-template-picker">
+                <span>{locale === 'ar' ? 'قالب مساحة العمل' : 'Workspace template'}</span>
+                <select className="field__input--large" onChange={(event) => setBlueprintChoice(event.target.value as BlueprintOption)} value={blueprintChoice}>
+                  <option value="phone">{locale === 'ar' ? 'متجر الهواتف — موصى به' : 'Phone Shop — Recommended'}</option>
+                  <option value="blank">{onboardingCopy(locale, 'blankTitle')}</option>
+                  <option value="custom">{onboardingCopy(locale, 'importCustomTitle')}</option>
+                </select>
+              </label>
 
-                <button
-                  aria-checked={blueprintChoice === 'blank'}
-                  className="choice-card choice-card--row"
-                  data-selected={blueprintChoice === 'blank'}
-                  onClick={() => setBlueprintChoice('blank')}
-                  role="radio"
-                  type="button"
-                >
-                  <div className="choice-card__icon">
-                    <Layers aria-hidden="true" size={24} />
-                  </div>
-                  <div>
-                    <strong className="choice-card__title">{onboardingCopy(locale, 'blankTitle')}</strong>
-                    <p className="choice-card__desc">{onboardingCopy(locale, 'blankSubtitle')}</p>
-                  </div>
-                </button>
-
-                <button
-                  aria-checked={blueprintChoice === 'custom'}
-                  className="choice-card choice-card--row"
-                  data-selected={blueprintChoice === 'custom'}
-                  onClick={() => setBlueprintChoice('custom')}
-                  role="radio"
-                  type="button"
-                >
-                  <div className="choice-card__icon">
-                    <FileCode aria-hidden="true" size={24} />
-                  </div>
-                  <div>
-                    <strong className="choice-card__title">{onboardingCopy(locale, 'importCustomTitle')}</strong>
-                    <p className="choice-card__desc">{onboardingCopy(locale, 'importCustomSubtitle')}</p>
-                  </div>
-                </button>
+              <div className="template-preview-card">
+                <strong>{blueprintChoice === 'phone' ? onboardingCopy(locale, 'phoneShopTitle') : blueprintChoice === 'blank' ? onboardingCopy(locale, 'blankTitle') : onboardingCopy(locale, 'importCustomTitle')}</strong>
+                <p>{blueprintChoice === 'phone'
+                  ? (locale === 'ar' ? 'الأصناف والأجهزة والأشخاص والحسابات والمعاملات، طرق الدفع المصرية، الرسوم، المخزون، عروض اليوم والأسبوع والشهر، وصفحات وعمليات جاهزة.' : 'Items and devices, people, accounts, transactions, Egyptian payment methods, fees, inventory, day/week/month views, pages, and ready operations.')
+                  : blueprintChoice === 'blank' ? onboardingCopy(locale, 'blankSubtitle') : onboardingCopy(locale, 'importCustomSubtitle')}</p>
               </div>
 
               {blueprintChoice === 'phone' && (
@@ -337,11 +296,11 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
               <p className="step-subtitle">{onboardingCopy(locale, 'readySubtitle')}</p>
 
               <div className="assembly-badge-list">
-                {selectedBlueprint ? (
+                {blueprintChoice === 'phone' ? (
                   <>
                     <div className="assembly-badge">
                       <CheckCircle2 aria-hidden="true" size={16} />
-                      <span>{selectedBlueprint.properties.item.length} {onboardingCopy(locale, 'assembledItemCount')}</span>
+                      <span>{locale === 'ar' ? '٦ قواعد مترابطة وقوالب للسجلات والصفحات' : '6 relational databases with record and page templates'}</span>
                     </div>
                     {includeDemoData && (
                       <div className="assembly-badge">
@@ -351,13 +310,15 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
                     )}
                     <div className="assembly-badge">
                       <CheckCircle2 aria-hidden="true" size={16} />
-                      <span>{selectedBlueprint.properties.person.length} {onboardingCopy(locale, 'assembledPersonCount')}</span>
+                      <span>{locale === 'ar' ? 'عروض اليوم والأسبوع والشهر بحسابات من قاعدة البيانات' : 'Database-backed day, week, and month views'}</span>
                     </div>
                     <div className="assembly-badge">
                       <CheckCircle2 aria-hidden="true" size={16} />
-                      <span>{selectedBlueprint.templates.length} {onboardingCopy(locale, 'assembledTemplateCount')}</span>
+                      <span>{locale === 'ar' ? 'بيع سريع وطرق دفع ورسوم قابلة للتعديل' : 'Quick Sale, payment methods, and editable fees'}</span>
                     </div>
                   </>
+                ) : blueprintChoice === 'custom' && selectedBlueprint ? (
+                  <div className="assembly-badge"><CheckCircle2 aria-hidden="true" size={16} /><span>{selectedBlueprint.name}</span></div>
                 ) : (
                   <div className="assembly-badge">
                     <CheckCircle2 aria-hidden="true" size={16} />

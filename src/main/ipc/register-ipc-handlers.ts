@@ -233,6 +233,7 @@ function parseCompleteOnboardingDraft(value: unknown): CompleteOnboardingDraft {
     includeDemoData: value.includeDemoData === true,
     locale: value.locale,
     shopName: value.shopName,
+    templateId: value.templateId === 'blank' || value.templateId === 'custom' || value.templateId === 'phone-shop' ? value.templateId : undefined,
   };
 }
 
@@ -1079,6 +1080,10 @@ export function registerIpcHandlers({
     trust(event);
     return workspaceMutation(() => database.records.createRecord(parseWorkspaceRecordDraft(draft)));
   });
+  ipcMain.handle(IPC_CHANNELS.workspaceListRecordTemplates, (event, databaseId: unknown) => {
+    trust(event);
+    return database.recordTemplates.list(parseId(databaseId));
+  });
   ipcMain.handle(IPC_CHANNELS.workspaceUpdateRecord, (event, id: unknown, patch: unknown) => {
     trust(event);
     return workspaceMutation(() => database.records.updateRecord(parseId(id), parseWorkspaceRecordPatch(patch)));
@@ -1209,9 +1214,9 @@ export function registerIpcHandlers({
     trust(event);
     return workspaceMutationResult(() => database.workspaceTemplates.importBlueprintV2(parseWorkspaceTemplateV2(template)));
   });
-  ipcMain.handle(IPC_CHANNELS.workspaceMigrateV01, (event) => {
+  ipcMain.handle(IPC_CHANNELS.workspaceMigrateV01, (event, locale: unknown) => {
     trust(event);
-    return workspaceMutationResult(() => database.v020Migration.migrate());
+    return workspaceMutationResult(() => database.v020Migration.migrate(locale === 'ar' ? 'ar' : 'en'));
   });
 }
 

@@ -81,7 +81,7 @@ const shopApi = {
   getMetadata: vi.fn(() => Promise.resolve(shopMetadataState)),
   resetDemoData: vi.fn(() => Promise.resolve({
     ok: true as const,
-    value: { accounts: 5, items: 24, pages: 4, people: 8, transactions: 15 },
+    value: { accounts: 8, items: 24, pages: 4, people: 8, transactions: 15 },
   })),
   seedDemoData: vi.fn(() => Promise.resolve({
     ok: true as const,
@@ -485,6 +485,8 @@ beforeEach(() => {
   reconciliationApi.listSessions.mockClear();
   backupsApi.list.mockClear();
   backupsApi.create.mockClear();
+  cloudBackupsApi.getStatus.mockReset();
+  cloudBackupsApi.getStatus.mockResolvedValue({ configured: false });
   pagesApi.archive.mockClear();
   pagesApi.create.mockClear();
   pagesApi.list.mockClear();
@@ -602,6 +604,25 @@ describe('Max shell', () => {
     expect(window.localStorage.getItem('max.ui.theme')).toBe('dark');
     await user.keyboard('{Escape}');
     await waitFor(() => expect(screen.getByRole('button', { name: 'Home' })).toBeInTheDocument());
+  });
+
+  it('keeps cloud sign-in out of the shell and enables cloud backup only from Backup settings', async () => {
+    cloudBackupsApi.getStatus.mockResolvedValue({ configured: true });
+    const user = userEvent.setup();
+    render(<MaxApp />);
+    await screen.findByRole('button', { name: 'Home' });
+
+    expect(screen.queryByRole('button', { name: /sign in/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/cloud sign-in/i)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Settings' }));
+    await user.click(await screen.findByRole('button', { name: 'Backup' }));
+
+    const cloudBackupSwitch = await screen.findByRole('switch', { name: 'Enable cloud backup' });
+    expect(cloudBackupSwitch).toHaveAttribute('aria-checked', 'false');
+    await user.click(cloudBackupSwitch);
+
+    expect(window.localStorage.getItem('max.cloud-backup.enabled')).toBe('true');
+    await waitFor(() => expect(screen.getByRole('switch', { name: 'Enable cloud backup' })).toHaveAttribute('aria-checked', 'true'));
   });
 
   it('creates an editable pricing profile from Settings without leaving the workspace', async () => {
