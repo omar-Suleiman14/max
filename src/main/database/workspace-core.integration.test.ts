@@ -29,6 +29,8 @@ describe('Max v0.2.0 Core Workspace Integration Tests', () => {
       const nav = db.workspace.getNavigation();
       expect(nav.pages.length).toBe(3);
       expect(nav.pages.find((p) => p.id === page1.id)?.title).toBe('Home Dashboard');
+      expect(nav.pages.find((p) => p.id === page1.id)?.level).toBe(0);
+      expect(nav.pages.find((p) => p.id === subpage.id)?.level).toBe(1);
     });
 
     it('archives, restores, and reorders nodes with fractional indexing', () => {

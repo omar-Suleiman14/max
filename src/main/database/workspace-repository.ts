@@ -205,12 +205,28 @@ export class WorkspaceRepository {
       `)
       .all() as NodeRow[];
 
+    const navigationRows = [...pageRows, ...databaseRows];
+    const navigationRowById = new Map(navigationRows.map((row) => [row.id, row] as const));
+    const levelFor = (row: NodeRow) => {
+      let level = 0;
+      let parentId = row.parent_node_id;
+      const visited = new Set([row.id]);
+      while (parentId && !visited.has(parentId)) {
+        const parent = navigationRowById.get(parentId);
+        if (!parent) break;
+        visited.add(parentId);
+        level += 1;
+        parentId = parent.parent_node_id;
+      }
+      return level;
+    };
+
     const pages: NavigationItem[] = pageRows.map((row) => ({
       archivedAt: row.archived_at,
       icon: row.icon,
       id: row.id,
       kind: 'page',
-      level: 0,
+      level: levelFor(row),
       parentNodeId: row.parent_node_id,
       positionKey: row.position_key,
       title: row.title,
@@ -221,7 +237,7 @@ export class WorkspaceRepository {
       icon: row.icon,
       id: row.id,
       kind: 'database',
-      level: 0,
+      level: levelFor(row),
       parentNodeId: row.parent_node_id,
       positionKey: row.position_key,
       title: row.title,

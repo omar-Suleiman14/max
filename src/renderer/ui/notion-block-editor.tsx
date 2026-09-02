@@ -1,7 +1,6 @@
 import {
   Check,
   Columns,
-  CreditCard,
   Database,
   FileText,
   GripVertical,
@@ -13,13 +12,10 @@ import {
   ListOrdered,
   ListTodo,
   Minus,
-  Package,
   Plus,
-  ReceiptText,
-  Users,
   type LucideIcon,
 } from 'lucide-react';
-import React, { lazy, Suspense, useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import React, { lazy, Suspense, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 
 import type { Locale } from '../app/i18n';
 import type { NavigationItem } from '../../shared/workspace-contract';
@@ -60,6 +56,8 @@ type NotionBlockEditorProps = Readonly<{
   blocks: readonly NotionBlock[];
   locale: Locale;
   onChange: (blocks: readonly NotionBlock[]) => void;
+  onWorkspaceChange?: () => void;
+  parentPageId?: string;
   placeholder?: string;
 }>;
 
@@ -75,7 +73,7 @@ type SlashOption = {
   run: (blockId: string) => void;
 };
 
-export function NotionBlockEditor({ blocks, locale, onChange }: NotionBlockEditorProps) {
+export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange, parentPageId }: NotionBlockEditorProps) {
   const [activeSlashBlockId, setActiveSlashBlockId] = useState<string | null>(null);
   const [slashQuery, setSlashQuery] = useState('');
   const [slashIndex, setSlashIndex] = useState(0);
@@ -84,6 +82,13 @@ export function NotionBlockEditor({ blocks, locale, onChange }: NotionBlockEdito
   const [dragOverEdge, setDragOverEdge] = useState<'after' | 'before'>('before');
   const [blockMenuId, setBlockMenuId] = useState<string | null>(null);
   const [workspaceDatabases, setWorkspaceDatabases] = useState<readonly NavigationItem[]>([]);
+  const [newDatabaseBlockId, setNewDatabaseBlockId] = useState<string | null>(null);
+  const [newDatabaseTitle, setNewDatabaseTitle] = useState('');
+  const [newDatabaseError, setNewDatabaseError] = useState<string>();
+  const [creatingDatabase, setCreatingDatabase] = useState(false);
+  const [linkDatabaseBlockId, setLinkDatabaseBlockId] = useState<string | null>(null);
+  const [linkDatabaseError, setLinkDatabaseError] = useState<string>();
+  const [linkingDatabaseId, setLinkingDatabaseId] = useState<string>();
 
   const inputRefs = useRef<Map<string, HTMLTextAreaElement | HTMLInputElement>>(new Map());
 
@@ -151,6 +156,84 @@ export function NotionBlockEditor({ blocks, locale, onChange }: NotionBlockEdito
     return newBlock.id;
   }
 
+  function openInsertMenu(afterId: string) {
+    const blockId = insertBlockAfter(afterId, 'text', '/');
+    setActiveSlashBlockId(blockId);
+    setSlashQuery('');
+    setSlashIndex(0);
+  }
+
+  async function createInlineDatabase(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!newDatabaseBlockId || !newDatabaseTitle.trim() || creatingDatabase) return;
+    setCreatingDatabase(true);
+    setNewDatabaseError(undefined);
+    try {
+      const result = await window.maxApi.workspace.createDatabase({
+        parentNodeId: parentPageId,
+        title: newDatabaseTitle.trim(),
+        visibility: 'normal',
+      });
+      if (!result.ok) {
+        setNewDatabaseError(result.error.message);
+        return;
+      }
+      const views = await window.maxApi.workspace.listViews(result.value.id);
+      updateBlock(newDatabaseBlockId, {
+        content: '',
+        databaseId: result.value.id,
+        databaseKind: undefined,
+        type: 'database-view',
+        viewId: views[0]?.id,
+      });
+      const navigation = await window.maxApi.workspace.getNavigation();
+      setWorkspaceDatabases(navigation.databases);
+      onWorkspaceChange?.();
+      setNewDatabaseBlockId(null);
+      setNewDatabaseTitle('');
+      setActiveSlashBlockId(null);
+    } catch (error) {
+      setNewDatabaseError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setCreatingDatabase(false);
+    }
+  }
+
+  async function linkDatabase(blockId: string, database: NavigationItem) {
+    if (linkingDatabaseId) return;
+    setLinkingDatabaseId(database.id);
+    setLinkDatabaseError(undefined);
+    try {
+      const views = await window.maxApi.workspace.listViews(database.id);
+      const source = views[0];
+      const linked = await window.maxApi.workspace.createView({
+        databaseId: database.id,
+        filterAst: source?.filterAst,
+        group: source?.group,
+        layout: source?.layout ?? 'table',
+        layoutConfig: source?.layoutConfig,
+        name: source?.name ?? database.title,
+        ownerId: blockId,
+        ownerType: 'block',
+        propertyState: source?.propertyState,
+        sorts: source?.sorts,
+      });
+      updateBlock(blockId, {
+        content: '',
+        databaseId: database.id,
+        databaseKind: undefined,
+        type: 'database-view',
+        viewId: linked.ok ? linked.value.id : source?.id,
+      });
+      setLinkDatabaseBlockId(null);
+      setActiveSlashBlockId(null);
+    } catch (error) {
+      setLinkDatabaseError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setLinkingDatabaseId(undefined);
+    }
+  }
+
   // Handle markdown shortcut triggers: #, ##, ###, -, *, 1., [], >, ---, /2col
   function handleContentChange(id: string, text: string) {
     // Check for markdown shortcuts at line start
@@ -212,6 +295,14 @@ export function NotionBlockEditor({ blocks, locale, onChange }: NotionBlockEdito
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>, block: NotionBlock, index: number) {
     // If slash menu is open for this block
     if (activeSlashBlockId === block.id) {
+      if (newDatabaseBlockId === block.id || linkDatabaseBlockId === block.id) {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          setNewDatabaseBlockId(null);
+          setLinkDatabaseBlockId(null);
+        }
+        return;
+      }
       if (event.key === 'ArrowDown') {
         event.preventDefault();
         setSlashIndex((prev) => (prev + 1) % filteredSlashOptions.length);
@@ -482,107 +573,23 @@ export function NotionBlockEditor({ blocks, locale, onChange }: NotionBlockEdito
       label: 'New database',
       labelAr: 'قاعدة بيانات جديدة',
       run: (bId) => {
-        const title = window.prompt(locale === 'ar' ? 'اسم قاعدة البيانات' : 'Database name');
-        if (!title?.trim()) return;
-        void window.maxApi.workspace.createDatabase({ title: title.trim(), visibility: 'normal' }).then(async (result) => {
-          if (!result.ok) return;
-          const views = await window.maxApi.workspace.listViews(result.value.id);
-          updateBlock(bId, { content: '', databaseId: result.value.id, databaseKind: undefined, type: 'database-view', viewId: views[0]?.id });
-          const navigation = await window.maxApi.workspace.getNavigation();
-          setWorkspaceDatabases(navigation.databases);
-        });
-        setActiveSlashBlockId(null);
+        setNewDatabaseBlockId(bId);
+        setNewDatabaseTitle('');
+        setNewDatabaseError(undefined);
       },
     },
-    ...workspaceDatabases.map((database) => ({
-      category: 'database' as const,
-      description: `Linked view of ${database.title}`,
-      descriptionAr: `عرض مرتبط من ${database.title}`,
+    {
+      category: 'database',
+      description: 'Choose an existing database after inserting this block',
+      descriptionAr: 'اختر قاعدة بيانات موجودة بعد إدراج هذا العنصر',
       icon: Database,
-      id: `db_link_${database.id}`,
-      keywords: ['linked database', database.title, 'قاعدة مرتبطة'],
-      label: `Linked database: ${database.title}`,
-      labelAr: `قاعدة مرتبطة: ${database.title}`,
-      run: (bId: string) => {
-        void window.maxApi.workspace.listViews(database.id).then(async (views) => {
-          const source = views[0];
-          const linked = await window.maxApi.workspace.createView({
-            databaseId: database.id,
-            filterAst: source?.filterAst,
-            group: source?.group,
-            layout: source?.layout ?? 'table',
-            layoutConfig: source?.layoutConfig,
-            name: source?.name ?? database.title,
-            ownerId: bId,
-            ownerType: 'block',
-            propertyState: source?.propertyState,
-            sorts: source?.sorts,
-          });
-          updateBlock(bId, {
-            content: '',
-            databaseId: database.id,
-            databaseKind: undefined,
-            type: 'database-view',
-            viewId: linked.ok ? linked.value.id : source?.id,
-          });
-        });
-        setActiveSlashBlockId(null);
-      },
-    })),
-    {
-      category: 'database',
-      description: 'Live interactive Items & Inventory table',
-      descriptionAr: 'جدول الأصناف والمخزون التفاعلي المباشر',
-      icon: Package,
-      id: 'db_items',
-      keywords: ['items', 'products', 'inventory', 'stock', 'أصناف', 'منتجات', 'مخزون'],
-      label: 'Database: Items',
-      labelAr: 'قاعدة بيانات: الأصناف',
+      id: 'db_link',
+      keywords: ['link database', 'linked view', 'existing database', 'قاعدة بيانات مرتبطة'],
+      label: 'Link to a database',
+      labelAr: 'ربط بقاعدة بيانات',
       run: (bId) => {
-        updateBlock(bId, { content: '', databaseKind: 'items', type: 'database-view' });
-        setActiveSlashBlockId(null);
-      },
-    },
-    {
-      category: 'database',
-      description: 'Live Customers & Suppliers directory',
-      descriptionAr: 'دليل العملاء والموردين التفاعلي المباشر',
-      icon: Users,
-      id: 'db_people',
-      keywords: ['people', 'customers', 'suppliers', 'contacts', 'عملاء', 'موردين', 'أشخاص'],
-      label: 'Database: People',
-      labelAr: 'قاعدة بيانات: الأشخاص',
-      run: (bId) => {
-        updateBlock(bId, { content: '', databaseKind: 'people', type: 'database-view' });
-        setActiveSlashBlockId(null);
-      },
-    },
-    {
-      category: 'database',
-      description: 'Live Transactions & Invoices ledger',
-      descriptionAr: 'سجل المعاملات والفواتير المباشر',
-      icon: ReceiptText,
-      id: 'db_transactions',
-      keywords: ['transactions', 'sales', 'purchases', 'payments', 'معاملات', 'مبيعات', 'فواتير'],
-      label: 'Database: Transactions',
-      labelAr: 'قاعدة بيانات: المعاملات',
-      run: (bId) => {
-        updateBlock(bId, { content: '', databaseKind: 'transactions', type: 'database-view' });
-        setActiveSlashBlockId(null);
-      },
-    },
-    {
-      category: 'database',
-      description: 'Live Cash Accounts & Drawers',
-      descriptionAr: 'الحسابات والخزائن المالية المباشرة',
-      icon: CreditCard,
-      id: 'db_accounts',
-      keywords: ['accounts', 'drawers', 'cash', 'money', 'حسابات', 'خزائن', 'مال'],
-      label: 'Database: Accounts',
-      labelAr: 'قاعدة بيانات: الحسابات',
-      run: (bId) => {
-        updateBlock(bId, { content: '', databaseKind: 'accounts', type: 'database-view' });
-        setActiveSlashBlockId(null);
+        setLinkDatabaseBlockId(bId);
+        setLinkDatabaseError(undefined);
       },
     },
   ];
@@ -677,10 +684,10 @@ export function NotionBlockEditor({ blocks, locale, onChange }: NotionBlockEdito
             {/* Gutter Handles (+ and Drag grip) - Hover Only */}
             <div className="notion-block-gutter">
               <button
-                aria-label="Add block below"
+                aria-label={locale === 'ar' ? 'إدراج عنصر أسفل' : 'Insert block below'}
                 className="notion-gutter-btn notion-gutter-btn--add"
-                onClick={() => insertBlockAfter(block.id)}
-                title={locale === 'ar' ? 'إضافة سطر' : 'Add line below'}
+                onClick={() => openInsertMenu(block.id)}
+                title={locale === 'ar' ? 'إدراج نص أو قاعدة بيانات' : 'Insert text or database'}
                 type="button"
               >
                 <Plus size={14} />
@@ -874,6 +881,8 @@ export function NotionBlockEditor({ blocks, locale, onChange }: NotionBlockEdito
                       }
                       locale={locale}
                       onChange={(nextCol1) => updateBlock(block.id, { col1Blocks: nextCol1 })}
+                      onWorkspaceChange={onWorkspaceChange}
+                      parentPageId={parentPageId}
                     />
                   </div>
                   <div className="notion-column notion-column--2">
@@ -885,6 +894,8 @@ export function NotionBlockEditor({ blocks, locale, onChange }: NotionBlockEdito
                       }
                       locale={locale}
                       onChange={(nextCol2) => updateBlock(block.id, { col2Blocks: nextCol2 })}
+                      onWorkspaceChange={onWorkspaceChange}
+                      parentPageId={parentPageId}
                     />
                   </div>
                 </div>
@@ -896,7 +907,7 @@ export function NotionBlockEditor({ blocks, locale, onChange }: NotionBlockEdito
                   <div className="notion-embedded-db-content">
                     <Suspense fallback={<div aria-live="polite" className="notion-embedded-db-loading" role="status">{locale === 'ar' ? 'جارٍ تحميل قاعدة البيانات…' : 'Loading database…'}</div>}>
                     {block.databaseId ? (
-                      <DatabasePage databaseId={block.databaseId} initialViewId={block.viewId} locale={locale} />
+                      <DatabasePage databaseId={block.databaseId} embedded initialViewId={block.viewId} locale={locale} />
                     ) : (block.databaseKind ?? block.content) === 'items' ? (
                       <ObjectWorkspace createRequest={0} locale={locale} objectKind="item" />
                     ) : (block.databaseKind ?? block.content) === 'people' ? (
@@ -921,7 +932,59 @@ export function NotionBlockEditor({ blocks, locale, onChange }: NotionBlockEdito
                     <kbd>ESC</kbd>
                   </div>
                   <div className="notion-slash-menu__list">
-                    {filteredSlashOptions.length > 0 ? (
+                    {newDatabaseBlockId === block.id ? (
+                      <form className="notion-new-database-form" onSubmit={(event) => void createInlineDatabase(event)}>
+                        <div className="notion-new-database-form__icon"><Database aria-hidden="true" size={19} /></div>
+                        <div>
+                          <strong>{locale === 'ar' ? 'قاعدة بيانات جديدة داخل هذه الصفحة' : 'New database in this page'}</strong>
+                          <small>{locale === 'ar' ? 'ستظهر هنا كجدول مباشر ويمكنك إضافة طرق عرض لاحقًا.' : 'It will appear here as a live table. You can add more views later.'}</small>
+                        </div>
+                        <label>
+                          <span className="sr-only">{locale === 'ar' ? 'اسم قاعدة البيانات' : 'Database name'}</span>
+                          <input
+                            autoFocus
+                            onChange={(event) => setNewDatabaseTitle(event.target.value)}
+                            placeholder={locale === 'ar' ? 'اسم قاعدة البيانات' : 'Database name'}
+                            value={newDatabaseTitle}
+                          />
+                        </label>
+                        {newDatabaseError && <p className="form-error" role="alert">{newDatabaseError}</p>}
+                        <div className="notion-new-database-form__actions">
+                          <button onClick={() => setNewDatabaseBlockId(null)} type="button">{locale === 'ar' ? 'رجوع' : 'Back'}</button>
+                          <button disabled={!newDatabaseTitle.trim() || creatingDatabase} type="submit">{creatingDatabase ? (locale === 'ar' ? 'جارٍ الإنشاء…' : 'Creating…') : (locale === 'ar' ? 'إنشاء' : 'Create')}</button>
+                        </div>
+                      </form>
+                    ) : linkDatabaseBlockId === block.id ? (
+                      <div className="notion-database-picker">
+                        <div className="notion-database-picker__heading">
+                          <Database aria-hidden="true" size={18} />
+                          <div>
+                            <strong>{locale === 'ar' ? 'ربط بقاعدة بيانات' : 'Link to a database'}</strong>
+                            <small>{locale === 'ar' ? 'اختر قاعدة البيانات التي تريد عرضها في هذه الصفحة.' : 'Choose the database to show on this page.'}</small>
+                          </div>
+                        </div>
+                        {linkDatabaseError && <p className="form-error" role="alert">{linkDatabaseError}</p>}
+                        <div className="notion-database-picker__list">
+                          {workspaceDatabases.length > 0 ? workspaceDatabases.map((database) => (
+                            <button
+                              disabled={Boolean(linkingDatabaseId)}
+                              key={database.id}
+                              onClick={() => void linkDatabase(block.id, database)}
+                              type="button"
+                            >
+                              <Database aria-hidden="true" size={16} />
+                              <span>{database.title}</span>
+                              {linkingDatabaseId === database.id && <small>{locale === 'ar' ? 'جارٍ الربط…' : 'Linking…'}</small>}
+                            </button>
+                          )) : (
+                            <p>{locale === 'ar' ? 'لا توجد قواعد بيانات بعد. ارجع وأنشئ قاعدة بيانات جديدة.' : 'No databases yet. Go back and create a new database.'}</p>
+                          )}
+                        </div>
+                        <button className="notion-database-picker__back" onClick={() => setLinkDatabaseBlockId(null)} type="button">
+                          {locale === 'ar' ? 'رجوع' : 'Back'}
+                        </button>
+                      </div>
+                    ) : filteredSlashOptions.length > 0 ? (
                       filteredSlashOptions.map((opt, optIdx) => {
                         const Icon = opt.icon;
                         const isSelected = optIdx === slashIndex;
@@ -966,7 +1029,19 @@ export function NotionBlockEditor({ blocks, locale, onChange }: NotionBlockEdito
           else if (last.type === 'divider' || last.type === 'database-view' || last.type === 'columns') insertBlockAfter(last.id, 'text', '');
           else focusBlock(last.id);
         }}
-      />
+      >
+        <button
+          className="notion-add-content-button"
+          onClick={(event) => {
+            event.stopPropagation();
+            openInsertMenu(blocks.at(-1)?.id ?? '');
+          }}
+          type="button"
+        >
+          <Plus aria-hidden="true" size={14} />
+          {locale === 'ar' ? 'أضف نصًا أو قاعدة بيانات' : 'Add text or database'}
+        </button>
+      </div>
     </div>
   );
 }

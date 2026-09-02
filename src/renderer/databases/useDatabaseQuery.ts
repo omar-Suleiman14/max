@@ -60,10 +60,14 @@ export function useDatabaseQuery(databaseId: string, initialViewId?: string): Us
   const loadMetadata = useCallback(async () => {
     if (!databaseId) return;
     try {
-      const [fetchedSchema, fetchedViews] = await Promise.all([
+      const [fetchedSchema, databaseViews, requestedView] = await Promise.all([
         window.maxApi.workspace.getDatabaseSchema(databaseId),
         window.maxApi.workspace.listViews(databaseId),
+        initialViewId ? window.maxApi.workspace.getView(initialViewId) : Promise.resolve(null),
       ]);
+      const fetchedViews = requestedView?.databaseId === databaseId && requestedView.ownerType === 'block'
+        ? [requestedView]
+        : databaseViews;
       setSchema(fetchedSchema);
       setViews(fetchedViews);
 
@@ -71,7 +75,7 @@ export function useDatabaseQuery(databaseId: string, initialViewId?: string): Us
         const defaultView = fetchedViews.find((view) => view.id === initialViewId)
           ?? fetchedViews.find((view) => view.id === fetchedSchema.database.defaultViewId)
           ?? fetchedViews[0];
-        setActiveView((prev) => prev || defaultView || null);
+        setActiveView((previous) => initialViewId ? defaultView ?? null : previous ?? defaultView ?? null);
         if (defaultView?.filterAst) {
           setFilterAst(defaultView.filterAst);
         }

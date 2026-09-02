@@ -18,6 +18,8 @@ export type CustomPage = Readonly<{
   icon: string;
   id: string;
   favorite?: boolean;
+  parentNodeId?: string | null;
+  positionKey?: string;
   title: string;
   updatedAt: string;
   wiki?: boolean;
