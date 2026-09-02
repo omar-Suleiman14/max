@@ -56,6 +56,7 @@ import type { CompleteOnboardingDraft, ShopMetadata } from '../../shared/bluepri
 import type { QuickEntryDraft, QuickEntryPriceSuggestion } from '../../shared/quick-entry-contract';
 import type { AccountDefinition } from '../../shared/account-contract';
 import type { WorkspaceNavigation, WorkspaceNode, WorkspaceNodeDraft, WorkspaceNodePatch } from '../../shared/workspace-contract';
+import type { WorkspaceView } from '../../shared/view-contract';
 import type { ConfigurableRecord, PropertyDefinition, PropertyDraft } from '../../shared/object-contract';
 import { calculatePricing, type PricingProfile, type PricingProfileDraft, type PricingService } from '../../shared/pricing-contract';
 
@@ -372,6 +373,7 @@ const workspaceApi = {
   createNode: vi.fn((draft: WorkspaceNodeDraft) => Promise.resolve({ ok: true as const, value: workspaceNode(draft) })),
   getNavigation: vi.fn<() => Promise<WorkspaceNavigation>>(() => Promise.resolve({ databases: [], pages: [] })),
   getNode: vi.fn<(id: string) => Promise<WorkspaceNode | null>>(() => Promise.resolve(null)),
+  listViews: vi.fn<() => Promise<readonly WorkspaceView[]>>(() => Promise.resolve([])),
   listWorkflows: vi.fn(() => Promise.resolve([])),
   migrateV01: vi.fn(() => Promise.resolve({
     ok: true as const,
@@ -497,6 +499,8 @@ beforeEach(() => {
   workspaceApi.getNavigation.mockResolvedValue({ databases: [], pages: [] });
   workspaceApi.getNode.mockReset();
   workspaceApi.getNode.mockResolvedValue(null);
+  workspaceApi.listViews.mockReset();
+  workspaceApi.listViews.mockResolvedValue([]);
   workspaceApi.updateNode.mockClear();
   resetWorkspace.mockClear();
   scrollIntoView.mockClear();
@@ -538,15 +542,13 @@ describe('Max shell', () => {
     expect(screen.getByRole('main', { name: 'Home' })).toBeInTheDocument();
   });
 
-  it('renders the English shell and navigates to Databases workspace', async () => {
-    const user = userEvent.setup();
+  it('renders the English page-first shell without a databases section in the sidebar', async () => {
     const { container } = render(<MaxApp />);
     await screen.findByRole('button', { name: 'Home' });
     expect(document.documentElement).toHaveAttribute('dir', 'ltr');
-
-    await user.click(screen.getByRole('button', { name: 'Databases' }));
-    expect((await screen.findAllByRole('heading', { name: 'Databases' }))[0]).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: 'Filter' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Databases' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Databases', { selector: '.sidebar__section-label' })).not.toBeInTheDocument();
     expect(container.querySelector('.app-frame')).toMatchSnapshot();
   });
 
@@ -671,6 +673,13 @@ describe('Max shell', () => {
 
     const favorites = await screen.findByRole('navigation', { name: 'Favorites' });
     expect(within(favorites).getByRole('button', { name: 'Client notes' })).toBeInTheDocument();
+    await user.click(within(favorites).getByRole('button', { name: 'Remove Client notes from favorites' }));
+    await waitFor(() => expect(screen.queryByRole('navigation', { name: 'Favorites' })).not.toBeInTheDocument());
+    const favoriteUpdate = workspaceApi.updateNode.mock.calls.find(([id, patch]) => {
+      const layout = JSON.parse(patch.contentJson ?? '{}') as { favorite?: unknown };
+      return id === 'source-page' && layout.favorite === false;
+    });
+    expect(favoriteUpdate).toBeDefined();
     await user.click(screen.getByRole('button', { name: 'Page settings' }));
     expect(screen.queryByRole('menuitem', { name: 'Copy link' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('menuitem', { name: 'Duplicate' }));
@@ -682,6 +691,54 @@ describe('Max shell', () => {
     expect(screen.getByRole('main', { name: 'Client notes copy' })).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Change icon or emoji' })).toHaveLength(1);
     expect(screen.queryByRole('heading', { name: 'Client notes copy' })).not.toBeInTheDocument();
+  });
+
+  it('creates a nested page from its parent page menu', async () => {
+    const parentPage = workspaceNode({
+      contentJson: JSON.stringify({ blocks: [{ content: '', id: 'parent-block', type: 'text' }], favorite: false, wiki: false }),
+      icon: 'lucide:FileText',
+      id: 'parent-page',
+      kind: 'page',
+      title: 'Operations',
+    });
+    workspaceApi.getNavigation.mockResolvedValue({ databases: [], pages: [{ ...parentPage, level: 0 }] });
+    workspaceApi.getNode.mockImplementation((id: string) => Promise.resolve(id === parentPage.id ? parentPage : null));
+    const user = userEvent.setup();
+    render(<MaxApp />);
+
+    await screen.findByRole('button', { name: 'Operations' });
+    await user.click(screen.getByRole('button', { name: 'Page settings' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Add sub-page' }));
+
+    await waitFor(() => expect(workspaceApi.createNode).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'page',
+      parentNodeId: 'parent-page',
+      title: 'Untitled',
+    })));
+    expect(await screen.findByRole('button', { name: 'Untitled' })).toBeInTheDocument();
+  });
+
+  it('shows databases as nested pages and expands their views from the icon', async () => {
+    const shopPage = workspaceNode({
+      contentJson: JSON.stringify({ blocks: [{ content: '', databaseId: 'db-products', id: 'products-block', type: 'database-view', viewId: 'view-all' }], favorite: false, wiki: false }),
+      icon: 'lucide:Store',
+      id: 'shop-page',
+      kind: 'page',
+      title: 'Phone shop',
+    });
+    workspaceApi.getNavigation.mockResolvedValue({
+      databases: [{ archivedAt: null, icon: 'lucide:Database', id: 'db-products', kind: 'database', level: 1, parentNodeId: 'shop-page', positionKey: 'a0', title: 'Products', visibility: 'normal' }],
+      pages: [{ ...shopPage, level: 0 }],
+    });
+    workspaceApi.getNode.mockImplementation((id: string) => Promise.resolve(id === shopPage.id ? shopPage : null));
+    workspaceApi.listViews.mockResolvedValue([{ archivedAt: null, createdAt: '2026-09-02', databaseId: 'db-products', filterAst: null, id: 'view-all', layout: 'table', layoutConfig: {}, name: 'All products', ownerId: 'db-products', ownerType: 'database', positionKey: 'a0', propertyState: { columns: [] }, sorts: [], updatedAt: '2026-09-02' }]);
+    const user = userEvent.setup();
+    render(<MaxApp />);
+
+    await user.click(await screen.findByRole('button', { name: 'Show Phone shop contents' }));
+    expect(await screen.findByRole('button', { name: 'Products' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Show Products contents' }));
+    expect(await screen.findByRole('button', { name: 'All products' })).toBeInTheDocument();
   });
 
   it('resizes the app sidebar with an accessible persistent handle', async () => {
@@ -738,7 +795,6 @@ describe('Max shell', () => {
       expect(screen.getByRole('tab', { name: operation })).toBeInTheDocument();
     }
     await user.keyboard('{Escape}');
-    await user.click(screen.getByRole('button', { name: 'Databases' }));
     await user.click(await screen.findByRole('button', { name: 'New' }));
     await user.type(screen.getByRole('textbox', { name: 'New item name' }), 'iPhone 15{Enter}');
 
@@ -868,8 +924,6 @@ describe('Max shell', () => {
     const user = userEvent.setup();
     render(<MaxApp />);
     await screen.findByRole('button', { name: 'Home' });
-    await user.click(screen.getByRole('button', { name: 'Databases' }));
-
     // Click Properties button to open sheet
     const propertiesBtn = await screen.findByRole('button', { name: 'Database properties' });
     await user.click(propertiesBtn);
