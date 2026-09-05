@@ -10,6 +10,7 @@ type CustomPageViewProps = Readonly<{
   isHome?: boolean;
   locale: Locale;
   onUpdatePage: (id: string, update: Partial<Omit<CustomPage, 'createdAt' | 'id'>>) => void;
+  onWorkspaceChange?: () => void;
   page: CustomPage;
 }>;
 
@@ -17,6 +18,7 @@ export function CustomPageView({
   isHome = false,
   locale,
   onUpdatePage,
+  onWorkspaceChange,
   page,
 }: CustomPageViewProps) {
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
@@ -90,6 +92,8 @@ export function CustomPageView({
           blocks={page.blocks}
           locale={locale}
           onChange={handleBlocksChange}
+          onWorkspaceChange={onWorkspaceChange}
+          parentPageId={page.id}
         />
       </div>
     </div>

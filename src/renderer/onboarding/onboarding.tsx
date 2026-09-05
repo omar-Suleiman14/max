@@ -87,7 +87,7 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
           <div className="brand" aria-label="Max">
             <span className="onboarding-brand-symbol"><img alt="" src={maxLogoReference} /></span>
             <strong className="onboarding-brand-name">MAX</strong>
-            <small className="onboarding-brand-version">v0.2.6</small>
+            <small className="onboarding-brand-version">v0.2.7</small>
           </div>
           <div className="onboarding-steps-indicator" aria-label={`Step ${step} of 5`}>
             {[1, 2, 3, 4, 5].map((i) => (
