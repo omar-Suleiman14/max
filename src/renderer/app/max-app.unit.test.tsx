@@ -596,8 +596,9 @@ describe('Max shell', () => {
     const settings = screen.getByRole('button', { name: 'Settings' });
     await user.click(settings);
     expect((await screen.findAllByRole('button', { name: 'Back to app' }))[0]).toBeInTheDocument();
-    expect(await screen.findByRole('navigation', { name: 'Settings sections' })).toBeInTheDocument();
-    const appearanceSection = screen.getByRole('button', { name: 'Appearance' });
+    const settingsNav = await screen.findByRole('navigation', { name: 'Settings sections' });
+    expect(settingsNav).toBeInTheDocument();
+    const appearanceSection = within(settingsNav).getByRole('button', { name: 'Appearance' });
     await user.click(appearanceSection);
     expect(appearanceSection).toHaveAttribute('aria-current', 'page');
     await waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' }));
