@@ -535,6 +535,8 @@ describe('Max shell', () => {
     // Step 5: Summary
     expect(screen.getByText('Setup complete')).toBeInTheDocument();
     expect(screen.getByText('Downtown Phones')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open workspace' })).toBeDisabled();
+    await user.click(screen.getByRole('checkbox', { name: 'I have read and agree to the Terms & Conditions' }));
     await user.click(screen.getByRole('button', { name: 'Open workspace' }));
 
     // Transition into main workspace
@@ -810,7 +812,8 @@ describe('Max shell', () => {
     render(<MaxApp />);
     await screen.findByRole('button', { name: 'Home' });
     await user.keyboard('{Control>}s{/Control}');
-    await user.selectOptions(await screen.findByLabelText('Select item or enter note'), 'priced-item');
+    await user.click(await screen.findByRole('combobox', { name: 'Select item or enter note' }));
+    await user.click(screen.getByRole('option', { name: 'Screen Protector' }));
 
     expect(screen.getByPlaceholderText('e.g., Screen protector with fitting')).toHaveValue('Screen Protector');
     await waitFor(() => expect(screen.getByPlaceholderText('0.00')).toHaveValue(75));
@@ -839,7 +842,8 @@ describe('Max shell', () => {
     render(<MaxApp />);
     await screen.findByRole('button', { name: 'Home' });
     await user.keyboard('{Control>}s{/Control}');
-    await user.selectOptions(await screen.findByLabelText('Service'), 'recharge-service');
+    await user.click(await screen.findByRole('combobox', { name: 'Service' }));
+    await user.click(screen.getByRole('option', { name: /Mobile recharge/ }));
     fireEvent.change(screen.getAllByPlaceholderText('0.00')[0]!, { target: { value: '100' } });
 
     expect(await screen.findByText('70.00')).toBeInTheDocument();
@@ -865,7 +869,8 @@ describe('Max shell', () => {
     await user.keyboard('{Control>}s{/Control}');
     await user.click(await screen.findByRole('tab', { name: 'Adjust' }));
     await screen.findByRole('button', { name: /Cash/ });
-    await user.selectOptions(screen.getByLabelText('Adjustment direction'), 'outflow');
+    await user.click(screen.getByRole('combobox', { name: 'Adjustment direction' }));
+    await user.keyboard('{ArrowDown}{Enter}');
     await user.type(screen.getByPlaceholderText('0.00'), '12.5');
     await user.type(screen.getByPlaceholderText('e.g., Correct counted cash after review'), 'Count correction');
     await user.click(screen.getByRole('button', { name: 'Record Adjustment (Enter)' }));

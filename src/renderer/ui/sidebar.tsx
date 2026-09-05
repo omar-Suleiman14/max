@@ -1,3 +1,4 @@
+import maxLogo from '../assets/max-logo.png';
 import {
   BadgeDollarSign,
   Archive,
@@ -362,7 +363,7 @@ export function Sidebar({
     <aside className="sidebar" data-collapsed={collapsed} style={collapsed ? undefined : { width }}>
       <div className="sidebar__brand-row">
         <div aria-label="Max" className="brand" role="img">
-          <span aria-hidden="true" className="brand__mark">M</span>
+          <img alt="" className="brand__mark" src={maxLogo} />
         </div>
         <button aria-label={collapseLabel} className="icon-button sidebar__collapse" onClick={onCollapse} type="button">
           <CollapseIcon aria-hidden="true" size={17} />

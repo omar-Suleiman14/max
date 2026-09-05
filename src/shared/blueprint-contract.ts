@@ -42,6 +42,8 @@ export type BlueprintValidationResult = Readonly<{
 }>;
 
 export type ShopMetadata = Readonly<{
+  acceptedTermsAt?: string;
+  acceptedTermsVersion?: string;
   backupSchedule: BackupSchedule;
   blueprintName?: string;
   locale: 'ar' | 'en';
@@ -50,6 +52,7 @@ export type ShopMetadata = Readonly<{
 }>;
 
 export type CompleteOnboardingDraft = Readonly<{
+  acceptedTermsVersion?: string;
   backupSchedule: BackupSchedule;
   blueprint?: Blueprint;
   includeDemoData?: boolean;

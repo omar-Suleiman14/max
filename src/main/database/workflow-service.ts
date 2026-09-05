@@ -191,22 +191,29 @@ export class WorkflowService {
 
   execute(input: WorkflowExecutionInput): WorkflowExecutionResult {
     const workflow = this.getWorkflow(input.workflowId);
-    if (!workflow) {
+    if (!workflow || workflow.archivedAt) {
       throw new WorkspaceDomainError('not-found', `Workflow not found: ${input.workflowId}`);
     }
 
     const runId = randomUUID();
     const startedAt = new Date().toISOString();
     const actorId = input.actorId ?? 'local-user';
-    for (const field of workflow.inputSchema.fields) {
-      const key = field.key ?? field.id;
-      if (field.required && key && (input.inputs[key] === undefined || input.inputs[key] === null || input.inputs[key] === '')) {
+    for (const [index, field] of workflow.inputSchema.fields.entries()) {
+      const key = field.key ?? field.id ?? `input_${index + 1}`;
+      const value = input.inputs[key] ?? field.defaultValue;
+      if (value !== undefined && value !== null && value !== '') {
+        if ((field.type === 'number' || field.type === 'money') && (typeof value !== 'number' || !Number.isFinite(value))) throw new WorkspaceDomainError('invalid-input', `${field.label} must be a finite number.`);
+        if (field.type === 'boolean' && typeof value !== 'boolean') throw new WorkspaceDomainError('invalid-input', `${field.label} must be boolean.`);
+        if (field.type === 'select' && !field.options?.some((option) => option.value === value)) throw new WorkspaceDomainError('invalid-input', `${field.label} is not an allowed option.`);
+      }
+      if (field.required && key && (value === undefined || value === null || value === '')) {
         throw new WorkspaceDomainError('invalid-input', `${field.label} is required.`);
       }
     }
 
     const perform = (persistRun: boolean): WorkflowExecutionResult => {
         const variables: Record<string, unknown> = {
+          ...Object.fromEntries(workflow.inputSchema.fields.map((field, index) => [field.key ?? field.id ?? `input_${index + 1}`, field.defaultValue])),
           ...input.inputs,
           actor_id: actorId,
           now: startedAt,
@@ -435,6 +442,8 @@ export class WorkflowService {
         const profileId = valueToText(variables.pricingProfileId);
         const profile = profileId ? this.#pricingRepo.getProfile(profileId) : null;
 
+        if (!Number.isFinite(baseAmount) || baseAmount < 0) throw new WorkspaceDomainError('invalid-input', 'Fee amount must be non-negative and finite.');
+        if (profile && !profile.active) throw new WorkspaceDomainError('invalid-input', 'The pricing profile is inactive.');
         if (profile) {
           const quote = calculatePricing(
             profile,

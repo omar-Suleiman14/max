@@ -1,3 +1,5 @@
+import { createExcelTable, downloadExcel } from '../databases/excel-export';
+import { Select } from '../ui/select';
 import {
   Archive,
   Check,
@@ -177,7 +179,7 @@ function EditableDatabaseCell({
 
   if (open && property.type === 'relation') {
     const choices = relatedRecords.filter((record) => record.objectKind === property.rules.relationTarget);
-    return <select autoFocus className="database-inline-input" onBlur={() => setOpen(false)} onChange={(event) => void commit(event.target.value || undefined)} value={draft}><option value="">—</option>{choices.map((record) => <option key={record.id} value={record.id}>{record.label}</option>)}</select>;
+    return <Select autoFocus className="database-inline-input" onBlur={() => setOpen(false)} onChange={(event) => void commit(event.target.value || undefined)} value={draft}><option value="">—</option>{choices.map((record) => <option key={record.id} value={record.id}>{record.label}</option>)}</Select>;
   }
 
   if (open) {
@@ -212,19 +214,19 @@ function InlinePropertyInput({ locale, onChange, onCommit, property, relatedReco
   }
   if (property.type === 'select' || property.type === 'status') {
     return (
-      <select aria-label={property.name} className="database-inline-input" data-inline-property="true" onChange={(event) => onChange(event.target.value || undefined)} onKeyDown={commonKeyDown} required={property.rules.required} value={typeof value === 'string' ? value : ''}>
+      <Select aria-label={property.name} className="database-inline-input" data-inline-property="true" onChange={(event) => onChange(event.target.value || undefined)} onKeyDown={commonKeyDown} required={property.rules.required} value={typeof value === 'string' ? value : ''}>
         <option value="">{locale === 'ar' ? 'اختر…' : 'Select…'}</option>
         {property.rules.choices.map((choice) => <option key={choice} value={choice}>{choice}</option>)}
-      </select>
+      </Select>
     );
   }
   if (property.type === 'relation') {
     const options = relatedRecords.filter((record) => record.objectKind === property.rules.relationTarget);
     return (
-      <select aria-label={property.name} className="database-inline-input" data-inline-property="true" onChange={(event) => onChange(event.target.value || undefined)} onKeyDown={commonKeyDown} required={property.rules.required} value={typeof value === 'string' ? value : ''}>
+      <Select aria-label={property.name} className="database-inline-input" data-inline-property="true" onChange={(event) => onChange(event.target.value || undefined)} onKeyDown={commonKeyDown} required={property.rules.required} value={typeof value === 'string' ? value : ''}>
         <option value="">{locale === 'ar' ? 'اختر…' : 'Select…'}</option>
         {options.map((record) => <option key={record.id} value={record.id}>{record.label}</option>)}
-      </select>
+      </Select>
     );
   }
   const numeric = property.type === 'money' || property.type === 'number';
@@ -361,7 +363,7 @@ function PropertyEditor({
         </label>
         <label className="field">
           <span>{objectCopy(locale, 'type')}</span>
-          <select onChange={(event) => {
+          <Select onChange={(event) => {
             const nextType = event.target.value as PropertyDraft['type'];
             setType(nextType);
             if (semanticRole === 'PRICE' && !['money', 'number'].includes(nextType)) setSemanticRole('');
@@ -373,17 +375,17 @@ function PropertyEditor({
                 {propertyTypeLabel(locale, propertyType)}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         {objectKind === 'item' && (
           <label className="field">
             <span>{objectCopy(locale, 'semanticRole')}</span>
-            <select onChange={(event) => setSemanticRole(event.target.value as SemanticRole | '')} value={semanticRole}>
+            <Select onChange={(event) => setSemanticRole(event.target.value as SemanticRole | '')} value={semanticRole}>
               <option value="">{objectCopy(locale, 'semanticRoleNone')}</option>
               {['text', 'select', 'status'].includes(type) && <option value="DISPLAY_NAME">{objectCopy(locale, 'semanticRoleDisplay')}</option>}
               {['money', 'number'].includes(type) && <option value="PRICE">{objectCopy(locale, 'semanticRolePrice')}</option>}
               {type === 'number' && <option value="QUANTITY">{objectCopy(locale, 'semanticRoleQuantity')}</option>}
-            </select>
+            </Select>
           </label>
         )}
         <div className="rule-grid">
@@ -439,10 +441,10 @@ function PropertyEditor({
         {type === 'relation' && (
           <label className="field">
             <span>{objectCopy(locale, 'relationTarget')}</span>
-            <select onChange={(event) => setRelationTarget(event.target.value as ObjectKind)} value={relationTarget}>
+            <Select onChange={(event) => setRelationTarget(event.target.value as ObjectKind)} value={relationTarget}>
               <option value="item">{objectKindLabel(locale, 'item')}</option>
               <option value="person">{objectKindLabel(locale, 'person')}</option>
-            </select>
+            </Select>
           </label>
         )}
         <footer className="form-footer">
@@ -609,7 +611,7 @@ function RecordEditor({
       return (
         <label className="field" key={property.id}>
           {fieldLabel}
-          <select
+          <Select
             onChange={(event) => setValue(property.id, event.target.value === '' ? '' : event.target.value === 'true')}
             required={property.rules.required}
             value={values[property.id] === undefined ? '' : String(values[property.id])}
@@ -617,14 +619,14 @@ function RecordEditor({
             <option value="">—</option>
             <option value="true">{locale === 'ar' ? 'نعم' : 'Yes'}</option>
             <option value="false">{locale === 'ar' ? 'لا' : 'No'}</option>
-          </select>
+          </Select>
         </label>
       );
     if (property.type === 'select' || property.type === 'status')
       return (
         <label className="field" key={property.id}>
           {fieldLabel}
-          <select
+          <Select
             onChange={(event) => setValue(property.id, event.target.value)}
             required={property.rules.required}
             value={String(values[property.id] ?? '')}
@@ -635,7 +637,7 @@ function RecordEditor({
                 {choice}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
       );
     if (property.type === 'relation') {
@@ -643,7 +645,7 @@ function RecordEditor({
       return (
         <label className="field" key={property.id}>
           {fieldLabel}
-          <select
+          <Select
             onChange={(event) => setValue(property.id, event.target.value)}
             required={property.rules.required}
             value={String(values[property.id] ?? '')}
@@ -654,7 +656,7 @@ function RecordEditor({
                 {record.label}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
       );
     }
@@ -708,6 +710,7 @@ export function ObjectWorkspace({ createRequest, locale, objectKind, onViewsChan
   const [relatedRecords, setRelatedRecords] = useState<readonly ConfigurableRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const [exportError, setExportError] = useState<string>();
   const [schemaTab, setSchemaTab] = useState<'properties' | 'templates'>('properties');
   const [schemaPanelOpen, setSchemaPanelOpen] = useState(false);
 
@@ -1048,6 +1051,15 @@ export function ObjectWorkspace({ createRequest, locale, objectKind, onViewsChan
 
       <div className="object-layout">
         <div className="record-panel" aria-busy={loading}>
+          {exportError && <p className="form-error" role="alert">{exportError}</p>}
+          <div className="object-export-action"><Button onClick={() => {
+            setExportError(undefined);
+            try {
+              const headers = [locale === 'ar' ? 'الاسم' : 'Name', ...properties.map((property) => property.name)];
+              const rows = visibleRecords.map((record) => [record.label, ...properties.map((property) => record.values[property.id])]);
+              downloadExcel(createExcelTable(objectKind, [headers, ...rows], locale === 'ar'), objectKind);
+            } catch (error) { setExportError(error instanceof Error ? error.message : String(error)); }
+          }}>{locale === 'ar' ? 'تصدير Excel' : 'Export Excel'}</Button></div>
           <ViewBar
             activeFilterRules={filterRules}
             activeSortRules={sortRules}
@@ -1080,7 +1092,7 @@ export function ObjectWorkspace({ createRequest, locale, objectKind, onViewsChan
                     <span className="notion-filter-pill__prefix">
                       {index === 0 ? viewsCopy(locale, 'where') : (locale === 'ar' ? 'و' : 'And')}
                     </span>
-                    <select
+                    <Select
                       aria-label={viewsCopy(locale, 'filterBy')}
                       className="notion-filter-select"
                       onChange={(e) => updateFilterRule(index, { field: e.target.value })}
@@ -1090,8 +1102,8 @@ export function ObjectWorkspace({ createRequest, locale, objectKind, onViewsChan
                       {properties.map((prop) => (
                         <option key={prop.id} value={prop.id}>{prop.name}</option>
                       ))}
-                    </select>
-                    <select
+                    </Select>
+                    <Select
                       aria-label={viewsCopy(locale, 'filterBy')}
                       className="notion-filter-select"
                       onChange={(e) => updateFilterRule(index, { operator: e.target.value as ViewFilterRule['operator'] })}
@@ -1103,7 +1115,7 @@ export function ObjectWorkspace({ createRequest, locale, objectKind, onViewsChan
                       <option value="is-not-empty">{viewsCopy(locale, 'isNotEmpty')}</option>
                       <option value="greater-than">{viewsCopy(locale, 'greaterThan')}</option>
                       <option value="less-than">{viewsCopy(locale, 'lessThan')}</option>
-                    </select>
+                    </Select>
                     {!['is-empty', 'is-not-empty'].includes(rule.operator) && (
                       <input
                         aria-label={viewsCopy(locale, 'value')}
@@ -1155,7 +1167,7 @@ export function ObjectWorkspace({ createRequest, locale, objectKind, onViewsChan
                 {sortRules.map((rule, index) => (
                   <div key={index} className="notion-sort-pill">
                     <span className="notion-filter-pill__prefix">{viewsCopy(locale, 'sortBy')}</span>
-                    <select
+                    <Select
                       aria-label={viewsCopy(locale, 'sortBy')}
                       className="notion-filter-select"
                       onChange={(e) => updateSortRule(index, { field: e.target.value })}
@@ -1165,8 +1177,8 @@ export function ObjectWorkspace({ createRequest, locale, objectKind, onViewsChan
                       {properties.map((prop) => (
                         <option key={prop.id} value={prop.id}>{prop.name}</option>
                       ))}
-                    </select>
-                    <select
+                    </Select>
+                    <Select
                       aria-label={viewsCopy(locale, 'sortBy')}
                       className="notion-filter-select"
                       onChange={(e) => updateSortRule(index, { direction: e.target.value as ViewSortRule['direction'] })}
@@ -1174,7 +1186,7 @@ export function ObjectWorkspace({ createRequest, locale, objectKind, onViewsChan
                     >
                       <option value="asc">{viewsCopy(locale, 'ascending')}</option>
                       <option value="desc">{viewsCopy(locale, 'descending')}</option>
-                    </select>
+                    </Select>
                     <button
                       aria-label="Remove sort rule"
                       className="notion-filter-remove"

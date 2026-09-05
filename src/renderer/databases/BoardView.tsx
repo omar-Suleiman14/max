@@ -1,3 +1,4 @@
+import { Select } from '../ui/select';
 import { Plus } from 'lucide-react';
 import { useState } from 'react';
 
@@ -122,7 +123,7 @@ export function BoardView({
 
                     {/* Quick Move Trigger / Status Pill */}
                     <div className="mt-3 flex items-center justify-between">
-                      <select
+                      <Select
                         className="select-clean text-xs font-medium py-0.5 px-1.5 rounded"
                         style={{
                           background: `${col.color}20`,
@@ -138,7 +139,7 @@ export function BoardView({
                             {c.label}
                           </option>
                         ))}
-                      </select>
+                      </Select>
                     </div>
                   </div>
                 ))}

@@ -107,3 +107,15 @@ describe('pricing engine', () => {
     expect(quote.componentResults.find(({ componentId }) => componentId === 'vat')?.baseAmount).toBe(5);
   });
 });
+
+it('does not add or lose a piastre at exact floating point rounding boundaries', () => {
+  expect(roundPricingAmount(0.07, {mode:'up',precision:2})).toBe(0.07);
+  expect(roundPricingAmount(0.29, {mode:'down',precision:2})).toBe(0.29);
+});
+it('rejects invalid cost and ambiguous duplicate overrides', () => {
+  expect(() => calculatePricing(profile([]), {amount:100,providerCost:NaN})).toThrow('Provider cost');
+  expect(() => calculatePricing(profile([]), {amount:100,providerCost:-1})).toThrow('Provider cost');
+  const fee=component({id:'fee',label:'Fee',type:'customer_fee',calculation:{kind:'fixed',fixedAmount:2}});
+  const override={componentId:'fee',amount:1,actor:'owner',reason:'Correction'};
+  expect(() => calculatePricing(profile([fee]), {amount:100,overrides:[override,override]})).toThrow('one override');
+});

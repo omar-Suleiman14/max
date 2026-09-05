@@ -1,3 +1,4 @@
+import { Terms } from './terms';
 import {
   Archive,
   ArrowLeft,
@@ -343,6 +344,7 @@ export function SettingsPage({
           </section>
       </div>
 
+      <Terms locale={locale} />
       {blueprintModalTab && (
         <BlueprintDialog
           initialTab={blueprintModalTab}

@@ -1,3 +1,5 @@
+import { ScrollOutline } from '../ui/scroll-outline';
+import { TERMS_VERSION } from '../../shared/terms';
 import {
   CircleDollarSign,
   ContactRound,
@@ -318,6 +320,7 @@ export function MaxApp() {
     templateId?: 'blank' | 'custom' | 'phone-shop',
   ) {
     const res = await window.maxApi.shop.completeOnboarding({
+      acceptedTermsVersion: TERMS_VERSION,
       backupSchedule,
       blueprint,
       includeDemoData,
@@ -325,6 +328,7 @@ export function MaxApp() {
       shopName: nextShopName,
       templateId,
     });
+    if (!res.ok) throw new Error(res.error.message);
     if (res.ok) {
       setShopName(res.value.shopName);
       setLocale(res.value.locale);
@@ -615,6 +619,7 @@ export function MaxApp() {
           )}
           </Suspense>
         </main>
+        <ScrollOutline locale={locale} pageKey={page} />
       </div>
 
       <Suspense fallback={null}>
@@ -655,9 +660,7 @@ export function MaxApp() {
           onClose={() => setQuickEntryOpen(false)}
           onSuccess={(tx) => {
             setRecentTxForUndo(tx);
-            if (page === 'transactions' || page === 'accounts') {
-              setDataRevision((revision) => revision + 1);
-            }
+            setDataRevision((revision) => revision + 1);
           }}
         />
       )}
@@ -665,10 +668,12 @@ export function MaxApp() {
       </Suspense>
       {recentTxForUndo && (
         <UndoToast
+          key={recentTxForUndo.id}
           locale={locale}
           onDismiss={() => setRecentTxForUndo(undefined)}
           onUndo={async (id) => {
-            await window.maxApi.transactions.undo(id);
+            const result = await window.maxApi.transactions.undo(id);
+            if (!result.ok) throw new Error(result.error.message);
             if (page === 'transactions' || page === 'accounts') {
               setDataRevision((revision) => revision + 1);
             }

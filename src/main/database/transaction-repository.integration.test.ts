@@ -157,7 +157,7 @@ describe('TransactionRepository', () => {
     expect(() => db.transactions.reverseTransaction(reversal.id)).toThrowError(ObjectDomainError);
   });
 
-  it('supports soft-undo of recent transactions', () => {
+  it('supports audited undo without erasing the original transaction', () => {
     const db = service();
     const cash = db.accounts.createAccount({
       accountType: 'cash',
@@ -175,7 +175,8 @@ describe('TransactionRepository', () => {
     expect(db.accounts.getAccount(cash.id).balance).toBe(650);
 
     db.transactions.undoTransaction(tx.id);
-    expect(db.transactions.getTransaction(tx.id)).toBeNull();
+    expect(db.transactions.getTransaction(tx.id)?.reversedAt).toBeTruthy();
+    expect(() => db.transactions.undoTransaction(tx.id)).toThrow('already been reversed');
     expect(db.accounts.getAccount(cash.id).balance).toBe(500);
   });
 

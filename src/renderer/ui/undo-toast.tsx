@@ -1,5 +1,5 @@
 import { CheckCircle2, RotateCcw, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import type { TransactionRecord } from '../../shared/transaction-contract';
 import type { Locale } from '../app/i18n';
@@ -22,26 +22,39 @@ export function UndoToast({
 }: UndoToastProps) {
   const [progress, setProgress] = useState(100);
   const [undone, setUndone] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string>();
+  const dismiss = useRef(onDismiss);
+  dismiss.current = onDismiss;
+  const deadline = useRef(Date.now() + durationMs);
+  const busy = useRef(false);
 
   useEffect(() => {
-    const startTime = Date.now();
+    if (pending || error) return;
+    if (undone) { const timer = setTimeout(() => dismiss.current(), 1200); return () => clearTimeout(timer); }
     const interval = setInterval(() => {
-      const elapsed = Date.now() - startTime;
-      const remaining = Math.max(0, 100 - (elapsed / durationMs) * 100);
+      const remaining = Math.max(0, ((deadline.current - Date.now()) / durationMs) * 100);
       setProgress(remaining);
       if (remaining <= 0) {
         clearInterval(interval);
-        onDismiss();
+        dismiss.current();
       }
     }, 50);
 
     return () => clearInterval(interval);
-  }, [durationMs, onDismiss]);
+  }, [durationMs, pending, undone, error]);
 
   async function handleUndo() {
-    setUndone(true);
-    await onUndo(transaction.id);
-    setTimeout(onDismiss, 1200);
+    if (busy.current) return;
+    busy.current = true;
+    setPending(true);
+    setError(undefined);
+    try {
+      await onUndo(transaction.id);
+      setUndone(true);
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : String(failure));
+    } finally { busy.current = false; setPending(false); }
   }
 
   return (
@@ -51,12 +64,12 @@ export function UndoToast({
         <div className="undo-toast__content">
           <strong>{undone ? quickEntryCopy(locale, 'transactionUndone') : quickEntryCopy(locale, 'undoSuccess')}</strong>
           <span className="undo-toast__meta">
-            {transaction.note || `Sale #${transaction.id.slice(0, 6)}`} · {transaction.totalAmount.toFixed(2)}
+            {transaction.note || `#${transaction.id.slice(0, 6)}`} · {transaction.totalAmount.toFixed(2)}
           </span>
         </div>
 
         {!undone && (
-          <button className="button button--secondary undo-toast__btn" onClick={() => void handleUndo()} type="button">
+          <button disabled={pending} className="button button--secondary undo-toast__btn" onClick={() => void handleUndo()} type="button">
             <RotateCcw aria-hidden="true" size={14} />
             {quickEntryCopy(locale, 'undo')}
           </button>
@@ -67,6 +80,7 @@ export function UndoToast({
         </button>
       </div>
 
+      {error && <p className="form-error" role="alert">{error}</p>}
       <div className="undo-toast__progress-track">
         <div className="undo-toast__progress-bar" style={{ width: `${progress}%` }} />
       </div>

@@ -630,3 +630,14 @@ describe('Max v0.2.0 Core Workspace Integration Tests', () => {
     });
   });
 });
+
+it('validates workflow numeric input before writes and rejects archived workflows',()=>{
+  const db=new DatabaseService(':memory:');db.initialize();
+  const workflow=db.workflows.createWorkflow({name:'Fee check',kind:'custom',inputSchema:{fields:[{key:'amount',label:'Amount',type:'money',required:true}]},steps:[{type:'CALCULATE_FEES',config:{}}]});
+  expect(()=>db.workflows.execute({workflowId:workflow.id,inputs:{amount:''}})).toThrow('required');
+  expect(()=>db.workflows.execute({workflowId:workflow.id,inputs:{amount:'abc'}})).toThrow('finite');
+  expect(()=>db.workflows.execute({workflowId:workflow.id,inputs:{amount:-5}})).toThrow('non-negative');
+  db.workflows.archiveWorkflow(workflow.id);
+  expect(()=>db.workflows.execute({workflowId:workflow.id,inputs:{amount:10}})).toThrow('not found');
+  db.close();
+});

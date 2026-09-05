@@ -21,6 +21,8 @@ export class ShopMetadataRepository {
     const locale: 'ar' | 'en' = rawLocale === 'ar' ? 'ar' : 'en';
 
     return {
+      acceptedTermsAt: map.get('shop.terms_accepted_at'),
+      acceptedTermsVersion: map.get('shop.terms_version'),
       backupSchedule,
       blueprintName: map.get('shop.blueprint_name'),
       locale,
@@ -83,6 +85,12 @@ export class ShopMetadataRepository {
       throw new ObjectDomainError('invalid-input', 'Invalid backup schedule.');
     }
 
+    if (draft.acceptedTermsVersion) {
+      const now = new Date().toISOString();
+      this.setKey('shop.terms_version', draft.acceptedTermsVersion);
+      this.setKey('shop.terms_accepted_at', now);
+      this.setKey(`shop.terms_acceptance.${now}`, JSON.stringify({ version: draft.acceptedTermsVersion, locale: draft.locale }));
+    }
     this.updateMetadata({
       backupSchedule: draft.backupSchedule,
       blueprintName: draft.blueprint?.name,

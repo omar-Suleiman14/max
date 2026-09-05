@@ -1,3 +1,4 @@
+import { Select } from '../ui/select';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState, useMemo } from 'react';
 
@@ -123,7 +124,7 @@ export function CalendarView({
         {dateProperties.length > 1 && (
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted">Date by:</span>
-            <select
+            <Select
               className="select-field text-xs py-1"
               value={selectedDatePropId}
               onChange={(e) => setSelectedDatePropId(e.target.value)}
@@ -133,7 +134,7 @@ export function CalendarView({
                   {p.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
         )}
       </div>

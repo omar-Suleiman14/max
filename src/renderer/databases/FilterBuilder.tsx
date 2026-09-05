@@ -1,3 +1,4 @@
+import { Select } from '../ui/select';
 import { Filter, Plus, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 
@@ -152,14 +153,14 @@ export function FilterBuilder({
           {rules.length > 1 && (
             <div className="filter-builder__combinator">
               <span>Match</span>
-              <select
+              <Select
                 className="select-clean"
                 value={combinator}
                 onChange={(e) => setCombinator(e.target.value as 'AND' | 'OR')}
               >
                 <option value="AND">ALL (AND)</option>
                 <option value="OR">ANY (OR)</option>
-              </select>
+              </Select>
               <span>of the following rules:</span>
             </div>
           )}
@@ -187,7 +188,7 @@ export function FilterBuilder({
               return (
                 <div key={index} className="filter-builder__row">
                   {/* Property Selector */}
-                  <select
+                  <Select
                     className="select-field"
                     value={rule.propertyId}
                     onChange={(e) => {
@@ -202,10 +203,10 @@ export function FilterBuilder({
                         {p.name}
                       </option>
                     ))}
-                  </select>
+                  </Select>
 
                   {/* Operator Selector */}
-                  <select
+                  <Select
                     className="select-field"
                     value={rule.operator}
                     onChange={(e) => updateRule(index, { operator: e.target.value as FilterOperator })}
@@ -215,11 +216,11 @@ export function FilterBuilder({
                         {op.label}
                       </option>
                     ))}
-                  </select>
+                  </Select>
 
                   {/* Value Input */}
                   {!isNoValueOp && rule.operator === 'relative_date' && (
-                    <select
+                    <Select
                       className="select-field flex-1"
                       value={rule.relativePeriod || 'THIS_MONTH'}
                       onChange={(e) => updateRule(index, { relativePeriod: e.target.value as RelativeDatePeriod })}
@@ -229,7 +230,7 @@ export function FilterBuilder({
                           {rp.label}
                         </option>
                       ))}
-                    </select>
+                    </Select>
                   )}
 
                   {!isNoValueOp && rule.operator !== 'relative_date' && (

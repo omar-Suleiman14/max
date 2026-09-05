@@ -53,6 +53,7 @@ async function openSmokeSurface(window: BrowserWindow): Promise<void> {
     (async () => {
       if (document.querySelector('.onboarding-container') && window.maxApi?.shop) {
         await window.maxApi.shop.completeOnboarding({
+          acceptedTermsVersion: '2026-09-06',
           shopName: 'Smoke Test Shop',
           locale: (localStorage.getItem('max.ui.locale') === 'ar' ? 'ar' : 'en'),
           backupSchedule: 'daily'

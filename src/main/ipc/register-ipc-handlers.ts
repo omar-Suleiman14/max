@@ -1,3 +1,4 @@
+import { TERMS_VERSION } from '../../shared/terms';
 import { app, ipcMain } from 'electron';
 
 import {
@@ -227,7 +228,9 @@ function parseCompleteOnboardingDraft(value: unknown): CompleteOnboardingDraft {
     throw new ObjectDomainError('invalid-input', 'A valid backup schedule is required.');
   }
 
+  if (value.acceptedTermsVersion !== TERMS_VERSION) throw new ObjectDomainError('invalid-input', 'Please accept the current Terms & Conditions.');
   return {
+    acceptedTermsVersion: TERMS_VERSION,
     backupSchedule: value.backupSchedule as CompleteOnboardingDraft['backupSchedule'],
     blueprint: value.blueprint as Blueprint | undefined,
     includeDemoData: value.includeDemoData === true,

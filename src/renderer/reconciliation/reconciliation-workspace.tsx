@@ -1,3 +1,4 @@
+import { Select } from '../ui/select';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -95,13 +96,13 @@ function OpenModal({
 
         <label className="field">
           <span>{reconciliationCopy(locale, 'registerAccount')}</span>
-          <select onChange={(e) => handleAccountChange(e.target.value)} value={accountId}>
+          <Select onChange={(e) => handleAccountChange(e.target.value)} value={accountId}>
             {accounts.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.name} ({a.balance.toFixed(2)})
               </option>
             ))}
-          </select>
+          </Select>
         </label>
 
         <label className="field">

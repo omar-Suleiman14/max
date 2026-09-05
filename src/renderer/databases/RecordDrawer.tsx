@@ -1,3 +1,4 @@
+import { Select } from '../ui/select';
 import {
   Calendar,
   CheckSquare,
@@ -251,7 +252,7 @@ export function RecordDrawer({
 
                       {/* Select / Status */}
                       {['select', 'status'].includes(prop.type) && (
-                        <select
+                        <Select
                           className="select-clean"
                           value={formatUnknown(value)}
                           onChange={(e) => handlePropertyChange(prop.id, e.target.value || null)}
@@ -262,7 +263,7 @@ export function RecordDrawer({
                               {opt.label}
                             </option>
                           ))}
-                        </select>
+                        </Select>
                       )}
 
                       {/* Date */}

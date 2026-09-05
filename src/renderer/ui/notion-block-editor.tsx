@@ -670,6 +670,8 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
           <div
             key={block.id}
             className="notion-block-row"
+            data-scroll-kind={block.type}
+            data-scroll-label={block.type === 'database-view' ? (block.databaseKind || (locale === 'ar' ? 'عرض قاعدة البيانات' : 'Database view')) : undefined}
             data-drag-over={isDragOver}
             data-dragging={isDragging}
             data-drop-edge={isDragOver ? dragOverEdge : undefined}

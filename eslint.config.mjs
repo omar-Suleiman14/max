@@ -5,7 +5,7 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['.vite/**', 'coverage/**', 'dist/**', 'node_modules/**', 'out/**', 'worker/**'],
+    ignores: ['.cache/**', '.npm-cache/**', '.vite/**', 'coverage/**', 'dist/**', 'node_modules/**', 'out/**', 'worker/**'],
   },
   eslint.configs.recommended,
   {

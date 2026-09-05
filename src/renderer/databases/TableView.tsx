@@ -1,3 +1,4 @@
+import { Select } from '../ui/select';
 import {
   Calendar,
   CheckSquare,
@@ -206,7 +207,7 @@ export function TableView({
 
                       {/* Select / Status */}
                       {['select', 'status'].includes(prop.type) && (
-                        <select
+                        <Select
                           className="table-cell-select"
                           value={formatUnknown(value)}
                           onChange={(e) => handleCellChange(record, prop.id, e.target.value || null)}
@@ -217,7 +218,7 @@ export function TableView({
                               {opt.label}
                             </option>
                           ))}
-                        </select>
+                        </Select>
                       )}
 
                       {/* Date */}

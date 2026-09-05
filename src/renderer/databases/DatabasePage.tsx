@@ -1,5 +1,8 @@
+import { createExcelWorkbook, downloadExcel } from './excel-export';
+import { Select } from '../ui/select';
 import {
   ArrowDownAZ,
+  Download,
   Calendar,
   ChevronDown,
   Database,
@@ -63,6 +66,26 @@ export function DatabasePage({ databaseId, embedded = false, initialViewId, loca
     updateView,
     views,
   } = useDatabaseQuery(databaseId, initialViewId);
+
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string>();
+  async function exportExcel() {
+    if (!schema || exporting) return;
+    setExporting(true); setExportError(undefined);
+    try {
+      const all: WorkspaceRecord[] = [];
+      let cursor: string | undefined;
+      do {
+        const result = await window.maxApi.workspace.queryDatabase({ databaseId, filter: filterAst, sorts, search: searchQuery, limit: 200, cursor });
+        all.push(...result.records);
+        if (all.length > 100_000) throw new Error(locale === 'ar' ? 'حدد الفلاتر لتصدير 100,000 سجل كحد أقصى.' : 'Narrow the filters to export at most 100,000 records.');
+        if (result.hasMore && (!result.nextCursor || result.nextCursor === cursor)) throw new Error('Export pagination did not advance.');
+        cursor = result.hasMore ? result.nextCursor ?? undefined : undefined;
+      } while (cursor);
+      downloadExcel(createExcelWorkbook(schema.database.title, schema.properties, all, locale === 'ar'), schema.database.title);
+    } catch (error) { setExportError(error instanceof Error ? error.message : String(error)); }
+    finally { setExporting(false); }
+  }
 
   // Modals & Drawers
   const [selectedRecord, setSelectedRecord] = useState<WorkspaceRecord | null>(null);
@@ -244,7 +267,9 @@ export function DatabasePage({ databaseId, embedded = false, initialViewId, loca
           </div>
         </div>
 
+        {exportError && <p className="form-error" role="alert">{exportError}</p>}
         <div className="database-toolbar">
+          <button className="btn btn-secondary btn-sm" disabled={exporting || !schema} onClick={() => void exportExcel()} type="button"><Download aria-hidden="true" size={14} />{exporting ? (locale === 'ar' ? 'جارٍ التصدير…' : 'Exporting…') : (locale === 'ar' ? 'تصدير Excel' : 'Export Excel')}</button>
           <div className="database-toolbar__search">
             <Search size={14} className="text-muted" />
             <input
@@ -262,7 +287,7 @@ export function DatabasePage({ databaseId, embedded = false, initialViewId, loca
           </div>
 
           <div className="database-toolbar__actions">
-            <select
+            <Select
               aria-label={locale === 'ar' ? 'تجميع حسب' : 'Group by'}
               className="database-toolbar-select"
               onChange={(event) => {
@@ -275,9 +300,9 @@ export function DatabasePage({ databaseId, embedded = false, initialViewId, loca
             >
               <option value="">{locale === 'ar' ? 'بدون تجميع' : 'No grouping'}</option>
               {schema?.properties.filter((property) => !['formula', 'relation', 'rollup'].includes(property.type)).map((property) => <option key={property.id} value={property.id}>{property.name}</option>)}
-            </select>
+            </Select>
             {group && schema?.properties.find((property) => property.id === group.propertyId)?.type === 'date' && (
-              <select
+              <Select
                 aria-label={locale === 'ar' ? 'دقة تجميع التاريخ' : 'Date grouping'}
                 className="database-toolbar-select"
                 onChange={(event) => {
@@ -290,7 +315,7 @@ export function DatabasePage({ databaseId, embedded = false, initialViewId, loca
                 {(['day', 'week', 'month', 'quarter', 'year'] as const).map((period) => (
                   <option key={period} value={period}>{locale === 'ar' ? ({ day: 'يوم', week: 'أسبوع', month: 'شهر', quarter: 'ربع سنة', year: 'سنة' } as const)[period] : period}</option>
                 ))}
-              </select>
+              </Select>
             )}
             <button className="database-tool-button" onClick={() => setPropertyManagerOpen(true)} type="button">
               <Settings aria-hidden="true" size={13} /> {locale === 'ar' ? 'الخصائص' : 'Properties'}

@@ -1,3 +1,4 @@
+import { Select } from '../ui/select';
 import { ArrowDown, ArrowUp, X } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 
@@ -162,7 +163,7 @@ export function TemplateEditor({
 
                   <div className="template-property-row__default">
                     {property.type === 'select' || property.type === 'status' ? (
-                      <select
+                      <Select
                         onChange={(e) => setDefault(propId, e.target.value || undefined)}
                         value={String(defaults[propId] ?? '')}
                       >
@@ -172,9 +173,9 @@ export function TemplateEditor({
                             {c}
                           </option>
                         ))}
-                      </select>
+                      </Select>
                     ) : property.type === 'checkbox' ? (
-                      <select
+                      <Select
                         onChange={(e) =>
                           setDefault(propId, e.target.value === '' ? undefined : e.target.value === 'true')
                         }
@@ -183,7 +184,7 @@ export function TemplateEditor({
                         <option value="">(No default)</option>
                         <option value="true">{locale === 'ar' ? 'نعم' : 'Yes'}</option>
                         <option value="false">{locale === 'ar' ? 'لا' : 'No'}</option>
-                      </select>
+                      </Select>
                     ) : (
                       <input
                         onChange={(e) =>

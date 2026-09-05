@@ -204,6 +204,7 @@ exports[`Max shell > renders the English page-first shell without a databases se
             class="notion-block-row"
             data-drag-over="false"
             data-dragging="false"
+            data-scroll-kind="callout"
             data-type="callout"
           >
             <div
@@ -314,6 +315,7 @@ exports[`Max shell > renders the English page-first shell without a databases se
             class="notion-block-row"
             data-drag-over="false"
             data-dragging="false"
+            data-scroll-kind="divider"
             data-type="divider"
           >
             <div
@@ -415,6 +417,7 @@ exports[`Max shell > renders the English page-first shell without a databases se
             class="notion-block-row"
             data-drag-over="false"
             data-dragging="false"
+            data-scroll-kind="h2"
             data-type="h2"
           >
             <div
@@ -514,6 +517,7 @@ exports[`Max shell > renders the English page-first shell without a databases se
             class="notion-block-row"
             data-drag-over="false"
             data-dragging="false"
+            data-scroll-kind="bullet"
             data-type="bullet"
           >
             <div
@@ -620,6 +624,7 @@ exports[`Max shell > renders the English page-first shell without a databases se
             class="notion-block-row"
             data-drag-over="false"
             data-dragging="false"
+            data-scroll-kind="bullet"
             data-type="bullet"
           >
             <div
@@ -726,6 +731,7 @@ exports[`Max shell > renders the English page-first shell without a databases se
             class="notion-block-row"
             data-drag-over="false"
             data-dragging="false"
+            data-scroll-kind="divider"
             data-type="divider"
           >
             <div
@@ -827,6 +833,8 @@ exports[`Max shell > renders the English page-first shell without a databases se
             class="notion-block-row"
             data-drag-over="false"
             data-dragging="false"
+            data-scroll-kind="database-view"
+            data-scroll-label="Database view"
             data-type="database-view"
           >
             <div
@@ -931,6 +939,20 @@ exports[`Max shell > renders the English page-first shell without a databases se
                         aria-busy="false"
                         class="record-panel"
                       >
+                        <div
+                          class="object-export-action"
+                        >
+                          <button
+                            class="button button--secondary"
+                            type="button"
+                          >
+                            <span
+                              class="button__label"
+                            >
+                              Export Excel
+                            </span>
+                          </button>
+                        </div>
                         <div
                           class="notion-view-bar"
                         >
@@ -1517,6 +1539,7 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
             class="notion-block-row"
             data-drag-over="false"
             data-dragging="false"
+            data-scroll-kind="callout"
             data-type="callout"
           >
             <div
@@ -1627,6 +1650,7 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
             class="notion-block-row"
             data-drag-over="false"
             data-dragging="false"
+            data-scroll-kind="divider"
             data-type="divider"
           >
             <div
@@ -1728,6 +1752,7 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
             class="notion-block-row"
             data-drag-over="false"
             data-dragging="false"
+            data-scroll-kind="h2"
             data-type="h2"
           >
             <div
@@ -1827,6 +1852,7 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
             class="notion-block-row"
             data-drag-over="false"
             data-dragging="false"
+            data-scroll-kind="bullet"
             data-type="bullet"
           >
             <div
@@ -1933,6 +1959,7 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
             class="notion-block-row"
             data-drag-over="false"
             data-dragging="false"
+            data-scroll-kind="bullet"
             data-type="bullet"
           >
             <div
@@ -2039,6 +2066,7 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
             class="notion-block-row"
             data-drag-over="false"
             data-dragging="false"
+            data-scroll-kind="divider"
             data-type="divider"
           >
             <div
@@ -2140,6 +2168,8 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
             class="notion-block-row"
             data-drag-over="false"
             data-dragging="false"
+            data-scroll-kind="database-view"
+            data-scroll-label="عرض قاعدة البيانات"
             data-type="database-view"
           >
             <div
@@ -2244,6 +2274,20 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
                         aria-busy="false"
                         class="record-panel"
                       >
+                        <div
+                          class="object-export-action"
+                        >
+                          <button
+                            class="button button--secondary"
+                            type="button"
+                          >
+                            <span
+                              class="button__label"
+                            >
+                              تصدير Excel
+                            </span>
+                          </button>
+                        </div>
                         <div
                           class="notion-view-bar"
                         >

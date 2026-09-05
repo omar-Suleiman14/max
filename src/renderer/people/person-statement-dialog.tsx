@@ -1,3 +1,4 @@
+import { Select } from '../ui/select';
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -109,13 +110,13 @@ function RepaymentModal({
 
         <label className="field">
           <span>{peopleDebtCopy(locale, 'paymentAccount')}</span>
-          <select onChange={(e) => setAccountId(e.target.value)} value={accountId}>
+          <Select onChange={(e) => setAccountId(e.target.value)} value={accountId}>
             {accounts.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.name} ({a.balance.toFixed(2)})
               </option>
             ))}
-          </select>
+          </Select>
         </label>
 
         <label className="field">
