@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
 import type { Locale } from '../app/i18n';
+import { findContentSections, type SectionMarker } from './scroll-sections';
 
-type Section = { element: HTMLElement; title: string; preview: string };
-
-/** T3-style section rail: reading position, hover previews, and keyboard navigation. */
+/** T3-style section rail: dynamic section count, reading position, hover previews, and keyboard navigation. */
 export function ScrollOutline({ locale, pageKey }: { locale: Locale; pageKey: string }) {
-  const [sections, setSections] = useState<Section[]>([]);
+  const [sections, setSections] = useState<SectionMarker[]>([]);
   const [active, setActive] = useState(0);
   const [visible, setVisible] = useState(false);
 
@@ -14,7 +13,7 @@ export function ScrollOutline({ locale, pageKey }: { locale: Locale; pageKey: st
     if (!root) return;
 
     let frame = 0;
-    let current: Section[] = [];
+    let current: SectionMarker[] = [];
 
     const update = () => {
       const top = root.getBoundingClientRect().top + 80;
@@ -26,28 +25,15 @@ export function ScrollOutline({ locale, pageKey }: { locale: Locale; pageKey: st
         index = current.length - 1;
       }
       setActive(Math.max(0, index));
-      setVisible(root.scrollHeight > root.clientHeight + 40 && current.length > 1);
+      // Show rail whenever there are multiple sections to navigate
+      const isScrollable = root.scrollHeight > root.clientHeight + 20 || root.scrollHeight === 0;
+      setVisible(current.length > 1 && isScrollable);
     };
 
     const collect = () => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
-        const blocks = [...root.querySelectorAll<HTMLElement>('.notion-editor-canvas > .notion-block-row')];
-        const nodes = blocks.length ? blocks : [...root.querySelectorAll<HTMLElement>('.settings-scroll-section, h2, h3')];
-        current = nodes
-          .filter((element) => element.getClientRects().length && element.dataset.scrollKind !== 'divider' && !element.closest('[role="dialog"]'))
-          .slice(0, 60)
-          .map((element) => {
-            const heading = element.querySelector<HTMLElement>('h1,h2,h3,[contenteditable="true"]');
-            const text = (element.dataset.scrollLabel || heading?.textContent || element.textContent || '').trim().replace(/\s+/g, ' ');
-            return {
-              element,
-              title: text.slice(0, 80) || (locale === 'ar' ? 'قسم' : 'Section'),
-              preview: element.dataset.scrollKind === 'database-view'
-                ? (locale === 'ar' ? 'الانتقال إلى قاعدة بيانات هذه الصفحة' : 'Jump to this page\'s database')
-                : (element.textContent ?? '').trim().slice(0, 180),
-            };
-          });
+        current = findContentSections(root, locale).slice(0, 60);
         setSections(current);
         update();
       });
@@ -70,50 +56,56 @@ export function ScrollOutline({ locale, pageKey }: { locale: Locale; pageKey: st
     };
   }, [locale, pageKey]);
 
-  if (!visible) return null;
+  if (!visible || sections.length < 2) return null;
 
   return (
     <nav
       aria-label={locale === 'ar' ? 'موضع القراءة وأقسام الصفحة' : 'Reading position and page sections'}
       className="scroll-outline"
     >
-      {sections.map((section, index) => (
-        <button
-          aria-current={index === active ? 'location' : undefined}
-          aria-label={section.title}
-          className="scroll-outline__mark"
-          key={index}
-          onClick={() => {
-            section.element.scrollIntoView({
-              behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth',
-              block: 'start',
-            });
-          }}
-          onKeyDown={(event) => {
-            if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
-            event.preventDefault();
-            const buttons = event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('button');
-            const next =
-              event.key === 'Home'
-                ? 0
-                : event.key === 'End'
-                  ? sections.length - 1
-                  : (index + (event.key === 'ArrowDown' ? 1 : -1) + sections.length) % sections.length;
-            buttons?.[next]?.focus();
-          }}
-          type="button"
-        >
-          <span
-            aria-hidden="true"
-            className="scroll-outline__line"
-            style={{ width: index === active ? 28 : 10 + Math.min(10, section.title.length / 5) }}
-          />
-          <span aria-hidden="true" className="scroll-outline__preview">
-            <strong>{section.title}</strong>
-            <span>{section.preview}</span>
-          </span>
-        </button>
-      ))}
+      {sections.map((section, index) => {
+        const isCurrent = index === active;
+        return (
+          <button
+            aria-current={isCurrent ? 'location' : undefined}
+            aria-label={section.title}
+            className="scroll-outline__mark"
+            key={index}
+            onClick={() => {
+              section.element.scrollIntoView({
+                behavior:
+                  typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
+                    ? 'instant'
+                    : 'smooth',
+                block: 'start',
+              });
+            }}
+            onKeyDown={(event) => {
+              if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+              event.preventDefault();
+              const buttons = event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('button');
+              const next =
+                event.key === 'Home'
+                  ? 0
+                  : event.key === 'End'
+                    ? sections.length - 1
+                    : (index + (event.key === 'ArrowDown' ? 1 : -1) + sections.length) % sections.length;
+              buttons?.[next]?.focus();
+            }}
+            type="button"
+          >
+            <span
+              aria-hidden="true"
+              className="scroll-outline__line"
+              style={{ width: isCurrent ? 28 : 10 + Math.min(10, section.title.length / 5) }}
+            />
+            <span aria-hidden="true" className="scroll-outline__preview">
+              <strong>{section.title}</strong>
+              <span>{section.preview}</span>
+            </span>
+          </button>
+        );
+      })}
     </nav>
   );
 }

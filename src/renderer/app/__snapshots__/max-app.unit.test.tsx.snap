@@ -2667,5 +2667,121 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
       </div>
     </div>
   </main>
+  <nav
+    aria-label="موضع القراءة وأقسام الصفحة"
+    class="scroll-outline"
+  >
+    <button
+      aria-label="عام"
+      class="scroll-outline__mark"
+      type="button"
+    >
+      <span
+        aria-hidden="true"
+        class="scroll-outline__line"
+        style="width: 10.6px;"
+      />
+      <span
+        aria-hidden="true"
+        class="scroll-outline__preview"
+      >
+        <strong>
+          عام
+        </strong>
+        <span>
+          عامهوية مساحة العمل وإعدادها وبيانات العرض.اسم المتجرالاسم الظاهر أعلى مساحة العمل.اسم المتجراللغةتتغير لغة واجهة Max واتجاهها فورًا.ستتغير واجهة Max، لكن الأسماء والملاحظات والنصو
+        </span>
+      </span>
+    </button>
+    <button
+      aria-label="التسعير"
+      class="scroll-outline__mark"
+      type="button"
+    >
+      <span
+        aria-hidden="true"
+        class="scroll-outline__line"
+        style="width: 11.4px;"
+      />
+      <span
+        aria-hidden="true"
+        class="scroll-outline__preview"
+      >
+        <strong>
+          التسعير
+        </strong>
+        <span>
+          التسعيررسوم وربح وعمولات وضرائب وتحويل قيمة قابلة للضبط لكل خدمة.تسعير الخدماتملفات قابلة لإعادة الاستخدام للرسوم والربح والعمولات والضرائب والخصومات والقيمة المستلمة.ملف تسعير جدي
+        </span>
+      </span>
+    </button>
+    <button
+      aria-label="المظهر"
+      class="scroll-outline__mark"
+      type="button"
+    >
+      <span
+        aria-hidden="true"
+        class="scroll-outline__line"
+        style="width: 11.2px;"
+      />
+      <span
+        aria-hidden="true"
+        class="scroll-outline__preview"
+      >
+        <strong>
+          المظهر
+        </strong>
+        <span>
+          المظهراضبط المظهر واللغة بما يناسب طريقة عملك.المظهراستخدم مظهر النظام أو اختر المظهر يدويًا.النظامفاتحداكنالحركةتتبع التأثيرات الحركية إعدادات نظام التشغيل.إعادة ضبط المظهر
+        </span>
+      </span>
+    </button>
+    <button
+      aria-label="النسخ الاحتياطي"
+      class="scroll-outline__mark"
+      type="button"
+    >
+      <span
+        aria-hidden="true"
+        class="scroll-outline__line"
+        style="width: 13px;"
+      />
+      <span
+        aria-hidden="true"
+        class="scroll-outline__preview"
+      >
+        <strong>
+          النسخ الاحتياطي
+        </strong>
+        <span>
+          النسخ الاحتياطينسخ محلية يمكنك فحصها واستعادتها دون اتصال بالإنترنت.جدول النسخ الاحتياطياختر عدد مرات إنشاء النسخ التلقائية.يوميًاأسبوعيًايدويًاالنسخ الاحتياطي والاستعادة المحليةيأ
+        </span>
+      </span>
+    </button>
+    <button
+      aria-current="location"
+      aria-label="الأرشيف والمهملات"
+      class="scroll-outline__mark"
+      type="button"
+    >
+      <span
+        aria-hidden="true"
+        class="scroll-outline__line"
+        style="width: 28px;"
+      />
+      <span
+        aria-hidden="true"
+        class="scroll-outline__preview"
+      >
+        <strong>
+          الأرشيف والمهملات
+        </strong>
+        <span>
+          الأرشيف والمهملاتاستعد الصفحات المحذوفة أو نظّف مساحة العمل بأمان.المهملات فارغةحذف مساحة العملينشئ Max نسخة أمان أولًا، ثم يحذف البيانات المحلية ويعيد شاشة الإعداد.اكتب "Test Shop
+        </span>
+      </span>
+    </button>
+  </nav>
 </div>
 `;
