@@ -29,6 +29,8 @@ describe('Max v0.2.0 Core Workspace Integration Tests', () => {
       const nav = db.workspace.getNavigation();
       expect(nav.pages.length).toBe(3);
       expect(nav.pages.find((p) => p.id === page1.id)?.title).toBe('Home Dashboard');
+      expect(nav.pages.find((p) => p.id === page1.id)?.level).toBe(0);
+      expect(nav.pages.find((p) => p.id === subpage.id)?.level).toBe(1);
     });
 
     it('archives, restores, and reorders nodes with fractional indexing', () => {
@@ -627,4 +629,15 @@ describe('Max v0.2.0 Core Workspace Integration Tests', () => {
       expect(migratedTransactions.some((record) => typeof record.properties[paymentMethod.id] === 'string')).toBe(true);
     });
   });
+});
+
+it('validates workflow numeric input before writes and rejects archived workflows',()=>{
+  const db=new DatabaseService(':memory:');db.initialize();
+  const workflow=db.workflows.createWorkflow({name:'Fee check',kind:'custom',inputSchema:{fields:[{key:'amount',label:'Amount',type:'money',required:true}]},steps:[{type:'CALCULATE_FEES',config:{}}]});
+  expect(()=>db.workflows.execute({workflowId:workflow.id,inputs:{amount:''}})).toThrow('required');
+  expect(()=>db.workflows.execute({workflowId:workflow.id,inputs:{amount:'abc'}})).toThrow('finite');
+  expect(()=>db.workflows.execute({workflowId:workflow.id,inputs:{amount:-5}})).toThrow('non-negative');
+  db.workflows.archiveWorkflow(workflow.id);
+  expect(()=>db.workflows.execute({workflowId:workflow.id,inputs:{amount:10}})).toThrow('not found');
+  db.close();
 });

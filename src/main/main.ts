@@ -10,6 +10,9 @@ import { registerAppProtocol, registerAppScheme } from './protocol/register-app-
 import { runSmokeTest } from './smoke/run-smoke-test';
 import { createMainWindow } from './window/create-main-window';
 
+// Separate disposable UI-test workspaces from the owner's real shop.
+if (!app.isPackaged && process.env.MAX_DEV_USER_DATA_DIR) app.setPath('userData', process.env.MAX_DEV_USER_DATA_DIR);
+
 const platform = getPlatformAdapter();
 if (process.env.MAX_SMOKE_TEST === '1') {
   // Deterministic screenshots on CI/virtualized GPUs.

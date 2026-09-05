@@ -1,3 +1,5 @@
+import { ScrollOutline } from '../ui/scroll-outline';
+import { TERMS_VERSION } from '../../shared/terms';
 import {
   CircleDollarSign,
   ContactRound,
@@ -232,6 +234,18 @@ export function MaxApp() {
     setObjectCreateRequest(0);
   }
 
+  function navigateDatabaseView(databaseId: string, viewId: string) {
+    setPage(databaseId);
+    setOpenRecordId(undefined);
+    setRequestedSavedViewId(viewId);
+    setCommandOpen(false);
+    setObjectCreateRequest(0);
+  }
+
+  const refreshWorkspaceNavigation = useCallback(() => {
+    void window.maxApi.workspace.getNavigation().then(setWorkspaceNavigation);
+  }, []);
+
   const handleAddCustomPage = useCallback(async () => {
     const newPage = await createPersistentCustomPage(locale === 'ar' ? 'بدون عنوان' : 'Untitled', 'lucide:FileText', customPages.length);
     if (!newPage) return;
@@ -239,12 +253,25 @@ export function MaxApp() {
     navigate(newPage.id);
   }, [customPages.length, locale]);
 
+  async function handleAddSubpage(parentId: string) {
+    const siblingCount = customPages.filter((candidate) => candidate.parentNodeId === parentId).length;
+    const newPage = await createPersistentCustomPage(
+      locale === 'ar' ? 'بدون عنوان' : 'Untitled',
+      'lucide:FileText',
+      siblingCount,
+      parentId,
+    );
+    if (!newPage) return;
+    setCustomPages((pages) => [...pages, newPage]);
+    navigate(newPage.id);
+  }
+
   async function handleDuplicateCustomPage(id: string) {
     const source = customPages.find((candidate) => candidate.id === id);
     if (!source) return;
     const sourceTitle = source.title.trim() || translate(locale, 'untitledPage');
     const copyTitle = locale === 'ar' ? `نسخة من ${sourceTitle}` : `${sourceTitle} copy`;
-    const copy = await createPersistentCustomPage(copyTitle, source.icon, customPages.length);
+    const copy = await createPersistentCustomPage(copyTitle, source.icon, customPages.length, source.parentNodeId);
     if (!copy) return;
     const hydratedCopy = {
       ...copy,
@@ -293,6 +320,7 @@ export function MaxApp() {
     templateId?: 'blank' | 'custom' | 'phone-shop',
   ) {
     const res = await window.maxApi.shop.completeOnboarding({
+      acceptedTermsVersion: TERMS_VERSION,
       backupSchedule,
       blueprint,
       includeDemoData,
@@ -300,6 +328,7 @@ export function MaxApp() {
       shopName: nextShopName,
       templateId,
     });
+    if (!res.ok) throw new Error(res.error.message);
     if (res.ok) {
       setShopName(res.value.shopName);
       setLocale(res.value.locale);
@@ -320,7 +349,7 @@ export function MaxApp() {
   }
 
   const commands = useMemo<readonly Command[]>(() => {
-    const defaultDests = ['home', 'databases', 'items', 'people', 'transactions', 'accounts', 'reconciliation'];
+    const defaultDests = ['home', 'items', 'people', 'transactions', 'accounts', 'reconciliation'];
     const navigationCommands = defaultDests.map((destination) => {
       const pLabel = pageLabels[destination] ? translate(locale, pageLabels[destination]) : destination;
       return {
@@ -412,7 +441,7 @@ export function MaxApp() {
         : page;
 
   const PageIcon: LucideIcon = (!isCustomPage && page in pageIcons && pageIcons[page]) ? pageIcons[page] : FileText;
-  const showPageHeader = !isCustomPage && !['databases', 'home', 'settings'].includes(page);
+  const showPageHeader = !isCustomPage && !activeWorkspaceDatabase && !['databases', 'home', 'settings'].includes(page);
 
   function navigateSettingsSection(section: SettingsSectionId) {
     setSettingsSection(section);
@@ -440,10 +469,12 @@ export function MaxApp() {
         homePage={homePage}
         locale={locale}
         onAddCustomPage={() => void handleAddCustomPage()}
+        onAddSubpage={(parentId) => void handleAddSubpage(parentId)}
         onCollapse={() => setSidebarCollapsed((collapsed) => !collapsed)}
         onDeletePage={handleDeleteCustomPage}
         onDuplicatePage={(id) => void handleDuplicateCustomPage(id)}
         onNavigate={navigate}
+        onNavigateView={navigateDatabaseView}
         onOpenSettings={() => navigate('settings')}
         onRenamePage={(id, title) => handleUpdateCustomPage(id, { title })}
         onResize={setSidebarWidth}
@@ -514,6 +545,7 @@ export function MaxApp() {
               isHome
               locale={locale}
               onUpdatePage={handleUpdateHomePage}
+              onWorkspaceChange={refreshWorkspaceNavigation}
               page={homePage}
             />
           ) : isCustomPage && activeCustomPage ? (
@@ -521,12 +553,13 @@ export function MaxApp() {
               key={activeCustomPage.id}
               locale={locale}
               onUpdatePage={handleUpdateCustomPage}
+              onWorkspaceChange={refreshWorkspaceNavigation}
               page={activeCustomPage}
             />
           ) : page === 'databases' ? (
             <DatabasesWorkspace key="databases" locale={locale} />
           ) : activeWorkspaceDatabase ? (
-            <DatabasePage databaseId={activeWorkspaceDatabase.id} locale={locale} onOpenRecordId={openRecordId} />
+            <DatabasePage databaseId={activeWorkspaceDatabase.id} initialViewId={requestedSavedViewId} locale={locale} onOpenRecordId={openRecordId} />
           ) : page === 'settings' ? (
             <SettingsPage
               key="settings"
@@ -586,6 +619,7 @@ export function MaxApp() {
           )}
           </Suspense>
         </main>
+        <ScrollOutline locale={locale} pageKey={page} />
       </div>
 
       <Suspense fallback={null}>
@@ -626,9 +660,7 @@ export function MaxApp() {
           onClose={() => setQuickEntryOpen(false)}
           onSuccess={(tx) => {
             setRecentTxForUndo(tx);
-            if (page === 'transactions' || page === 'accounts') {
-              setDataRevision((revision) => revision + 1);
-            }
+            setDataRevision((revision) => revision + 1);
           }}
         />
       )}
@@ -636,10 +668,12 @@ export function MaxApp() {
       </Suspense>
       {recentTxForUndo && (
         <UndoToast
+          key={recentTxForUndo.id}
           locale={locale}
           onDismiss={() => setRecentTxForUndo(undefined)}
           onUndo={async (id) => {
-            await window.maxApi.transactions.undo(id);
+            const result = await window.maxApi.transactions.undo(id);
+            if (!result.ok) throw new Error(result.error.message);
             if (page === 'transactions' || page === 'accounts') {
               setDataRevision((revision) => revision + 1);
             }

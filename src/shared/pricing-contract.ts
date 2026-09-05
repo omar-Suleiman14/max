@@ -233,10 +233,11 @@ export function roundPricingAmount(value: number, rule: RoundingRule = DEFAULT_R
   const precisionIncrement = rule.precision === 0 ? 1 : 0.01;
   const increment = rule.increment && rule.increment > 0 ? rule.increment : precisionIncrement;
   const scaled = value / increment;
+  const tolerance = Number.EPSILON * Math.max(1, Math.abs(scaled)) * 4;
   const rounded = rule.mode === 'up'
-    ? Math.ceil(scaled - Number.EPSILON)
+    ? Math.ceil(scaled - tolerance)
     : rule.mode === 'down'
-      ? Math.floor(scaled + Number.EPSILON)
+      ? Math.floor(scaled + tolerance)
       : Math.round(scaled);
   const precisionFactor = rule.precision === 0 ? 1 : 100;
   return Math.round(rounded * increment * precisionFactor) / precisionFactor;
@@ -301,6 +302,8 @@ function matchingLookup(entries: readonly PricingLookupEntry[], amount: number, 
 
 export function calculatePricing(profile: PricingProfile, input: PricingQuoteInput, calculatedAt = new Date().toISOString()): PricingSnapshot {
   if (!Number.isFinite(input.amount) || input.amount < 0) throw new Error('Pricing amount must be a non-negative finite number.');
+  if (input.providerCost !== undefined && (!Number.isFinite(input.providerCost) || input.providerCost < 0)) throw new Error('Provider cost must be non-negative and finite.');
+  if (new Set(input.overrides?.map(({ componentId }) => componentId)).size !== (input.overrides?.length ?? 0)) throw new Error('Only one override per component is allowed.');
   for (const override of input.overrides ?? []) {
     if (!Number.isFinite(override.amount) || override.amount < 0) throw new Error('Override amount must be non-negative.');
     if (!override.reason.trim()) throw new Error('Every pricing override requires a reason.');
@@ -413,5 +416,7 @@ export function calculatePricing(profile: PricingProfile, input: PricingQuoteInp
     taxAmount: money(taxAmount),
   };
 
+  if (Object.values(totals).some((value) => !Number.isFinite(value) || Math.abs(value) > Number.MAX_SAFE_INTEGER / 100)) throw new Error('Pricing totals exceed the supported monetary range.');
+  if (customerTotal < 0 || shopNetCost < 0) throw new Error('Pricing cannot produce a negative customer total or shop cost.');
   return { calculatedAt, componentResults: results, input, profile, totals };
 }

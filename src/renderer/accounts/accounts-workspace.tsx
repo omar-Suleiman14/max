@@ -1,3 +1,4 @@
+import { Select } from '../ui/select';
 import {
   Archive,
   ArrowRightLeft,
@@ -125,20 +126,20 @@ function AccountEditor({
 
         <label className="field">
           <span>{accountsCopy(locale, 'provider')}</span>
-          <select onChange={(event) => setProviderId(event.target.value)} value={providerId}>
+          <Select onChange={(event) => setProviderId(event.target.value)} value={providerId}>
             <option value="">{accountsCopy(locale, 'noProvider')}</option>
             {providers.filter((provider) => provider.active).map((provider) => <option key={provider.id} value={provider.id}>{provider.name}</option>)}
-          </select>
+          </Select>
         </label>
 
         <label className="field">
           <span>{accountsCopy(locale, 'accountType')}</span>
-          <select onChange={(e) => setAccountType(e.target.value as AccountType)} value={accountType}>
+          <Select onChange={(e) => setAccountType(e.target.value as AccountType)} value={accountType}>
             <option value="cash">{accountsCopy(locale, 'cash')}</option>
             <option value="bank">{accountsCopy(locale, 'bank')}</option>
             <option value="wallet">{accountsCopy(locale, 'wallet')}</option>
             <option value="other">{accountsCopy(locale, 'other')}</option>
-          </select>
+          </Select>
         </label>
 
         {!initial && (
@@ -159,12 +160,12 @@ function AccountEditor({
         <div className="quick-step-block">
           <label className="field">
             <span>{accountsCopy(locale, 'feeSettings')}</span>
-            <select onChange={(event) => setFeeType(event.target.value as FeeType)} value={feeType}>
+            <Select onChange={(event) => setFeeType(event.target.value as FeeType)} value={feeType}>
               <option value="none">{accountsCopy(locale, 'feeNone')}</option>
               <option value="fixed">{accountsCopy(locale, 'feeFixed')}</option>
               <option value="percentage">{accountsCopy(locale, 'feePercentage')}</option>
               <option value="fixed_plus_percentage">{accountsCopy(locale, 'feeFixedPlusPercentage')}</option>
-            </select>
+            </Select>
           </label>
           {feeType !== 'none' && (
             <div className="field-pair">
@@ -261,24 +262,24 @@ function TransferDialog({
         <div className="field-pair">
           <label className="field">
             <span>{accountsCopy(locale, 'fromAccount')}</span>
-            <select onChange={(e) => { const id = e.target.value; setFromAccountId(id); const account = accounts.find((candidate) => candidate.id === id); setProviderFee(String(calculateFee(Number(amount) || 0, account?.feeConfig))); }} value={fromAccountId}>
+            <Select onChange={(e) => { const id = e.target.value; setFromAccountId(id); const account = accounts.find((candidate) => candidate.id === id); setProviderFee(String(calculateFee(Number(amount) || 0, account?.feeConfig))); }} value={fromAccountId}>
               {accounts.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.name} ({a.balance.toFixed(2)})
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
 
           <label className="field">
             <span>{accountsCopy(locale, 'toAccount')}</span>
-            <select onChange={(e) => setToAccountId(e.target.value)} value={toAccountId}>
+            <Select onChange={(e) => setToAccountId(e.target.value)} value={toAccountId}>
               {accounts.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.name} ({a.balance.toFixed(2)})
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
         </div>
 

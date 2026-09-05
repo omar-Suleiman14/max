@@ -1,6 +1,6 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`Max shell > renders the English shell and navigates to Databases workspace 1`] = `
+exports[`Max shell > renders the English page-first shell without a databases section in the sidebar 1`] = `
 <div
   class="app-frame"
 >
@@ -20,7 +20,7 @@ exports[`Max shell > renders the English shell and navigates to Databases worksp
       </span>
       <bdi>
         <strong>
-          Databases
+          Home
         </strong>
       </bdi>
     </div>
@@ -140,637 +140,1195 @@ exports[`Max shell > renders the English shell and navigates to Databases worksp
     </div>
   </header>
   <main
-    aria-label="Databases"
+    aria-label="Home"
     class="content"
     data-custom-page="false"
-    data-page="databases"
+    data-page="home"
     id="main-content"
     tabindex="-1"
   >
     <div
-      class="databases-workspace"
+      class="custom-page-view"
     >
       <div
-        class="databases-header"
+        class="custom-page-header"
       >
         <div
-          class="databases-header__info"
+          class="custom-page-header__icon-wrap"
         >
-          <div
-            class="databases-header__icon"
+          <button
+            aria-label="Change icon or emoji"
+            class="custom-page-icon-btn"
+            title="Change icon or emoji"
+            type="button"
           >
             <svg
               aria-hidden="true"
-              class="lucide lucide-database"
+              class="lucide lucide-house custom-page-icon-display"
               fill="none"
-              height="24"
+              height="28"
               stroke="currentColor"
               stroke-linecap="round"
               stroke-linejoin="round"
-              stroke-width="2"
+              stroke-width="1.8"
               viewBox="0 0 24 24"
-              width="24"
+              width="28"
               xmlns="http://www.w3.org/2000/svg"
             >
-              <ellipse
-                cx="12"
-                cy="5"
-                rx="9"
-                ry="3"
+              <path
+                d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"
               />
               <path
-                d="M3 5V19A9 3 0 0 0 21 19V5"
-              />
-              <path
-                d="M3 12A9 3 0 0 0 21 12"
+                d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
               />
             </svg>
-          </div>
-          <div>
-            <h2>
-              Databases
-            </h2>
-            <p>
-              All shop databases, inventory, contacts, accounts, and transactions in one unified workspace.
-            </p>
-          </div>
+          </button>
         </div>
-        <nav
-          aria-label="Databases Switcher"
-          class="databases-tabs"
+        <div
+          class="custom-page-header__title-row"
         >
-          <button
-            aria-current="page"
-            class="databases-tab"
-            data-active="true"
-            type="button"
-          >
-            <svg
-              aria-hidden="true"
-              class="lucide lucide-package"
-              fill="none"
-              height="17"
-              stroke="currentColor"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              viewBox="0 0 24 24"
-              width="17"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"
-              />
-              <path
-                d="M12 22V12"
-              />
-              <polyline
-                points="3.29 7 12 12 20.71 7"
-              />
-              <path
-                d="m7.5 4.27 9 5.15"
-              />
-            </svg>
-            <span>
-              Items & Products
-            </span>
-          </button>
-          <button
-            class="databases-tab"
-            data-active="false"
-            type="button"
-          >
-            <svg
-              aria-hidden="true"
-              class="lucide lucide-contact-round"
-              fill="none"
-              height="17"
-              stroke="currentColor"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              viewBox="0 0 24 24"
-              width="17"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                d="M16 2v2"
-              />
-              <path
-                d="M17.915 21a6 6 0 10-12 0"
-              />
-              <path
-                d="M8 2v2"
-              />
-              <circle
-                cx="12"
-                cy="11"
-                r="4"
-              />
-              <rect
-                height="18"
-                rx="2"
-                width="18"
-                x="3"
-                y="3"
-              />
-            </svg>
-            <span>
-              People & Contacts
-            </span>
-          </button>
-          <button
-            class="databases-tab"
-            data-active="false"
-            type="button"
-          >
-            <svg
-              aria-hidden="true"
-              class="lucide lucide-receipt-text"
-              fill="none"
-              height="17"
-              stroke="currentColor"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              viewBox="0 0 24 24"
-              width="17"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                d="M13 16H8"
-              />
-              <path
-                d="M14 8H8"
-              />
-              <path
-                d="M16 12H8"
-              />
-              <path
-                d="M4 3a1 1 0 0 1 1-1 1.3 1.3 0 0 1 .7.2l.933.6a1.3 1.3 0 0 0 1.4 0l.934-.6a1.3 1.3 0 0 1 1.4 0l.933.6a1.3 1.3 0 0 0 1.4 0l.933-.6a1.3 1.3 0 0 1 1.4 0l.934.6a1.3 1.3 0 0 0 1.4 0l.933-.6A1.3 1.3 0 0 1 19 2a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1 1.3 1.3 0 0 1-.7-.2l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.934.6a1.3 1.3 0 0 1-1.4 0l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-1.4 0l-.934-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-.7.2 1 1 0 0 1-1-1z"
-              />
-            </svg>
-            <span>
-              Transactions
-            </span>
-          </button>
-          <button
-            class="databases-tab"
-            data-active="false"
-            type="button"
-          >
-            <svg
-              aria-hidden="true"
-              class="lucide lucide-circle-dollar-sign"
-              fill="none"
-              height="17"
-              stroke="currentColor"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              viewBox="0 0 24 24"
-              width="17"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <circle
-                cx="12"
-                cy="12"
-                r="10"
-              />
-              <path
-                d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"
-              />
-              <path
-                d="M12 18V6"
-              />
-            </svg>
-            <span>
-              Accounts & Drawers
-            </span>
-          </button>
-          <button
-            class="databases-tab"
-            data-active="false"
-            type="button"
-          >
-            <svg
-              aria-hidden="true"
-              class="lucide lucide-scale"
-              fill="none"
-              height="17"
-              stroke="currentColor"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              viewBox="0 0 24 24"
-              width="17"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                d="M12 3v18"
-              />
-              <path
-                d="m19 8 3 8a5 5 0 0 1-6 0zV7"
-              />
-              <path
-                d="M3 7h1a17 17 0 0 0 8-2 17 17 0 0 0 8 2h1"
-              />
-              <path
-                d="m5 8 3 8a5 5 0 0 1-6 0zV7"
-              />
-              <path
-                d="M7 21h10"
-              />
-            </svg>
-            <span>
-              Daily Reconciliation
-            </span>
-          </button>
-          <button
-            class="databases-tab text-muted hover:text-foreground"
-            title="Create new database"
-            type="button"
-          >
-            <svg
-              aria-hidden="true"
-              class="lucide lucide-plus mr-1"
-              fill="none"
-              height="16"
-              stroke="currentColor"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              viewBox="0 0 24 24"
-              width="16"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                d="M5 12h14"
-              />
-              <path
-                d="M12 5v14"
-              />
-            </svg>
-            <span>
-              New Database
-            </span>
-          </button>
-        </nav>
+          <input
+            class="custom-page-title-input"
+            placeholder="Shop Overview & Home"
+            value="Home"
+          />
+        </div>
       </div>
       <div
-        class="databases-tab-content"
+        class="custom-page-content"
       >
-        <section
-          class="object-workspace"
+        <div
+          class="notion-editor-canvas"
         >
           <div
-            class="object-layout"
+            class="notion-block-row"
+            data-drag-over="false"
+            data-dragging="false"
+            data-scroll-kind="callout"
+            data-type="callout"
           >
             <div
-              aria-busy="false"
-              class="record-panel"
+              class="notion-block-gutter"
+            >
+              <button
+                aria-label="Insert block below"
+                class="notion-gutter-btn notion-gutter-btn--add"
+                title="Insert text or database"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-plus"
+                  fill="none"
+                  height="14"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="14"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M5 12h14"
+                  />
+                  <path
+                    d="M12 5v14"
+                  />
+                </svg>
+              </button>
+              <button
+                aria-label="Block actions"
+                class="notion-gutter-btn notion-gutter-btn--drag"
+                draggable="true"
+                title="Drag to reorder"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-grip-vertical"
+                  fill="none"
+                  height="14"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="14"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <circle
+                    cx="9"
+                    cy="12"
+                    r="1"
+                  />
+                  <circle
+                    cx="9"
+                    cy="5"
+                    r="1"
+                  />
+                  <circle
+                    cx="9"
+                    cy="19"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="12"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="5"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="19"
+                    r="1"
+                  />
+                </svg>
+              </button>
+            </div>
+            <div
+              class="notion-block-body"
             >
               <div
-                class="notion-view-bar"
+                class="notion-callout-card"
               >
-                <div
-                  class="notion-view-bar__tabs"
+                <span
+                  class="notion-callout-icon"
                 >
-                  <div
-                    class="notion-view-tab-wrapper"
-                  >
-                    <button
-                      class="notion-view-tab"
-                      data-active="true"
-                      type="button"
-                    >
-                      <svg
-                        aria-hidden="true"
-                        class="lucide lucide-table-properties"
-                        fill="none"
-                        height="14"
-                        stroke="currentColor"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        viewBox="0 0 24 24"
-                        width="14"
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <path
-                          d="M15 3v18"
-                        />
-                        <rect
-                          height="18"
-                          rx="2"
-                          width="18"
-                          x="3"
-                          y="3"
-                        />
-                        <path
-                          d="M21 9H3"
-                        />
-                        <path
-                          d="M21 15H3"
-                        />
-                      </svg>
-                      <span>
-                        Default view
-                      </span>
-                    </button>
-                    <button
-                      aria-label="View options"
-                      class="notion-view-tab-menu"
-                      type="button"
-                    >
-                      <svg
-                        aria-hidden="true"
-                        class="lucide lucide-chevron-down"
-                        fill="none"
-                        height="12"
-                        stroke="currentColor"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        viewBox="0 0 24 24"
-                        width="12"
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <path
-                          d="m6 9 6 6 6-6"
-                        />
-                      </svg>
-                    </button>
-                  </div>
-                  <button
-                    aria-label="Save view"
-                    class="notion-view-tab-add"
-                    title="Save view"
-                    type="button"
-                  >
-                    <svg
-                      aria-hidden="true"
-                      class="lucide lucide-plus"
-                      fill="none"
-                      height="14"
-                      stroke="currentColor"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      viewBox="0 0 24 24"
-                      width="14"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <path
-                        d="M5 12h14"
-                      />
-                      <path
-                        d="M12 5v14"
-                      />
-                    </svg>
-                  </button>
-                </div>
-                <div
-                  class="notion-view-bar__actions"
+                  💡
+                </span>
+                <textarea
+                  class="notion-callout-input"
+                  placeholder="Callout note..."
+                  rows="1"
                 >
-                  <button
-                    aria-expanded="false"
-                    class="notion-db-tool-btn"
-                    data-active="false"
-                    title="Filter"
-                    type="button"
-                  >
-                    <svg
-                      aria-hidden="true"
-                      class="lucide lucide-funnel"
-                      fill="none"
-                      height="14"
-                      stroke="currentColor"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      viewBox="0 0 24 24"
-                      width="14"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <path
-                        d="M10 20a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341L21.74 4.67A1 1 0 0 0 21 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14z"
-                      />
-                    </svg>
-                    <span>
-                      Filter
-                    </span>
-                  </button>
-                  <button
-                    aria-expanded="false"
-                    class="notion-db-tool-btn"
-                    data-active="false"
-                    title="Sort"
-                    type="button"
-                  >
-                    <svg
-                      aria-hidden="true"
-                      class="lucide lucide-arrow-up-down"
-                      fill="none"
-                      height="14"
-                      stroke="currentColor"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      viewBox="0 0 24 24"
-                      width="14"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <path
-                        d="m21 16-4 4-4-4"
-                      />
-                      <path
-                        d="M17 20V4"
-                      />
-                      <path
-                        d="m3 8 4-4 4 4"
-                      />
-                      <path
-                        d="M7 4v16"
-                      />
-                    </svg>
-                    <span>
-                      Sort
-                    </span>
-                  </button>
-                  <button
-                    aria-label="Database properties"
-                    class="notion-db-tool-btn"
-                    title="Properties"
-                    type="button"
-                  >
-                    <svg
-                      aria-hidden="true"
-                      class="lucide lucide-sliders-horizontal"
-                      fill="none"
-                      height="14"
-                      stroke="currentColor"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      viewBox="0 0 24 24"
-                      width="14"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <path
-                        d="M10 5H3"
-                      />
-                      <path
-                        d="M12 19H3"
-                      />
-                      <path
-                        d="M14 3v4"
-                      />
-                      <path
-                        d="M16 17v4"
-                      />
-                      <path
-                        d="M21 12h-9"
-                      />
-                      <path
-                        d="M21 19h-5"
-                      />
-                      <path
-                        d="M21 5h-7"
-                      />
-                      <path
-                        d="M8 10v4"
-                      />
-                      <path
-                        d="M8 12H3"
-                      />
-                    </svg>
-                    <span>
-                      Properties
-                    </span>
-                  </button>
-                  <button
-                    class="notion-db-tool-btn"
-                    title="Templates"
-                    type="button"
-                  >
-                    <svg
-                      aria-hidden="true"
-                      class="lucide lucide-file-text"
-                      fill="none"
-                      height="14"
-                      stroke="currentColor"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      viewBox="0 0 24 24"
-                      width="14"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <path
-                        d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
-                      />
-                      <path
-                        d="M14 2v5a1 1 0 0 0 1 1h5"
-                      />
-                      <path
-                        d="M10 9H8"
-                      />
-                      <path
-                        d="M16 13H8"
-                      />
-                      <path
-                        d="M16 17H8"
-                      />
-                    </svg>
-                    <span>
-                      Templates
-                    </span>
-                  </button>
-                  <div
-                    class="notion-db-new-split-btn"
-                  >
-                    <button
-                      class="notion-db-new-btn"
-                      type="button"
-                    >
-                      <span>
-                        New
-                      </span>
-                    </button>
-                    <button
-                      aria-label="New options"
-                      class="notion-db-new-dropdown-btn"
-                      type="button"
-                    >
-                      <svg
-                        aria-hidden="true"
-                        class="lucide lucide-chevron-down"
-                        fill="none"
-                        height="13"
-                        stroke="currentColor"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2.5"
-                        viewBox="0 0 24 24"
-                        width="13"
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <path
-                          d="m6 9 6 6 6-6"
-                        />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              </div>
-              <div
-                class="object-empty"
-              >
-                <div
-                  class="empty-state__icon"
-                >
-                  <svg
-                    aria-hidden="true"
-                    class="lucide lucide-plus"
-                    fill="none"
-                    height="25"
-                    stroke="currentColor"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    viewBox="0 0 24 24"
-                    width="25"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path
-                      d="M5 12h14"
-                    />
-                    <path
-                      d="M12 5v14"
-                    />
-                  </svg>
-                </div>
-                <h2>
-                  No items yet
-                </h2>
-                <p>
-                  Create the first record or configure properties for the way this shop works.
-                </p>
-                <button
-                  class="button button--primary"
-                  type="button"
-                >
-                  <span
-                    class="button__label"
-                  >
-                    Create item
-                  </span>
-                </button>
+                  Welcome to Max. You can type **/** anywhere to insert headings, notes, bullet lists, or embed live interactive database tables directly into this page.
+                </textarea>
               </div>
             </div>
           </div>
-        </section>
+          <div
+            class="notion-block-row"
+            data-drag-over="false"
+            data-dragging="false"
+            data-scroll-kind="divider"
+            data-type="divider"
+          >
+            <div
+              class="notion-block-gutter"
+            >
+              <button
+                aria-label="Insert block below"
+                class="notion-gutter-btn notion-gutter-btn--add"
+                title="Insert text or database"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-plus"
+                  fill="none"
+                  height="14"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="14"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M5 12h14"
+                  />
+                  <path
+                    d="M12 5v14"
+                  />
+                </svg>
+              </button>
+              <button
+                aria-label="Block actions"
+                class="notion-gutter-btn notion-gutter-btn--drag"
+                draggable="true"
+                title="Drag to reorder"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-grip-vertical"
+                  fill="none"
+                  height="14"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="14"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <circle
+                    cx="9"
+                    cy="12"
+                    r="1"
+                  />
+                  <circle
+                    cx="9"
+                    cy="5"
+                    r="1"
+                  />
+                  <circle
+                    cx="9"
+                    cy="19"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="12"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="5"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="19"
+                    r="1"
+                  />
+                </svg>
+              </button>
+            </div>
+            <div
+              class="notion-block-body"
+            >
+              <div
+                class="notion-divider-wrap"
+              >
+                <hr
+                  class="notion-divider"
+                />
+              </div>
+            </div>
+          </div>
+          <div
+            class="notion-block-row"
+            data-drag-over="false"
+            data-dragging="false"
+            data-scroll-kind="h2"
+            data-type="h2"
+          >
+            <div
+              class="notion-block-gutter"
+            >
+              <button
+                aria-label="Insert block below"
+                class="notion-gutter-btn notion-gutter-btn--add"
+                title="Insert text or database"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-plus"
+                  fill="none"
+                  height="14"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="14"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M5 12h14"
+                  />
+                  <path
+                    d="M12 5v14"
+                  />
+                </svg>
+              </button>
+              <button
+                aria-label="Block actions"
+                class="notion-gutter-btn notion-gutter-btn--drag"
+                draggable="true"
+                title="Drag to reorder"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-grip-vertical"
+                  fill="none"
+                  height="14"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="14"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <circle
+                    cx="9"
+                    cy="12"
+                    r="1"
+                  />
+                  <circle
+                    cx="9"
+                    cy="5"
+                    r="1"
+                  />
+                  <circle
+                    cx="9"
+                    cy="19"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="12"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="5"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="19"
+                    r="1"
+                  />
+                </svg>
+              </button>
+            </div>
+            <div
+              class="notion-block-body"
+            >
+              <input
+                class="notion-heading-input notion-heading-input--h2"
+                placeholder="Heading 2..."
+                value="Quick Notes & Priorities"
+              />
+            </div>
+          </div>
+          <div
+            class="notion-block-row"
+            data-drag-over="false"
+            data-dragging="false"
+            data-scroll-kind="bullet"
+            data-type="bullet"
+          >
+            <div
+              class="notion-block-gutter"
+            >
+              <button
+                aria-label="Insert block below"
+                class="notion-gutter-btn notion-gutter-btn--add"
+                title="Insert text or database"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-plus"
+                  fill="none"
+                  height="14"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="14"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M5 12h14"
+                  />
+                  <path
+                    d="M12 5v14"
+                  />
+                </svg>
+              </button>
+              <button
+                aria-label="Block actions"
+                class="notion-gutter-btn notion-gutter-btn--drag"
+                draggable="true"
+                title="Drag to reorder"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-grip-vertical"
+                  fill="none"
+                  height="14"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="14"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <circle
+                    cx="9"
+                    cy="12"
+                    r="1"
+                  />
+                  <circle
+                    cx="9"
+                    cy="5"
+                    r="1"
+                  />
+                  <circle
+                    cx="9"
+                    cy="19"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="12"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="5"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="19"
+                    r="1"
+                  />
+                </svg>
+              </button>
+            </div>
+            <div
+              class="notion-block-body"
+            >
+              <div
+                class="notion-bullet-wrap"
+              >
+                <span
+                  class="notion-bullet-dot"
+                />
+                <input
+                  class="notion-bullet-input"
+                  placeholder="List item..."
+                  value="Track daily cash reconciliation before closing drawer."
+                />
+              </div>
+            </div>
+          </div>
+          <div
+            class="notion-block-row"
+            data-drag-over="false"
+            data-dragging="false"
+            data-scroll-kind="bullet"
+            data-type="bullet"
+          >
+            <div
+              class="notion-block-gutter"
+            >
+              <button
+                aria-label="Insert block below"
+                class="notion-gutter-btn notion-gutter-btn--add"
+                title="Insert text or database"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-plus"
+                  fill="none"
+                  height="14"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="14"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M5 12h14"
+                  />
+                  <path
+                    d="M12 5v14"
+                  />
+                </svg>
+              </button>
+              <button
+                aria-label="Block actions"
+                class="notion-gutter-btn notion-gutter-btn--drag"
+                draggable="true"
+                title="Drag to reorder"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-grip-vertical"
+                  fill="none"
+                  height="14"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="14"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <circle
+                    cx="9"
+                    cy="12"
+                    r="1"
+                  />
+                  <circle
+                    cx="9"
+                    cy="5"
+                    r="1"
+                  />
+                  <circle
+                    cx="9"
+                    cy="19"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="12"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="5"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="19"
+                    r="1"
+                  />
+                </svg>
+              </button>
+            </div>
+            <div
+              class="notion-block-body"
+            >
+              <div
+                class="notion-bullet-wrap"
+              >
+                <span
+                  class="notion-bullet-dot"
+                />
+                <input
+                  class="notion-bullet-input"
+                  placeholder="List item..."
+                  value="Review low stock items and contact suppliers for reorders."
+                />
+              </div>
+            </div>
+          </div>
+          <div
+            class="notion-block-row"
+            data-drag-over="false"
+            data-dragging="false"
+            data-scroll-kind="divider"
+            data-type="divider"
+          >
+            <div
+              class="notion-block-gutter"
+            >
+              <button
+                aria-label="Insert block below"
+                class="notion-gutter-btn notion-gutter-btn--add"
+                title="Insert text or database"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-plus"
+                  fill="none"
+                  height="14"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="14"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M5 12h14"
+                  />
+                  <path
+                    d="M12 5v14"
+                  />
+                </svg>
+              </button>
+              <button
+                aria-label="Block actions"
+                class="notion-gutter-btn notion-gutter-btn--drag"
+                draggable="true"
+                title="Drag to reorder"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-grip-vertical"
+                  fill="none"
+                  height="14"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="14"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <circle
+                    cx="9"
+                    cy="12"
+                    r="1"
+                  />
+                  <circle
+                    cx="9"
+                    cy="5"
+                    r="1"
+                  />
+                  <circle
+                    cx="9"
+                    cy="19"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="12"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="5"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="19"
+                    r="1"
+                  />
+                </svg>
+              </button>
+            </div>
+            <div
+              class="notion-block-body"
+            >
+              <div
+                class="notion-divider-wrap"
+              >
+                <hr
+                  class="notion-divider"
+                />
+              </div>
+            </div>
+          </div>
+          <div
+            class="notion-block-row"
+            data-drag-over="false"
+            data-dragging="false"
+            data-scroll-kind="database-view"
+            data-scroll-label="Database view"
+            data-type="database-view"
+          >
+            <div
+              class="notion-block-gutter"
+            >
+              <button
+                aria-label="Insert block below"
+                class="notion-gutter-btn notion-gutter-btn--add"
+                title="Insert text or database"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-plus"
+                  fill="none"
+                  height="14"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="14"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M5 12h14"
+                  />
+                  <path
+                    d="M12 5v14"
+                  />
+                </svg>
+              </button>
+              <button
+                aria-label="Block actions"
+                class="notion-gutter-btn notion-gutter-btn--drag"
+                draggable="true"
+                title="Drag to reorder"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-grip-vertical"
+                  fill="none"
+                  height="14"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="14"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <circle
+                    cx="9"
+                    cy="12"
+                    r="1"
+                  />
+                  <circle
+                    cx="9"
+                    cy="5"
+                    r="1"
+                  />
+                  <circle
+                    cx="9"
+                    cy="19"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="12"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="5"
+                    r="1"
+                  />
+                  <circle
+                    cx="15"
+                    cy="19"
+                    r="1"
+                  />
+                </svg>
+              </button>
+            </div>
+            <div
+              class="notion-block-body"
+            >
+              <div
+                class="notion-embedded-db-card"
+              >
+                <div
+                  class="notion-embedded-db-content"
+                >
+                  <section
+                    class="object-workspace"
+                  >
+                    <div
+                      class="object-layout"
+                    >
+                      <div
+                        aria-busy="false"
+                        class="record-panel"
+                      >
+                        <div
+                          class="object-export-action"
+                        >
+                          <button
+                            class="button button--secondary"
+                            type="button"
+                          >
+                            <span
+                              class="button__label"
+                            >
+                              Export Excel
+                            </span>
+                          </button>
+                        </div>
+                        <div
+                          class="notion-view-bar"
+                        >
+                          <div
+                            class="notion-view-bar__tabs"
+                          >
+                            <div
+                              class="notion-view-tab-wrapper"
+                            >
+                              <button
+                                class="notion-view-tab"
+                                data-active="true"
+                                type="button"
+                              >
+                                <svg
+                                  aria-hidden="true"
+                                  class="lucide lucide-table-properties"
+                                  fill="none"
+                                  height="14"
+                                  stroke="currentColor"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  stroke-width="2"
+                                  viewBox="0 0 24 24"
+                                  width="14"
+                                  xmlns="http://www.w3.org/2000/svg"
+                                >
+                                  <path
+                                    d="M15 3v18"
+                                  />
+                                  <rect
+                                    height="18"
+                                    rx="2"
+                                    width="18"
+                                    x="3"
+                                    y="3"
+                                  />
+                                  <path
+                                    d="M21 9H3"
+                                  />
+                                  <path
+                                    d="M21 15H3"
+                                  />
+                                </svg>
+                                <span>
+                                  Default view
+                                </span>
+                              </button>
+                              <button
+                                aria-label="View options"
+                                class="notion-view-tab-menu"
+                                type="button"
+                              >
+                                <svg
+                                  aria-hidden="true"
+                                  class="lucide lucide-chevron-down"
+                                  fill="none"
+                                  height="12"
+                                  stroke="currentColor"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  stroke-width="2"
+                                  viewBox="0 0 24 24"
+                                  width="12"
+                                  xmlns="http://www.w3.org/2000/svg"
+                                >
+                                  <path
+                                    d="m6 9 6 6 6-6"
+                                  />
+                                </svg>
+                              </button>
+                            </div>
+                            <button
+                              aria-label="Save view"
+                              class="notion-view-tab-add"
+                              title="Save view"
+                              type="button"
+                            >
+                              <svg
+                                aria-hidden="true"
+                                class="lucide lucide-plus"
+                                fill="none"
+                                height="14"
+                                stroke="currentColor"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                viewBox="0 0 24 24"
+                                width="14"
+                                xmlns="http://www.w3.org/2000/svg"
+                              >
+                                <path
+                                  d="M5 12h14"
+                                />
+                                <path
+                                  d="M12 5v14"
+                                />
+                              </svg>
+                            </button>
+                          </div>
+                          <div
+                            class="notion-view-bar__actions"
+                          >
+                            <button
+                              aria-expanded="false"
+                              class="notion-db-tool-btn"
+                              data-active="false"
+                              title="Filter"
+                              type="button"
+                            >
+                              <svg
+                                aria-hidden="true"
+                                class="lucide lucide-funnel"
+                                fill="none"
+                                height="14"
+                                stroke="currentColor"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                viewBox="0 0 24 24"
+                                width="14"
+                                xmlns="http://www.w3.org/2000/svg"
+                              >
+                                <path
+                                  d="M10 20a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341L21.74 4.67A1 1 0 0 0 21 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14z"
+                                />
+                              </svg>
+                              <span>
+                                Filter
+                              </span>
+                            </button>
+                            <button
+                              aria-expanded="false"
+                              class="notion-db-tool-btn"
+                              data-active="false"
+                              title="Sort"
+                              type="button"
+                            >
+                              <svg
+                                aria-hidden="true"
+                                class="lucide lucide-arrow-up-down"
+                                fill="none"
+                                height="14"
+                                stroke="currentColor"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                viewBox="0 0 24 24"
+                                width="14"
+                                xmlns="http://www.w3.org/2000/svg"
+                              >
+                                <path
+                                  d="m21 16-4 4-4-4"
+                                />
+                                <path
+                                  d="M17 20V4"
+                                />
+                                <path
+                                  d="m3 8 4-4 4 4"
+                                />
+                                <path
+                                  d="M7 4v16"
+                                />
+                              </svg>
+                              <span>
+                                Sort
+                              </span>
+                            </button>
+                            <button
+                              aria-label="Database properties"
+                              class="notion-db-tool-btn"
+                              title="Properties"
+                              type="button"
+                            >
+                              <svg
+                                aria-hidden="true"
+                                class="lucide lucide-sliders-horizontal"
+                                fill="none"
+                                height="14"
+                                stroke="currentColor"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                viewBox="0 0 24 24"
+                                width="14"
+                                xmlns="http://www.w3.org/2000/svg"
+                              >
+                                <path
+                                  d="M10 5H3"
+                                />
+                                <path
+                                  d="M12 19H3"
+                                />
+                                <path
+                                  d="M14 3v4"
+                                />
+                                <path
+                                  d="M16 17v4"
+                                />
+                                <path
+                                  d="M21 12h-9"
+                                />
+                                <path
+                                  d="M21 19h-5"
+                                />
+                                <path
+                                  d="M21 5h-7"
+                                />
+                                <path
+                                  d="M8 10v4"
+                                />
+                                <path
+                                  d="M8 12H3"
+                                />
+                              </svg>
+                              <span>
+                                Properties
+                              </span>
+                            </button>
+                            <button
+                              class="notion-db-tool-btn"
+                              title="Templates"
+                              type="button"
+                            >
+                              <svg
+                                aria-hidden="true"
+                                class="lucide lucide-file-text"
+                                fill="none"
+                                height="14"
+                                stroke="currentColor"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                viewBox="0 0 24 24"
+                                width="14"
+                                xmlns="http://www.w3.org/2000/svg"
+                              >
+                                <path
+                                  d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+                                />
+                                <path
+                                  d="M14 2v5a1 1 0 0 0 1 1h5"
+                                />
+                                <path
+                                  d="M10 9H8"
+                                />
+                                <path
+                                  d="M16 13H8"
+                                />
+                                <path
+                                  d="M16 17H8"
+                                />
+                              </svg>
+                              <span>
+                                Templates
+                              </span>
+                            </button>
+                            <div
+                              class="notion-db-new-split-btn"
+                            >
+                              <button
+                                class="notion-db-new-btn"
+                                type="button"
+                              >
+                                <span>
+                                  New
+                                </span>
+                              </button>
+                              <button
+                                aria-label="New options"
+                                class="notion-db-new-dropdown-btn"
+                                type="button"
+                              >
+                                <svg
+                                  aria-hidden="true"
+                                  class="lucide lucide-chevron-down"
+                                  fill="none"
+                                  height="13"
+                                  stroke="currentColor"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  stroke-width="2.5"
+                                  viewBox="0 0 24 24"
+                                  width="13"
+                                  xmlns="http://www.w3.org/2000/svg"
+                                >
+                                  <path
+                                    d="m6 9 6 6 6-6"
+                                  />
+                                </svg>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                        <div
+                          class="object-empty"
+                        >
+                          <div
+                            class="empty-state__icon"
+                          >
+                            <svg
+                              aria-hidden="true"
+                              class="lucide lucide-plus"
+                              fill="none"
+                              height="25"
+                              stroke="currentColor"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              stroke-width="2"
+                              viewBox="0 0 24 24"
+                              width="25"
+                              xmlns="http://www.w3.org/2000/svg"
+                            >
+                              <path
+                                d="M5 12h14"
+                              />
+                              <path
+                                d="M12 5v14"
+                              />
+                            </svg>
+                          </div>
+                          <h2>
+                            No items yet
+                          </h2>
+                          <p>
+                            Create the first record or configure properties for the way this shop works.
+                          </p>
+                          <button
+                            class="button button--primary"
+                            type="button"
+                          >
+                            <span
+                              class="button__label"
+                            >
+                              Create item
+                            </span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div
+            class="notion-canvas-bottom-click-target"
+          >
+            <button
+              class="notion-add-content-button"
+              type="button"
+            >
+              <svg
+                aria-hidden="true"
+                class="lucide lucide-plus"
+                fill="none"
+                height="14"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                width="14"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M5 12h14"
+                />
+                <path
+                  d="M12 5v14"
+                />
+              </svg>
+              Add text or database
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </main>
@@ -981,15 +1539,16 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
             class="notion-block-row"
             data-drag-over="false"
             data-dragging="false"
+            data-scroll-kind="callout"
             data-type="callout"
           >
             <div
               class="notion-block-gutter"
             >
               <button
-                aria-label="Add block below"
+                aria-label="إدراج عنصر أسفل"
                 class="notion-gutter-btn notion-gutter-btn--add"
-                title="إضافة سطر"
+                title="إدراج نص أو قاعدة بيانات"
                 type="button"
               >
                 <svg
@@ -1091,15 +1650,16 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
             class="notion-block-row"
             data-drag-over="false"
             data-dragging="false"
+            data-scroll-kind="divider"
             data-type="divider"
           >
             <div
               class="notion-block-gutter"
             >
               <button
-                aria-label="Add block below"
+                aria-label="إدراج عنصر أسفل"
                 class="notion-gutter-btn notion-gutter-btn--add"
-                title="إضافة سطر"
+                title="إدراج نص أو قاعدة بيانات"
                 type="button"
               >
                 <svg
@@ -1192,15 +1752,16 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
             class="notion-block-row"
             data-drag-over="false"
             data-dragging="false"
+            data-scroll-kind="h2"
             data-type="h2"
           >
             <div
               class="notion-block-gutter"
             >
               <button
-                aria-label="Add block below"
+                aria-label="إدراج عنصر أسفل"
                 class="notion-gutter-btn notion-gutter-btn--add"
-                title="إضافة سطر"
+                title="إدراج نص أو قاعدة بيانات"
                 type="button"
               >
                 <svg
@@ -1291,15 +1852,16 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
             class="notion-block-row"
             data-drag-over="false"
             data-dragging="false"
+            data-scroll-kind="bullet"
             data-type="bullet"
           >
             <div
               class="notion-block-gutter"
             >
               <button
-                aria-label="Add block below"
+                aria-label="إدراج عنصر أسفل"
                 class="notion-gutter-btn notion-gutter-btn--add"
-                title="إضافة سطر"
+                title="إدراج نص أو قاعدة بيانات"
                 type="button"
               >
                 <svg
@@ -1397,15 +1959,16 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
             class="notion-block-row"
             data-drag-over="false"
             data-dragging="false"
+            data-scroll-kind="bullet"
             data-type="bullet"
           >
             <div
               class="notion-block-gutter"
             >
               <button
-                aria-label="Add block below"
+                aria-label="إدراج عنصر أسفل"
                 class="notion-gutter-btn notion-gutter-btn--add"
-                title="إضافة سطر"
+                title="إدراج نص أو قاعدة بيانات"
                 type="button"
               >
                 <svg
@@ -1503,15 +2066,16 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
             class="notion-block-row"
             data-drag-over="false"
             data-dragging="false"
+            data-scroll-kind="divider"
             data-type="divider"
           >
             <div
               class="notion-block-gutter"
             >
               <button
-                aria-label="Add block below"
+                aria-label="إدراج عنصر أسفل"
                 class="notion-gutter-btn notion-gutter-btn--add"
-                title="إضافة سطر"
+                title="إدراج نص أو قاعدة بيانات"
                 type="button"
               >
                 <svg
@@ -1604,15 +2168,17 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
             class="notion-block-row"
             data-drag-over="false"
             data-dragging="false"
+            data-scroll-kind="database-view"
+            data-scroll-label="عرض قاعدة البيانات"
             data-type="database-view"
           >
             <div
               class="notion-block-gutter"
             >
               <button
-                aria-label="Add block below"
+                aria-label="إدراج عنصر أسفل"
                 class="notion-gutter-btn notion-gutter-btn--add"
-                title="إضافة سطر"
+                title="إدراج نص أو قاعدة بيانات"
                 type="button"
               >
                 <svg
@@ -1708,6 +2274,20 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
                         aria-busy="false"
                         class="record-panel"
                       >
+                        <div
+                          class="object-export-action"
+                        >
+                          <button
+                            class="button button--secondary"
+                            type="button"
+                          >
+                            <span
+                              class="button__label"
+                            >
+                              تصدير Excel
+                            </span>
+                          </button>
+                        </div>
                         <div
                           class="notion-view-bar"
                         >
@@ -2055,7 +2635,34 @@ exports[`Max shell > switches the complete shell to Arabic and RTL 1`] = `
           </div>
           <div
             class="notion-canvas-bottom-click-target"
-          />
+          >
+            <button
+              class="notion-add-content-button"
+              type="button"
+            >
+              <svg
+                aria-hidden="true"
+                class="lucide lucide-plus"
+                fill="none"
+                height="14"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                width="14"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M5 12h14"
+                />
+                <path
+                  d="M12 5v14"
+                />
+              </svg>
+              أضف نصًا أو قاعدة بيانات
+            </button>
+          </div>
         </div>
       </div>
     </div>

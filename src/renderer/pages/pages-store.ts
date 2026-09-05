@@ -19,6 +19,8 @@ function fromWorkspacePage(page: WorkspaceNode): CustomPage {
     favorite: layout.favorite,
     icon: page.icon ?? 'lucide:FileText',
     id: page.id,
+    parentNodeId: page.parentNodeId,
+    positionKey: page.positionKey,
     title: page.title,
     updatedAt: page.updatedAt,
     wiki: layout.wiki,
@@ -29,6 +31,8 @@ function toWorkspacePatch(page: CustomPage) {
   return {
     contentJson: JSON.stringify({ blocks: page.blocks, favorite: page.favorite ?? false, wiki: page.wiki ?? false }),
     icon: page.icon,
+    parentNodeId: page.parentNodeId,
+    positionKey: page.positionKey,
     title: page.title.trim() || 'Untitled',
   };
 }
@@ -41,12 +45,18 @@ export async function loadPersistentCustomPages(): Promise<readonly CustomPage[]
   return nodes.filter((node): node is WorkspaceNode => node !== null).map(fromWorkspacePage);
 }
 
-export async function createPersistentCustomPage(title = 'Untitled', icon = 'lucide:FileText', position = 0): Promise<CustomPage | undefined> {
+export async function createPersistentCustomPage(
+  title = 'Untitled',
+  icon = 'lucide:FileText',
+  position = 0,
+  parentNodeId?: string | null,
+): Promise<CustomPage | undefined> {
   const blocks: readonly NotionBlock[] = [{ content: '', id: `block_${crypto.randomUUID()}`, type: 'text' }];
   const result = await window.maxApi.workspace.createNode({
     contentJson: JSON.stringify({ blocks, favorite: false, wiki: false }),
     icon,
     kind: 'page',
+    parentNodeId,
     positionKey: `p${String(position).padStart(8, '0')}`,
     title: title.trim() || 'Untitled',
   });
@@ -54,8 +64,10 @@ export async function createPersistentCustomPage(title = 'Untitled', icon = 'luc
 }
 
 export async function updatePersistentCustomPage(page: CustomPage, position: number): Promise<void> {
-  void position;
-  await window.maxApi.workspace.updateNode(page.id, toWorkspacePatch(page));
+  await window.maxApi.workspace.updateNode(page.id, {
+    ...toWorkspacePatch(page),
+    positionKey: `p${String(position).padStart(8, '0')}`,
+  });
 }
 
 export async function archivePersistentCustomPage(page: CustomPage): Promise<void> {

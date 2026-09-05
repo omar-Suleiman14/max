@@ -54,3 +54,12 @@ describe('ShopMetadataRepository', () => {
     db.close();
   });
 });
+
+it('persists the accepted terms version and timestamp with onboarding', () => {
+  const db = new DatabaseService(':memory:'); db.initialize();
+  const result=db.completeOnboarding({shopName:'Terms test',locale:'ar',backupSchedule:'manual',acceptedTermsVersion:'2026-09-06'});
+  expect(result.acceptedTermsVersion).toBe('2026-09-06');
+  expect(result.acceptedTermsAt).toMatch(/^\d{4}-/);
+  expect(db.shopMetadata.getMetadata().acceptedTermsAt).toBe(result.acceptedTermsAt);
+  db.close();
+});

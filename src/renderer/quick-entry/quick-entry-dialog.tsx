@@ -1,3 +1,4 @@
+import { Select } from '../ui/select';
 import {
   ArrowLeftRight,
   BanknoteArrowDown,
@@ -206,6 +207,7 @@ export function QuickEntryDialog({
       return;
     }
     let active = true;
+    setPricingPreview(undefined);
     void window.maxApi.quickEntry.quotePricing({
       accountId: selectedAccountId || undefined,
       operationKind,
@@ -231,7 +233,7 @@ export function QuickEntryDialog({
         setPricingPreview(undefined);
         setPricingError(undefined);
       }
-    });
+    }).catch((error) => { if (active) { setPricingPreview(undefined); setPricingError(error instanceof Error ? error.message : String(error)); } });
     return () => { active = false; };
   }, [operationKind, paymentMode, pricingCustomerType, pricingInputMode, pricingOverrides, providerCost, selectedAccountId, selectedPricingProfileId, selectedPricingServiceId, toAccountId, totalAmountNum]);
 
@@ -242,10 +244,11 @@ export function QuickEntryDialog({
   // Transfer fee calculation
   const sourceAccount = accounts.find((a) => a.id === selectedAccountId);
   const calculatedProviderFee = sourceAccount ? calculateFee(totalAmountNum, sourceAccount.feeConfig) : 0;
-  const totalDebited = Math.round((totalAmountNum + calculatedProviderFee) * 100) / 100;
+  const totalDebited = pricingPreview?.totals.shopNetCost ?? Math.round((totalAmountNum + calculatedProviderFee) * 100) / 100;
 
   async function handleSubmit(event?: FormEvent) {
     event?.preventDefault();
+    if (submitting || (selectedPricingProfileId && (!pricingPreview || pricingError))) return;
     setSubmitting(true);
     setError(undefined);
 
@@ -274,7 +277,7 @@ export function QuickEntryDialog({
       }
 
       if (paymentMode === 'partial') {
-        if (paidNowNum <= 0 || paidNowNum >= totalAmountNum) {
+        if (paidNowNum <= 0 || paidNowNum >= customerDueNum) {
           setError(quickEntryCopy(locale, 'paidAmountInvalid'));
           setSubmitting(false);
           return;
@@ -342,7 +345,9 @@ export function QuickEntryDialog({
       totalAmount: totalAmountNum,
     };
 
-    const res = await window.maxApi.quickEntry.submit(draft);
+    let res;
+    try { res = await window.maxApi.quickEntry.submit(draft); }
+    catch (error) { setError(error instanceof Error ? error.message : String(error)); setSubmitting(false); return; }
     setSubmitting(false);
 
     if (res.ok) {
@@ -435,7 +440,7 @@ export function QuickEntryDialog({
             <div className="field-grid-3">
               <label className="field">
                 <span>{quickEntryCopy(locale, 'selectItem')}</span>
-                <select
+                <Select
                   data-autofocus="true"
                   onChange={(e) => handleItemSelect(e.target.value)}
                   value={selectedItemId}
@@ -446,7 +451,7 @@ export function QuickEntryDialog({
                       {item.label} {item.currentQuantity !== undefined && item.currentQuantity !== null ? `(${item.currentQuantity})` : ''}
                     </option>
                   ))}
-                </select>
+                </Select>
               </label>
 
               <label className="field field--quantity">
@@ -494,12 +499,12 @@ export function QuickEntryDialog({
 
               <label className="field">
                 <span>{quickEntryCopy(locale, 'person')}</span>
-                <select onChange={(e) => setSelectedPersonId(e.target.value)} value={selectedPersonId}>
+                <Select onChange={(e) => setSelectedPersonId(e.target.value)} value={selectedPersonId}>
                   <option value="">-- {quickEntryCopy(locale, 'optionalContact')} --</option>
                   {people.map((p) => (
                     <option key={p.id} value={p.id}>{p.label}</option>
                   ))}
-                </select>
+                </Select>
               </label>
             </div>
           </div>
@@ -516,7 +521,7 @@ export function QuickEntryDialog({
             <div className="field-pair">
               <label className="field">
                 <span>{quickEntryCopy(locale, 'fromAccount')}</span>
-                <select
+                <Select
                   data-autofocus="true"
                   onChange={(e) => setSelectedAccountId(e.target.value)}
                   required
@@ -528,12 +533,12 @@ export function QuickEntryDialog({
                       {acc.name} ({acc.balance.toFixed(2)})
                     </option>
                   ))}
-                </select>
+                </Select>
               </label>
 
               <label className="field">
                 <span>{quickEntryCopy(locale, 'toAccount')}</span>
-                <select
+                <Select
                   onChange={(e) => setToAccountId(e.target.value)}
                   required
                   value={toAccountId}
@@ -544,7 +549,7 @@ export function QuickEntryDialog({
                       {acc.name} ({acc.balance.toFixed(2)})
                     </option>
                   ))}
-                </select>
+                </Select>
               </label>
             </div>
 
@@ -570,14 +575,14 @@ export function QuickEntryDialog({
             <div className="field-pair">
               <label className="field">
                 <span>{quickEntryCopy(locale, 'adjustmentDirection')}</span>
-                <select
+                <Select
                   data-autofocus="true"
                   onChange={(event) => setAdjustmentDirection(event.target.value as 'inflow' | 'outflow')}
                   value={adjustmentDirection}
                 >
                   <option value="inflow">{quickEntryCopy(locale, 'adjustmentIncrease')}</option>
                   <option value="outflow">{quickEntryCopy(locale, 'adjustmentDecrease')}</option>
-                </select>
+                </Select>
               </label>
 
               <label className="field">
@@ -634,7 +639,7 @@ export function QuickEntryDialog({
           <div className="quick-pricing-controls">
             <label className="field">
               <span>{quickEntryCopy(locale, 'service')}</span>
-              <select onChange={(event) => {
+              <Select onChange={(event) => {
                 const serviceId = event.target.value;
                 setSelectedPricingServiceId(serviceId);
                 setPricingOverrides([]);
@@ -649,11 +654,11 @@ export function QuickEntryDialog({
               }} value={selectedPricingServiceId}>
                 <option value="">{quickEntryCopy(locale, 'noService')}</option>
                 {pricingServices.filter((service) => service.operation === operationKind).map((service) => <option key={service.id} value={service.id}>{service.name}</option>)}
-              </select>
+              </Select>
             </label>
-            {selectedPricingService && selectedPricingService.inputModes.length > 1 && <label className="field"><span>{quickEntryCopy(locale, 'pricingInput')}</span><select onChange={(event) => setPricingInputMode(event.target.value as typeof pricingInputMode)} value={pricingInputMode}>{selectedPricingService.inputModes.map((mode) => <option key={mode} value={mode}>{quickEntryCopy(locale, mode === 'customer_pays' ? 'customerPaysInput' : 'customerReceivesInput')}</option>)}</select></label>}
+            {selectedPricingService && selectedPricingService.inputModes.length > 1 && <label className="field"><span>{quickEntryCopy(locale, 'pricingInput')}</span><Select onChange={(event) => setPricingInputMode(event.target.value as typeof pricingInputMode)} value={pricingInputMode}>{selectedPricingService.inputModes.map((mode) => <option key={mode} value={mode}>{quickEntryCopy(locale, mode === 'customer_pays' ? 'customerPaysInput' : 'customerReceivesInput')}</option>)}</Select></label>}
             {selectedPricingProfileId && <details className="quick-pricing-setup"><summary>{quickEntryCopy(locale, 'pricingDetails')}</summary><div>
-              <label className="field"><span>{quickEntryCopy(locale, 'pricingProfile')}</span><select onChange={(event) => { setSelectedPricingProfileId(event.target.value); setPricingOverrides([]); }} value={selectedPricingProfileId}>{pricingProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}</select></label>
+              <label className="field"><span>{quickEntryCopy(locale, 'pricingProfile')}</span><Select onChange={(event) => { setSelectedPricingProfileId(event.target.value); setPricingOverrides([]); }} value={selectedPricingProfileId}>{pricingProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}</Select></label>
               <label className="field"><span>{quickEntryCopy(locale, 'customerType')}</span><input onChange={(event) => setPricingCustomerType(event.target.value)} placeholder="retail" value={pricingCustomerType} /></label>
               <label className="field"><span>{quickEntryCopy(locale, 'providerCost')}</span><input min="0" onChange={(event) => setProviderCost(event.target.value)} placeholder="0.00" step="0.01" type="number" value={providerCost} /></label>
             </div></details>}
@@ -694,7 +699,7 @@ export function QuickEntryDialog({
           {/* Transfer Fee Preview */}
           {operationKind === 'transfer' && totalAmountNum > 0 && (
             <div className="transfer-fee-breakdown">
-              {calculatedProviderFee > 0 && (
+              {!pricingPreview && calculatedProviderFee > 0 && (
                 <div className="fee-row">
                   <span>{quickEntryCopy(locale, 'providerFee')}:</span>
                   <strong>+{calculatedProviderFee.toFixed(2)}</strong>
@@ -796,7 +801,7 @@ export function QuickEntryDialog({
 
                 <label className="field">
                   <span>{quickEntryCopy(locale, 'person')}</span>
-                  <select
+                  <Select
                     onChange={(e) => setSelectedPersonId(e.target.value)}
                     required
                     value={selectedPersonId}
@@ -807,7 +812,7 @@ export function QuickEntryDialog({
                         {p.label}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </label>
               </div>
             )}
@@ -817,7 +822,7 @@ export function QuickEntryDialog({
               <div className="partial-breakdown-card">
                 <label className="field">
                   <span>{quickEntryCopy(locale, 'person')}</span>
-                  <select
+                  <Select
                     onChange={(e) => setSelectedPersonId(e.target.value)}
                     required
                     value={selectedPersonId}
@@ -828,19 +833,19 @@ export function QuickEntryDialog({
                         {p.label}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </label>
 
                 <label className="field">
                   <span>{quickEntryCopy(locale, 'collector')}</span>
-                  <select onChange={(e) => setCollectorId(e.target.value)} value={collectorId}>
+                  <Select onChange={(e) => setCollectorId(e.target.value)} value={collectorId}>
                     <option value="">{quickEntryCopy(locale, 'noCollector')}</option>
                     {people.map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.label}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </label>
               </div>
             )}
@@ -849,12 +854,12 @@ export function QuickEntryDialog({
             {operationKind === 'purchase' && (
               <label className="field" style={{ marginTop: '0.75rem' }}>
                 <span>{quickEntryCopy(locale, 'supplier')}</span>
-                <select onChange={(e) => setSelectedPersonId(e.target.value)} value={selectedPersonId}>
+                <Select onChange={(e) => setSelectedPersonId(e.target.value)} value={selectedPersonId}>
                   <option value="">-- {quickEntryCopy(locale, 'optionalSupplier')} --</option>
                   {people.map((p) => (
                     <option key={p.id} value={p.id}>{p.label}</option>
                   ))}
-                </select>
+                </Select>
               </label>
             )}
           </div>
@@ -863,7 +868,7 @@ export function QuickEntryDialog({
         <footer className="form-footer">
           <Button onClick={onClose}>{quickEntryCopy(locale, 'cancel')}</Button>
           <Button
-            disabled={submitting || totalAmountNum <= 0}
+            disabled={submitting || totalAmountNum <= 0 || Boolean(selectedPricingProfileId && (!pricingPreview || pricingError))}
             icon={
               operationKind === 'sale' ? <Zap aria-hidden="true" size={16} /> :
               operationKind === 'purchase' ? <ShoppingCart aria-hidden="true" size={16} /> :

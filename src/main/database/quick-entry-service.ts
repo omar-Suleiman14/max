@@ -1,3 +1,4 @@
+import { calculateFee } from '../../shared/account-contract';
 import type { DatabaseSync } from 'node:sqlite';
 
 import type {
@@ -269,7 +270,7 @@ export class QuickEntryService {
       fromAccountId: draft.accountId,
       note: draft.note,
       pricing,
-      providerFee: draft.providerFee,
+      providerFee: pricing?.providerFee ?? calculateFee(total, this.accounts.getAccount(draft.accountId).feeConfig),
       serviceFee: draft.serviceFee,
       toAccountId: draft.toAccountId,
     });
@@ -294,11 +295,14 @@ export class QuickEntryService {
 
   #calculatePricing(draft: QuickEntryDraft, amount: number): TransactionPricing | undefined {
     const service = draft.pricingServiceId ? this.pricingCatalog.getService(draft.pricingServiceId) : undefined;
-    if (service && service.operation !== draft.operationKind) {
+    if (service && !service.active) throw new ObjectDomainError('invalid-input', 'The selected service is inactive.');
+    if (service && draft.pricingProfileId && draft.pricingProfileId !== service.pricingProfileId) throw new ObjectDomainError('invalid-input', 'The pricing profile does not match the service.');
+    if (service && service.operation !== (draft.operationKind ?? 'sale')) {
       throw new ObjectDomainError('invalid-input', 'The selected service does not support this operation.');
     }
     const profileId = draft.pricingProfileId ?? service?.pricingProfileId;
     if (!profileId) return undefined;
+    if (!this.pricing.getProfile(profileId).active) throw new ObjectDomainError('invalid-input', 'The selected pricing profile is inactive.');
     const inputMode = draft.pricingInputMode ?? service?.defaultInputMode;
     if (service && inputMode && !service.inputModes.includes(inputMode)) {
       throw new ObjectDomainError('invalid-input', 'The selected service does not support this input mode.');

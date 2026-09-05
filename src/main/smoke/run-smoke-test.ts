@@ -53,6 +53,7 @@ async function openSmokeSurface(window: BrowserWindow): Promise<void> {
     (async () => {
       if (document.querySelector('.onboarding-container') && window.maxApi?.shop) {
         await window.maxApi.shop.completeOnboarding({
+          acceptedTermsVersion: '2026-09-06',
           shopName: 'Smoke Test Shop',
           locale: (localStorage.getItem('max.ui.locale') === 'ar' ? 'ar' : 'en'),
           backupSchedule: 'daily'
@@ -157,6 +158,10 @@ export async function runSmokeTest(window: BrowserWindow): Promise<void> {
   if (!shellBecameReady) {
     throw new Error('The renderer did not reach its database-backed ready state.');
   }
+
+  // Let startup effects finish their IPC requests before smoke mode closes the
+  // window and removes handlers during app shutdown.
+  await new Promise((resolveDelay) => setTimeout(resolveDelay, 300));
 
   const screenshotPath = process.env.MAX_SMOKE_SCREENSHOT_PATH;
   if (!screenshotPath) return;

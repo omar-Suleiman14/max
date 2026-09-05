@@ -1,3 +1,4 @@
+import { Select } from '../ui/select';
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -187,22 +188,22 @@ function TransactionEditor({
 
         <label className="field">
           <span>{transactionsCopy(locale, 'transactionType')}</span>
-          <select onChange={(e) => setTransactionType(e.target.value as Exclude<TransactionType, 'reversal' | 'transfer'>)} value={transactionType}>
+          <Select onChange={(e) => setTransactionType(e.target.value as Exclude<TransactionType, 'reversal' | 'transfer'>)} value={transactionType}>
             <option value="sale">{transactionsCopy(locale, 'sale')}</option>
             <option value="expense">{transactionsCopy(locale, 'expense')}</option>
             <option value="purchase">{transactionsCopy(locale, 'purchase')}</option>
             <option value="income">{transactionsCopy(locale, 'income')}</option>
             <option value="adjustment">{transactionsCopy(locale, 'adjustment')}</option>
-          </select>
+          </Select>
         </label>
 
         {transactionType === 'adjustment' && (
           <label className="field">
             <span>{locale === 'ar' ? 'اتجاه التسوية' : 'Adjustment direction'}</span>
-            <select onChange={(event) => setAdjustmentMovementType(event.target.value as MovementType)} value={adjustmentMovementType}>
+            <Select onChange={(event) => setAdjustmentMovementType(event.target.value as MovementType)} value={adjustmentMovementType}>
               <option value="inflow">{locale === 'ar' ? 'زيادة رصيد الحساب' : 'Increase account balance'}</option>
               <option value="outflow">{locale === 'ar' ? 'خفض رصيد الحساب' : 'Decrease account balance'}</option>
-            </select>
+            </Select>
           </label>
         )}
 
@@ -241,13 +242,13 @@ function TransactionEditor({
             {accounts.length === 0 ? (
               <p className="form-error">{transactionsCopy(locale, 'noPaymentAccount')}</p>
             ) : (
-              <select onChange={(e) => setSelectedAccountId(e.target.value)} value={selectedAccountId}>
+              <Select onChange={(e) => setSelectedAccountId(e.target.value)} value={selectedAccountId}>
                 {accounts.map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.name} ({a.balance.toFixed(2)})
                   </option>
                 ))}
-              </select>
+              </Select>
             )}
           </label>
         )}
@@ -255,26 +256,26 @@ function TransactionEditor({
         <div className="field-pair">
           <label className="field">
             <span>{transactionsCopy(locale, 'person')}</span>
-            <select onChange={(e) => setPersonId(e.target.value)} value={personId}>
+            <Select onChange={(e) => setPersonId(e.target.value)} value={personId}>
               <option value="">{transactionsCopy(locale, 'selectPerson')}</option>
               {people.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.label}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
 
           <label className="field">
             <span>{transactionsCopy(locale, 'item')}</span>
-            <select onChange={(e) => setItemId(e.target.value)} value={itemId}>
+            <Select onChange={(e) => setItemId(e.target.value)} value={itemId}>
               <option value="">{transactionsCopy(locale, 'selectItem')}</option>
               {items.map((i) => (
                 <option key={i.id} value={i.id}>
                   {i.label}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
         </div>
 
@@ -338,8 +339,8 @@ function TransferEditor({ accounts, locale, onClose, onSave }: Readonly<{
         {accounts.length < 2 && <p className="form-error" role="alert">{locale === 'ar' ? 'أنشئ حسابين على الأقل لإجراء تحويل.' : 'Create at least two accounts to make a transfer.'}</p>}
         {error && <p className="form-error" role="alert">{error}</p>}
         <div className="field-pair">
-          <label className="field"><span>{locale === 'ar' ? 'من حساب' : 'From account'}</span><select onChange={(event) => { const id = event.target.value; setFromAccountId(id); const account = accounts.find((candidate) => candidate.id === id); setProviderFee(String(calculateFee(Number(amount) || 0, account?.feeConfig))); }} value={fromAccountId}>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name} ({account.balance.toFixed(2)})</option>)}</select></label>
-          <label className="field"><span>{locale === 'ar' ? 'إلى حساب' : 'To account'}</span><select onChange={(event) => setToAccountId(event.target.value)} value={toAccountId}>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name} ({account.balance.toFixed(2)})</option>)}</select></label>
+          <label className="field"><span>{locale === 'ar' ? 'من حساب' : 'From account'}</span><Select onChange={(event) => { const id = event.target.value; setFromAccountId(id); const account = accounts.find((candidate) => candidate.id === id); setProviderFee(String(calculateFee(Number(amount) || 0, account?.feeConfig))); }} value={fromAccountId}>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name} ({account.balance.toFixed(2)})</option>)}</Select></label>
+          <label className="field"><span>{locale === 'ar' ? 'إلى حساب' : 'To account'}</span><Select onChange={(event) => setToAccountId(event.target.value)} value={toAccountId}>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name} ({account.balance.toFixed(2)})</option>)}</Select></label>
         </div>
         <label className="field"><span>{transactionsCopy(locale, 'totalAmount')}</span><input data-autofocus="true" min="0.01" onChange={(event) => { const value = event.target.value; setAmount(value); const account = accounts.find((candidate) => candidate.id === fromAccountId); setProviderFee(String(calculateFee(Number(value) || 0, account?.feeConfig))); }} placeholder="0.00" required step="0.01" type="number" value={amount} /></label>
         <div className="field-pair">

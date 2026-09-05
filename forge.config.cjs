@@ -32,6 +32,7 @@ const linuxMakers = [
     config: {
       options: {
         categories: ['Office'],
+        icon: join(__dirname, 'assets', 'max.png'),
         description: 'Offline-first configurable shop operating system',
         genericName: 'Shop operating system',
       },
@@ -56,6 +57,7 @@ const config = {
   packagerConfig: {
     afterExtract: [trimElectronLocales],
     asar: true,
+    icon: join(__dirname, 'assets', 'max'),
     electronZipDir: join(__dirname, '.cache', 'electron-zips'),
     executableName: process.platform === 'linux' ? 'max-shop-os' : 'max',
     ignore: [
@@ -79,6 +81,7 @@ const config = {
         authors: 'Max',
         description: 'Offline-first configurable shop operating system',
         name: 'Max',
+        setupIcon: join(__dirname, 'assets', 'max.ico'),
       },
     },
     {

@@ -265,3 +265,33 @@ describe('QuickEntryService', () => {
     ).toThrowError(ObjectDomainError);
   });
 });
+
+it('posts the previewed service cost and receipt and reverses both on undo', () => {
+  const db=service();
+  const source=db.accounts.createAccount({name:'Wallet',accountType:'wallet',initialBalance:1000,feeConfig:{feeType:'fixed',fixedAmount:99}});
+  const destination=db.accounts.createAccount({name:'Cash',accountType:'cash',initialBalance:0});
+  const profile=db.pricing.createProfile({active:true,name:'Transfer',currency:'EGP',inputMode:'customer_pays',components:[{id:'fee',label:'Fee',type:'customer_fee',chargedTo:'customer',base:'principal',conditions:[],order:1,priority:0,rounding:{mode:'nearest',precision:2},calculation:{kind:'fixed',fixedAmount:5}}]});
+  const draft={accountId:source.id,toAccountId:destination.id,totalAmount:100,paymentMode:'full',operationKind:'transfer',pricingProfileId:profile.id,providerCost:102} as const;
+  const quote=db.quickEntry.previewPricing(draft)!;
+  const tx=db.quickEntry.submit(draft);
+  expect(db.accounts.getAccount(source.id).balance).toBe(1000-quote.totals.shopNetCost);
+  expect(db.accounts.getAccount(destination.id).balance).toBe(quote.totals.customerTotal);
+  expect(tx.pricing?.netProfit).toBe(3);
+  db.transactions.undoTransaction(tx.id);
+  expect(db.accounts.getAccount(source.id).balance).toBe(1000);
+  expect(db.accounts.getAccount(destination.id).balance).toBe(0);
+  expect(db.transactions.getTransaction(tx.id)?.reversedAt).toBeTruthy();
+  db.close();
+});
+it('calculates account transfer fees in the backend and rejects inactive pricing',()=>{
+  const db=service();
+  const source=db.accounts.createAccount({name:'Wallet',accountType:'wallet',initialBalance:1000,feeConfig:{feeType:'percentage',percentage:1}});
+  const destination=db.accounts.createAccount({name:'Cash',accountType:'cash',initialBalance:0});
+  const draft={accountId:source.id,toAccountId:destination.id,totalAmount:100,paymentMode:'full',operationKind:'transfer'} as const;
+  db.quickEntry.submit(draft);
+  expect(db.accounts.getAccount(source.id).balance).toBe(899);
+  const profile=db.pricing.createProfile({active:false,name:'Old',currency:'EGP',inputMode:'customer_pays',components:[]});
+  expect(()=>db.quickEntry.submit({...draft,pricingProfileId:profile.id})).toThrow('inactive');
+  expect(db.accounts.getAccount(source.id).balance).toBe(899);
+  db.close();
+});

@@ -1,3 +1,4 @@
+import { Select } from '../ui/select';
 import {
   Binary,
   Calendar,
@@ -322,7 +323,7 @@ export function PropertyEditor({
                 <div className="text-danger font-semibold mt-1">
                   Warning: Incompatible values may be set to null.
                 </div>
-                <select
+                <Select
                   className="select-field mt-2"
                   value={conversionStrategy}
                   onChange={(event) => setConversionStrategy(event.target.value as TypeConversionStrategy)}
@@ -330,7 +331,7 @@ export function PropertyEditor({
                   {preview.availableStrategies.filter((strategy) => strategy !== 'cancel').map((strategy) => (
                     <option key={strategy} value={strategy}>{strategy.replaceAll('_', ' ')}</option>
                   ))}
-                </select>
+                </Select>
               </div>
             )}
 
@@ -338,7 +339,7 @@ export function PropertyEditor({
               <div className="space-y-3">
                 <div className="form-group">
                   <label className="form-label">Target Database</label>
-                  <select
+                  <Select
                     className="select-field"
                     onChange={(event) => setRelationTargetDatabaseId(event.target.value)}
                     required
@@ -347,7 +348,7 @@ export function PropertyEditor({
                     {databases.map((database) => (
                       <option key={database.id} value={database.id}>{database.title}</option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
                 <div className="form-group">
                   <label className="form-label">Inverse Property Name (optional)</label>
@@ -424,7 +425,7 @@ export function PropertyEditor({
               <div className="space-y-3">
                 <div className="form-group">
                   <label className="form-label">Relation Property</label>
-                  <select
+                  <Select
                     className="select-field"
                     value={rollupRelationId}
                     onChange={(e) => setRollupRelationId(e.target.value)}
@@ -436,7 +437,7 @@ export function PropertyEditor({
                         {p.name}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
 
                 <div className="form-group">
@@ -453,7 +454,7 @@ export function PropertyEditor({
 
                 <div className="form-group">
                   <label className="form-label">Calculation</label>
-                  <select
+                  <Select
                     className="select-field"
                     value={rollupAggregation}
                     onChange={(e) => setRollupAggregation(e.target.value as RollupAggregation)}
@@ -464,7 +465,7 @@ export function PropertyEditor({
                     <option value="max">Max</option>
                     <option value="count">Count all</option>
                     <option value="count_distinct">Count unique</option>
-                  </select>
+                  </Select>
                 </div>
               </div>
             )}

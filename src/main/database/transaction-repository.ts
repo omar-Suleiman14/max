@@ -388,8 +388,8 @@ export class TransactionRepository {
     return this.#transaction(() => {
       const providerFee = Math.round((Number(draft.providerFee) || 0) * 100) / 100;
       const serviceFee = Math.round((Number(draft.serviceFee) || 0) * 100) / 100;
-      const outflowAmount = Math.round((draft.amount + providerFee) * 100) / 100;
-      const inflowAmount = Math.round((draft.amount + serviceFee) * 100) / 100;
+      const outflowAmount = draft.pricing?.shopNetCost ?? Math.round((draft.amount + providerFee) * 100) / 100;
+      const inflowAmount = draft.pricing?.customerTotal ?? Math.round((draft.amount + serviceFee) * 100) / 100;
 
       this.database
         .prepare(`
@@ -417,7 +417,8 @@ export class TransactionRepository {
         );
       }
 
-      // Outflow from source account (amount + provider fee)
+      // A priced service posts its authoritative net cost and customer receipt.
+      // Unpriced transfers use amount plus the explicitly configured fees.
       this.database
         .prepare(`
           INSERT INTO shop_money_movements (transaction_id, account_id, movement_type, amount, created_at)
@@ -514,33 +515,8 @@ export class TransactionRepository {
   }
 
   undoTransaction(id: string): void {
-    const original = this.getTransaction(id);
-    if (!original) {
-      throw new ObjectDomainError('not-found', 'Transaction not found.');
-    }
-    const now = new Date().toISOString();
-
-    this.#transaction(() => {
-      // Restore inventory if the transaction had inventory movements
-      const invMovements = this.database
-        .prepare('SELECT item_id, quantity_delta FROM inventory_movements WHERE operation_id = ?')
-        .all(id) as { item_id: string; quantity_delta: number }[];
-      for (const inv of invMovements) {
-        this.#updateInventoryQuantity(inv.item_id, -inv.quantity_delta);
-      }
-      // Delete the inventory movements
-      this.database
-        .prepare('DELETE FROM inventory_movements WHERE operation_id = ?')
-        .run(id);
-
-      this.database
-        .prepare('UPDATE shop_transactions SET archived_at = ?, updated_at = ? WHERE id = ?')
-        .run(now, now, id);
-      this.database
-        .prepare('UPDATE shop_money_movements SET archived_at = ? WHERE transaction_id = ?')
-        .run(now, id);
-      this.#writeAudit(id, 'archived', original, now);
-    });
+    // Undo is an audited counter-entry, preserving inventory and monetary history.
+    this.reverseTransaction(id, 'Undo quick operation');
   }
 
   getLedgerSummary(): LedgerSummary {

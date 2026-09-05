@@ -1,6 +1,10 @@
+import { createExcelWorkbook, downloadExcel } from './excel-export';
+import { Select } from '../ui/select';
 import {
   ArrowDownAZ,
+  Download,
   Calendar,
+  ChevronDown,
   Database,
   Filter,
   LayoutGrid,
@@ -12,7 +16,7 @@ import {
   Table as TableIcon,
   X,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import type { Locale } from '../app/i18n';
 import type { WorkspaceProperty, WorkspaceRecord, WorkspaceRecordTemplate } from '../../shared/property-contract';
@@ -26,12 +30,13 @@ import { useDatabaseQuery } from './useDatabaseQuery';
 
 type DatabasePageProps = Readonly<{
   databaseId: string;
+  embedded?: boolean;
   initialViewId?: string;
   locale?: Locale;
   onOpenRecordId?: string | null;
 }>;
 
-export function DatabasePage({ databaseId, initialViewId, locale = 'en', onOpenRecordId }: DatabasePageProps) {
+export function DatabasePage({ databaseId, embedded = false, initialViewId, locale = 'en', onOpenRecordId }: DatabasePageProps) {
   const {
     activeView,
     archiveRecord,
@@ -62,6 +67,26 @@ export function DatabasePage({ databaseId, initialViewId, locale = 'en', onOpenR
     views,
   } = useDatabaseQuery(databaseId, initialViewId);
 
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string>();
+  async function exportExcel() {
+    if (!schema || exporting) return;
+    setExporting(true); setExportError(undefined);
+    try {
+      const all: WorkspaceRecord[] = [];
+      let cursor: string | undefined;
+      do {
+        const result = await window.maxApi.workspace.queryDatabase({ databaseId, filter: filterAst, sorts, search: searchQuery, limit: 200, cursor });
+        all.push(...result.records);
+        if (all.length > 100_000) throw new Error(locale === 'ar' ? 'حدد الفلاتر لتصدير 100,000 سجل كحد أقصى.' : 'Narrow the filters to export at most 100,000 records.');
+        if (result.hasMore && (!result.nextCursor || result.nextCursor === cursor)) throw new Error('Export pagination did not advance.');
+        cursor = result.hasMore ? result.nextCursor ?? undefined : undefined;
+      } while (cursor);
+      downloadExcel(createExcelWorkbook(schema.database.title, schema.properties, all, locale === 'ar'), schema.database.title);
+    } catch (error) { setExportError(error instanceof Error ? error.message : String(error)); }
+    finally { setExporting(false); }
+  }
+
   // Modals & Drawers
   const [selectedRecord, setSelectedRecord] = useState<WorkspaceRecord | null>(null);
   const [recordDrawerOpen, setRecordDrawerOpen] = useState(false);
@@ -74,6 +99,8 @@ export function DatabasePage({ databaseId, initialViewId, locale = 'en', onOpenR
   const [newViewName, setNewViewName] = useState('');
   const [newViewLayout, setNewViewLayout] = useState<ViewLayout>('table');
   const [recordTemplates, setRecordTemplates] = useState<readonly WorkspaceRecordTemplate[]>([]);
+  const [newRecordMenuOpen, setNewRecordMenuOpen] = useState(false);
+  const newRecordMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let active = true;
@@ -82,6 +109,24 @@ export function DatabasePage({ databaseId, initialViewId, locale = 'en', onOpenR
     });
     return () => { active = false; };
   }, [databaseId]);
+
+  useEffect(() => {
+    if (!newRecordMenuOpen) return;
+    const closeMenu = (event: MouseEvent) => {
+      if (event.target instanceof Node && !newRecordMenuRef.current?.contains(event.target)) {
+        setNewRecordMenuOpen(false);
+      }
+    };
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') setNewRecordMenuOpen(false);
+    };
+    document.addEventListener('mousedown', closeMenu);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('mousedown', closeMenu);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [newRecordMenuOpen]);
 
   useEffect(() => {
     if (!onOpenRecordId) return;
@@ -96,6 +141,17 @@ export function DatabasePage({ databaseId, initialViewId, locale = 'en', onOpenR
     setSelectedRecord(record);
     setRecordDrawerOpen(true);
   };
+
+  async function handleCreateBlankRecord(templateId?: string) {
+    const template = recordTemplates.find(({ id }) => id === templateId);
+    const record = await createRecord({
+      databaseId,
+      properties: {},
+      templateId: template?.id,
+      title: template?.name ?? (locale === 'ar' ? 'بدون عنوان' : 'Untitled'),
+    });
+    if (record) handleOpenRecord(record);
+  }
 
   const handleCreateNewView = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -132,82 +188,55 @@ export function DatabasePage({ databaseId, initialViewId, locale = 'en', onOpenR
   };
 
   return (
-    <div className="database-page-container">
-      {/* Database Title Bar */}
+    <div className="database-page-container" data-embedded={embedded}>
       <div className="database-page-header">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
-              <Database size={22} />
-            </div>
+        <div className="database-title-row">
+          <div className="database-title-copy">
+            <Database aria-hidden="true" size={embedded ? 17 : 20} />
             <div>
-              <h1 className="database-page-title">{schema?.database.title || 'Database'}</h1>
-              <span className="text-xs text-muted">
-                {totalCount} {totalCount === 1 ? 'record' : 'records'} · {schema?.properties.length || 0} properties
+              <h2 className="database-page-title">{schema?.database.title || (locale === 'ar' ? 'قاعدة بيانات' : 'Database')}</h2>
+              <span>
+                {locale === 'ar'
+                  ? `${totalCount} سجل · ${schema?.properties.length || 0} خاصية`
+                  : `${totalCount} ${totalCount === 1 ? 'record' : 'records'} · ${schema?.properties.length || 0} properties`}
               </span>
             </div>
           </div>
-
-          <div className="flex items-center gap-2">
-            <select
-              aria-label={locale === 'ar' ? 'تجميع حسب' : 'Group by'}
-              className="input-field text-xs"
-              onChange={(event) => {
-                const propertyId = event.target.value;
-                const next = propertyId ? { propertyId } : null;
-                setGroup(next);
-                if (activeView) void updateView(activeView.id, { group: next });
-              }}
-              value={group?.propertyId ?? ''}
-            >
-              <option value="">{locale === 'ar' ? 'بدون تجميع' : 'No grouping'}</option>
-              {schema?.properties.filter((property) => !['formula', 'relation', 'rollup'].includes(property.type)).map((property) => <option key={property.id} value={property.id}>{property.name}</option>)}
-            </select>
-            {group && schema?.properties.find((property) => property.id === group.propertyId)?.type === 'date' && (
-              <select
-                aria-label={locale === 'ar' ? 'دقة التاريخ' : 'Date grouping'}
-                className="input-field text-xs"
-                onChange={(event) => {
-                  const next = { ...group, dateGranularity: event.target.value as 'day' | 'week' | 'month' | 'quarter' | 'year' };
-                  setGroup(next);
-                  if (activeView) void updateView(activeView.id, { group: next });
-                }}
-                value={group.dateGranularity ?? 'month'}
+          <div className="database-create-actions">
+            <div className="database-new-record-split" ref={newRecordMenuRef}>
+              <button className="database-new-record-button" onClick={() => void handleCreateBlankRecord()} type="button">
+                <Plus aria-hidden="true" size={15} />
+                {locale === 'ar' ? 'جديد' : 'New'}
+              </button>
+              <button
+                aria-expanded={newRecordMenuOpen}
+                aria-haspopup="menu"
+                aria-label={locale === 'ar' ? 'خيارات السجل الجديد' : 'New record options'}
+                className="database-new-record-menu-button"
+                onClick={() => setNewRecordMenuOpen((open) => !open)}
+                type="button"
               >
-                {(['day', 'week', 'month', 'quarter', 'year'] as const).map((period) => <option key={period} value={period}>{period}</option>)}
-              </select>
-            )}
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={() => setPropertyManagerOpen(true)}
-            >
-              <Settings size={14} className="mr-1.5" /> Customize Properties
-            </button>
-            <select
-              aria-label={locale === 'ar' ? 'إنشاء سجل من قالب' : 'Create record from template'}
-              className="input-field text-xs"
-              onChange={(event) => {
-                const template = recordTemplates.find(({ id }) => id === event.target.value);
-                event.target.value = '';
-                void createRecord({
-                  databaseId,
-                  properties: {},
-                  templateId: template?.id,
-                  title: template ? `${template.name}` : (locale === 'ar' ? 'بدون عنوان' : 'Untitled'),
-                }).then((record) => { if (record) handleOpenRecord(record); });
-              }}
-              value=""
-            >
-              <option value="">＋ {locale === 'ar' ? 'سجل فارغ' : 'Blank record'}</option>
-              {recordTemplates.map((template) => (
-                <option key={template.id} value={template.id}>{template.icon ?? '◫'} {template.name}</option>
-              ))}
-            </select>
+                <ChevronDown aria-hidden="true" size={14} />
+              </button>
+              {newRecordMenuOpen && (
+                <div className="database-new-record-menu" role="menu">
+                  <button onClick={() => { setNewRecordMenuOpen(false); void handleCreateBlankRecord(); }} role="menuitem" type="button">
+                    <Plus aria-hidden="true" size={15} />
+                    <span>{locale === 'ar' ? 'سجل فارغ' : 'Blank record'}</span>
+                  </button>
+                  {recordTemplates.length > 0 && <div className="database-new-record-menu__label">{locale === 'ar' ? 'القوالب' : 'Templates'}</div>}
+                  {recordTemplates.map((template) => (
+                    <button key={template.id} onClick={() => { setNewRecordMenuOpen(false); void handleCreateBlankRecord(template.id); }} role="menuitem" type="button">
+                      <span aria-hidden="true" className="database-new-record-menu__icon">{template.icon ?? '◫'}</span>
+                      <span>{template.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* View Tabs Switcher */}
         <div className="database-views-bar">
           <div className="database-views-tabs">
             {views.map((view) => {
@@ -231,20 +260,21 @@ export function DatabasePage({ databaseId, initialViewId, locale = 'en', onOpenR
               type="button"
               className="database-view-tab text-muted hover:text-foreground"
               onClick={() => setAddViewModalOpen(true)}
-              title="Add new view layout"
+              title={locale === 'ar' ? 'إضافة طريقة عرض' : 'Add a view'}
             >
-              <Plus size={14} className="mr-1" /> View
+              <Plus aria-hidden="true" size={14} /> {locale === 'ar' ? 'طريقة عرض' : 'View'}
             </button>
           </div>
         </div>
 
-        {/* Action Toolbar (Search, Filter, Sort) */}
+        {exportError && <p className="form-error" role="alert">{exportError}</p>}
         <div className="database-toolbar">
+          <button className="btn btn-secondary btn-sm" disabled={exporting || !schema} onClick={() => void exportExcel()} type="button"><Download aria-hidden="true" size={14} />{exporting ? (locale === 'ar' ? 'جارٍ التصدير…' : 'Exporting…') : (locale === 'ar' ? 'تصدير Excel' : 'Export Excel')}</button>
           <div className="database-toolbar__search">
             <Search size={14} className="text-muted" />
             <input
               type="text"
-              placeholder="Search records in this database..."
+              placeholder={locale === 'ar' ? 'ابحث في قاعدة البيانات…' : 'Search this database…'}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="input-clean text-xs"
@@ -256,32 +286,68 @@ export function DatabasePage({ databaseId, initialViewId, locale = 'en', onOpenR
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="database-toolbar__actions">
+            <Select
+              aria-label={locale === 'ar' ? 'تجميع حسب' : 'Group by'}
+              className="database-toolbar-select"
+              onChange={(event) => {
+                const propertyId = event.target.value;
+                const next = propertyId ? { propertyId } : null;
+                setGroup(next);
+                if (activeView) void updateView(activeView.id, { group: next });
+              }}
+              value={group?.propertyId ?? ''}
+            >
+              <option value="">{locale === 'ar' ? 'بدون تجميع' : 'No grouping'}</option>
+              {schema?.properties.filter((property) => !['formula', 'relation', 'rollup'].includes(property.type)).map((property) => <option key={property.id} value={property.id}>{property.name}</option>)}
+            </Select>
+            {group && schema?.properties.find((property) => property.id === group.propertyId)?.type === 'date' && (
+              <Select
+                aria-label={locale === 'ar' ? 'دقة تجميع التاريخ' : 'Date grouping'}
+                className="database-toolbar-select"
+                onChange={(event) => {
+                  const next = { ...group, dateGranularity: event.target.value as 'day' | 'week' | 'month' | 'quarter' | 'year' };
+                  setGroup(next);
+                  if (activeView) void updateView(activeView.id, { group: next });
+                }}
+                value={group.dateGranularity ?? 'month'}
+              >
+                {(['day', 'week', 'month', 'quarter', 'year'] as const).map((period) => (
+                  <option key={period} value={period}>{locale === 'ar' ? ({ day: 'يوم', week: 'أسبوع', month: 'شهر', quarter: 'ربع سنة', year: 'سنة' } as const)[period] : period}</option>
+                ))}
+              </Select>
+            )}
+            <button className="database-tool-button" onClick={() => setPropertyManagerOpen(true)} type="button">
+              <Settings aria-hidden="true" size={13} /> {locale === 'ar' ? 'الخصائص' : 'Properties'}
+            </button>
             <button
               type="button"
-              className={`btn btn-secondary btn-xs ${activeFilterCount > 0 ? 'border-primary text-primary' : ''}`}
+              className="database-tool-button"
+              data-active={activeFilterCount > 0}
               onClick={() => setFilterModalOpen(true)}
             >
-              <Filter size={13} className="mr-1" />
-              Filter
+              <Filter aria-hidden="true" size={13} />
+              {locale === 'ar' ? 'تصفية' : 'Filter'}
               {activeFilterCount > 0 && <span className="badge badge-primary ml-1.5 text-2xs">{activeFilterCount}</span>}
             </button>
 
             <button
               type="button"
-              className={`btn btn-secondary btn-xs ${sorts.length > 0 ? 'border-primary text-primary' : ''}`}
+              className="database-tool-button"
+              data-active={sorts.length > 0}
               onClick={() => setSortModalOpen(true)}
             >
-              <ArrowDownAZ size={13} className="mr-1" />
-              Sort
+              <ArrowDownAZ aria-hidden="true" size={13} />
+              {locale === 'ar' ? 'ترتيب' : 'Sort'}
               {sorts.length > 0 && <span className="badge badge-primary ml-1.5 text-2xs">{sorts.length}</span>}
             </button>
 
             <button
               type="button"
-              className="btn-icon p-1.5 text-muted hover:text-foreground"
+              aria-label={locale === 'ar' ? 'تحديث قاعدة البيانات' : 'Refresh database'}
+              className="database-refresh-button"
               onClick={() => void refresh()}
-              title="Refresh database"
+              title={locale === 'ar' ? 'تحديث' : 'Refresh'}
             >
               <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
             </button>

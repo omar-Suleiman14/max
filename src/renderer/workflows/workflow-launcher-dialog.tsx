@@ -1,3 +1,4 @@
+import { Select } from '../ui/select';
 import { Play, Plus, Save, Settings2, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -19,6 +20,7 @@ function inputKey(field: WorkflowInputField, index: number): string {
 function coerceInput(field: WorkflowInputField, value: string | boolean): unknown {
   if (field.type === 'boolean') return Boolean(value);
   if (field.type === 'money' || field.type === 'number') {
+    if (value === '') return '';
     const number = Number(value);
     return Number.isFinite(number) ? number : value;
   }
@@ -150,7 +152,7 @@ export function WorkflowLauncherDialog({ locale, onClose }: Props) {
                   const key = inputKey(field, index);
                   return <label className="form-group" key={key}><span className="form-label">{field.label}{field.required ? ' *' : ''}</span>
                     {field.type === 'boolean' ? <input checked={Boolean(inputs[key])} onChange={(event) => setInputs((current) => ({ ...current, [key]: event.target.checked }))} type="checkbox" />
-                      : field.type === 'select' || field.type === 'record' ? <select className="input-field" onChange={(event) => setInputs((current) => ({ ...current, [key]: event.target.value }))} value={String(inputs[key] ?? '')}><option value="">{ar ? 'اختر…' : 'Choose…'}</option>{(field.type === 'record' ? recordOptions[key] ?? [] : field.options ?? []).map((option) => <option key={'id' in option ? option.id : option.value} value={'id' in option ? option.id : option.value}>{'id' in option ? option.title : option.label}</option>)}</select>
+                      : field.type === 'select' || field.type === 'record' ? <Select className="input-field" onChange={(event) => setInputs((current) => ({ ...current, [key]: event.target.value }))} value={String(inputs[key] ?? '')}><option value="">{ar ? 'اختر…' : 'Choose…'}</option>{(field.type === 'record' ? recordOptions[key] ?? [] : field.options ?? []).map((option) => <option key={'id' in option ? option.id : option.value} value={'id' in option ? option.id : option.value}>{'id' in option ? option.title : option.label}</option>)}</Select>
                         : <input className="input-field" onChange={(event) => setInputs((current) => ({ ...current, [key]: event.target.value }))} type={field.type === 'date' ? 'date' : field.type === 'money' || field.type === 'number' ? 'number' : 'text'} value={String(inputs[key] ?? '')} />}
                   </label>;
                 })}

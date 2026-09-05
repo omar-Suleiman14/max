@@ -1,3 +1,4 @@
+import { Select } from '../ui/select';
 import { ArrowDownAZ, ArrowUpZA, Plus, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 
@@ -80,7 +81,7 @@ export function SortBuilder({
                   <span className="text-xs text-muted w-12">{index === 0 ? 'Sort by' : 'Then by'}</span>
 
                   {/* Property Selector */}
-                  <select
+                  <Select
                     className="select-field flex-1"
                     value={rule.propertyId}
                     onChange={(e) => updateSort(index, { propertyId: e.target.value })}
@@ -90,7 +91,7 @@ export function SortBuilder({
                         {p.name}
                       </option>
                     ))}
-                  </select>
+                  </Select>
 
                   {/* Direction Selector */}
                   <div className="flex rounded-md border border-neutral-700 overflow-hidden">

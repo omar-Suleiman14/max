@@ -1,7 +1,7 @@
 {
   "name": "max-shop-os",
   "productName": "Max",
-  "version": "0.2.6",
+  "version": "0.2.8",
   "description": "Offline-first configurable shop operating system",
   "private": true,
   "main": ".vite/build/main.js",
@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "@clerk/react": "^6.14.8",
+    "fflate": "^0.8.3",
     "lucide-react": "^1.37.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"

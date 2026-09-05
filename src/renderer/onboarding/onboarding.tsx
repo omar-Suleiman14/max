@@ -1,3 +1,5 @@
+import { Terms } from '../ui/terms';
+import { Select } from '../ui/select';
 import {
   ArrowLeft,
   ArrowRight,
@@ -12,7 +14,7 @@ import type { Locale } from '../app/i18n';
 import { phoneShopBlueprint } from '../blueprints/starter-blueprints';
 import { Button } from '../ui/button';
 import { onboardingCopy } from './onboarding-i18n';
-import maxLogoReference from '../assets/max-logo-reference.jpg';
+import maxLogoReference from '../assets/max-logo.png';
 
 type OnboardingProps = Readonly<{
   initialLocale: Locale;
@@ -24,6 +26,7 @@ type OnboardingProps = Readonly<{
 type BlueprintOption = 'blank' | 'custom' | 'phone';
 
 export function Onboarding({ initialLocale, onClose, onComplete, preview = false }: OnboardingProps) {
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [step, setStep] = useState(1);
   const [locale, setLocale] = useState<Locale>(initialLocale);
   const [shopName, setShopName] = useState('');
@@ -33,6 +36,7 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
   const [backupSchedule, setBackupSchedule] = useState<BackupSchedule>('daily');
   const [includeDemoData, setIncludeDemoData] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [finishError, setFinishError] = useState<string>();
 
   function handleLanguageChange(nextLocale: Locale) {
     setLocale(nextLocale);
@@ -42,6 +46,7 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
 
   async function handleCustomFile(event: ChangeEvent<HTMLInputElement>) {
     setCustomFileError(undefined);
+    setCustomBlueprint(undefined);
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -68,9 +73,13 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
 
   async function handleFinish(event: FormEvent) {
     event.preventDefault();
+    if (!acceptedTerms || submitting || !shopName.trim() || (blueprintChoice === 'custom' && !customBlueprint)) return;
+    setFinishError(undefined);
     setSubmitting(true);
     try {
       await onComplete(shopName.trim() || 'My Shop', locale, backupSchedule, selectedBlueprint, blueprintChoice === 'phone' && includeDemoData, blueprintChoice === 'phone' ? 'phone-shop' : blueprintChoice);
+    } catch (error) {
+      setFinishError(error instanceof Error ? error.message : String(error));
     } finally {
       setSubmitting(false);
     }
@@ -87,7 +96,7 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
           <div className="brand" aria-label="Max">
             <span className="onboarding-brand-symbol"><img alt="" src={maxLogoReference} /></span>
             <strong className="onboarding-brand-name">MAX</strong>
-            <small className="onboarding-brand-version">v0.2.6</small>
+            <small className="onboarding-brand-version">v0.2.8</small>
           </div>
           <div className="onboarding-steps-indicator" aria-label={`Step ${step} of 5`}>
             {[1, 2, 3, 4, 5].map((i) => (
@@ -100,7 +109,8 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
           {preview && onClose && <Button onClick={onClose}>{locale === 'ar' ? 'إغلاق المعاينة' : 'Close preview'}</Button>}
         </header>
 
-        <main className="onboarding-card__body">
+        <main className="onboarding-card__body" key={step}>
+          {finishError && <p className="form-error" role="alert">{finishError}</p>}
           {/* STEP 1: LANGUAGE */}
           {step === 1 && (
             <div className="onboarding-step">
@@ -172,11 +182,11 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
 
               <label className="field onboarding-template-picker">
                 <span>{locale === 'ar' ? 'قالب مساحة العمل' : 'Workspace template'}</span>
-                <select className="field__input--large" onChange={(event) => setBlueprintChoice(event.target.value as BlueprintOption)} value={blueprintChoice}>
+                <Select className="field__input--large" onChange={(event) => setBlueprintChoice(event.target.value as BlueprintOption)} value={blueprintChoice}>
                   <option value="phone">{locale === 'ar' ? 'متجر الهواتف — موصى به' : 'Phone Shop — Recommended'}</option>
                   <option value="blank">{onboardingCopy(locale, 'blankTitle')}</option>
                   <option value="custom">{onboardingCopy(locale, 'importCustomTitle')}</option>
-                </select>
+                </Select>
               </label>
 
               <div className="template-preview-card">
@@ -295,6 +305,8 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
               <h2>{shopName.trim() || 'My Shop'}</h2>
               <p className="step-subtitle">{onboardingCopy(locale, 'readySubtitle')}</p>
 
+              <Terms locale={locale} />
+              <label className="terms-acceptance"><input type="checkbox" checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} />{locale === 'ar' ? 'قرأت ووافقت على الشروط والأحكام' : 'I have read and agree to the Terms & Conditions'}</label>
               <div className="assembly-badge-list">
                 {blueprintChoice === 'phone' ? (
                   <>
@@ -341,7 +353,7 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
 
           {step < 5 ? (
             <Button
-              disabled={step === 2 && shopName.trim().length === 0}
+              disabled={(step === 2 && !shopName.trim()) || (step === 3 && blueprintChoice === 'custom' && !customBlueprint)}
               icon={<NextIcon aria-hidden="true" size={16} />}
               onClick={() => setStep((s) => s + 1)}
               variant="primary"
@@ -350,7 +362,7 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
             </Button>
           ) : (
             <Button
-              disabled={submitting}
+              disabled={!acceptedTerms || submitting || (blueprintChoice === 'custom' && !customBlueprint)}
               icon={<Sparkles aria-hidden="true" size={16} />}
               onClick={(e) => void handleFinish(e)}
               variant="primary"
