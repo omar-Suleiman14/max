@@ -565,7 +565,8 @@ describe('Max shell', () => {
 
     expect(document.documentElement).toHaveAttribute('lang', 'ar');
     expect(document.documentElement).toHaveAttribute('dir', 'rtl');
-    await user.click(screen.getByRole('button', { name: 'المظهر' }));
+    const settingsNav = await screen.findByRole('navigation', { name: 'أقسام الإعدادات' });
+    await user.click(within(settingsNav).getByRole('button', { name: 'المظهر' }));
     const systemTheme = screen.getByRole('radio', { name: 'النظام' });
     systemTheme.focus();
     await user.keyboard('{ArrowLeft}');
@@ -622,7 +623,8 @@ describe('Max shell', () => {
     expect(screen.queryByRole('button', { name: /sign in/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/cloud sign-in/i)).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Settings' }));
-    await user.click(await screen.findByRole('button', { name: 'Backup' }));
+    const settingsNav = await screen.findByRole('navigation', { name: 'Settings sections' });
+    await user.click(within(settingsNav).getByRole('button', { name: 'Backup' }));
 
     const cloudBackupSwitch = await screen.findByRole('switch', { name: 'Enable cloud backup' });
     expect(cloudBackupSwitch).toHaveAttribute('aria-checked', 'false');
@@ -637,7 +639,8 @@ describe('Max shell', () => {
     render(<MaxApp />);
     await screen.findByRole('button', { name: 'Home' });
     await user.click(screen.getByRole('button', { name: 'Settings' }));
-    await user.click(await screen.findByRole('button', { name: 'Pricing' }));
+    const settingsNav = await screen.findByRole('navigation', { name: 'Settings sections' });
+    await user.click(within(settingsNav).getByRole('button', { name: 'Pricing' }));
     await user.click(screen.getByRole('button', { name: 'New pricing profile' }));
     await user.type(screen.getByLabelText('Name'), 'Vodafone recharge');
     await user.type(screen.getByLabelText('Provider'), 'Vodafone');
