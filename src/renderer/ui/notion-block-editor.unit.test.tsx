@@ -74,6 +74,11 @@ describe('NotionBlockEditor', () => {
     const boxes = await screen.findAllByRole('textbox');
     const second = boxes[1]!;
     second.focus();
+    const endRange = document.createRange();
+    endRange.selectNodeContents(second);
+    endRange.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(endRange);
     await user.keyboard('World');
     expect(second).toHaveTextContent('World');
     // Place cursor at start for Backspace merge
