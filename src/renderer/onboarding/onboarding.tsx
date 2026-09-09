@@ -14,6 +14,29 @@ import { Button } from '../ui/button';
 import { onboardingCopy } from './onboarding-i18n';
 import maxLogoReference from '../assets/max-logo.png';
 
+function playWelcomeSound(): void {
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const audioWindow = window as typeof window & { webkitAudioContext?: typeof AudioContext };
+  const AudioContextConstructor = audioWindow.AudioContext ?? audioWindow.webkitAudioContext;
+  if (!AudioContextConstructor) return;
+  try {
+    const context = new AudioContextConstructor();
+    const gain = context.createGain();
+    const oscillator = context.createOscillator();
+    const now = context.currentTime;
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(523.25, now);
+    oscillator.frequency.exponentialRampToValueAtTime(783.99, now + 0.19);
+    oscillator.frequency.exponentialRampToValueAtTime(1046.5, now + 0.46);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.045, now + 0.05);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.58);
+    oscillator.connect(gain); gain.connect(context.destination);
+    oscillator.start(now); oscillator.stop(now + 0.6);
+    oscillator.addEventListener('ended', () => { void context.close(); }, { once: true });
+  } catch { /* Audio is an optional welcome enhancement. */ }
+}
+
 type OnboardingProps = Readonly<{
   initialLocale: Locale;
   onComplete: (shopName: string, locale: Locale, backupSchedule: BackupSchedule, blueprint?: Blueprint, includeDemoData?: boolean, templateId?: 'blank' | 'custom' | 'phone-shop') => Promise<void>;
@@ -68,6 +91,12 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
   }, []);
 
   useEffect(() => {
+    if (!showWelcome) return;
+    const timer = window.setTimeout(playWelcomeSound, 320);
+    return () => window.clearTimeout(timer);
+  }, [showWelcome]);
+
+  useEffect(() => {
     function handleGlobalKeyDown(e: KeyboardEvent) {
       if (e.key === 'Enter' && !e.defaultPrevented) {
         const btn = document.querySelector<HTMLButtonElement>('.onboarding-actions .apple-button');
@@ -101,6 +130,8 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
     return (
       <div className="onboarding-container onboarding-container--welcome" dir="ltr">
         <main className="onboarding-welcome" aria-labelledby="welcome-to-max">
+          <div className="onboarding-welcome__ripple onboarding-welcome__ripple--one" aria-hidden="true" />
+          <div className="onboarding-welcome__ripple onboarding-welcome__ripple--two" aria-hidden="true" />
           <div className="onboarding-welcome__halo" aria-hidden="true" />
           <img alt="" className="onboarding-welcome__logo" src={maxLogoReference} />
           <p className="onboarding-welcome__eyebrow"><Sparkles size={14} aria-hidden="true" /> Your local workspace</p>
