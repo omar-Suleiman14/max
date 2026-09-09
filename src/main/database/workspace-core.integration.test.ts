@@ -87,6 +87,28 @@ describe('Max v0.2.0 Core Workspace Integration Tests', () => {
       const updatedN2 = db.workspace.reorderNode(n2.id, '00000000000000000000000000');
       expect(updatedN2.positionKey).toBe('00000000000000000000000000');
     });
+
+    it('permanently deletes a database handle and its owned data without leaving an inverse relation field behind', () => {
+      const db = createTestDb();
+      try {
+        const source = db.databases.createDatabase({ title: 'Source' });
+        const target = db.databases.createDatabase({ title: 'Target' });
+        const sourceRelation = db.properties.createProperty({ databaseId: source.id, name: 'Target', type: 'relation' });
+        const targetRelation = db.properties.createProperty({ databaseId: target.id, name: 'Source', type: 'relation' });
+        const relation = db.relations.createRelation({ sourceDatabaseId: source.id, targetDatabaseId: target.id, sourcePropertyId: sourceRelation.id, inversePropertyId: targetRelation.id });
+        const sourceRecord = db.records.createRecord({ databaseId: source.id, title: 'Source row' });
+        const targetRecord = db.records.createRecord({ databaseId: target.id, title: 'Target row' });
+        db.relations.connect(relation.id, sourceRecord.id, targetRecord.id);
+
+        db.databases.permanentlyDeleteDatabase(source.id);
+
+        expect(db.databases.getDatabase(source.id)).toBeNull();
+        expect(db.records.getRecord(sourceRecord.id)).toBeNull();
+        expect(db.workspace.getNavigation().databases.map((item) => item.id)).not.toContain(source.id);
+        expect(db.databases.getDatabase(target.id)?.title).toBe('Target');
+        expect(db.databases.getSchema(target.id).properties.some((property) => property.id === targetRelation.id)).toBe(false);
+      } finally { db.close(); }
+    });
   });
 
   describe('Databases & Properties', () => {

@@ -18,6 +18,8 @@ type Props = {
   onFilter: () => void; onSort: () => void; onProperties: () => void; onExport: () => void;
   grouping: ReactNode;
   onArchived?: () => void;
+  embedded?: boolean;
+  onRemoveEmbeddedView?: () => void;
 };
 export function DatabaseToolbar(props: Props) {
   const { locale, activeView, views } = props;
@@ -51,12 +53,17 @@ export function DatabaseToolbar(props: Props) {
     if (deleteLock.current) return;
     deleteLock.current = true; setDeleting(true); setDeleteError('');
     try {
-      const result = await window.maxApi.workspace.archiveDatabase(props.databaseId);
+      if (props.embedded) {
+        props.onRemoveEmbeddedView?.();
+        setConfirmDelete(false);
+        return;
+      }
+      const result = await window.maxApi.workspace.permanentlyDeleteDatabase(props.databaseId);
       if (!result.ok) { setDeleteError(result.error.message); return; }
       setConfirmDelete(false);
       props.onArchived?.();
       window.dispatchEvent(new Event('max:workspace-changed'));
-    } catch { setDeleteError(ar ? 'تعذر نقل قاعدة البيانات إلى المهملات.' : 'Could not move the database to Trash.'); }
+    } catch { setDeleteError(ar ? 'تعذر حذف قاعدة البيانات نهائيًا.' : 'Could not permanently delete the database.'); }
     finally { deleteLock.current = false; setDeleting(false); }
   }
   const root = useRef<HTMLDivElement>(null);
@@ -118,10 +125,10 @@ export function DatabaseToolbar(props: Props) {
           const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
           event.preventDefault(); buttons[(current + (event.shiftKey ? -1 : 1) + buttons.length) % buttons.length]?.focus();
         }
-      }}><h3>{ar ? 'حذف قاعدة البيانات؟' : 'Delete database?'}</h3>
-        <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--muted)', marginBottom: 12, marginTop: 0 }}>{ar ? 'يمكنك استعادتها من المهملات.' : 'You can restore it from Trash.'}</p>
+      }}><h3>{props.embedded ? (ar ? 'إزالة عرض قاعدة البيانات؟' : 'Remove database view?') : (ar ? 'حذف قاعدة البيانات؟' : 'Delete database?')}</h3>
+        <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--muted)', marginBottom: 12, marginTop: 0 }}>{props.embedded ? (ar ? 'ستتم إزالة هذا العرض من الصفحة فقط. ستبقى قاعدة البيانات وسجلاتها دون تغيير.' : 'Only this view will be removed from the page. The database and its records will stay unchanged.') : (ar ? 'سيتم حذف جميع الصفوف والخصائص والعروض نهائيًا. لا يمكن التراجع.' : 'All records, properties, and views will be permanently deleted. This cannot be undone.')}</p>
         {deleteError && <p className="form-error" role="alert">{deleteError}</p>}
-        <button className="record-sort-confirm-remove" type="button" disabled={deleting} onClick={() => void deleteDatabase()}>{ar ? 'حذف قاعدة البيانات' : 'Delete database'}</button>
+        <button className="record-sort-confirm-remove" type="button" disabled={deleting} onClick={() => void deleteDatabase()}>{props.embedded ? (ar ? 'إزالة العرض' : 'Remove view') : (ar ? 'حذف قاعدة البيانات' : 'Delete database')}</button>
         <button autoFocus type="button" disabled={deleting} onClick={() => setConfirmDelete(false)}>{ar ? 'إلغاء' : "Cancel"}</button>
       </section></div>, document.body)}
     {templateEditor && <RecordTemplateEditor databaseId={props.databaseId} template={templateEditor === 'new' ? undefined : templateEditor} locale={locale} onClose={() => setTemplateEditor(null)} />}

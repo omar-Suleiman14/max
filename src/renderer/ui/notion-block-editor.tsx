@@ -316,7 +316,16 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [dragOverEdge, setDragOverEdge] = useState<'after' | 'before'>('before');
+  const [failedMoveBlockId, setFailedMoveBlockId] = useState<string | null>(null);
+  const failedMoveTimer = useRef<number | undefined>(undefined);
   const [blockMenuId, setBlockMenuId] = useState<string | null>(null);
+  function signalMoveFailure(id: string | undefined) {
+    if (!id) return;
+    if (failedMoveTimer.current) window.clearTimeout(failedMoveTimer.current);
+    setFailedMoveBlockId(id);
+    failedMoveTimer.current = window.setTimeout(() => setFailedMoveBlockId(null), 280);
+  }
+  useEffect(() => () => { if (failedMoveTimer.current) window.clearTimeout(failedMoveTimer.current); }, []);
   useEffect(() => {
     if (!blockMenuId) return;
     const close = (event: PointerEvent) => {
@@ -963,6 +972,7 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
 
   function handleDrop(targetIndex: number) {
     if (draggedIndex === null || draggedIndex === targetIndex) {
+      if (draggedIndex !== null) signalMoveFailure(blocks[draggedIndex]?.id);
       setDraggedIndex(null);
       setDragOverIndex(null);
       return;
@@ -981,7 +991,7 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
 
   function moveBlock(index: number, direction: -1 | 1) {
     const target = index + direction;
-    if (target < 0 || target >= blocks.length) return;
+    if (target < 0 || target >= blocks.length) { signalMoveFailure(blocks[index]?.id); return; }
     const next = [...blocks];
     const [moved] = next.splice(index, 1);
     if (!moved) return;
@@ -1060,6 +1070,7 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
         else focusBlock(last.id);
       }}
     >
+      <p className="sr-only" role="status">{failedMoveBlockId ? (locale === 'ar' ? 'لا يمكن نقل الكتلة أبعد من ذلك.' : 'This block cannot move any farther.') : ''}</p>
       {blocks.map((block, index) => {
         const isDragging = draggedIndex === index;
         const isDragOver = dragOverIndex === index;
@@ -1097,6 +1108,7 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
             data-drag-over={isDragOver}
             data-dragging={isDragging}
             data-drop-edge={isDragOver ? dragOverEdge : undefined}
+            data-move-failed={failedMoveBlockId === block.id || undefined}
             data-type={block.type}
             onClick={(e) => {
               if (selectedLines.length || !window.getSelection()?.isCollapsed) return;
@@ -1245,7 +1257,7 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
                   <div className="notion-embedded-db-content">
                     <Suspense fallback={<div aria-live="polite" className="notion-embedded-db-loading" role="status">{locale === 'ar' ? 'جارٍ تحميل قاعدة البيانات…' : 'Loading database…'}</div>}>
                     {block.databaseId ? (
-                      <DatabasePage databaseId={block.databaseId} embedded initialViewId={block.viewId} locale={locale} />
+                      <DatabasePage databaseId={block.databaseId} embedded initialViewId={block.viewId} locale={locale} onRemoveEmbeddedView={() => removeBlock(block.id)} />
                     ) : (
                       <LegacyDatabaseLink alias={block.databaseKind ?? block.content} locale={locale} />
                     )}

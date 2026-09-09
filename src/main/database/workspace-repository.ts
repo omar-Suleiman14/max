@@ -164,20 +164,54 @@ export class WorkspaceRepository {
   }
 
   permanentlyDeleteNode(id: string): void {
+    new DatabaseUnitOfWork(this.#database).run(() => this.#permanentlyDeleteArchivedNode(id));
+  }
+
+  /**
+   * The database handle's Delete action is intentionally irreversible.  It
+   * still shares the normal purge implementation so a database and every row,
+   * property, view, template, relation edge, and search entry it owns leave in
+   * one SQLite transaction.
+   */
+  permanentlyDeleteDatabase(id: string): void {
     new DatabaseUnitOfWork(this.#database).run(() => {
-      const root = this.getNode(id);
-      if (!root?.archivedAt) throw new WorkspaceDomainError('invalid-input', 'Only items in Trash can be permanently deleted.');
-      const nodes = this.#database.prepare(`WITH RECURSIVE owned(id) AS (SELECT ? UNION SELECT n.id FROM workspace_nodes n JOIN owned p ON n.parent_node_id = p.id) SELECT n.id, n.archived_at FROM workspace_nodes n JOIN owned ON owned.id = n.id`).all(id) as { id: string; archived_at: string | null }[];
-      if (nodes.some((node) => !node.archived_at)) throw new WorkspaceDomainError('invalid-input', 'Restore this item and move its contents to Trash before permanently deleting it.');
-      // Remove record rows first: their database foreign keys deliberately restrict deletion.
-      for (const node of nodes) this.#database.prepare('DELETE FROM workspace_records WHERE id = ?').run(node.id);
-      for (const node of nodes) {
-        this.#search?.removeIndex(node.id);
-        this.#database.prepare('DELETE FROM workspace_dependencies WHERE source_id = ? OR target_id = ?').run(node.id, node.id);
-        this.#database.prepare('DELETE FROM workspace_nodes WHERE id = ?').run(node.id);
+      const database = this.getNode(id);
+      if (!database || database.kind !== 'database') {
+        throw new WorkspaceDomainError('not-found', 'Database not found.');
       }
-      this.#database.prepare("INSERT INTO workspace_audit_log (entity_kind, entity_id, action, actor_id, metadata_json, created_at) VALUES ('node', ?, 'archived', 'local-user', ?, ?)").run(id, JSON.stringify({ permanentlyDeleted: true, title: root.title, nodeCount: nodes.length }), new Date().toISOString());
+      if (!database.archivedAt) this.#archiveNode(id);
+      this.#permanentlyDeleteArchivedNode(id);
     });
+  }
+
+  #permanentlyDeleteArchivedNode(id: string): void {
+    const root = this.getNode(id);
+    if (!root?.archivedAt) throw new WorkspaceDomainError('invalid-input', 'Only items in Trash can be permanently deleted.');
+    const nodes = this.#database.prepare(`WITH RECURSIVE owned(id) AS (SELECT ? UNION SELECT n.id FROM workspace_nodes n JOIN owned p ON n.parent_node_id = p.id) SELECT n.id, n.archived_at FROM workspace_nodes n JOIN owned ON owned.id = n.id`).all(id) as { id: string; archived_at: string | null }[];
+    if (nodes.some((node) => !node.archived_at)) throw new WorkspaceDomainError('invalid-input', 'Restore this item and move its contents to Trash before permanently deleting it.');
+    // A relation's other endpoint is a property in a database that survives
+    // this deletion. Remove that endpoint as well so it cannot remain as a
+    // relation field pointing at a database that no longer exists.
+    const externalRelationProperties = this.#database.prepare(`
+      SELECT CASE WHEN source_database_id = ? THEN inverse_property_id ELSE source_property_id END AS id
+      FROM workspace_relations
+      WHERE source_database_id = ? OR target_database_id = ?
+    `).all(id, id, id) as { id: string | null }[];
+    for (const property of externalRelationProperties) {
+      if (property.id) this.#database.prepare('DELETE FROM workspace_properties WHERE id = ?').run(property.id);
+    }
+    // Database records deliberately restrict database deletion. Include every
+    // row owned by a database even when an older workspace did not parent its
+    // record node under the database node.
+    const recordIds = this.#database.prepare('SELECT id FROM workspace_records WHERE database_id = ?').all(id) as { id: string }[];
+    for (const record of recordIds) this.#database.prepare('DELETE FROM workspace_records WHERE id = ?').run(record.id);
+    for (const node of nodes) this.#database.prepare('DELETE FROM workspace_records WHERE id = ?').run(node.id);
+    for (const node of nodes) {
+      this.#search?.removeIndex(node.id);
+      this.#database.prepare('DELETE FROM workspace_dependencies WHERE source_id = ? OR target_id = ?').run(node.id, node.id);
+      this.#database.prepare('DELETE FROM workspace_nodes WHERE id = ?').run(node.id);
+    }
+    this.#database.prepare("INSERT INTO workspace_audit_log (entity_kind, entity_id, action, actor_id, metadata_json, created_at) VALUES ('node', ?, 'archived', 'local-user', ?, ?)").run(id, JSON.stringify({ permanentlyDeleted: true, title: root.title, nodeCount: nodes.length }), new Date().toISOString());
   }
 
   #restoreNode(id: string): WorkspaceNode {

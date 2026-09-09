@@ -280,6 +280,10 @@ export class DatabaseRepository {
     this.#workspaceRepo.archiveNode(id);
   }
 
+  permanentlyDeleteDatabase(id: string): void {
+    this.#workspaceRepo.permanentlyDeleteDatabase(id);
+  }
+
   duplicateDatabase(
     id: string,
     newTitle?: string,
