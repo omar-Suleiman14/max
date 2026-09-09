@@ -1,4 +1,4 @@
-﻿import type { Locale } from '../app/i18n';
+import type { Locale } from '../app/i18n';
 
 export type SectionMarker = {
   element: HTMLElement;
@@ -49,11 +49,14 @@ export function findContentSections(root: HTMLElement, locale: Locale): SectionM
     .filter((el) => !el.closest('[role="dialog"]'));
   if (settingsSections.length > 0) {
     return settingsSections.map((el) => {
-      const heading = el.querySelector<HTMLElement>('h2, h3, strong');
+      const internalHeading = el.querySelector<HTMLElement>('h2, h3, strong');
+      const prevSibling = el.previousElementSibling;
+      const externalHeading = prevSibling?.tagName.match(/^H[1-6]$/i) ? prevSibling : null;
+      const heading = internalHeading || externalHeading;
       const label = (el.dataset.scrollLabel || heading?.textContent || '').trim().replace(/\s+/g, ' ');
       return {
         element: el,
-        preview: (el.textContent ?? '').trim().slice(0, 180),
+        preview: (heading?.textContent ?? el.textContent ?? '').trim().slice(0, 180),
         title: label.slice(0, 80) || (locale === 'ar' ? 'قسم' : 'Section'),
       };
     });

@@ -127,8 +127,8 @@ export function objectCopy(locale: Locale, key: ObjectCopyKey): string {
 }
 
 const typeCopy: Record<Locale, Record<PropertyType, string>> = {
-  en: { checkbox: 'Checkbox', date: 'Date', money: 'Money', number: 'Number', relation: 'Relation', select: 'Select', status: 'Status', text: 'Text' },
-  ar: { checkbox: 'صح أو خطأ', date: 'تاريخ', money: 'مبلغ', number: 'رقم', relation: 'ربط بسجل', select: 'قائمة', status: 'حالة', text: 'نص' },
+  en: { checkbox: 'Checkbox', date: 'Date', number: 'Number', relation: 'Relation', select: 'Select', status: 'Status', text: 'Text' },
+  ar: { checkbox: 'صح أو خطأ', date: 'تاريخ', number: 'رقم', relation: 'ربط بسجل', select: 'قائمة', status: 'حالة', text: 'نص' },
 };
 
 export function propertyTypeLabel(locale: Locale, type: PropertyType): string {

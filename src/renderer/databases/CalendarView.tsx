@@ -1,12 +1,14 @@
 import { Select } from '../ui/select';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 
 import type { DatabaseSchema } from '../../shared/database-contract';
 import type { WorkspaceRecord, WorkspaceRecordDraft } from '../../shared/property-contract';
 
 type CalendarViewProps = Readonly<{
   databaseId: string;
+  datePropertyId?: string | null;
+  onDatePropertyChange?: (id: string) => void;
   onArchiveRecord?: (recordId: string) => Promise<void>;
   onCreateRecord: (draft: WorkspaceRecordDraft) => Promise<WorkspaceRecord | null>;
   onOpenRecord: (record: WorkspaceRecord) => void;
@@ -16,6 +18,8 @@ type CalendarViewProps = Readonly<{
 
 export function CalendarView({
   databaseId,
+  datePropertyId,
+  onDatePropertyChange,
   onCreateRecord,
   onOpenRecord,
   records,
@@ -26,8 +30,9 @@ export function CalendarView({
   // Find date property (default to first date property or createdAt)
   const dateProperties = schema?.properties.filter((p) => p.type === 'date') || [];
   const [selectedDatePropId, setSelectedDatePropId] = useState<string>(
-    dateProperties[0]?.id || 'createdAt',
+    datePropertyId || dateProperties[0]?.id || 'createdAt',
   );
+  useEffect(() => { if (datePropertyId) setSelectedDatePropId(datePropertyId); }, [datePropertyId]);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -51,7 +56,7 @@ export function CalendarView({
       const d = new Date(year, month - 1, prevMonthDays - i);
       days.push({
         date: d,
-        dateString: d.toISOString().slice(0, 10),
+        dateString: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
         isCurrentMonth: false,
       });
     }
@@ -61,7 +66,7 @@ export function CalendarView({
       const d = new Date(year, month, i);
       days.push({
         date: d,
-        dateString: d.toISOString().slice(0, 10),
+        dateString: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
         isCurrentMonth: true,
       });
     }
@@ -72,7 +77,7 @@ export function CalendarView({
       const d = new Date(year, month + 1, i);
       days.push({
         date: d,
-        dateString: d.toISOString().slice(0, 10),
+        dateString: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
         isCurrentMonth: false,
       });
     }
@@ -85,19 +90,19 @@ export function CalendarView({
   const handleToday = () => setCurrentDate(new Date());
 
   const handleAddOnDate = async (dateString: string) => {
-    const title = window.prompt(`New record for ${dateString}:`);
-    if (!title || !title.trim()) return;
+    const title = 'Untitled';
 
     const props: Record<string, unknown> = {};
     if (selectedDatePropId !== 'createdAt') {
       props[selectedDatePropId] = dateString;
     }
 
-    await onCreateRecord({
+    const created = await onCreateRecord({
       databaseId,
       properties: props,
-      title: title.trim(),
+      title,
     });
+    if (created) onOpenRecord(created);
   };
 
   return (
@@ -121,14 +126,15 @@ export function CalendarView({
           </div>
         </div>
 
-        {dateProperties.length > 1 && (
+        {dateProperties.length > 0 && (
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted">Date by:</span>
             <Select
               className="select-field text-xs py-1"
               value={selectedDatePropId}
-              onChange={(e) => setSelectedDatePropId(e.target.value)}
+              onChange={(e) => { setSelectedDatePropId(e.target.value); onDatePropertyChange?.(e.target.value); }}
             >
+              <option value="createdAt">Created time</option>
               {dateProperties.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
@@ -151,12 +157,12 @@ export function CalendarView({
       {/* Days Grid */}
       <div className="calendar-grid">
         {calendarDays.map((dayObj) => {
-          const isToday = new Date().toISOString().slice(0, 10) === dayObj.dateString;
+          const isToday = new Date().toDateString() === dayObj.date.toDateString();
 
           // Find records on this date
           const dayRecords = records.filter((r) => {
             if (selectedDatePropId === 'createdAt') {
-              return r.createdAt.slice(0, 10) === dayObj.dateString;
+              return new Date(r.createdAt).toDateString() === dayObj.date.toDateString();
             }
             const val = r.properties[selectedDatePropId];
             return typeof val === 'string' && val.slice(0, 10) === dayObj.dateString;

@@ -71,13 +71,6 @@ export function ListView({
                   const val = record.properties[prop.id];
                   if (val === undefined || val === null || val === '') return null;
 
-                  if (prop.type === 'money') {
-                    return (
-                      <span key={prop.id} className="badge badge-primary font-mono text-xs">
-                        ${typeof val === 'number' ? val.toFixed(2) : formatUnknown(val)}
-                      </span>
-                    );
-                  }
 
                   if (['select', 'status'].includes(prop.type)) {
                     const opt = prop.options?.find((o) => (o.id || o.label) === val);

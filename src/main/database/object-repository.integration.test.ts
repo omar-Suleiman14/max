@@ -46,23 +46,23 @@ describe('property definitions', () => {
   it('persists language-independent semantic roles and enforces compatible types', () => {
     const db = service();
     db.objects.createProperty({ ...draft('اسم المنتج', 'text', 'item', { required: true }), semanticRole: 'DISPLAY_NAME' });
-    db.objects.createProperty({ ...draft('سعرنا', 'money'), semanticRole: 'PRICE' });
+    db.objects.createProperty({ ...draft('سعرنا', 'number'), semanticRole: 'PRICE' });
     db.objects.createProperty({ ...draft('عدد القطع', 'number', 'item', { required: true }), semanticRole: 'QUANTITY' });
 
     expect(db.objects.listProperties('item').map(({ semanticRole }) => semanticRole)).toEqual(['DISPLAY_NAME', 'PRICE', 'QUANTITY']);
     expect(() => db.objects.createProperty({ ...draft('سعر خاطئ', 'checkbox'), semanticRole: 'PRICE' })).toThrowError();
-    expect(() => db.objects.createProperty({ ...draft('سعر آخر', 'money'), semanticRole: 'PRICE' })).toThrowError(/Only one active PRICE/);
+    expect(() => db.objects.createProperty({ ...draft('سعر آخر', 'number'), semanticRole: 'PRICE' })).toThrowError(/Only one active PRICE/);
     db.close();
   });
 
   it('creates every initial property type and returns correct metadata', () => {
     const db = service();
     const types: PropertyType[] = [
-      'text', 'number', 'money', 'date', 'checkbox', 'select', 'status', 'relation',
+      'text', 'number', 'date', 'checkbox', 'select', 'status', 'relation',
     ];
     const created = types.map((type) => db.objects.createProperty(draft(`Prop ${type}`, type)));
 
-    expect(created).toHaveLength(8);
+    expect(created).toHaveLength(7);
     for (const [index, property] of created.entries()) {
       expect(property.type).toBe(types[index]);
       expect(property.position).toBe(index);
@@ -479,7 +479,7 @@ describe('value validation', () => {
 
   it('rejects money with non-finite value', () => {
     const db = service();
-    const prop = db.objects.createProperty(draft('Amount', 'money'));
+    const prop = db.objects.createProperty(draft('Amount', 'number'));
     expect(() =>
       db.objects.createRecord({ label: 'Bad', objectKind: 'item', values: { [prop.id]: NaN } }),
     ).toThrow('valid number');

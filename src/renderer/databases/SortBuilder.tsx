@@ -1,12 +1,15 @@
+import { PropertyIcon } from './PropertyIcon';
+import { DatabasePopover } from '../ui/database-popover';
 import { Select } from '../ui/select';
-import { ArrowDownAZ, ArrowUpZA, Plus, Trash2, X } from 'lucide-react';
-import { useState } from 'react';
+import { ArrowDownAZ, ArrowUp, ArrowDown, Plus, Trash2, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 import type { WorkspaceProperty } from '../../shared/property-contract';
 import type { SortRule } from '../../shared/query-contract';
 
 type SortBuilderProps = Readonly<{
   isOpen: boolean;
+  locale?: 'ar' | 'en';
   onApply: (sorts: readonly SortRule[]) => void;
   onClose: () => void;
   properties: readonly WorkspaceProperty[];
@@ -15,6 +18,7 @@ type SortBuilderProps = Readonly<{
 
 export function SortBuilder({
   isOpen,
+  locale = 'en',
   onApply,
   onClose,
   properties,
@@ -22,10 +26,12 @@ export function SortBuilder({
 }: SortBuilderProps) {
   const [sortRules, setSortRules] = useState<SortRule[]>(() => [...initialSorts]);
 
+  useEffect(() => { if (isOpen) setSortRules([...initialSorts]); }, [isOpen, initialSorts]);
+  const [propertySearch, setPropertySearch] = useState('');
   if (!isOpen) return null;
 
   const addSort = () => {
-    const available = properties.find((p) => !sortRules.some((s) => s.propertyId === p.id)) || properties[0];
+    const available = properties.find((p) => !sortRules.some((s) => s.propertyId === p.id));
     if (!available) return;
     setSortRules([...sortRules, { direction: 'asc', propertyId: available.id }]);
   };
@@ -55,12 +61,12 @@ export function SortBuilder({
   };
 
   return (
-    <div className="modal-backdrop" onClick={onClose} role="dialog" aria-modal="true">
-      <div className="modal-container sort-builder-modal" onClick={(e) => e.stopPropagation()}>
+    <DatabasePopover className="database-rule-dialog" labelId="sort-builder-title" onClose={onClose}>
+      <div dir={locale === 'ar' ? 'rtl' : 'ltr'} className="database-rule-panel sort-builder-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div className="modal-header__title">
             <ArrowDownAZ size={18} className="text-primary" />
-            <h3>Sort Database</h3>
+            <h3 id="sort-builder-title">{locale === 'ar' ? 'ترتيب' : 'Sort'}</h3>
           </div>
           <button className="btn-icon" onClick={onClose} type="button" aria-label="Close">
             <X size={16} />
@@ -68,11 +74,7 @@ export function SortBuilder({
         </div>
 
         <div className="modal-body sort-builder__body">
-          {sortRules.length === 0 && (
-            <div className="text-muted p-4 text-center">
-              No active sorts. Click &quot;Add sort&quot; to order records.
-            </div>
-          )}
+          {sortRules.length === 0 && <div className="property-menu-list"><input autoFocus aria-label="Sort by…" placeholder="Sort by…" value={propertySearch} onChange={(e) => setPropertySearch(e.target.value)} />{properties.filter((p) => p.name.toLocaleLowerCase().includes(propertySearch.toLocaleLowerCase())).map((p) => <button type="button" key={p.id} onClick={() => setSortRules([{ propertyId: p.id, direction: 'asc' }])}><PropertyIcon type={p.type} icon={typeof p.config.icon === 'string' ? p.config.icon : undefined} />{p.name}</button>)}</div>}
 
           <div className="sort-builder__rules">
             {sortRules.map((rule, index) => {
@@ -82,34 +84,20 @@ export function SortBuilder({
 
                   {/* Property Selector */}
                   <Select
-                    className="select-field flex-1"
+                    aria-label="Property" className="select-field flex-1"
                     value={rule.propertyId}
                     onChange={(e) => updateSort(index, { propertyId: e.target.value })}
                   >
                     {properties.map((p) => (
-                      <option key={p.id} value={p.id}>
+                      <option key={p.id} value={p.id} disabled={sortRules.some((other, otherIndex) => otherIndex !== index && other.propertyId === p.id)}>
                         {p.name}
                       </option>
                     ))}
                   </Select>
 
                   {/* Direction Selector */}
-                  <div className="flex rounded-md border border-neutral-700 overflow-hidden">
-                    <button
-                      type="button"
-                      className={`px-3 py-1.5 text-xs font-medium flex items-center gap-1 ${rule.direction === 'asc' ? 'bg-primary text-white' : 'bg-neutral-800 text-neutral-300'}`}
-                      onClick={() => updateSort(index, { direction: 'asc' })}
-                    >
-                      <ArrowDownAZ size={14} /> Ascending
-                    </button>
-                    <button
-                      type="button"
-                      className={`px-3 py-1.5 text-xs font-medium flex items-center gap-1 ${rule.direction === 'desc' ? 'bg-primary text-white' : 'bg-neutral-800 text-neutral-300'}`}
-                      onClick={() => updateSort(index, { direction: 'desc' })}
-                    >
-                      <ArrowUpZA size={14} /> Descending
-                    </button>
-                  </div>
+                  <Select aria-label="Sort direction" className="select-field" value={rule.direction} onChange={(event) => updateSort(index, { direction: event.target.value as 'asc' | 'desc' })}><option value="asc">{locale === 'ar' ? 'تصاعدي' : 'Ascending'}</option><option value="desc">{locale === 'ar' ? 'تنازلي' : 'Descending'}</option></Select>
+                  <div className="sort-priority-actions">{([-1,1] as const).map((direction) => <button type="button" className="btn-icon" key={direction} aria-label={direction < 0 ? 'Move sort up' : 'Move sort down'} disabled={!sortRules[index + direction]} onClick={() => { const next = [...sortRules]; [next[index], next[index + direction]] = [next[index + direction]!, next[index]!]; setSortRules(next); }}>{direction < 0 ? <ArrowUp size={13} /> : <ArrowDown size={13} />}</button>)}</div>
 
                   <button
                     type="button"
@@ -124,7 +112,7 @@ export function SortBuilder({
             })}
           </div>
 
-          <button type="button" className="btn btn-secondary btn-sm mt-3" onClick={addSort}>
+          <button type="button" className="btn btn-secondary btn-sm mt-3" onClick={addSort} disabled={sortRules.length >= properties.length}>
             <Plus size={14} className="mr-1" /> Add sort
           </button>
         </div>
@@ -143,6 +131,6 @@ export function SortBuilder({
           </div>
         </div>
       </div>
-    </div>
+    </DatabasePopover>
   );
 }

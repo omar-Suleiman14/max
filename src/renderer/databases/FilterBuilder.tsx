@@ -1,6 +1,8 @@
+import { PropertyIcon } from './PropertyIcon';
+import { DatabasePopover } from '../ui/database-popover';
 import { Select } from '../ui/select';
 import { Filter, Plus, Trash2, X } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import type { WorkspaceProperty } from '../../shared/property-contract';
 import type { FilterGroupNode, FilterNode, FilterOperator, PropertyFilterNode, RelativeDatePeriod } from '../../shared/query-contract';
@@ -8,6 +10,7 @@ import type { FilterGroupNode, FilterNode, FilterOperator, PropertyFilterNode, R
 type FilterBuilderProps = Readonly<{
   filterAst: FilterNode | null;
   isOpen: boolean;
+  locale?: 'ar' | 'en';
   onApply: (filter: FilterNode | null) => void;
   onClose: () => void;
   properties: readonly WorkspaceProperty[];
@@ -71,6 +74,7 @@ function formatUnknown(value: unknown): string {
 export function FilterBuilder({
   filterAst,
   isOpen,
+  locale = 'en',
   onApply,
   onClose,
   properties,
@@ -87,6 +91,12 @@ export function FilterBuilder({
 
   const [combinator, setCombinator] = useState<'AND' | 'OR'>('AND');
 
+  useEffect(() => {
+    if (!isOpen) return;
+    setRules(!filterAst ? [] : filterAst.kind === 'property' ? [filterAst] : filterAst.kind === 'group' ? filterAst.conditions.filter((rule): rule is PropertyFilterNode => rule.kind === 'property') : []);
+    setCombinator(filterAst?.kind === 'group' ? filterAst.operator : 'AND');
+  }, [isOpen, filterAst]);
+  const [propertySearch, setPropertySearch] = useState('');
   if (!isOpen) return null;
 
   const addRule = () => {
@@ -94,7 +104,7 @@ export function FilterBuilder({
     if (!defaultProp) return;
     const newRule: PropertyFilterNode = {
       kind: 'property',
-      operator: 'contains',
+      operator: defaultProp.type === 'checkbox' ? 'is_checked' : ['text','title'].includes(defaultProp.type) ? 'contains' : 'equals',
       propertyId: defaultProp.id,
       value: '',
     };
@@ -137,12 +147,12 @@ export function FilterBuilder({
   };
 
   return (
-    <div className="modal-backdrop" onClick={onClose} role="dialog" aria-modal="true">
-      <div className="modal-container filter-builder-modal" onClick={(e) => e.stopPropagation()}>
+    <DatabasePopover className="database-rule-dialog" labelId="filter-builder-title" onClose={onClose}>
+      <div dir={locale === 'ar' ? 'rtl' : 'ltr'} className="database-rule-panel filter-builder-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div className="modal-header__title">
             <Filter size={18} className="text-primary" />
-            <h3>Filter Database</h3>
+            <h3 id="filter-builder-title">{locale === 'ar' ? 'تصفية' : 'Filters'}</h3>
           </div>
           <button className="btn-icon" onClick={onClose} type="button" aria-label="Close">
             <X size={16} />
@@ -165,11 +175,7 @@ export function FilterBuilder({
             </div>
           )}
 
-          {rules.length === 0 && (
-            <div className="text-muted p-4 text-center">
-              No active filters. Click &quot;Add condition&quot; to filter records.
-            </div>
-          )}
+          {rules.length === 0 && <div className="property-menu-list"><input autoFocus aria-label="Filter by…" placeholder="Filter by…" value={propertySearch} onChange={(e) => setPropertySearch(e.target.value)} />{properties.filter((p) => p.name.toLocaleLowerCase().includes(propertySearch.toLocaleLowerCase())).map((p) => <button type="button" key={p.id} onClick={() => setRules([{ kind: 'property', propertyId: p.id, operator: p.type === 'checkbox' ? 'is_checked' : 'equals', value: '' }])}><PropertyIcon type={p.type} icon={typeof p.config.icon === 'string' ? p.config.icon : undefined} />{p.name}</button>)}</div>}
 
           <div className="filter-builder__rules">
             {rules.map((rule, index) => {
@@ -177,7 +183,7 @@ export function FilterBuilder({
               const propType = prop?.type || 'text';
 
               let ops = textOperators;
-              if (propType === 'number' || propType === 'money') ops = numberOperators;
+              if (propType === 'number') ops = numberOperators;
               else if (propType === 'date') ops = dateOperators;
               else if (propType === 'checkbox') ops = booleanOperators;
 
@@ -233,13 +239,18 @@ export function FilterBuilder({
                     </Select>
                   )}
 
-                  {!isNoValueOp && rule.operator !== 'relative_date' && (
+                  {!isNoValueOp && rule.operator !== 'relative_date' && prop?.options?.length ? (
+                    <Select className="select-field flex-1" value={formatUnknown(rule.value)} onChange={(event) => updateRule(index, { value: event.target.value })}>
+                      <option value="">Choose an option…</option>
+                      {prop.options.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+                    </Select>
+                  ) : !isNoValueOp && rule.operator !== 'relative_date' && (
                     <input
-                      type={propType === 'number' || propType === 'money' ? 'number' : propType === 'date' ? 'date' : 'text'}
+                      type={propType === 'number' ? 'number' : propType === 'date' ? 'date' : 'text'}
                       className="input-field flex-1"
                       placeholder="Value..."
                       value={formatUnknown(rule.value)}
-                      onChange={(e) => updateRule(index, { value: e.target.value })}
+                      onChange={(e) => updateRule(index, { value: propType === 'number' ? (e.target.value === '' ? '' : Number(e.target.value)) : e.target.value })}
                     />
                   )}
 
@@ -256,7 +267,7 @@ export function FilterBuilder({
             })}
           </div>
 
-          <button type="button" className="btn btn-secondary btn-sm mt-3" onClick={addRule}>
+          <button type="button" className="btn btn-secondary btn-sm mt-3" onClick={addRule} disabled={!properties.length}>
             <Plus size={14} className="mr-1" /> Add condition
           </button>
         </div>
@@ -275,6 +286,6 @@ export function FilterBuilder({
           </div>
         </div>
       </div>
-    </div>
+    </DatabasePopover>
   );
 }

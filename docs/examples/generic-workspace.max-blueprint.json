@@ -1,0 +1,343 @@
+{
+  "version": 2,
+  "name": "Stations and entries",
+  "description": "Generic blueprint demonstrating seeded records, relations, options, calculations and an atomic action.",
+  "databases": [
+    {
+      "key": "db_stations",
+      "title": "Stations",
+      "parentPageKey": "page_overview",
+      "properties": [
+        {
+          "key": "prop_station_title",
+          "name": "Name",
+          "type": "title"
+        },
+        {
+          "key": "prop_station_code",
+          "name": "Code",
+          "type": "text",
+          "uniqueValue": true
+        },
+        {
+          "key": "prop_station_units",
+          "name": "Units",
+          "type": "number",
+          "defaultValue": 0
+        },
+        {
+          "key": "prop_station_factor",
+          "name": "Factor",
+          "type": "number",
+          "defaultValue": 1
+        }
+      ],
+      "views": [
+        {
+          "key": "view_stations",
+          "name": "All stations",
+          "layout": "table"
+        }
+      ]
+    },
+    {
+      "key": "db_entries",
+      "title": "Entries",
+      "parentPageKey": "page_overview",
+      "properties": [
+        {
+          "key": "prop_entry_title",
+          "name": "Name",
+          "type": "title"
+        },
+        {
+          "key": "prop_entry_units",
+          "name": "Units",
+          "type": "number"
+        },
+        {
+          "key": "prop_entry_result",
+          "name": "Result",
+          "type": "number"
+        },
+        {
+          "key": "prop_entry_double",
+          "name": "Double result",
+          "type": "formula",
+          "config": {
+            "formula": {
+              "expression": "[prop_entry_result] * 2",
+              "returnType": "number"
+            }
+          }
+        },
+        {
+          "key": "prop_entry_station",
+          "name": "Station",
+          "type": "relation"
+        },
+        {
+          "key": "prop_entry_state",
+          "name": "State",
+          "type": "select",
+          "options": [
+            {
+              "key": "option_open",
+              "label": "Open"
+            },
+            {
+              "key": "option_done",
+              "label": "Done"
+            }
+          ]
+        }
+      ],
+      "defaultViewKey": "view_entries",
+      "views": [
+        {
+          "key": "view_entries",
+          "name": "Positive entries",
+          "layout": "table",
+          "propertyKeys": [
+            "prop_entry_title",
+            "prop_entry_units",
+            "prop_entry_result",
+            "prop_entry_double",
+            "prop_entry_station",
+            "prop_entry_state"
+          ],
+          "filterAst": {
+            "kind": "property",
+            "propertyId": "prop_entry_units",
+            "operator": "greater_than",
+            "value": 0
+          },
+          "sorts": [
+            {
+              "propertyId": "prop_entry_units",
+              "direction": "desc"
+            }
+          ],
+          "layoutConfig": {
+            "calculations": [
+              {
+                "propertyId": "prop_entry_units",
+                "calculation": "sum"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "relations": [
+    {
+      "key": "relation_station",
+      "sourceDatabaseKey": "db_entries",
+      "sourcePropertyKey": "prop_entry_station",
+      "targetDatabaseKey": "db_stations",
+      "sourceCardinality": "many",
+      "targetCardinality": "one"
+    }
+  ],
+  "records": [
+    {
+      "key": "record_station_a",
+      "databaseKey": "db_stations",
+      "title": "Station A",
+      "properties": {
+        "prop_station_code": "A",
+        "prop_station_units": 100,
+        "prop_station_factor": 2
+      }
+    },
+    {
+      "key": "record_station_b",
+      "databaseKey": "db_stations",
+      "title": "Station B",
+      "properties": {
+        "prop_station_code": "B",
+        "prop_station_units": 60,
+        "prop_station_factor": 3
+      }
+    },
+    {
+      "key": "record_initial",
+      "databaseKey": "db_entries",
+      "title": "Initial entry",
+      "properties": {
+        "prop_entry_units": 1,
+        "prop_entry_result": 2,
+        "prop_entry_station": [
+          "record_station_a"
+        ],
+        "prop_entry_state": "option_open"
+      }
+    }
+  ],
+  "pages": [
+    {
+      "key": "page_overview",
+      "title": "Overview",
+      "icon": "lucide:Layout#337ea9",
+      "icon": "lucide:LayoutDashboard",
+      "contentJson": "[{\"id\":\"block_intro\",\"type\":\"text\",\"content\":\"Choose a station and record an entry with Quick Actions.\"},{\"id\":\"block_entries\",\"type\":\"database-view\",\"content\":\"\",\"databaseId\":\"db_entries\",\"viewId\":\"view_entries\"}]"
+    }
+  ],
+  "recordTemplates": [
+    {
+      "key": "template_entry",
+      "databaseKey": "db_entries",
+      "name": "Open entry",
+      "defaults": {
+        "prop_entry_units": 1,
+        "prop_entry_state": "option_open"
+      },
+      "contentJson": "[]"
+    }
+  ],
+  "workflows": [
+    {
+      "key": "workflow_entry",
+      "name": "Record entry",
+      "icon": "lucide:Plus",
+      "enabled": true,
+      "inputSchema": {
+        "fields": [
+          {
+            "key": "station",
+            "label": "Station",
+            "type": "record",
+            "databaseId": "db_stations",
+            "defaultValue": "record_station_a",
+            "required": true
+          },
+          {
+            "key": "label",
+            "label": "Entry name",
+            "type": "text",
+            "defaultValue": "New entry",
+            "required": true
+          },
+          {
+            "key": "units",
+            "label": "Units",
+            "type": "number",
+            "defaultValue": 1,
+            "required": true
+          }
+        ]
+      },
+      "steps": [
+        {
+          "id": "step_validate",
+          "type": "VALIDATE",
+          "config": {
+            "condition": "[units] > 0",
+            "errorMessage": "Units must be greater than zero."
+          }
+        },
+        {
+          "id": "step_find",
+          "type": "FIND_RECORD",
+          "config": {
+            "databaseId": "db_stations",
+            "filter": {
+              "kind": "property",
+              "propertyId": "prop_station_code",
+              "operator": "equals",
+              "value": {
+                "source": "property",
+                "record": {
+                  "source": "variable",
+                  "key": "station"
+                },
+                "databaseId": "db_stations",
+                "propertyId": "prop_station_code"
+              }
+            },
+            "outputVariable": "matched",
+            "required": true
+          }
+        },
+        {
+          "id": "step_compute",
+          "type": "COMPUTE",
+          "config": {
+            "outputVariable": "adjusted",
+            "value": {
+              "source": "expression",
+              "expression": "[units] * [factor]",
+              "bindings": {
+                "factor": {
+                  "source": "property",
+                  "record": {
+                    "source": "variable",
+                    "key": "matched"
+                  },
+                  "databaseId": "db_stations",
+                  "propertyId": "prop_station_factor"
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "step_create",
+          "type": "CREATE_RECORD",
+          "config": {
+            "databaseId": "db_entries",
+            "title": {
+              "source": "variable",
+              "key": "label"
+            },
+            "properties": {
+              "prop_entry_units": {
+                "source": "variable",
+                "key": "units"
+              },
+              "prop_entry_result": {
+                "source": "variable",
+                "key": "adjusted"
+              },
+              "prop_entry_station": {
+                "source": "variable",
+                "key": "matched"
+              },
+              "prop_entry_state": {
+                "source": "literal",
+                "value": "option_open"
+              }
+            },
+            "outputVariable": "entry"
+          }
+        },
+        {
+          "id": "step_update",
+          "type": "UPDATE_RECORD",
+          "config": {
+            "databaseId": "db_stations",
+            "record": {
+              "source": "variable",
+              "key": "matched"
+            },
+            "increments": {
+              "prop_station_units": {
+                "source": "expression",
+                "expression": "-[units]",
+                "bindings": {}
+              }
+            }
+          }
+        },
+        {
+          "id": "step_return",
+          "type": "RETURN_RESULT",
+          "config": {
+            "record": "$entry"
+          }
+        }
+      ]
+    }
+  ]
+}

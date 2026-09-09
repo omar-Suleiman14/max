@@ -6,7 +6,6 @@ export const PROPERTY_TYPES = [
   'title',
   'text',
   'number',
-  'money',
   'select',
   'multi_select',
   'status',
@@ -83,11 +82,6 @@ export type NumberConfig = Readonly<{
   precision?: number;
 }>;
 
-export type MoneyConfig = Readonly<{
-  currency?: string;
-  precision?: number;
-}>;
-
 export type AutoIdConfig = Readonly<{
   prefix?: string;
   zeroPadding?: number;
@@ -96,7 +90,6 @@ export type AutoIdConfig = Readonly<{
 export type PropertyConfig = Readonly<{
   autoId?: AutoIdConfig;
   formula?: FormulaConfig | string | { expression: string };
-  money?: MoneyConfig;
   number?: NumberConfig;
   relationId?: string;
   rollup?: RollupConfig;

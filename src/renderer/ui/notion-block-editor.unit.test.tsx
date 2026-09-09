@@ -17,22 +17,74 @@ function EditorHarness({ initial, parentPageId }: Readonly<{ initial: readonly N
 afterEach(() => cleanup());
 
 describe('NotionBlockEditor', () => {
+  it.each([
+    ['Control', 'Backspace'], ['Meta', 'Delete'],
+  ])('selects page links with %s+A from a text block and supports %s and undo', async (modifier, key) => {
+    const archiveNode = vi.fn();
+    Object.defineProperty(window, 'maxApi', { configurable: true, value: { workspace: {
+      getPageGraph: () => Promise.resolve({ pages: [{ id: 'target', title: 'Linked page' }], links: [] }),
+      getNavigation: () => Promise.resolve({ pages: [], databases: [] }), archiveNode,
+    } } });
+    const user = userEvent.setup();
+    const { container } = render(<EditorHarness initial={[
+      { id: 'link', type: 'page-link', pageId: 'target', content: '' },
+      { id: 'text', type: 'text', content: 'Body text' },
+    ]} />);
+    await screen.findByRole('button', { name: 'Linked page' });
+    await user.click(screen.getByRole('textbox'));
+    await user.keyboard(`{${modifier}>}a{/${modifier}}`);
+    expect(container.querySelectorAll('[data-line-selected="true"]')).toHaveLength(2);
+    await user.keyboard(`{${key}}`);
+    expect(screen.queryByRole('button', { name: 'Linked page' })).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox').textContent?.replaceAll('\u200B', '')).toBe('');
+    await waitFor(() => expect(screen.getByRole('textbox')).toHaveFocus());
+    await user.keyboard(`{${modifier}>}z{/${modifier}}`);
+    expect(await screen.findByRole('button', { name: 'Linked page' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox')).toHaveTextContent('Body text');
+    expect(archiveNode).not.toHaveBeenCalled();
+  });
+
+  it('keeps select-all inside a page-picker search input', async () => {
+    Object.defineProperty(window, 'maxApi', { configurable: true, value: { workspace: {
+      getPageGraph: () => Promise.resolve({ pages: [], links: [] }),
+      getNavigation: () => Promise.resolve({ pages: [], databases: [] }),
+    } } });
+    const user = userEvent.setup();
+    const { container } = render(<EditorHarness initial={[{ id: 'link', type: 'page-link', content: '' }]} />);
+    const search = await screen.findByRole('textbox', { name: 'Find a page' });
+    await user.type(search, 'Query'); await user.keyboard('{Control>}a{/Control}{Backspace}');
+    expect(search).toHaveValue('');
+    expect(container.querySelector('[data-block-id="link"]')).toBeInTheDocument();
+  });
+
   it('splits at the caret and merges back into the previous block', async () => {
     const user = userEvent.setup();
     render(<EditorHarness initial={[{ content: 'Hello', id: 'one', type: 'text' }]} />);
     const first = screen.getByRole('textbox');
-    if (!(first instanceof HTMLTextAreaElement)) throw new Error('Expected the text block editor.');
+    if (first.getAttribute('contenteditable') !== 'true') throw new Error('Expected the text block editor.');
     first.focus();
-    first.setSelectionRange(5, 5);
+    // Place cursor at end for Enter split
+    const sel = window.getSelection()!;
+    const range = document.createRange();
+    range.selectNodeContents(first);
+    range.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(range);
     await user.keyboard('{Enter}');
-    const second = (await screen.findAllByRole('textbox'))[1] as HTMLTextAreaElement;
+    const boxes = await screen.findAllByRole('textbox');
+    const second = boxes[1]!;
     second.focus();
     await user.keyboard('World');
-    expect(second).toHaveValue('World');
-    second.setSelectionRange(0, 0);
+    expect(second).toHaveTextContent('World');
+    // Place cursor at start for Backspace merge
+    const range2 = document.createRange();
+    range2.selectNodeContents(second);
+    range2.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range2);
     await user.keyboard('{Backspace}');
     expect(screen.getAllByRole('textbox')).toHaveLength(1);
-    expect(screen.getByRole('textbox')).toHaveValue('HelloWorld');
+    expect(screen.getByRole('textbox')).toHaveTextContent('HelloWorld');
   });
 
   it('opens block actions from the six-dot handle and duplicates a block', async () => {
@@ -40,7 +92,7 @@ describe('NotionBlockEditor', () => {
     render(<EditorHarness initial={[{ content: 'Keep me', id: 'one', type: 'text' }]} />);
     await user.click(screen.getByRole('button', { name: 'Block actions' }));
     await user.click(screen.getByRole('menuitem', { name: 'Duplicate' }));
-    expect(screen.getAllByDisplayValue('Keep me')).toHaveLength(2);
+    expect(screen.getAllByText('Keep me')).toHaveLength(2);
   });
 
   it('focuses the final line when the empty page canvas is clicked', async () => {
@@ -49,10 +101,10 @@ describe('NotionBlockEditor', () => {
       { content: 'First', id: 'one', type: 'text' },
       { content: 'Last', id: 'two', type: 'text' },
     ]} />);
-    const clickTarget = container.querySelector('.notion-canvas-bottom-click-target');
+    const clickTarget = container.querySelector('.notion-editor-canvas');
     if (!(clickTarget instanceof HTMLElement)) throw new Error('Expected the page click target.');
-    await user.click(clickTarget);
-    await waitFor(() => expect(screen.getAllByRole('textbox')[1]).toHaveFocus());
+    await user.dblClick(clickTarget);
+    await waitFor(() => expect(screen.getAllByRole('textbox').at(-1)).toHaveFocus());
   });
 
   it('creates a real database inside the current page from the insert menu', async () => {

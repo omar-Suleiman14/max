@@ -1,11 +1,30 @@
 import { Check, CheckCircle2, Copy, Download, FileCode, Upload, X } from 'lucide-react';
-import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 
-import type { Blueprint, BlueprintValidationResult } from '../../shared/blueprint-contract';
+import type { BlueprintValidationResult } from '../../shared/blueprint-contract';
+import type { WorkspaceTemplateV2 } from '../../shared/template-v2-contract';
 import type { Locale } from '../app/i18n';
 import { Button } from '../ui/button';
 import { FocusedOverlay } from '../ui/focused-overlay';
 import { blueprintCopy } from './blueprint-i18n';
+
+function getErrorLineIndex(text: string, errorMessage: string): number | null {
+  const posMatch = /at position (\d+)/.exec(errorMessage);
+  if (posMatch && posMatch[1]) {
+    const pos = parseInt(posMatch[1], 10);
+    if (!isNaN(pos)) {
+      return text.slice(0, pos).split('\n').length - 1;
+    }
+  }
+  const quoteMatch = /"([^"]+)"/.exec(errorMessage);
+  if (quoteMatch && quoteMatch[1]) {
+    const term = quoteMatch[1];
+    const lines = text.split('\n');
+    const index = lines.findIndex(line => line.includes(`"${term}"`));
+    if (index !== -1) return index;
+  }
+  return null;
+}
 
 type BlueprintDialogProps = Readonly<{
   initialTab?: 'export' | 'import';
@@ -21,22 +40,45 @@ export function BlueprintDialog({
   onImportSuccess,
 }: BlueprintDialogProps) {
   const [tab, setTab] = useState<'export' | 'import'>(initialTab);
-  const [exportedBlueprint, setExportedBlueprint] = useState<Blueprint>();
+  const [exportedBlueprint, setExportedBlueprint] = useState<WorkspaceTemplateV2>();
   const [copied, setCopied] = useState(false);
   const [importJson, setImportJson] = useState('');
   const [validationResult, setValidationResult] = useState<BlueprintValidationResult>();
-  const [parsedBlueprint, setParsedBlueprint] = useState<Blueprint>();
+  const [errorLineIndex, setErrorLineIndex] = useState<number | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const highlightRef = useRef<HTMLPreElement>(null);
+  const [parsedBlueprint, setParsedBlueprint] = useState<WorkspaceTemplateV2>();
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string>();
   const [importSuccess, setImportSuccess] = useState(false);
+  const [validating, setValidating] = useState(false);
+  const locked = useRef(false);
+  const revision = useRef(0);
+
+  useEffect(() => {
+    if (errorLineIndex !== null && highlightRef.current && textareaRef.current) {
+      const lineHeight = 16.5; // Approx 11px font + 1.5 line height
+      const targetScroll = Math.max(0, errorLineIndex * lineHeight - 60);
+      textareaRef.current.scrollTop = targetScroll;
+      highlightRef.current.scrollTop = targetScroll;
+    }
+  }, [errorLineIndex]);
 
   useEffect(() => {
     if (tab === 'export') {
-      void window.maxApi.blueprints.export().then(setExportedBlueprint);
+      void window.maxApi.workspace.exportTemplate().then((result) => {
+        if (result.ok) setExportedBlueprint(result.value);
+        else setImportError(result.error.message);
+      }).catch(() => setImportError(blueprintCopy(locale, 'importError')));
     }
-  }, [tab]);
+  }, [tab, locale]);
 
   async function handleValidate(text: string) {
+    if (locked.current) return;
+    locked.current = true;
+    const current = ++revision.current;
+    setParsedBlueprint(undefined);
+    setValidating(true);
     setImportJson(text);
     setImportError(undefined);
     setImportSuccess(false);
@@ -44,32 +86,47 @@ export function BlueprintDialog({
     if (!text.trim()) {
       setValidationResult(undefined);
       setParsedBlueprint(undefined);
+      setValidating(false);
+      locked.current = false;
       return;
     }
 
     try {
       const parsed = JSON.parse(text) as unknown;
-      const res = await window.maxApi.blueprints.validate(parsed);
-      setValidationResult(res);
-      if (res.valid) {
-        setParsedBlueprint(parsed as Blueprint);
+      const result = await window.maxApi.workspace.validateTemplate(parsed);
+      if (current !== revision.current) return;
+      if (result.ok) {
+        setValidationResult({ valid: true, issues: [] });
+        setParsedBlueprint(parsed as WorkspaceTemplateV2);
+        setErrorLineIndex(null);
       } else {
+        setValidationResult({ valid: false, issues: [{ path: '$', message: result.error.message }] });
         setParsedBlueprint(undefined);
+        setErrorLineIndex(getErrorLineIndex(text, result.error.message));
       }
-    } catch {
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Invalid JSON syntax.';
       setValidationResult({
-        issues: [{ message: 'Invalid JSON syntax.', path: '$' }],
+        issues: [{ message: msg, path: '$' }],
         valid: false,
       });
+      setErrorLineIndex(getErrorLineIndex(text, msg));
       setParsedBlueprint(undefined);
+    } finally {
+      locked.current = false;
+      if (current === revision.current) setValidating(false);
     }
   }
 
   async function handleFileSelect(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
-    const text = await file.text();
-    await handleValidate(text);
+    const current = ++revision.current;
+    try {
+      const text = await file.text();
+      if (current !== revision.current) return;
+      setImportJson(text); setParsedBlueprint(undefined); setValidationResult(undefined); setImportSuccess(false); setImportError(undefined);
+    } catch { setImportError(locale === 'ar' ? 'تعذر قراءة الملف.' : 'Could not read the file.'); }
   }
 
   async function copyToClipboard() {
@@ -92,14 +149,17 @@ export function BlueprintDialog({
 
   async function handleImportSubmit(event: FormEvent) {
     event.preventDefault();
-    if (!parsedBlueprint) return;
+    if (!parsedBlueprint || locked.current || importSuccess) return;
+    locked.current = true;
 
     setImporting(true);
     setImportError(undefined);
     try {
-      const res = await window.maxApi.blueprints.import(parsedBlueprint);
+      const res = await window.maxApi.workspace.importTemplate(parsedBlueprint);
       if (res.ok) {
         setImportSuccess(true);
+        window.dispatchEvent(new Event('max:workspace-changed'));
+        window.dispatchEvent(new Event('max:workspace-imported'));
         onImportSuccess?.();
       } else {
         setImportError(res.error.message);
@@ -107,18 +167,19 @@ export function BlueprintDialog({
     } catch {
       setImportError(blueprintCopy(locale, 'importError'));
     } finally {
+      locked.current = false;
       setImporting(false);
     }
   }
 
   return (
-    <FocusedOverlay className="blueprint-dialog" labelId="blueprint-dialog-title" onClose={onClose}>
+    <FocusedOverlay className="blueprint-dialog" labelId="blueprint-dialog-title" onClose={() => { if (!locked.current) onClose(); }}>
       <header className="dialog-header">
         <div>
           <p className="eyebrow">MAX · {blueprintCopy(locale, 'blueprint')}</p>
           <h2 id="blueprint-dialog-title">{blueprintCopy(locale, 'blueprintTitle')}</h2>
         </div>
-        <button aria-label={blueprintCopy(locale, 'close')} className="icon-button" onClick={onClose} type="button">
+        <button disabled={importing || validating} aria-label={blueprintCopy(locale, 'close')} className="icon-button" onClick={onClose} type="button">
           <X aria-hidden="true" size={19} />
         </button>
       </header>
@@ -126,6 +187,7 @@ export function BlueprintDialog({
       <div className="blueprint-tabs" role="tablist">
         <button
           aria-selected={tab === 'export'}
+          disabled={importing || validating}
           className="blueprint-tab"
           data-active={tab === 'export'}
           onClick={() => setTab('export')}
@@ -137,6 +199,7 @@ export function BlueprintDialog({
         </button>
         <button
           aria-selected={tab === 'import'}
+          disabled={importing || validating}
           className="blueprint-tab"
           data-active={tab === 'import'}
           onClick={() => setTab('import')}
@@ -149,6 +212,7 @@ export function BlueprintDialog({
       </div>
 
       <div className="blueprint-tab-content">
+        {tab === 'export' && importError && <p className="form-error" role="alert">{importError}</p>}
         {tab === 'export' && (
           <div className="blueprint-export-pane">
             <p className="step-subtitle">{blueprintCopy(locale, 'exportSubtitle')}</p>
@@ -158,9 +222,9 @@ export function BlueprintDialog({
                 <div>
                   <strong>{exportedBlueprint?.name ?? 'Loading…'}</strong>
                   <small>
-                    {exportedBlueprint?.properties.item.length ?? 0} {blueprintCopy(locale, 'itemPropertiesCount')} ·{' '}
-                    {exportedBlueprint?.properties.person.length ?? 0} {blueprintCopy(locale, 'personPropertiesCount')} ·{' '}
-                    {exportedBlueprint?.templates.length ?? 0} {blueprintCopy(locale, 'templatesCount')}
+                    {exportedBlueprint?.databases.length ?? 0} {locale === 'ar' ? 'قواعد بيانات' : 'databases'} ·{' '}
+                    {exportedBlueprint?.records?.length ?? 0} {locale === 'ar' ? 'سجلات' : 'records'} ·{' '}
+                    {exportedBlueprint?.workflows?.length ?? 0} {locale === 'ar' ? 'إجراءات' : 'actions'}
                   </small>
                 </div>
                 <div className="blueprint-preview-card__actions">
@@ -185,8 +249,6 @@ export function BlueprintDialog({
 
         {tab === 'import' && (
           <form className="blueprint-import-pane" onSubmit={(event) => void handleImportSubmit(event)}>
-            <p className="step-subtitle">{blueprintCopy(locale, 'importSubtitle')}</p>
-
             {importError && <p className="form-error" role="alert">{importError}</p>}
             {importSuccess && (
               <p className="form-success" role="status">
@@ -199,20 +261,43 @@ export function BlueprintDialog({
               <label className="button button--secondary">
                 <FileCode aria-hidden="true" size={16} />
                 {blueprintCopy(locale, 'pasteOrUpload')}
-                <input accept=".json,.max-blueprint.json" onChange={(event) => void handleFileSelect(event)} style={{ display: 'none' }} type="file" />
+                <input disabled={importing || validating} accept=".json,.max-blueprint.json" onChange={(event) => void handleFileSelect(event)} style={{ display: 'none' }} type="file" />
               </label>
             </div>
 
-            <textarea
-              className="blueprint-textarea"
-              onChange={(e) => void handleValidate(e.target.value)}
-              placeholder="Paste JSON blueprint here…"
-              rows={8}
-              value={importJson}
-            />
+            <div className="blueprint-textarea-container">
+              <pre className="blueprint-textarea-bg" aria-hidden="true" ref={highlightRef}>
+                {importJson.split('\n').map((line, i) => (
+                  <span key={i} className={errorLineIndex === i ? 'error-line' : ''}>
+                    {line || ' '}
+                    {'\n'}
+                  </span>
+                ))}
+              </pre>
+              <textarea
+                ref={textareaRef}
+                className="blueprint-textarea"
+                disabled={importing || validating}
+                aria-label={locale === 'ar' ? 'مخطط JSON' : 'Blueprint JSON'}
+                onChange={(e) => { revision.current++; setImportJson(e.target.value); setParsedBlueprint(undefined); setValidationResult(undefined); setImportSuccess(false); setErrorLineIndex(null); }}
+                onScroll={(e) => {
+                  if (highlightRef.current) {
+                    highlightRef.current.scrollTop = e.currentTarget.scrollTop;
+                    highlightRef.current.scrollLeft = e.currentTarget.scrollLeft;
+                  }
+                }}
+                placeholder="Paste JSON blueprint here…"
+                rows={8}
+                value={importJson}
+              />
+            </div>
+
+            <div className="blueprint-preview-action" style={{ marginBlock: '16px' }}>
+              <Button disabled={!importJson.trim() || validating || importing} onClick={() => void handleValidate(importJson)}>{validating ? (locale === 'ar' ? 'جارٍ التحقق…' : 'Validating…') : (locale === 'ar' ? 'معاينة المخطط' : 'Preview blueprint')}</Button>
+            </div>
 
             {validationResult && !validationResult.valid && (
-              <div className="validation-issues">
+              <div className="validation-issues" style={{ paddingBottom: '16px' }}>
                 {validationResult.issues.map((issue, i) => (
                   <p key={i} className="form-error">
                     {issue.path}: {issue.message}
@@ -228,24 +313,24 @@ export function BlueprintDialog({
                 <div className="assembly-badge-list">
                   <div className="assembly-badge">
                     <CheckCircle2 aria-hidden="true" size={16} />
-                    <span>{parsedBlueprint.properties.item?.length ?? 0} {blueprintCopy(locale, 'itemPropertiesCount')}</span>
+                    <span>{parsedBlueprint.databases.length} {locale === 'ar' ? 'قواعد بيانات' : 'databases'}</span>
                   </div>
                   <div className="assembly-badge">
                     <CheckCircle2 aria-hidden="true" size={16} />
-                    <span>{parsedBlueprint.properties.person?.length ?? 0} {blueprintCopy(locale, 'personPropertiesCount')}</span>
+                    <span>{parsedBlueprint.records?.length ?? 0} {locale === 'ar' ? 'سجلات' : 'records'}</span>
                   </div>
                   <div className="assembly-badge">
                     <CheckCircle2 aria-hidden="true" size={16} />
-                    <span>{parsedBlueprint.templates?.length ?? 0} {blueprintCopy(locale, 'templatesCount')}</span>
+                    <span>{parsedBlueprint.workflows?.length ?? 0} {locale === 'ar' ? 'إجراءات' : 'actions'}</span>
                   </div>
                 </div>
               </div>
             )}
 
             <footer className="form-footer">
-              <Button onClick={onClose}>{blueprintCopy(locale, 'cancel')}</Button>
+              <Button disabled={importing || validating} onClick={onClose}>{blueprintCopy(locale, 'cancel')}</Button>
               <Button
-                disabled={!parsedBlueprint || importing || importSuccess}
+                disabled={!parsedBlueprint || importing || validating || importSuccess}
                 type="submit"
                 variant="primary"
               >

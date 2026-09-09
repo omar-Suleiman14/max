@@ -1,32 +1,36 @@
+import { UpdateNotice } from '../ui/update-notice';
+import { useWorkspaceDisplay } from '../pages/workspace-display-preferences';
+import { useAppearance } from './appearance';
+import { NavigationHistory } from '../pages/navigation-history';
+import { readSessionValue, usePagePosition } from './page-session';
+import { LegacyDatabaseLink } from '../databases/LegacyDatabaseLink';
 import { ScrollOutline } from '../ui/scroll-outline';
 import { TERMS_VERSION } from '../../shared/terms';
 import {
+  Waypoints,
   CircleDollarSign,
   ContactRound,
   Database,
   FileText,
-  Home,
   Package,
   ReceiptText,
   Scale,
   Search,
   Settings,
   X,
-  Zap,
-  Workflow,
+  PlusCircle,
+
   type LucideIcon,
 } from 'lucide-react';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { BackupSchedule, Blueprint } from '../../shared/blueprint-contract';
-import type { TransactionRecord } from '../../shared/transaction-contract';
 import type { WorkspaceNavigation } from '../../shared/workspace-contract';
 import { CustomPageView } from '../pages/custom-page-view';
 import {
   loadHomePage,
   loadPersistentHomePage,
   saveHomePage,
-  archivePersistentCustomPage,
   createPersistentCustomPage,
   loadPersistentCustomPages,
   updatePersistentCustomPage,
@@ -42,30 +46,25 @@ import {
   resolveTheme,
   type ThemePreference,
 } from './preferences';
-import { Button } from '../ui/button';
 import type { Command } from '../ui/command-menu';
+import { quickActionModifier, readQuickActionsEnabled } from '../workflows/quick-actions-preferences';
 import { EmptyPage } from '../ui/empty-page';
 import { Sidebar } from '../ui/sidebar';
-import { UndoToast } from '../ui/undo-toast';
 
-const AccountsWorkspace = lazy(() => import('../accounts/accounts-workspace').then((module) => ({ default: module.AccountsWorkspace })));
+const WorkspaceGraph = lazy(() => import('../pages/workspace-graph').then(module => ({ default: module.WorkspaceGraph })));
+const SettingsPage = lazy(() => import('../ui/settings-page').then(module => ({ default: module.SettingsPage })));
 const BlueprintDialog = lazy(() => import('../blueprints/blueprint-dialog').then((module) => ({ default: module.BlueprintDialog })));
 const CommandMenu = lazy(() => import('../ui/command-menu').then((module) => ({ default: module.CommandMenu })));
 const DatabasePage = lazy(() => import('../databases/DatabasePage').then((module) => ({ default: module.DatabasePage })));
 const DatabasesWorkspace = lazy(() => import('../databases/databases-workspace').then((module) => ({ default: module.DatabasesWorkspace })));
-const ObjectWorkspace = lazy(() => import('../objects/object-workspace').then((module) => ({ default: module.ObjectWorkspace })));
 const Onboarding = lazy(() => import('../onboarding/onboarding').then((module) => ({ default: module.Onboarding })));
-const QuickEntryDialog = lazy(() => import('../quick-entry/quick-entry-dialog').then((module) => ({ default: module.QuickEntryDialog })));
-const ReconciliationWorkspace = lazy(() => import('../reconciliation/reconciliation-workspace').then((module) => ({ default: module.ReconciliationWorkspace })));
-const SettingsPage = lazy(() => import('../ui/settings-page').then((module) => ({ default: module.SettingsPage })));
-const TransactionsWorkspace = lazy(() => import('../transactions/transactions-workspace').then((module) => ({ default: module.TransactionsWorkspace })));
-const UniversalSearchDialog = lazy(() => import('../search/universal-search-dialog').then((module) => ({ default: module.UniversalSearchDialog })));
 const WorkflowLauncherDialog = lazy(() => import('../workflows/workflow-launcher-dialog').then((module) => ({ default: module.WorkflowLauncherDialog })));
+const UniversalSearchDialog = lazy(() => import('../search/universal-search-dialog').then((module) => ({ default: module.UniversalSearchDialog })));
 
 const pageLabels: Record<string, TranslationKey> = {
   accounts: 'account',
   databases: 'databases',
-  home: 'home',
+
   items: 'item',
   people: 'person',
   reconciliation: 'reconciliation',
@@ -76,7 +75,7 @@ const pageLabels: Record<string, TranslationKey> = {
 const pageIcons: Record<string, LucideIcon> = {
   accounts: CircleDollarSign,
   databases: Database,
-  home: Home,
+
   items: Package,
   people: ContactRound,
   reconciliation: Scale,
@@ -87,7 +86,7 @@ const pageIcons: Record<string, LucideIcon> = {
 const pageSubtitles: Record<string, TranslationKey> = {
   accounts: 'pageSubtitleAccounts',
   databases: 'pageSubtitleDatabases',
-  home: 'pageSubtitleHome',
+
   items: 'pageSubtitleItems',
   people: 'pageSubtitlePeople',
   reconciliation: 'pageSubtitleReconciliation',
@@ -95,29 +94,48 @@ const pageSubtitles: Record<string, TranslationKey> = {
   transactions: 'pageSubtitleTransactions',
 };
 
+/** Return the ID of the first workspace page or database, sorted by position key. */
+function firstWorkspacePageId(
+  customPages: readonly { id: string; positionKey?: string }[],
+  workspacePages: readonly { id: string; positionKey: string }[],
+  databases: readonly { id: string; positionKey: string }[],
+): string {
+  const all = [
+    ...customPages.map((p) => ({ id: p.id, key: p.positionKey ?? p.id })),
+    ...workspacePages.map((p) => ({ id: p.id, key: p.positionKey })),
+    ...databases.map((d) => ({ id: d.id, key: d.positionKey })),
+  ].sort((a, b) => a.key.localeCompare(b.key));
+  return all[0]?.id ?? 'databases';
+}
+
 function isEditingTarget(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && Boolean(target.closest('input, textarea, select, [contenteditable="true"]'));
 }
 
 export function MaxApp() {
+  useAppearance();
   const [locale, setLocale] = useState<Locale>(() => readLocale(window.localStorage));
   const [theme, setTheme] = useState<ThemePreference>(() => readTheme(window.localStorage));
   const [systemUsesDark, setSystemUsesDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => readSidebarCollapsed(window.localStorage));
   const [sidebarWidth, setSidebarWidth] = useState(() => readSidebarWidth(window.localStorage));
   const [settingsSection, setSettingsSection] = useState<SettingsSectionId>('settings-general');
-  const [page, setPage] = useState<AppPage>('home');
+  const [page, setPage] = useState<AppPage>(() => readSessionValue('page', 'home'));
+  const previousPage = useRef<AppPage>(page === 'settings' ? 'home' : page);
+  usePagePosition(page);
+  useEffect(() => { if (page !== 'settings') previousPage.current = page; }, [page]);
   const [customPages, setCustomPages] = useState<readonly CustomPage[]>([]);
   const [workspaceNavigation, setWorkspaceNavigation] = useState<WorkspaceNavigation>({ databases: [], pages: [] });
   const [homePage, setHomePage] = useState<CustomPage>(() => loadHomePage(locale));
   const [commandOpen, setCommandOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [blueprintModalTab, setBlueprintModalTab] = useState<'export' | 'import'>();
-  const [quickEntryOpen, setQuickEntryOpen] = useState(false);
-  const [workflowOpen, setWorkflowOpen] = useState(false);
-  const [dataRevision, setDataRevision] = useState(0);
-  const [recentTxForUndo, setRecentTxForUndo] = useState<TransactionRecord>();
-  const [objectCreateRequest, setObjectCreateRequest] = useState(0);
+  const [graphEnabled] = useWorkspaceDisplay('graph');
+  useEffect(() => { if (!graphEnabled || page === 'settings') setGraphOpen(false); }, [graphEnabled, page]);
+  const [graphOpen, setGraphOpen] = useState(() => readSessionValue('graph-open', 'false') === 'true');
+  useEffect(() => { localStorage.setItem('max:session:graph-open', String(graphOpen)); }, [graphOpen]);
+  const [quickActionOpen, setQuickActionOpen] = useState<number | null>(null);
+  const [quickActionsEnabled, setQuickActionsEnabled] = useState(readQuickActionsEnabled);
   const [requestedSavedViewId, setRequestedSavedViewId] = useState<string>();
   const [engineStatus, setEngineStatus] = useState<EngineStatus>('checking');
   const [runtimePlatform, setRuntimePlatform] = useState<'linux' | 'macos' | 'windows'>();
@@ -129,6 +147,34 @@ export function MaxApp() {
   const startupLocale = useRef(locale);
 
   const effectiveTheme = resolveTheme(theme, systemUsesDark);
+
+  const navigateSettingsSection = useCallback((section: SettingsSectionId) => {
+    if (page !== 'settings') previousPage.current = page;
+    setGraphOpen(false);
+    setPage('settings');
+    setSettingsSection(section);
+    const revealSection = () => {
+      const target = document.getElementById(section);
+      const heading = target?.previousElementSibling;
+      const anchor = heading?.matches('.apple-settings-group-title') ? heading : target;
+      const scroller = document.getElementById('main-content');
+      if (anchor && scroller) {
+        scroller.scrollTo({
+          top: Math.max(0, scroller.scrollTop + anchor.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 24),
+          behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+        });
+      }
+      target?.focus({ preventScroll: true });
+      return Boolean(target);
+    };
+    if (!revealSection()) window.setTimeout(revealSection, 0);
+  }, [page]);
+
+  useEffect(() => {
+    const updateQuickActions = () => setQuickActionsEnabled(readQuickActionsEnabled());
+    window.addEventListener('max:quick-actions-preference-changed', updateQuickActions);
+    return () => window.removeEventListener('max:quick-actions-preference-changed', updateQuickActions);
+  }, []);
 
   useEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)');
@@ -195,6 +241,13 @@ export function MaxApp() {
             setCustomPages(pages);
             setHomePage(persistedHome);
             setWorkspaceNavigation(navigation);
+            setPage((current) => current === 'settings'
+              || current in pageLabels
+              || pages.some((item) => item.id === current)
+              || navigation.pages.some((item) => item.id === current)
+              || navigation.databases.some((item) => item.id === current || item.legacyAlias === current)
+              ? current
+              : firstWorkspacePageId(pages, navigation.pages, navigation.databases));
           }
         }
       })
@@ -213,10 +266,19 @@ export function MaxApp() {
     function handleGlobalKeyDown(event: globalThis.KeyboardEvent) {
       if ((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === 'f') {
         event.preventDefault();
-        setSearchOpen(true);
-      } else if ((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === 's') {
+        if (document.querySelector('[data-page="settings"]')) {
+          document.getElementById('settings-search-input')?.focus();
+        } else {
+          setSearchOpen(true);
+        }
+      } else if (quickActionsEnabled && (event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === 's') {
         event.preventDefault();
-        setQuickEntryOpen(true);
+        setQuickActionOpen((prev) => prev === null ? 0 : null);
+      } else if (graphEnabled && page !== 'settings' && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'g') {
+        event.preventDefault(); setGraphOpen(value => !value);
+      } else if ((event.ctrlKey || event.metaKey) && event.key === ',') {
+        event.preventDefault();
+        navigateSettingsSection('settings-general');
       } else if (event.key === '/' && !isEditingTarget(event.target)) {
         event.preventDefault();
         setSearchOpen(true);
@@ -224,27 +286,39 @@ export function MaxApp() {
     }
     document.addEventListener('keydown', handleGlobalKeyDown);
     return () => document.removeEventListener('keydown', handleGlobalKeyDown);
-  }, []);
+  }, [quickActionsEnabled, graphEnabled, navigateSettingsSection, page]);
 
   function navigate(nextPage: AppPage) {
+    setGraphOpen(false);
     setPage(nextPage);
     setOpenRecordId(undefined);
     setRequestedSavedViewId(undefined);
     setCommandOpen(false);
-    setObjectCreateRequest(0);
   }
 
+  useEffect(() => {
+    const open = (event: Event) => { const id = (event as CustomEvent<unknown>).detail; if (typeof id === 'string') { setGraphOpen(false); setPage(id); setOpenRecordId(undefined); setRequestedSavedViewId(undefined); setCommandOpen(false); } };
+    window.addEventListener('max:open-page', open); return () => window.removeEventListener('max:open-page', open);
+  }, []);
+
   function navigateDatabaseView(databaseId: string, viewId: string) {
+    setGraphOpen(false);
     setPage(databaseId);
     setOpenRecordId(undefined);
     setRequestedSavedViewId(viewId);
     setCommandOpen(false);
-    setObjectCreateRequest(0);
   }
 
   const refreshWorkspaceNavigation = useCallback(() => {
     void window.maxApi.workspace.getNavigation().then(setWorkspaceNavigation);
   }, []);
+  useEffect(() => {
+    const restorePages = () => { void Promise.all([window.maxApi.workspace.getNavigation(), loadPersistentCustomPages()]).then(([navigation, pages]) => { setWorkspaceNavigation(navigation); setCustomPages(pages); }); };
+    window.addEventListener('max:workspace-changed', refreshWorkspaceNavigation);
+    window.addEventListener('max:pages-restored', restorePages);
+    window.addEventListener('max:workspace-imported', restorePages);
+    return () => { window.removeEventListener('max:workspace-changed', refreshWorkspaceNavigation); window.removeEventListener('max:pages-restored', restorePages); window.removeEventListener('max:workspace-imported', restorePages); };
+  }, [refreshWorkspaceNavigation]);
 
   const handleAddCustomPage = useCallback(async () => {
     const newPage = await createPersistentCustomPage(locale === 'ar' ? 'بدون عنوان' : 'Untitled', 'lucide:FileText', customPages.length);
@@ -293,13 +367,15 @@ export function MaxApp() {
     }));
   }
 
-  function handleDeleteCustomPage(id: string) {
-    const target = customPages.find((candidate) => candidate.id === id);
-    if (target) void archivePersistentCustomPage(target);
-    setCustomPages((pages) => pages.filter((candidate) => candidate.id !== id));
-    if (page === id) {
-      navigate('home');
-    }
+  async function handleDeleteCustomPage(id: string) {
+    try {
+      const result = await window.maxApi.workspace.archiveNode(id);
+      if (!result.ok) { alert(result.error.message); return; }
+      if (page === id) navigate(firstWorkspacePageId(customPages.filter((p) => p.id !== id), workspaceNavigation.pages, workspaceNavigation.databases));
+      setCustomPages((pages) => pages.filter((candidate) => candidate.id !== id));
+      window.dispatchEvent(new Event('max:workspace-changed'));
+      window.dispatchEvent(new Event('max:pages-restored'));
+    } catch { alert(locale === 'ar' ? 'تعذر نقل العنصر إلى المهملات.' : 'Could not move this item to Trash.'); }
   }
 
   function handleUpdateHomePage(_id: string, update: Partial<Omit<CustomPage, 'createdAt' | 'id'>>) {
@@ -344,12 +420,15 @@ export function MaxApp() {
         setCustomPages(pages);
         setHomePage(persistedHome);
         setWorkspaceNavigation(navigation);
+        if (templateId === 'custom' && !blueprint) {
+          setBlueprintModalTab('import');
+        }
       }
     }
   }
 
   const commands = useMemo<readonly Command[]>(() => {
-    const defaultDests = ['home', 'items', 'people', 'transactions', 'accounts', 'reconciliation'];
+    const defaultDests = ['databases', 'items', 'people', 'transactions', 'accounts', 'reconciliation'];
     const navigationCommands = defaultDests.map((destination) => {
       const pLabel = pageLabels[destination] ? translate(locale, pageLabels[destination]) : destination;
       return {
@@ -383,13 +462,13 @@ export function MaxApp() {
         id: 'open-settings',
         keywords: ['preferences', 'appearance', 'theme', 'language', 'إعدادات', 'مظهر'],
         label: translate(locale, 'openSettings'),
-        run: () => navigate('settings'),
+        run: () => navigateSettingsSection('settings-general'),
       },
       {
         id: 'quick-operation',
         keywords: ['quick', 'sale', 'fast', 'بيع', 'سريع', 'تسجيل'],
         label: locale === 'ar' ? 'عملية سريعة (Ctrl+S)' : 'Quick Operation (Ctrl+S)',
-        run: () => setQuickEntryOpen(true),
+        run: () => setQuickActionOpen(0),
       },
       {
         id: 'export-blueprint',
@@ -416,7 +495,11 @@ export function MaxApp() {
         run: () => setTheme(nextTheme),
       })),
     ];
-  }, [customPages, handleAddCustomPage, locale]);
+  }, [customPages, handleAddCustomPage, locale, navigateSettingsSection]);
+
+  if (onboardingCompleted === null) {
+    return null;
+  }
 
   if (onboardingCompleted === false) {
     return <Suspense fallback={null}><Onboarding initialLocale={locale} onComplete={handleCompleteOnboarding} /></Suspense>;
@@ -426,12 +509,13 @@ export function MaxApp() {
     return <Suspense fallback={null}><Onboarding initialLocale={locale} onClose={() => setOnboardingPreview(false)} onComplete={() => { setOnboardingPreview(false); return Promise.resolve(); }} preview /></Suspense>;
   }
 
-  const isCustomPage = customPages.some((candidate) => candidate.id === page);
-  const activeCustomPage = isCustomPage ? customPages.find((p) => p.id === page) : undefined;
-  const activeWorkspaceDatabase = workspaceNavigation.databases.find((database) => database.id === page);
+  const isHomePage = page === 'home';
+  const isCustomPage = isHomePage || customPages.some((candidate) => candidate.id === page);
+  const activeCustomPage = isHomePage ? homePage : customPages.find((p) => p.id === page);
+  const activeWorkspaceDatabase = workspaceNavigation.databases.find((database) => database.id === page || database.legacyAlias === page);
 
-  const pageLabel = page === 'home'
-    ? homePage.title.trim() || translate(locale, 'home')
+  const pageLabel = isHomePage
+    ? activeCustomPage?.title || translate(locale, 'home')
     : isCustomPage
       ? activeCustomPage?.title || translate(locale, 'untitledPage')
       : activeWorkspaceDatabase
@@ -441,21 +525,7 @@ export function MaxApp() {
         : page;
 
   const PageIcon: LucideIcon = (!isCustomPage && page in pageIcons && pageIcons[page]) ? pageIcons[page] : FileText;
-  const showPageHeader = !isCustomPage && !activeWorkspaceDatabase && !['databases', 'home', 'settings'].includes(page);
-
-  function navigateSettingsSection(section: SettingsSectionId) {
-    setSettingsSection(section);
-    const revealSection = () => {
-      const target = document.getElementById(section);
-      target?.scrollIntoView({
-        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
-        block: 'start',
-      });
-      target?.focus({ preventScroll: true });
-      return Boolean(target);
-    };
-    if (!revealSection()) window.setTimeout(revealSection, 0);
-  }
+  const showPageHeader = !isCustomPage && !activeWorkspaceDatabase && !['databases', 'settings'].includes(page);
 
   return (
     <div className="app-shell" data-app-ready={engineStatus === 'ready' ? 'true' : undefined}>
@@ -471,62 +541,76 @@ export function MaxApp() {
         onAddCustomPage={() => void handleAddCustomPage()}
         onAddSubpage={(parentId) => void handleAddSubpage(parentId)}
         onCollapse={() => setSidebarCollapsed((collapsed) => !collapsed)}
-        onDeletePage={handleDeleteCustomPage}
+        onDeletePage={(id) => { void handleDeleteCustomPage(id); }}
         onDuplicatePage={(id) => void handleDuplicateCustomPage(id)}
-        onNavigate={navigate}
+        onNavigate={(next) => navigate(page === 'settings' && next === 'home' ? previousPage.current : next)}
         onNavigateView={navigateDatabaseView}
-        onOpenSettings={() => navigate('settings')}
+        onOpenSettings={() => navigateSettingsSection('settings-general')}
         onRenamePage={(id, title) => handleUpdateCustomPage(id, { title })}
         onResize={setSidebarWidth}
         onSettingsSectionChange={navigateSettingsSection}
         onToggleFavorite={(id, favorite) => handleUpdateCustomPage(id, { favorite })}
-        onReorderPages={(reordered) => {
-          const newHome = reordered.find((p) => p.id === 'home');
-          if (newHome) {
-            setHomePage(newHome);
-            saveHomePage(newHome);
-          }
-          const otherPages = reordered.filter((p) => p.id !== 'home');
-          setCustomPages(otherPages);
-          otherPages.forEach((candidate, position) => void updatePersistentCustomPage(candidate, position));
+        onReorderNodes={(reorderedIds, movedId, parentNodeId) => {
+          let updatedHome = homePage;
+          const updatedCustomPages = [...customPages];
+          const updatedDatabases = [...workspaceNavigation.databases];
+          reorderedIds.forEach((id, position) => {
+            const positionKey = `p${String(position).padStart(8, '0')}`;
+            if (id === 'home') {
+              updatedHome = { ...updatedHome, positionKey };
+            } else {
+              const customIndex = updatedCustomPages.findIndex((p) => p.id === id);
+              if (customIndex !== -1) {
+                updatedCustomPages[customIndex] = { ...updatedCustomPages[customIndex], positionKey, ...(id === movedId ? { parentNodeId } : {}) } as typeof updatedCustomPages[0];
+              } else {
+                const dbIndex = updatedDatabases.findIndex((d) => d.id === id);
+                if (dbIndex !== -1) {
+                  updatedDatabases[dbIndex] = { ...updatedDatabases[dbIndex], positionKey, ...(id === movedId ? { parentNodeId } : {}) } as typeof updatedDatabases[0];
+                }
+              }
+            }
+            window.maxApi.workspace.updateNode(id, { positionKey, ...(id === movedId ? { parentNodeId } : {}) }).catch(() => undefined);
+          });
+          setHomePage(updatedHome);
+          setCustomPages(updatedCustomPages);
+          setWorkspaceNavigation({ ...workspaceNavigation, databases: updatedDatabases });
         }}
         page={page}
         settingsSection={settingsSection}
+        runtimePlatform={runtimePlatform}
         width={sidebarWidth}
       />
 
       <div className="app-frame">
         <header className="topbar">
           <div className="topbar__title">
+            <NavigationHistory page={page} onNavigate={navigate} locale={locale} />
             <bdi>{shopName || translate(locale, 'workspace')}</bdi>
             <span aria-hidden="true">/</span>
             <bdi><strong>{pageLabel}</strong></bdi>
           </div>
           <div className="topbar__actions">
-            <button className="command-trigger" onClick={() => setSearchOpen(true)} type="button">
-              <Search aria-hidden="true" size={17} />
-              <span>{locale === 'ar' ? 'ابحث في البيانات' : 'Search data'}</span>
-              <kbd>{runtimePlatform === 'macos' ? '⌘' : 'Ctrl'} F</kbd>
-            </button>
-            <Button
-              icon={<Workflow aria-hidden="true" size={16} />}
-              onClick={() => setWorkflowOpen(true)}
-              variant="ghost"
-            >
-              {locale === 'ar' ? 'سير العمل' : 'Workflows'}
-            </Button>
-            <Button
-              className="quick-entry-trigger"
-              icon={<Zap aria-hidden="true" size={16} />}
-              onClick={() => setQuickEntryOpen(true)}
-              variant="ghost"
-            >
-              {locale === 'ar' ? 'عملية سريعة' : 'Quick action'}
-            </Button>
+            <UpdateNotice locale={locale} onOpen={() => navigateSettingsSection('settings-danger')} />
+            {graphEnabled && page !== 'settings' && <button type="button" className="topbar-tool" aria-pressed={graphOpen} aria-keyshortcuts={`${runtimePlatform === 'macos' ? 'Meta' : 'Control'}+g`} onClick={() => setGraphOpen(value => !value)}><Waypoints size={17}/><span>{locale === 'ar' ? 'خريطة' : 'Graph'}</span><kbd>{quickActionModifier(runtimePlatform)} G</kbd></button>}
+            {page !== 'settings' && (
+              <button className="topbar-tool" aria-keyshortcuts={`${runtimePlatform === 'macos' ? 'Meta' : 'Control'}+f`} onClick={() => setSearchOpen(true)} type="button">
+                <Search aria-hidden="true" size={17} />
+                <span>{locale === 'ar' ? 'بحث' : 'Search'}</span>
+                <kbd>{quickActionModifier(runtimePlatform)} F</kbd>
+              </button>
+            )}
+
+            {quickActionsEnabled && <button className="topbar-tool topbar-tool--quick" aria-keyshortcuts={`${runtimePlatform === 'macos' ? 'Meta' : 'Control'}+s`} onClick={() => setQuickActionOpen(0)} type="button">
+              <PlusCircle aria-hidden="true" size={16} />
+              <span>{locale === 'ar' ? 'عملية سريعة' : 'Quick action'}</span>
+              <kbd>{quickActionModifier(runtimePlatform)} S</kbd>
+            </button>}
           </div>
         </header>
 
-        <main aria-label={showPageHeader ? undefined : pageLabel} aria-labelledby={showPageHeader ? 'page-title' : undefined} className="content" data-custom-page={isCustomPage} data-page={page} id="main-content" tabIndex={-1}>
+        <main style={{ position: 'relative' }} onClick={(event) => { if (event.target === event.currentTarget) event.currentTarget.querySelector('.notion-editor-canvas')?.dispatchEvent(new Event('max:focus-page-end')); }} aria-label={showPageHeader ? undefined : pageLabel} aria-labelledby={showPageHeader ? 'page-title' : undefined} className="content" data-custom-page={isCustomPage} data-page={page} id="main-content" tabIndex={-1}>
+          {graphOpen && <Suspense fallback={<div className="page-loading" />}><WorkspaceGraph locale={locale} onClose={() => setGraphOpen(false)} /></Suspense>}
+          <div style={{ display: graphOpen ? 'none' : 'contents' }}>
           {showPageHeader && <header className="page-header">
             <div className="page-header__icon" aria-hidden="true">
               <PageIcon size={28} strokeWidth={1.7} />
@@ -539,36 +623,30 @@ export function MaxApp() {
             </div>
           </header>}
 
-          <Suspense fallback={<div aria-live="polite" className="page-loading" role="status">{locale === 'ar' ? 'جارٍ التحميل…' : 'Loading…'}</div>}>
-          {page === 'home' ? (
-            <CustomPageView
-              isHome
-              locale={locale}
-              onUpdatePage={handleUpdateHomePage}
-              onWorkspaceChange={refreshWorkspaceNavigation}
-              page={homePage}
-            />
-          ) : isCustomPage && activeCustomPage ? (
+          <Suspense fallback={<div className="page-loading" />}>
+          {isCustomPage && activeCustomPage ? (
             <CustomPageView
               key={activeCustomPage.id}
               locale={locale}
-              onUpdatePage={handleUpdateCustomPage}
+              onUpdatePage={isHomePage ? handleUpdateHomePage : handleUpdateCustomPage}
               onWorkspaceChange={refreshWorkspaceNavigation}
               page={activeCustomPage}
             />
           ) : page === 'databases' ? (
             <DatabasesWorkspace key="databases" locale={locale} />
           ) : activeWorkspaceDatabase ? (
-            <DatabasePage databaseId={activeWorkspaceDatabase.id} initialViewId={requestedSavedViewId} locale={locale} onOpenRecordId={openRecordId} />
+            <DatabasePage key={activeWorkspaceDatabase.id} databaseId={activeWorkspaceDatabase.id} initialViewId={requestedSavedViewId} locale={locale} onOpenRecordId={openRecordId} onArchived={() => navigate(firstWorkspacePageId(customPages, workspaceNavigation.pages, workspaceNavigation.databases.filter((d) => d.id !== activeWorkspaceDatabase.id)))} />
           ) : page === 'settings' ? (
             <SettingsPage
               key="settings"
+              activeSection={settingsSection}
+              onVisibleSectionChange={setSettingsSection}
               locale={locale}
-              onBackToApp={() => navigate('home')}
+              onBackToApp={() => navigate(previousPage.current)}
               onChangeLocale={setLocale}
               onChangeTheme={setTheme}
               onDemoDataSeeded={() => {
-                setDataRevision((revision) => revision + 1);
+                window.dispatchEvent(new Event('max:workspace-changed'));
                 void loadPersistentCustomPages().then(setCustomPages);
                 setHomePage(loadHomePage(locale));
                 void window.maxApi.shop.getMetadata().then((metadata) => setShopName(metadata.shopName));
@@ -584,40 +662,19 @@ export function MaxApp() {
               }}
               theme={theme}
             />
-          ) : page === 'items' || page === 'people' ? (
-            <ObjectWorkspace
-              createRequest={objectCreateRequest}
-              key={page}
-              locale={locale}
-              objectKind={page === 'items' ? 'item' : 'person'}
-              selectedViewId={requestedSavedViewId}
-            />
-          ) : page === 'accounts' ? (
-            <AccountsWorkspace
-              createRequest={objectCreateRequest}
-              key="accounts"
-              locale={locale}
-              refreshRequest={dataRevision}
-            />
-          ) : page === 'transactions' ? (
-            <TransactionsWorkspace
-              createRequest={objectCreateRequest}
-              key="transactions"
-              locale={locale}
-              refreshRequest={dataRevision}
-            />
-          ) : page === 'reconciliation' ? (
-            <ReconciliationWorkspace key="reconciliation" locale={locale} />
+          ) : ['items', 'people', 'accounts', 'transactions'].includes(page) ? (
+            <LegacyDatabaseLink key={page} alias={page} locale={locale} />
           ) : (
             <EmptyPage
               locale={locale}
-              onCreate={() => setObjectCreateRequest((r) => r + 1)}
+              onCreate={() => { void handleAddCustomPage(); }}
               onNavigate={navigate}
               onOpenCommand={() => setCommandOpen(true)}
-              page={page as 'accounts' | 'home' | 'items' | 'people' | 'reconciliation' | 'transactions'}
+              page={page as 'accounts' | 'items' | 'people' | 'reconciliation' | 'transactions'}
             />
           )}
           </Suspense>
+        </div>
         </main>
         <ScrollOutline locale={locale} pageKey={page} />
       </div>
@@ -654,33 +711,11 @@ export function MaxApp() {
           }}
         />
       )}
-      {quickEntryOpen && (
-        <QuickEntryDialog
-          locale={locale}
-          onClose={() => setQuickEntryOpen(false)}
-          onSuccess={(tx) => {
-            setRecentTxForUndo(tx);
-            setDataRevision((revision) => revision + 1);
-          }}
-        />
+      {quickActionOpen !== null && (
+        <WorkflowLauncherDialog locale={locale} onClose={() => setQuickActionOpen(null)} onConfigure={() => { setQuickActionOpen(null); navigateSettingsSection('settings-quick-actions'); }} />
       )}
-      {workflowOpen && <WorkflowLauncherDialog locale={locale} onClose={() => setWorkflowOpen(false)} />}
       </Suspense>
-      {recentTxForUndo && (
-        <UndoToast
-          key={recentTxForUndo.id}
-          locale={locale}
-          onDismiss={() => setRecentTxForUndo(undefined)}
-          onUndo={async (id) => {
-            const result = await window.maxApi.transactions.undo(id);
-            if (!result.ok) throw new Error(result.error.message);
-            if (page === 'transactions' || page === 'accounts') {
-              setDataRevision((revision) => revision + 1);
-            }
-          }}
-          transaction={recentTxForUndo}
-        />
-      )}
+
       {engineNoticeVisible && (
         <div className="toast" role="alert">
           <span>{translate(locale, 'engineIssue')}</span>

@@ -59,6 +59,7 @@ export class RecordTemplateRepository {
     id?: string;
     name: string;
   }>): WorkspaceRecordTemplate {
+    this.assertDatabase(input.databaseId);
     const id = input.id ?? randomUUID();
     const name = input.name.trim();
     if (!name) throw new WorkspaceDomainError('invalid-input', 'Record template name is required.');
@@ -74,5 +75,27 @@ export class RecordTemplateRepository {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(id, input.databaseId, name, input.icon ?? null, JSON.stringify(input.defaults ?? {}), input.contentJson ?? '[]', positionKey, now, now);
     return this.get(id)!;
+  }
+
+  edit(databaseId: string, id: string | null, patch: { positionKey?: string; title?: string; contentJson?: string | null; icon?: string | null }): WorkspaceRecordTemplate {
+    this.assertDatabase(databaseId);
+    if (!id) return this.create({ databaseId, name: patch.title ?? '', contentJson: patch.contentJson ?? '[]', icon: patch.icon ?? undefined });
+    const current = this.get(id);
+    if (!current || current.databaseId !== databaseId) throw new WorkspaceDomainError('not-found', 'Template is unavailable in this database.');
+    const name = patch.title?.trim() ?? current.name;
+    if (!name) throw new WorkspaceDomainError('invalid-input', 'Template name is required.');
+    this.database.prepare('UPDATE workspace_record_templates SET name = ?, content_json = ?, icon = ?, position_key = ?, updated_at = ? WHERE id = ?').run(name, patch.contentJson ?? current.contentJson, patch.icon === undefined ? current.icon ?? null : patch.icon, patch.positionKey ?? current.positionKey, new Date().toISOString(), id);
+    return this.get(id)!;
+  }
+
+  archive(id: string): void {
+    const current = this.get(id);
+    if (!current) throw new WorkspaceDomainError('not-found', 'Template is unavailable.');
+    this.assertDatabase(current.databaseId);
+    this.database.prepare('UPDATE workspace_record_templates SET archived_at = ?, updated_at = ? WHERE id = ?').run(new Date().toISOString(), new Date().toISOString(), id);
+  }
+
+  private assertDatabase(id: string) {
+    if (!this.database.prepare('SELECT 1 FROM workspace_databases d JOIN workspace_nodes n ON n.id = d.id WHERE d.id = ? AND n.archived_at IS NULL').get(id)) throw new WorkspaceDomainError('not-found', 'Referenced database no longer exists in this workspace.');
   }
 }

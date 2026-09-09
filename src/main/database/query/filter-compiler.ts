@@ -60,6 +60,10 @@ export class FilterCompiler {
     }
 
     const type = prop?.type ?? 'text';
+    if (type === 'checkbox' && typeof node.value === 'boolean' && ['equals', 'not_equals'].includes(node.operator)) {
+      const checked = node.operator === 'equals' ? node.value : !node.value;
+      return this.#compilePropertyFilter({ ...node, operator: checked ? 'is_checked' : 'is_not_checked' });
+    }
 
     switch (node.operator) {
       case 'is_empty':
@@ -180,19 +184,6 @@ export class FilterCompiler {
 
       default:
         break;
-    }
-
-    // Money comparisons (convert to minor units)
-    if (type === 'money') {
-      const minor = Math.round(Number(node.value || 0) * 100);
-      const sqlOp = sqlComparisonOperator(node.operator);
-      return {
-        params: [propId, minor],
-        whereSql: `EXISTS (
-          SELECT 1 FROM workspace_property_values pv
-          WHERE pv.record_id = r.id AND pv.property_id = ? AND pv.money_minor_value ${sqlOp} ?
-        )`,
-      };
     }
 
     // Number comparisons

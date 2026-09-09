@@ -1,7 +1,7 @@
 {
   "name": "max-shop-os",
   "productName": "Max",
-  "version": "0.2.8",
+  "version": "0.4.0",
   "description": "Offline-first configurable shop operating system",
   "private": true,
   "main": ".vite/build/main.js",
@@ -18,10 +18,12 @@
     "build": "npm run setup:runtime && electron-forge package",
     "verify:size": "node scripts/verify-size-budget.cjs",
     "make": "npm run setup:runtime && electron-forge make",
-    "make:flatpak": "npm run setup:runtime && cross-env MAX_ENABLE_FLATPAK=1 electron-forge make --platform=linux --arch=x64 --targets=@electron-forge/maker-flatpak"
+    "make:flatpak": "npm run setup:runtime && cross-env MAX_ENABLE_FLATPAK=1 electron-forge make --platform=linux --arch=x64 --targets=@electron-forge/maker-flatpak",
+    "dev:web": "vite --config vite.preview.config.mjs"
   },
   "dependencies": {
     "@clerk/react": "^6.14.8",
+    "d3-force": "^3.0.0",
     "fflate": "^0.8.3",
     "lucide-react": "^1.37.0",
     "react": "^19.2.8",
@@ -43,6 +45,7 @@
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.6",
+    "@types/d3-force": "^3.0.10",
     "@types/node": "^22.18.1",
     "@types/react": "^19.1.12",
     "@types/react-dom": "^19.1.9",

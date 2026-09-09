@@ -1,26 +1,17 @@
+
+import { Eye, EyeOff, GripVertical } from 'lucide-react';
+import { DatabaseToolbar } from './DatabaseToolbar';
+import './database.css';
 import { createExcelWorkbook, downloadExcel } from './excel-export';
 import { Select } from '../ui/select';
-import {
-  ArrowDownAZ,
-  Download,
-  Calendar,
-  ChevronDown,
-  Database,
-  Filter,
-  LayoutGrid,
-  List,
-  Plus,
-  RefreshCw,
-  Search,
-  Settings,
-  Table as TableIcon,
-  X,
-} from 'lucide-react';
+import { Plus, RefreshCw, X } from 'lucide-react';
+import { PropertyIcon } from './PropertyIcon';
+import { PageIconRenderer } from '../ui/page-icon-renderer';
 import { useEffect, useRef, useState } from 'react';
 
 import type { Locale } from '../app/i18n';
+import type { DatabaseSchema } from '../../shared/database-contract';
 import type { WorkspaceProperty, WorkspaceRecord, WorkspaceRecordTemplate } from '../../shared/property-contract';
-import type { ViewLayout } from '../../shared/view-contract';
 import { DatabaseViewHost } from './DatabaseViewHost';
 import { FilterBuilder } from './FilterBuilder';
 import { PropertyEditor } from './PropertyEditor';
@@ -34,13 +25,14 @@ type DatabasePageProps = Readonly<{
   initialViewId?: string;
   locale?: Locale;
   onOpenRecordId?: string | null;
+  onArchived?: () => void;
 }>;
 
-export function DatabasePage({ databaseId, embedded = false, initialViewId, locale = 'en', onOpenRecordId }: DatabasePageProps) {
+export function DatabasePage({ databaseId, embedded = false, initialViewId, locale = 'en', onOpenRecordId, onArchived }: DatabasePageProps) {
   const {
     activeView,
     archiveRecord,
-    archiveProperty,
+    archiveView,
     calculations,
     createProperty,
     createRecord,
@@ -50,6 +42,9 @@ export function DatabasePage({ databaseId, embedded = false, initialViewId, loca
     group,
     groups,
     loading,
+    page,
+    pageSize,
+    setPage,
     records,
     refresh,
     schema,
@@ -68,6 +63,14 @@ export function DatabasePage({ databaseId, embedded = false, initialViewId, loca
   } = useDatabaseQuery(databaseId, initialViewId);
 
   const [exporting, setExporting] = useState(false);
+  const [unavailable, setUnavailable] = useState(false);
+  useEffect(() => {
+    let active = true;
+    const check = () => { void window.maxApi.workspace.getNode(databaseId).then((node) => { if (active) setUnavailable(!node || !!node.archivedAt); }).catch(() => undefined); };
+    check();
+    window.addEventListener('max:workspace-changed', check);
+    return () => { active = false; window.removeEventListener('max:workspace-changed', check); };
+  }, [databaseId]);
   const [exportError, setExportError] = useState<string>();
   async function exportExcel() {
     if (!schema || exporting) return;
@@ -89,55 +92,69 @@ export function DatabasePage({ databaseId, embedded = false, initialViewId, loca
 
   // Modals & Drawers
   const [selectedRecord, setSelectedRecord] = useState<WorkspaceRecord | null>(null);
+  const [relatedSchema, setRelatedSchema] = useState<DatabaseSchema | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const container = containerRef.current;
+    const open = (event: Event) => {
+      event.stopPropagation();
+      const record = (event as CustomEvent<WorkspaceRecord>).detail;
+      void window.maxApi.workspace.getDatabaseSchema(record.databaseId).then((recordSchema) => {
+        setRelatedSchema(recordSchema);
+        setSelectedRecord(record);
+        setRecordDrawerOpen(true);
+      });
+    };
+    container?.addEventListener('max:open-record', open);
+    return () => container?.removeEventListener('max:open-record', open);
+  }, []);
   const [recordDrawerOpen, setRecordDrawerOpen] = useState(false);
   const [filterModalOpen, setFilterModalOpen] = useState(false);
   const [sortModalOpen, setSortModalOpen] = useState(false);
   const [propertyModalOpen, setPropertyModalOpen] = useState(false);
   const [propertyManagerOpen, setPropertyManagerOpen] = useState(false);
+  const propertiesPanelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!propertyManagerOpen) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (propertiesPanelRef.current && !propertiesPanelRef.current.contains(event.target as Node)) {
+        setPropertyManagerOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [propertyManagerOpen]);
+  const [dragProperty, setDragProperty] = useState<string>();
   const [editingProperty, setEditingProperty] = useState<WorkspaceProperty | null>(null);
-  const [addViewModalOpen, setAddViewModalOpen] = useState(false);
-  const [newViewName, setNewViewName] = useState('');
-  const [newViewLayout, setNewViewLayout] = useState<ViewLayout>('table');
   const [recordTemplates, setRecordTemplates] = useState<readonly WorkspaceRecordTemplate[]>([]);
-  const [newRecordMenuOpen, setNewRecordMenuOpen] = useState(false);
-  const newRecordMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let active = true;
-    void window.maxApi.workspace.listRecordTemplates(databaseId).then((templates) => {
-      if (active) setRecordTemplates(templates);
-    });
-    return () => { active = false; };
+    const refreshTemplates = () => {
+      void window.maxApi.workspace.listRecordTemplates(databaseId).then((templates) => {
+        if (active) setRecordTemplates(templates);
+      });
+    };
+    refreshTemplates();
+    window.addEventListener('max:workspace-changed', refreshTemplates);
+    return () => { active = false; window.removeEventListener('max:workspace-changed', refreshTemplates); };
   }, [databaseId]);
 
   useEffect(() => {
-    if (!newRecordMenuOpen) return;
-    const closeMenu = (event: MouseEvent) => {
-      if (event.target instanceof Node && !newRecordMenuRef.current?.contains(event.target)) {
-        setNewRecordMenuOpen(false);
-      }
-    };
-    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
-      if (event.key === 'Escape') setNewRecordMenuOpen(false);
-    };
-    document.addEventListener('mousedown', closeMenu);
-    document.addEventListener('keydown', closeOnEscape);
-    return () => {
-      document.removeEventListener('mousedown', closeMenu);
-      document.removeEventListener('keydown', closeOnEscape);
-    };
-  }, [newRecordMenuOpen]);
-
-  useEffect(() => {
     if (!onOpenRecordId) return;
-    const record = records.find((candidate) => candidate.id === onOpenRecordId);
-    if (record) {
-      setSelectedRecord(record);
-      setRecordDrawerOpen(true);
-    }
-  }, [onOpenRecordId, records]);
+    let active = true;
+    void window.maxApi.workspace.getRecord(onOpenRecordId).then((record) => {
+      if (record && active && record.databaseId === databaseId) {
+        setRelatedSchema(null);
+        setSelectedRecord(record);
+        setRecordDrawerOpen(true);
+      }
+    });
+    return () => { active = false; };
+  }, [databaseId, onOpenRecordId]);
 
   const handleOpenRecord = (record: WorkspaceRecord) => {
+    setRelatedSchema(null);
     setSelectedRecord(record);
     setRecordDrawerOpen(true);
   };
@@ -153,208 +170,88 @@ export function DatabasePage({ databaseId, embedded = false, initialViewId, loca
     if (record) handleOpenRecord(record);
   }
 
-  const handleCreateNewView = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newViewName.trim()) return;
-
-    await createView({
-      databaseId,
-      layout: newViewLayout,
-      name: newViewName.trim(),
-    });
-
-    setNewViewName('');
-    setAddViewModalOpen(false);
-  };
-
   const activeFilterCount = filterAst
     ? filterAst.kind === 'group'
       ? filterAst.conditions.length
       : 1
     : 0;
+  const orderedProperties = [...(schema?.properties ?? [])].sort((a, b) => {
+    const columns = activeView?.propertyState.columns ?? [];
+    if (columns.length < (schema?.properties.length ?? 0)) return 0;
+    return columns.findIndex((column) => column.propertyId === a.id) - columns.findIndex((column) => column.propertyId === b.id);
+  });
+  function moveProperty(id: string, direction: number) {
+    if (!activeView) return;
+    const columns = orderedProperties.map((property) => ({ ...activeView.propertyState.columns.find((column) => column.propertyId === property.id), propertyId: property.id }));
+    const index = columns.findIndex((column) => column.propertyId === id);
+    const target = index + direction;
+    const source = columns[index], destination = columns[target];
+    if (!source || !destination) return;
+    columns[index] = destination; columns[target] = source;
+    void updateView(activeView.id, { propertyState: { ...activeView.propertyState, columns } });
+  }
 
-  const getViewIcon = (layout: ViewLayout) => {
-    switch (layout) {
-      case 'board':
-        return LayoutGrid;
-      case 'list':
-        return List;
-      case 'calendar':
-        return Calendar;
-      case 'table':
-      default:
-        return TableIcon;
+  useEffect(() => {
+    if (schema?.database.archivedAt) {
+      onArchived?.();
     }
-  };
+  }, [schema?.database.archivedAt, onArchived]);
+
+  if (unavailable || schema?.database.archivedAt) {
+    if (embedded) return null;
+    return <div className="database-page-container"><p style={{ padding: '2rem', textAlign: 'center', color: 'var(--muted)' }}>{locale === 'ar' ? 'هذه القاعدة مؤرشفة.' : 'This database has been archived.'}</p></div>;
+  }
 
   return (
-    <div className="database-page-container" data-embedded={embedded}>
-      <div className="database-page-header">
-        <div className="database-title-row">
-          <div className="database-title-copy">
-            <Database aria-hidden="true" size={embedded ? 17 : 20} />
-            <div>
-              <h2 className="database-page-title">{schema?.database.title || (locale === 'ar' ? 'قاعدة بيانات' : 'Database')}</h2>
-              <span>
-                {locale === 'ar'
-                  ? `${totalCount} سجل · ${schema?.properties.length || 0} خاصية`
-                  : `${totalCount} ${totalCount === 1 ? 'record' : 'records'} · ${schema?.properties.length || 0} properties`}
-              </span>
-            </div>
-          </div>
-          <div className="database-create-actions">
-            <div className="database-new-record-split" ref={newRecordMenuRef}>
-              <button className="database-new-record-button" onClick={() => void handleCreateBlankRecord()} type="button">
-                <Plus aria-hidden="true" size={15} />
-                {locale === 'ar' ? 'جديد' : 'New'}
-              </button>
-              <button
-                aria-expanded={newRecordMenuOpen}
-                aria-haspopup="menu"
-                aria-label={locale === 'ar' ? 'خيارات السجل الجديد' : 'New record options'}
-                className="database-new-record-menu-button"
-                onClick={() => setNewRecordMenuOpen((open) => !open)}
-                type="button"
-              >
-                <ChevronDown aria-hidden="true" size={14} />
-              </button>
-              {newRecordMenuOpen && (
-                <div className="database-new-record-menu" role="menu">
-                  <button onClick={() => { setNewRecordMenuOpen(false); void handleCreateBlankRecord(); }} role="menuitem" type="button">
-                    <Plus aria-hidden="true" size={15} />
-                    <span>{locale === 'ar' ? 'سجل فارغ' : 'Blank record'}</span>
-                  </button>
-                  {recordTemplates.length > 0 && <div className="database-new-record-menu__label">{locale === 'ar' ? 'القوالب' : 'Templates'}</div>}
-                  {recordTemplates.map((template) => (
-                    <button key={template.id} onClick={() => { setNewRecordMenuOpen(false); void handleCreateBlankRecord(template.id); }} role="menuitem" type="button">
-                      <span aria-hidden="true" className="database-new-record-menu__icon">{template.icon ?? '◫'}</span>
-                      <span>{template.name}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="database-views-bar">
-          <div className="database-views-tabs">
-            {views.map((view) => {
-              const Icon = getViewIcon(view.layout);
-              const isActive = activeView?.id === view.id;
-
-              return (
-                <button
-                  key={view.id}
-                  type="button"
-                  className={`database-view-tab ${isActive ? 'database-view-tab--active' : ''}`}
-                  onClick={() => setActiveView(view)}
-                >
-                  <Icon size={14} className="mr-1.5" />
-                  <span>{view.name}</span>
-                </button>
-              );
-            })}
-
-            <button
-              type="button"
-              className="database-view-tab text-muted hover:text-foreground"
-              onClick={() => setAddViewModalOpen(true)}
-              title={locale === 'ar' ? 'إضافة طريقة عرض' : 'Add a view'}
-            >
-              <Plus aria-hidden="true" size={14} /> {locale === 'ar' ? 'طريقة عرض' : 'View'}
-            </button>
-          </div>
-        </div>
-
-        {exportError && <p className="form-error" role="alert">{exportError}</p>}
-        <div className="database-toolbar">
-          <button className="btn btn-secondary btn-sm" disabled={exporting || !schema} onClick={() => void exportExcel()} type="button"><Download aria-hidden="true" size={14} />{exporting ? (locale === 'ar' ? 'جارٍ التصدير…' : 'Exporting…') : (locale === 'ar' ? 'تصدير Excel' : 'Export Excel')}</button>
-          <div className="database-toolbar__search">
-            <Search size={14} className="text-muted" />
-            <input
-              type="text"
-              placeholder={locale === 'ar' ? 'ابحث في قاعدة البيانات…' : 'Search this database…'}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="input-clean text-xs"
-            />
-            {searchQuery && (
-              <button type="button" className="btn-icon p-0.5" onClick={() => setSearchQuery('')}>
-                <X size={12} />
-              </button>
-            )}
-          </div>
-
-          <div className="database-toolbar__actions">
+    <div ref={containerRef} className="database-page-container" data-embedded={embedded} dir={locale === 'ar' ? 'rtl' : 'ltr'}>
+      <div className="notion-db-heading"><PageIconRenderer icon={schema?.database.icon ?? 'lucide:Database'} size={embedded ? 20 : 32} /><h2 contentEditable suppressContentEditableWarning aria-label={locale === 'ar' ? 'اسم قاعدة البيانات' : 'Database name'} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); } }} onBlur={(event) => {
+        const title = event.currentTarget.textContent?.trim();
+        if (!title || title === schema?.database.title) { event.currentTarget.textContent = schema?.database.title ?? ''; return; }
+        void window.maxApi.workspace.updateDatabase(databaseId, { title }).then((result) => {
+          if (!result.ok) { setExportError(result.error.message); return; }
+          window.dispatchEvent(new Event('max:workspace-changed'));
+        }).catch((cause: unknown) => setExportError(String(cause)));
+      }}>{schema?.database.title}</h2></div>
+      <DatabaseToolbar locale={locale} databaseId={databaseId} activeView={activeView} views={views} templates={recordTemplates}
+        onArchived={() => { setUnavailable(true); onArchived?.(); }}
+        search={searchQuery} onSearch={setSearchQuery} onSelectView={setActiveView} filterCount={activeFilterCount} sortCount={sorts.length}
+        onCreate={(templateId) => { void handleCreateBlankRecord(templateId); }} onCreateView={createView} onUpdateView={updateView} onArchiveView={archiveView}
+        onFilter={() => setFilterModalOpen(true)} onSort={() => setSortModalOpen(true)} onProperties={() => setPropertyManagerOpen((open) => !open)} onExport={() => { void exportExcel(); }}
+        grouping={<>
+          <Select
+            aria-label={locale === 'ar' ? 'تجميع حسب' : 'Group by'}
+            className="database-toolbar-select"
+            onChange={(event) => {
+              const propertyId = event.target.value;
+              const next = propertyId ? { propertyId } : null;
+              setGroup(next);
+              if (activeView) void updateView(activeView.id, { group: next });
+            }}
+            value={group?.propertyId ?? ''}
+          >
+            <option value="">{locale === 'ar' ? 'بدون تجميع' : 'No grouping'}</option>
+            {schema?.properties.filter((property) => !['formula', 'relation', 'rollup'].includes(property.type)).map((property) => <option key={property.id} value={property.id}>{property.name}</option>)}
+          </Select>
+          {group && schema?.properties.find((property) => property.id === group.propertyId)?.type === 'date' && (
             <Select
-              aria-label={locale === 'ar' ? 'تجميع حسب' : 'Group by'}
+              aria-label={locale === 'ar' ? 'دقة تجميع التاريخ' : 'Date grouping'}
               className="database-toolbar-select"
               onChange={(event) => {
-                const propertyId = event.target.value;
-                const next = propertyId ? { propertyId } : null;
+                const next = { ...group, dateGranularity: event.target.value as 'day' | 'week' | 'month' | 'quarter' | 'year' };
                 setGroup(next);
                 if (activeView) void updateView(activeView.id, { group: next });
               }}
-              value={group?.propertyId ?? ''}
+              value={group.dateGranularity ?? 'month'}
             >
-              <option value="">{locale === 'ar' ? 'بدون تجميع' : 'No grouping'}</option>
-              {schema?.properties.filter((property) => !['formula', 'relation', 'rollup'].includes(property.type)).map((property) => <option key={property.id} value={property.id}>{property.name}</option>)}
+              {(['day', 'week', 'month', 'quarter', 'year'] as const).map((period) => (
+                <option key={period} value={period}>{locale === 'ar' ? ({ day: 'يوم', week: 'أسبوع', month: 'شهر', quarter: 'ربع سنة', year: 'سنة' } as const)[period] : period}</option>
+              ))}
             </Select>
-            {group && schema?.properties.find((property) => property.id === group.propertyId)?.type === 'date' && (
-              <Select
-                aria-label={locale === 'ar' ? 'دقة تجميع التاريخ' : 'Date grouping'}
-                className="database-toolbar-select"
-                onChange={(event) => {
-                  const next = { ...group, dateGranularity: event.target.value as 'day' | 'week' | 'month' | 'quarter' | 'year' };
-                  setGroup(next);
-                  if (activeView) void updateView(activeView.id, { group: next });
-                }}
-                value={group.dateGranularity ?? 'month'}
-              >
-                {(['day', 'week', 'month', 'quarter', 'year'] as const).map((period) => (
-                  <option key={period} value={period}>{locale === 'ar' ? ({ day: 'يوم', week: 'أسبوع', month: 'شهر', quarter: 'ربع سنة', year: 'سنة' } as const)[period] : period}</option>
-                ))}
-              </Select>
-            )}
-            <button className="database-tool-button" onClick={() => setPropertyManagerOpen(true)} type="button">
-              <Settings aria-hidden="true" size={13} /> {locale === 'ar' ? 'الخصائص' : 'Properties'}
-            </button>
-            <button
-              type="button"
-              className="database-tool-button"
-              data-active={activeFilterCount > 0}
-              onClick={() => setFilterModalOpen(true)}
-            >
-              <Filter aria-hidden="true" size={13} />
-              {locale === 'ar' ? 'تصفية' : 'Filter'}
-              {activeFilterCount > 0 && <span className="badge badge-primary ml-1.5 text-2xs">{activeFilterCount}</span>}
-            </button>
+          )}
 
-            <button
-              type="button"
-              className="database-tool-button"
-              data-active={sorts.length > 0}
-              onClick={() => setSortModalOpen(true)}
-            >
-              <ArrowDownAZ aria-hidden="true" size={13} />
-              {locale === 'ar' ? 'ترتيب' : 'Sort'}
-              {sorts.length > 0 && <span className="badge badge-primary ml-1.5 text-2xs">{sorts.length}</span>}
-            </button>
-
-            <button
-              type="button"
-              aria-label={locale === 'ar' ? 'تحديث قاعدة البيانات' : 'Refresh database'}
-              className="database-refresh-button"
-              onClick={() => void refresh()}
-              title={locale === 'ar' ? 'تحديث' : 'Refresh'}
-            >
-              <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-            </button>
-          </div>
-        </div>
-      </div>
-
+        </>}
+      />
+      {exportError && <p className="form-error" role="alert">{exportError}</p>}
       {/* Error alert */}
       {error && (
         <div className="alert alert-danger m-4">
@@ -370,32 +267,67 @@ export function DatabasePage({ databaseId, embedded = false, initialViewId, loca
         <DatabaseViewHost
           activeView={activeView}
           calculations={calculations}
+          totalCount={totalCount}
           databaseId={databaseId}
           groups={groups}
+          locale={locale}
           onArchiveRecord={archiveRecord}
           onCreateRecord={createRecord}
           onOpenRecord={handleOpenRecord}
           onUpdateRecord={updateRecord}
+          onManageProperties={() => setPropertyManagerOpen((open) => !open)}
+          onEditProperty={(property) => { setEditingProperty(property); setPropertyModalOpen(true); }}
+          onDatePropertyChange={(datePropertyId) => { if (activeView) void updateView(activeView.id, { propertyState: { ...activeView.propertyState, datePropertyId } }); }}
+          onRemoveSorting={async () => {
+            if (!activeView) return;
+            const result = await window.maxApi.workspace.updateView(activeView.id, { sorts: [] });
+            if (!result.ok) throw new Error(result.error.message);
+            await updateView(activeView.id, { sorts: [] });
+          }}
+          onPropertyMove={(source, target) => {
+            if (!activeView || source === target) return;
+            const columns = orderedProperties.map((property) => ({ ...activeView.propertyState.columns.find((column) => column.propertyId === property.id), propertyId: property.id }));
+            const index = columns.findIndex((column) => column.propertyId === source);
+            if (index < 0) return;
+            const moved = columns.splice(index, 1)[0]!;
+            const destination = columns.findIndex((column) => column.propertyId === target);
+            if (destination < 0) return;
+            columns.splice(destination + (index < destination + 1 ? 1 : 0), 0, moved);
+            void updateView(activeView.id, { propertyState: { ...activeView.propertyState, columns } });
+          }}
+          onColumnResize={(propertyId, width) => {
+            if (!activeView) return;
+            const columns = activeView.propertyState.columns;
+            const exists = columns.some((column) => column.propertyId === propertyId);
+            void updateView(activeView.id, { propertyState: { ...activeView.propertyState, columns: exists ? columns.map((column) => column.propertyId === propertyId ? { ...column, width } : column) : [...columns, { propertyId, width }] } });
+          }}
           records={records}
           schema={schema}
         />
       </div>
 
+      {totalCount > pageSize && <div className="database-pagination">
+        <span>{page * pageSize + 1}–{Math.min((page + 1) * pageSize, totalCount)} / {totalCount}</span>
+        <button disabled={page === 0 || loading} onClick={() => setPage(page - 1)} type="button">{locale === 'ar' ? 'السابق' : 'Previous'}</button>
+        <button disabled={(page + 1) * pageSize >= totalCount || loading} onClick={() => setPage(page + 1)} type="button">{locale === 'ar' ? 'التالي' : 'Next'}</button>
+      </div>}
       {/* Modals & Drawers */}
       <RecordDrawer
+        key={selectedRecord?.id}
         isOpen={recordDrawerOpen}
         locale={locale}
+        pageMode={activeView?.layoutConfig.pageMode === 'full' || activeView?.layoutConfig.pageMode === 'center' || activeView?.layoutConfig.pageMode === 'side' ? activeView.layoutConfig.pageMode : 'center'}
         onArchive={archiveRecord}
         onClose={() => {
           setRecordDrawerOpen(false);
           setSelectedRecord(null);
         }}
-        onUpdate={updateRecord}
         record={selectedRecord}
-        schema={schema}
+        schema={relatedSchema ?? schema}
       />
 
       <FilterBuilder
+        locale={locale}
         filterAst={filterAst}
         isOpen={filterModalOpen}
         onApply={(filter) => {
@@ -409,6 +341,7 @@ export function DatabasePage({ databaseId, embedded = false, initialViewId, loca
       />
 
       <SortBuilder
+        locale={locale}
         isOpen={sortModalOpen}
         onApply={(newSorts) => {
           setSorts(newSorts);
@@ -440,19 +373,21 @@ export function DatabasePage({ databaseId, embedded = false, initialViewId, loca
       />
 
       {propertyManagerOpen && (
-        <div className="modal-backdrop" onClick={() => setPropertyManagerOpen(false)} role="dialog" aria-modal="true">
-          <div className="modal-container modal-sm" onClick={(event) => event.stopPropagation()}>
-            <div className="modal-header">
-              <h3>{locale === 'ar' ? 'خصائص قاعدة البيانات' : 'Database properties'}</h3>
-              <button type="button" className="btn-icon" onClick={() => setPropertyManagerOpen(false)} aria-label="Close">
-                <X size={16} />
-              </button>
-            </div>
-            <div className="modal-body space-y-2">
-              {schema?.properties.map((property) => (
-                <div className="flex items-center justify-between gap-3 rounded-lg border border-neutral-700 p-3" key={property.id}>
+        <div className="database-properties-panel" ref={propertiesPanelRef} onClick={(event) => event.stopPropagation()}>
+          <div className="database-properties-panel__header">
+            <h3>{locale === 'ar' ? 'خصائص قاعدة البيانات' : 'Properties'}</h3>
+            <button type="button" className="btn-icon" onClick={() => setPropertyManagerOpen(false)} aria-label="Close">
+              <X size={16} />
+            </button>
+          </div>
+          <div className="database-properties-panel__body">
+            {orderedProperties.map((property, index) => {
+              const isHidden = activeView?.propertyState.columns.find(c => c.propertyId === property.id)?.hidden;
+              return (
+                <div className="database-property-row" key={property.id} onDragOver={event => { if (dragProperty) event.preventDefault(); }} onDrop={event => { event.preventDefault(); if (dragProperty) moveProperty(dragProperty, index - orderedProperties.findIndex(p => p.id === dragProperty)); setDragProperty(undefined); }}>
+                  <button type="button" className="btn-icon database-property-grip" draggable aria-label={"Reorder " + property.name} onDragStart={event => { setDragProperty(property.id); event.dataTransfer.setData("text/plain", property.id); }} onDragEnd={() => setDragProperty(undefined)}><GripVertical size={13} /></button>
                   <button
-                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                    className="database-property-name"
                     onClick={() => {
                       setEditingProperty(property);
                       setPropertyManagerOpen(false);
@@ -460,104 +395,36 @@ export function DatabasePage({ databaseId, embedded = false, initialViewId, loca
                     }}
                     type="button"
                   >
-                    <span className="truncate font-medium">{property.name}</span>
-                    <span className="badge badge-secondary text-2xs">{property.type}</span>
+                    <PropertyIcon type={property.type} icon={typeof property.config.icon === 'string' ? property.config.icon : undefined} />
+                    <span className="truncate">{property.name}</span>
                   </button>
-                  {property.type !== 'title' && (
-                    <button
-                      className="btn btn-ghost btn-xs text-danger"
-                      onClick={() => void archiveProperty(property.id)}
-                      type="button"
-                    >
-                      {locale === 'ar' ? 'أرشفة' : 'Archive'}
-                    </button>
+                  {property.type !== 'title' && activeView && (
+                    <button type="button" className="btn-icon database-property-eye" aria-label={"Toggle visibility of " + property.name} aria-pressed={!isHidden} onClick={() => {
+                      const columns = orderedProperties.map(candidate => ({ ...activeView.propertyState.columns.find(c => c.propertyId === candidate.id), propertyId: candidate.id }));
+                      void updateView(activeView.id, { propertyState: { ...activeView.propertyState, columns: columns.map(c => c.propertyId === property.id ? { ...c, hidden: !c.hidden } : c) } });
+                    }}>{isHidden ? <EyeOff size={15} /> : <Eye size={15} />}</button>
                   )}
                 </div>
-              ))}
-            </div>
-            <div className="modal-footer">
-              <button
-                className="btn btn-primary"
-                onClick={() => {
-                  setEditingProperty(null);
-                  setPropertyManagerOpen(false);
-                  setPropertyModalOpen(true);
-                }}
-                type="button"
-              >
-                <Plus size={14} className="mr-1.5" />
-                {locale === 'ar' ? 'خاصية جديدة' : 'New property'}
-              </button>
-            </div>
+              );
+            })}
+          </div>
+          <div className="database-properties-panel__footer">
+            <button
+              className="btn btn-sm btn-primary"
+              onClick={() => {
+                setEditingProperty(null);
+                setPropertyManagerOpen(false);
+                setPropertyModalOpen(true);
+              }}
+              type="button"
+            >
+              <Plus size={14} className="mr-1" />
+              {locale === 'ar' ? 'خاصية جديدة' : 'New property'}
+            </button>
           </div>
         </div>
       )}
 
-      {/* Add View Modal */}
-      {addViewModalOpen && (
-        <div className="modal-backdrop" onClick={() => setAddViewModalOpen(false)} role="dialog" aria-modal="true">
-          <div className="modal-container modal-sm" onClick={(e) => e.stopPropagation()}>
-            <form onSubmit={(e) => { void handleCreateNewView(e); }}>
-              <div className="modal-header">
-                <h3>New View</h3>
-                <button type="button" className="btn-icon" onClick={() => setAddViewModalOpen(false)}>
-                  <X size={16} />
-                </button>
-              </div>
-
-              <div className="modal-body space-y-3">
-                <div className="form-group">
-                  <label className="form-label">View Name</label>
-                  <input
-                    type="text"
-                    className="input-field"
-                    placeholder="e.g. All Items, Active Orders..."
-                    value={newViewName}
-                    onChange={(e) => setNewViewName(e.target.value)}
-                    autoFocus
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Layout</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {[
-                      { icon: TableIcon, id: 'table', label: 'Table' },
-                      { icon: LayoutGrid, id: 'board', label: 'Board' },
-                      { icon: List, id: 'list', label: 'List' },
-                      { icon: Calendar, id: 'calendar', label: 'Calendar' },
-                    ].map((opt) => {
-                      const Icon = opt.icon;
-                      const isSelected = newViewLayout === opt.id;
-                      return (
-                        <button
-                          key={opt.id}
-                          type="button"
-                          className={`p-3 rounded-lg border text-left flex items-center gap-2 ${isSelected ? 'border-primary bg-primary/10 text-primary' : 'border-neutral-700 bg-neutral-800 text-neutral-300'}`}
-                          onClick={() => setNewViewLayout(opt.id as ViewLayout)}
-                        >
-                          <Icon size={16} />
-                          <span className="text-sm font-medium">{opt.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-
-              <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setAddViewModalOpen(false)}>
-                  Cancel
-                </button>
-                <button type="submit" className="btn btn-primary">
-                  Create View
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

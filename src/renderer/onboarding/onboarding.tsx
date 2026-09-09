@@ -1,17 +1,15 @@
 import { Terms } from '../ui/terms';
-import { Select } from '../ui/select';
 import {
-  ArrowLeft,
-  ArrowRight,
   CheckCircle2,
   Database,
+  Check,
+  Globe2,
   Sparkles,
 } from 'lucide-react';
-import { useState, type ChangeEvent, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent, type ChangeEvent } from 'react';
 
 import type { BackupSchedule, Blueprint } from '../../shared/blueprint-contract';
 import type { Locale } from '../app/i18n';
-import { phoneShopBlueprint } from '../blueprints/starter-blueprints';
 import { Button } from '../ui/button';
 import { onboardingCopy } from './onboarding-i18n';
 import maxLogoReference from '../assets/max-logo.png';
@@ -23,20 +21,40 @@ type OnboardingProps = Readonly<{
   preview?: boolean;
 }>;
 
-type BlueprintOption = 'blank' | 'custom' | 'phone';
-
 export function Onboarding({ initialLocale, onClose, onComplete, preview = false }: OnboardingProps) {
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [hasReadTerms, setHasReadTerms] = useState(false);
   const [step, setStep] = useState(1);
   const [locale, setLocale] = useState<Locale>(initialLocale);
+  const [showWelcome, setShowWelcome] = useState(!preview);
   const [shopName, setShopName] = useState('');
-  const [blueprintChoice, setBlueprintChoice] = useState<BlueprintOption>('phone');
-  const [customBlueprint, setCustomBlueprint] = useState<Blueprint>();
-  const [customFileError, setCustomFileError] = useState<string>();
+  const [template, setTemplate] = useState<'blank' | 'custom'>('blank');
   const [backupSchedule, setBackupSchedule] = useState<BackupSchedule>('daily');
-  const [includeDemoData, setIncludeDemoData] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [finishError, setFinishError] = useState<string>();
+  const [blueprint, setBlueprint] = useState<Blueprint>();
+  const [blueprintError, setBlueprintError] = useState<string>();
+
+  async function handleFileSelect(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      setBlueprintError(undefined);
+      const text = await file.text();
+      const parsed = JSON.parse(text) as unknown;
+      const result = await window.maxApi.workspace.validateTemplate(parsed);
+      if (result.ok) {
+        setBlueprint(parsed as Blueprint);
+        setTemplate('custom');
+      } else {
+        setBlueprintError(result.error.message);
+        setTemplate('blank');
+      }
+    } catch (e) {
+      setBlueprintError(e instanceof Error ? e.message : 'Invalid JSON file.');
+      setTemplate('blank');
+    }
+  }
 
   function handleLanguageChange(nextLocale: Locale) {
     setLocale(nextLocale);
@@ -44,40 +62,32 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
     document.documentElement.dir = nextLocale === 'ar' ? 'rtl' : 'ltr';
   }
 
-  async function handleCustomFile(event: ChangeEvent<HTMLInputElement>) {
-    setCustomFileError(undefined);
-    setCustomBlueprint(undefined);
-    const file = event.target.files?.[0];
-    if (!file) return;
+  useEffect(() => {
+    document.documentElement.lang = 'en';
+    document.documentElement.dir = 'ltr';
+  }, []);
 
-    try {
-      const text = await file.text();
-      const parsed = JSON.parse(text) as unknown;
-      const validation = await window.maxApi.blueprints.validate(parsed);
-      if (validation.valid) {
-        setCustomBlueprint(parsed as Blueprint);
-      } else {
-        setCustomFileError(validation.issues[0]?.message ?? onboardingCopy(locale, 'invalidFile'));
+  useEffect(() => {
+    function handleGlobalKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Enter' && !e.defaultPrevented) {
+        const btn = document.querySelector<HTMLButtonElement>('.onboarding-actions .apple-button');
+        if (btn && !btn.disabled) {
+          e.preventDefault();
+          btn.click();
+        }
       }
-    } catch {
-      setCustomFileError(onboardingCopy(locale, 'invalidFile'));
     }
-  }
-
-  const selectedBlueprint: Blueprint | undefined =
-    blueprintChoice === 'phone'
-      ? phoneShopBlueprint
-      : blueprintChoice === 'custom'
-        ? customBlueprint
-        : undefined;
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, []);
 
   async function handleFinish(event: FormEvent) {
     event.preventDefault();
-    if (!acceptedTerms || submitting || !shopName.trim() || (blueprintChoice === 'custom' && !customBlueprint)) return;
+    if (!acceptedTerms || submitting || !shopName.trim()) return;
     setFinishError(undefined);
     setSubmitting(true);
     try {
-      await onComplete(shopName.trim() || 'My Shop', locale, backupSchedule, selectedBlueprint, blueprintChoice === 'phone' && includeDemoData, blueprintChoice === 'phone' ? 'phone-shop' : blueprintChoice);
+      await onComplete(shopName.trim() || 'My Shop', locale, backupSchedule, template === 'custom' ? blueprint : undefined, false, template);
     } catch (error) {
       setFinishError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -86,25 +96,28 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
   }
 
   const isRtl = locale === 'ar';
-  const NextIcon = isRtl ? ArrowLeft : ArrowRight;
-  const PrevIcon = isRtl ? ArrowRight : ArrowLeft;
+
+  if (showWelcome) {
+    return (
+      <div className="onboarding-container onboarding-container--welcome" dir="ltr">
+        <main className="onboarding-welcome" aria-labelledby="welcome-to-max">
+          <div className="onboarding-welcome__halo" aria-hidden="true" />
+          <img alt="" className="onboarding-welcome__logo" src={maxLogoReference} />
+          <p className="onboarding-welcome__eyebrow"><Sparkles size={14} aria-hidden="true" /> Your local workspace</p>
+          <h1 id="welcome-to-max">Welcome to Max</h1>
+          <p>Build your workspace around the way you work.</p>
+          <button autoFocus className="apple-button onboarding-welcome__button" onClick={() => setShowWelcome(false)} type="button">Get started</button>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="onboarding-container" data-locale={locale} dir={isRtl ? 'rtl' : 'ltr'}>
       <div className="onboarding-card">
         <header className="onboarding-card__header">
-          <div className="brand" aria-label="Max">
-            <span className="onboarding-brand-symbol"><img alt="" src={maxLogoReference} /></span>
-            <strong className="onboarding-brand-name">MAX</strong>
-            <small className="onboarding-brand-version">v0.2.8</small>
-          </div>
-          <div className="onboarding-steps-indicator" aria-label={`Step ${step} of 5`}>
-            {[1, 2, 3, 4, 5].map((i) => (
-              <span
-                key={i}
-                className={`step-dot ${step === i ? 'step-dot--active' : step > i ? 'step-dot--completed' : ''}`}
-              />
-            ))}
+          <div className="brand" aria-label="Max" role="img">
+            <img alt="Max" className="onboarding-brand-logo" src={maxLogoReference} />
           </div>
           {preview && onClose && <Button onClick={onClose}>{locale === 'ar' ? 'إغلاق المعاينة' : 'Close preview'}</Button>}
         </header>
@@ -113,34 +126,66 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
           {finishError && <p className="form-error" role="alert">{finishError}</p>}
           {/* STEP 1: LANGUAGE */}
           {step === 1 && (
-            <div className="onboarding-step">
+            <div
+              className="onboarding-step"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  setStep(2);
+                }
+              }}
+            >
               <p className="eyebrow">{onboardingCopy(locale, 'onboardingTitle')}</p>
-              <h2>{onboardingCopy(locale, 'languageTitle')}</h2>
+              <div className="language-heading"><Globe2 aria-hidden="true" size={18} /><h2>{onboardingCopy(locale, 'languageTitle')}</h2></div>
               <p className="step-subtitle">{onboardingCopy(locale, 'languageSubtitle')}</p>
 
-              <div className="choice-grid choice-grid--large" role="radiogroup">
+              <div className="language-list" role="radiogroup">
                 <button
                   aria-checked={locale === 'en'}
-                  className="choice-card choice-card--large"
+                  autoFocus={locale === 'en'}
+                  className="language-item"
                   data-selected={locale === 'en'}
                   onClick={() => handleLanguageChange('en')}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleLanguageChange('en');
+                      if (e.key === 'Enter') setStep(2);
+                    } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      handleLanguageChange('ar');
+                    }
+                  }}
                   role="radio"
+                  tabIndex={0}
                   type="button"
                 >
-                  <span className="choice-card__title">English</span>
-                  <small>Left-to-right interface</small>
+                  <span className="language-item__identity"><span className="language-item__monogram">EN</span><span><span className="language-item__title" lang="en">English</span><span className="language-item__native">English</span></span></span>
+                  <span className="language-item__selection"><span className="language-item__meta">Left-to-right</span>{locale === 'en' && <Check aria-hidden="true" size={17} />}</span>
                 </button>
 
                 <button
                   aria-checked={locale === 'ar'}
-                  className="choice-card choice-card--large"
+                  autoFocus={locale === 'ar'}
+                  className="language-item"
                   data-selected={locale === 'ar'}
                   onClick={() => handleLanguageChange('ar')}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleLanguageChange('ar');
+                      if (e.key === 'Enter') setStep(2);
+                    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      handleLanguageChange('en');
+                    }
+                  }}
                   role="radio"
+                  tabIndex={0}
                   type="button"
                 >
-                  <span className="choice-card__title">العربية</span>
-                  <small>واجهة من اليمين إلى اليسار</small>
+                  <span className="language-item__identity"><span className="language-item__monogram" lang="en">AR</span><span><span className="language-item__title" lang="ar">العربية</span><span className="language-item__native">Arabic</span></span></span>
+                  <span className="language-item__selection"><span className="language-item__meta">من اليمين لليسار</span>{locale === 'ar' && <Check aria-hidden="true" size={17} />}</span>
                 </button>
               </div>
             </div>
@@ -148,7 +193,15 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
 
           {/* STEP 2: SHOP NAME */}
           {step === 2 && (
-            <div className="onboarding-step">
+            <div
+              className="onboarding-step"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && shopName.trim()) {
+                  e.preventDefault();
+                  setStep(3);
+                }
+              }}
+            >
               <p className="eyebrow">
                 {onboardingCopy(locale, 'step')} 2 {onboardingCopy(locale, 'stepOf')} 5
               </p>
@@ -162,6 +215,12 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
                     className="field__input--large"
                     maxLength={120}
                     onChange={(event) => setShopName(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' && shopName.trim()) {
+                        event.preventDefault();
+                        setStep(3);
+                      }
+                    }}
                     placeholder={onboardingCopy(locale, 'shopNameHint')}
                     required
                     value={shopName}
@@ -173,67 +232,60 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
 
           {/* STEP 3: BLUEPRINT */}
           {step === 3 && (
-            <div className="onboarding-step">
+            <div
+              className="onboarding-step"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  setStep(4);
+                }
+              }}
+            >
               <p className="eyebrow">
                 {onboardingCopy(locale, 'step')} 3 {onboardingCopy(locale, 'stepOf')} 5
               </p>
               <h2>{onboardingCopy(locale, 'chooseBlueprintTitle')}</h2>
               <p className="step-subtitle">{onboardingCopy(locale, 'chooseBlueprintSubtitle')}</p>
 
-              <label className="field onboarding-template-picker">
-                <span>{locale === 'ar' ? 'قالب مساحة العمل' : 'Workspace template'}</span>
-                <Select className="field__input--large" onChange={(event) => setBlueprintChoice(event.target.value as BlueprintOption)} value={blueprintChoice}>
-                  <option value="phone">{locale === 'ar' ? 'متجر الهواتف — موصى به' : 'Phone Shop — Recommended'}</option>
-                  <option value="blank">{onboardingCopy(locale, 'blankTitle')}</option>
-                  <option value="custom">{onboardingCopy(locale, 'importCustomTitle')}</option>
-                </Select>
-              </label>
-
-              <div className="template-preview-card">
-                <strong>{blueprintChoice === 'phone' ? onboardingCopy(locale, 'phoneShopTitle') : blueprintChoice === 'blank' ? onboardingCopy(locale, 'blankTitle') : onboardingCopy(locale, 'importCustomTitle')}</strong>
-                <p>{blueprintChoice === 'phone'
-                  ? (locale === 'ar' ? 'الأصناف والأجهزة والأشخاص والحسابات والمعاملات، طرق الدفع المصرية، الرسوم، المخزون، عروض اليوم والأسبوع والشهر، وصفحات وعمليات جاهزة.' : 'Items and devices, people, accounts, transactions, Egyptian payment methods, fees, inventory, day/week/month views, pages, and ready operations.')
-                  : blueprintChoice === 'blank' ? onboardingCopy(locale, 'blankSubtitle') : onboardingCopy(locale, 'importCustomSubtitle')}</p>
-              </div>
-
-              {blueprintChoice === 'phone' && (
+              <div className="choice-grid--large" role="radiogroup">
                 <button
-                  aria-checked={includeDemoData}
-                  className="choice-card choice-card--row onboarding-demo-toggle"
-                  data-selected={includeDemoData}
-                  onClick={() => setIncludeDemoData((enabled) => !enabled)}
-                  role="checkbox"
+                  aria-checked={template === 'blank'}
+                  className="choice-card--large"
+                  data-selected={template === 'blank'}
+                  onClick={() => { setTemplate('blank'); setBlueprint(undefined); setBlueprintError(undefined); }}
+                  role="radio"
                   type="button"
                 >
-                  <div className="choice-card__icon"><Sparkles aria-hidden="true" size={22} /></div>
-                  <div>
-                    <strong className="choice-card__title">{locale === 'ar' ? 'إضافة بيانات تجريبية' : 'Add demo workspace data'}</strong>
-                    <p className="choice-card__desc">{locale === 'ar' ? 'حسابات وأصناف وأشخاص ومعاملات وصفحات جاهزة للاستكشاف.' : 'Prefill accounts, items, people, transactions, views, and custom pages.'}</p>
-                  </div>
+                  <strong>{onboardingCopy(locale, 'blankTitle')}</strong>
+                  <p>{onboardingCopy(locale, 'blankSubtitle')}</p>
                 </button>
-              )}
 
-              {blueprintChoice === 'custom' && (
-                <div className="custom-blueprint-upload">
-                  <label className="button button--secondary">
-                    {onboardingCopy(locale, 'selectFile')}
-                    <input accept=".json,.max-blueprint.json" onChange={(event) => void handleCustomFile(event)} style={{ display: 'none' }} type="file" />
-                  </label>
-                  {customBlueprint && (
-                    <p className="form-success">
-                      <CheckCircle2 aria-hidden="true" size={16} />
-                      {customBlueprint.name} ({customBlueprint.properties.item.length} item props, {customBlueprint.properties.person.length} person props)
-                    </p>
-                  )}
-                  {customFileError && <p className="form-error">{customFileError}</p>}
-                </div>
-              )}
+                <label
+                  aria-checked={template === 'custom'}
+                  className="choice-card--large"
+                  data-selected={template === 'custom'}
+                  role="radio"
+                >
+                  <strong>{locale === 'ar' ? 'استيراد مخطط' : 'Import Blueprint'}</strong>
+                  <p>{blueprint ? blueprint.name : locale === 'ar' ? 'ابدأ من ملف مخطط موجود.' : 'Start from an existing blueprint file.'}</p>
+                  <input accept=".json,.max-blueprint.json" onChange={(e) => void handleFileSelect(e)} style={{ display: 'none' }} type="file" />
+                </label>
+              </div>
+              {blueprintError && <p className="form-error" style={{ marginTop: '12px' }}>{blueprintError}</p>}
             </div>
           )}
 
           {/* STEP 4: BACKUP SCHEDULE */}
           {step === 4 && (
-            <div className="onboarding-step">
+            <div
+              className="onboarding-step"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  setStep(5);
+                }
+              }}
+            >
               <p className="eyebrow">
                 {onboardingCopy(locale, 'step')} 4 {onboardingCopy(locale, 'stepOf')} 5
               </p>
@@ -297,80 +349,65 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
 
           {/* STEP 5: SUMMARY & FINISH */}
           {step === 5 && (
-            <div className="onboarding-step onboarding-step--summary">
-              <div className="summary-icon-glow">
-                <Sparkles aria-hidden="true" size={38} />
-              </div>
+            <div
+              className="onboarding-step onboarding-step--summary"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && acceptedTerms && !submitting) {
+                  e.preventDefault();
+                  void handleFinish(e);
+                }
+              }}
+            >
               <p className="eyebrow">{onboardingCopy(locale, 'readyTitle')}</p>
               <h2>{shopName.trim() || 'My Shop'}</h2>
               <p className="step-subtitle">{onboardingCopy(locale, 'readySubtitle')}</p>
 
-              <Terms locale={locale} />
-              <label className="terms-acceptance"><input type="checkbox" checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} />{locale === 'ar' ? 'قرأت ووافقت على الشروط والأحكام' : 'I have read and agree to the Terms & Conditions'}</label>
+              <Terms locale={locale} onScrollToBottom={() => setHasReadTerms(true)} />
+              <label className={`terms-acceptance ${!hasReadTerms ? 'terms-acceptance--disabled' : ''}`}>
+                <input
+                  checked={acceptedTerms}
+                  disabled={!hasReadTerms}
+                  onChange={(event) => setAcceptedTerms(event.target.checked)}
+                  type="checkbox"
+                />
+                {locale === 'ar' ? 'قرأت ووافقت على الشروط والأحكام' : 'I have read and agree to the Terms & Conditions'}
+              </label>
               <div className="assembly-badge-list">
-                {blueprintChoice === 'phone' ? (
-                  <>
-                    <div className="assembly-badge">
-                      <CheckCircle2 aria-hidden="true" size={16} />
-                      <span>{locale === 'ar' ? '٦ قواعد مترابطة وقوالب للسجلات والصفحات' : '6 relational databases with record and page templates'}</span>
-                    </div>
-                    {includeDemoData && (
-                      <div className="assembly-badge">
-                        <Sparkles aria-hidden="true" size={16} />
-                        <span>{locale === 'ar' ? 'بيانات وصفحات تجريبية جاهزة' : 'Demo data and custom pages ready'}</span>
-                      </div>
-                    )}
-                    <div className="assembly-badge">
-                      <CheckCircle2 aria-hidden="true" size={16} />
-                      <span>{locale === 'ar' ? 'عروض اليوم والأسبوع والشهر بحسابات من قاعدة البيانات' : 'Database-backed day, week, and month views'}</span>
-                    </div>
-                    <div className="assembly-badge">
-                      <CheckCircle2 aria-hidden="true" size={16} />
-                      <span>{locale === 'ar' ? 'بيع سريع وطرق دفع ورسوم قابلة للتعديل' : 'Quick Sale, payment methods, and editable fees'}</span>
-                    </div>
-                  </>
-                ) : blueprintChoice === 'custom' && selectedBlueprint ? (
-                  <div className="assembly-badge"><CheckCircle2 aria-hidden="true" size={16} /><span>{selectedBlueprint.name}</span></div>
-                ) : (
-                  <div className="assembly-badge">
-                    <CheckCircle2 aria-hidden="true" size={16} />
-                    <span>{onboardingCopy(locale, 'blankTitle')}</span>
-                  </div>
-                )}
+                <div className="assembly-badge">
+                  <CheckCircle2 aria-hidden="true" size={16} />
+                  <span>{onboardingCopy(locale, 'blankTitle')}</span>
+                </div>
               </div>
             </div>
           )}
+
+          <div className="onboarding-actions onboarding-actions--centered">
+            <button
+              className="apple-button"
+              disabled={
+                (step === 2 && !shopName.trim()) ||
+                (step === 5 && (!acceptedTerms || submitting))
+              }
+              onClick={(e) => {
+                if (step < 5) setStep((s) => s + 1);
+                else void handleFinish(e);
+              }}
+              type="button"
+            >
+              {step < 5 ? onboardingCopy(locale, 'continue') : onboardingCopy(locale, 'enterWorkspace')}
+            </button>
+
+            {step > 1 && (
+              <button
+                className="onboarding-back-btn"
+                onClick={() => setStep((s) => s - 1)}
+                type="button"
+              >
+                {onboardingCopy(locale, 'previous')}
+              </button>
+            )}
+          </div>
         </main>
-
-        <footer className="onboarding-card__footer">
-          {step > 1 ? (
-            <Button icon={<PrevIcon aria-hidden="true" size={16} />} onClick={() => setStep((s) => s - 1)}>
-              {onboardingCopy(locale, 'previous')}
-            </Button>
-          ) : (
-            <div />
-          )}
-
-          {step < 5 ? (
-            <Button
-              disabled={(step === 2 && !shopName.trim()) || (step === 3 && blueprintChoice === 'custom' && !customBlueprint)}
-              icon={<NextIcon aria-hidden="true" size={16} />}
-              onClick={() => setStep((s) => s + 1)}
-              variant="primary"
-            >
-              {onboardingCopy(locale, 'continue')}
-            </Button>
-          ) : (
-            <Button
-              disabled={!acceptedTerms || submitting || (blueprintChoice === 'custom' && !customBlueprint)}
-              icon={<Sparkles aria-hidden="true" size={16} />}
-              onClick={(e) => void handleFinish(e)}
-              variant="primary"
-            >
-              {onboardingCopy(locale, 'enterWorkspace')}
-            </Button>
-          )}
-        </footer>
       </div>
     </div>
   );

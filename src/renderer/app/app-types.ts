@@ -1,5 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import type { NotionBlock } from '../ui/notion-block-editor';
+import type { PageProperty } from '../pages/page-properties';
 
 export type AppPage =
   | 'accounts'
@@ -13,6 +14,7 @@ export type AppPage =
   | (string & {});
 
 export type CustomPage = Readonly<{
+  properties?: readonly PageProperty[];
   blocks: readonly NotionBlock[];
   createdAt: string;
   icon: string;
@@ -34,7 +36,8 @@ export type EngineStatus = 'checking' | 'ready' | 'unavailable';
 
 export type SettingsSectionId =
   | 'settings-general'
-  | 'settings-pricing'
+  | 'settings-quick-actions'
   | 'settings-appearance'
   | 'settings-backup'
-  | 'settings-archive';
+  | 'settings-archive'
+  | 'settings-danger';

@@ -1,10 +1,14 @@
+import { useWorkspaceDisplay } from './workspace-display-preferences';
 import { useState } from 'react';
+import { PageConnections } from './page-connections';
 
 import type { CustomPage } from '../app/app-types';
 import type { Locale } from '../app/i18n';
 import { IconPickerDialog } from '../ui/icon-picker-dialog';
 import { NotionBlockEditor, type NotionBlock } from '../ui/notion-block-editor';
 import { PageIconRenderer } from '../ui/page-icon-renderer';
+import { PageProperties } from './page-properties';
+import '../databases/database.css';
 
 type CustomPageViewProps = Readonly<{
   isHome?: boolean;
@@ -21,6 +25,7 @@ export function CustomPageView({
   onWorkspaceChange,
   page,
 }: CustomPageViewProps) {
+  const [connectionsEnabled] = useWorkspaceDisplay('connections');
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
 
   function handleTitleChange(newTitle: string) {
@@ -45,7 +50,11 @@ export function CustomPageView({
       : 'Untitled';
 
   return (
-    <div className="custom-page-view">
+    <div className="custom-page-view" data-database-page={page.blocks.some((block) => block.type === 'database-view' && !!block.databaseId)} onClick={(event) => {
+      const target = event.target as HTMLElement;
+      if (!target.matches('.custom-page-view,.custom-page-content,.custom-page-header')) return;
+      event.currentTarget.querySelector('.notion-editor-canvas')?.dispatchEvent(new Event('max:focus-page-end'));
+    }}>
       {/* Page Top Banner / Icon + Title Row */}
       <div className="custom-page-header">
         <div className="custom-page-header__icon-wrap">
@@ -79,6 +88,15 @@ export function CustomPageView({
           <input
             className="custom-page-title-input"
             onChange={(e) => handleTitleChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                const firstInput = document.querySelector('.notion-editor-canvas input, .notion-editor-canvas textarea, .notion-editor-canvas [contenteditable="true"]');
+                if (firstInput instanceof HTMLElement) {
+                  firstInput.focus();
+                }
+              }
+            }}
             placeholder={defaultTitlePlaceholder}
             value={page.title}
           />
@@ -87,7 +105,17 @@ export function CustomPageView({
       </div>
 
       {/* Notion Block Document Canvas */}
-      <div className="custom-page-content">
+      <PageProperties properties={page.properties} locale={locale} onChange={(properties) => onUpdatePage(page.id, { properties })} />
+      <div
+        className="custom-page-content"
+        onClick={(e) => {
+          // Clicking the empty space around/below the editor focuses the last block
+          if (e.target === e.currentTarget) {
+            const canvas = e.currentTarget.querySelector('.notion-editor-canvas');
+            if (canvas instanceof HTMLElement) canvas.click();
+          }
+        }}
+      >
         <NotionBlockEditor
           blocks={page.blocks}
           locale={locale}
@@ -96,6 +124,7 @@ export function CustomPageView({
           parentPageId={page.id}
         />
       </div>
+      {connectionsEnabled && <PageConnections pageId={page.id} locale={locale} />}
     </div>
   );
 }

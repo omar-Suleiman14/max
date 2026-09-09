@@ -47,13 +47,13 @@ export const phoneShopBlueprint: Blueprint = {
       {
         name: 'Cost Price',
         rules: { choices: [], digitsOnly: false, minimum: 0, required: false, unique: false },
-        type: 'money',
+        type: 'number',
       },
       {
         name: 'Selling Price',
         rules: { choices: [], digitsOnly: false, minimum: 0, required: false, unique: false },
         semanticRole: 'PRICE',
-        type: 'money',
+        type: 'number',
       },
       {
         name: 'Stock',

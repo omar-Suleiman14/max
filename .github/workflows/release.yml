@@ -2,9 +2,8 @@ name: Release builds
 
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - v*
+  release:
+    types: [published]
 
 permissions:
   contents: write
@@ -31,6 +30,11 @@ jobs:
 
       - name: Install
         run: npm ci --ignore-scripts
+
+      - name: Validate stable release version
+        if: github.event_name == 'release' && !github.event.release.prerelease
+        shell: bash
+        run: node -e 'if (process.env.GITHUB_REF_NAME !== "v" + require("./package.json").version) process.exit(1)'
 
       - name: Prepare trusted build runtimes
         run: npm run setup:runtime
@@ -107,8 +111,11 @@ jobs:
 
   publish:
     name: Publish GitHub release
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'release' && !github.event.release.prerelease
     needs: [native, flatpak]
+    concurrency:
+      group: max-stable-update-feed
+      cancel-in-progress: false
     runs-on: ubuntu-latest
 
     steps:
@@ -131,7 +138,16 @@ jobs:
             echo "No release artifacts were downloaded." >&2
             exit 1
           fi
-          gh release create "$GITHUB_REF_NAME" "${files[@]}" \
-            --generate-notes \
-            --title "Max $GITHUB_REF_NAME" \
-            --verify-tag
+          gh release upload "$GITHUB_REF_NAME" "${files[@]}"
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Advance Cloudflare update feed
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/publish-updates.cjs artifacts

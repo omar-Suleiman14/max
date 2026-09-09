@@ -4,7 +4,7 @@ import type { WorkspaceProperty, WorkspaceRecord } from '../../shared/property-c
 import { createExcelWorkbook } from './excel-export';
 
 it('exports typed numbers, Arabic labels, safe text, and more than a screen of rows', () => {
-  const properties = [{ id: 'price', name: 'السعر', type: 'money' }, { id: 'state', name: 'State', type: 'select', options: [{ id: 'new', label: 'جديد' }] }] as WorkspaceProperty[];
+  const properties = [{ id: 'price', name: 'السعر', type: 'number' }, { id: 'state', name: 'State', type: 'select', options: [{ id: 'new', label: 'جديد' }] }] as WorkspaceProperty[];
   const records = Array.from({ length: 251 }, (_, i) => ({ title: i === 0 ? '=HYPERLINK("bad") & <text>' : `صنف ${i}`, properties: { price: 123.45, state: 'new' } })) as unknown as WorkspaceRecord[];
   const files = unzipSync(createExcelWorkbook('Shop/المحل', properties, records, true));
   const sheet = strFromU8(files['xl/worksheets/sheet1.xml']!);

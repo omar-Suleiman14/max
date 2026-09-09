@@ -3,6 +3,7 @@ import { valueToText } from '../value-utils';
 
 export type FormulaEvaluationContext = Readonly<{
   now?: string;
+  strict?: boolean;
   properties: Readonly<Record<string, unknown>>;
   recordTitle?: string;
 }>;
@@ -47,12 +48,12 @@ export function evaluateFormula(node: FormulaNode, context: FormulaEvaluationCon
           return (Number(left) || 0) * (Number(right) || 0);
         case '/': {
           const denom = Number(right);
-          if (!denom) return 0;
+          if (!denom) { if (context.strict) throw new Error('Division by zero'); return 0; }
           return (Number(left) || 0) / denom;
         }
         case '%': {
           const denom = Number(right);
-          if (!denom) return 0;
+          if (!denom) { if (context.strict) throw new Error('Division by zero'); return 0; }
           return (Number(left) || 0) % denom;
         }
         case '==':
@@ -75,6 +76,7 @@ export function evaluateFormula(node: FormulaNode, context: FormulaEvaluationCon
         case '||':
           return isTruthy(left) || isTruthy(right);
         default:
+          if (context.strict) throw new Error('Unsupported expression operation');
           return null;
       }
     }
@@ -202,6 +204,7 @@ export function evaluateFormula(node: FormulaNode, context: FormulaEvaluationCon
         }
 
         default:
+          if (context.strict) throw new Error('Unknown expression function');
           return null;
       }
     }

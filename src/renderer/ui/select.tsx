@@ -38,16 +38,21 @@ export function Select({ children, value, defaultValue, onChange, onBlur, onKeyD
       if (event.target instanceof Node && !trigger.current?.contains(event.target) && !popup.current?.contains(event.target)) setOpen(false);
     };
     const closeOnMove = () => setOpen(false);
+    const closeOnScroll = (event: Event) => {
+      if (event.target instanceof Node && popup.current?.contains(event.target)) return;
+      setOpen(false);
+    };
     document.addEventListener('pointerdown', close);
     window.addEventListener('resize', closeOnMove);
-    return () => { document.removeEventListener('pointerdown', close); window.removeEventListener('resize', closeOnMove); };
+    document.addEventListener('scroll', closeOnScroll, true);
+    return () => { document.removeEventListener('pointerdown', close); window.removeEventListener('resize', closeOnMove); document.removeEventListener('scroll', closeOnScroll, true); };
   }, [open]);
 
   useEffect(() => { if (open) popup.current?.querySelector('[data-active="true"]')?.scrollIntoView?.({ block: 'nearest' }); }, [active, open]);
 
   function show() {
     const rect = trigger.current?.getBoundingClientRect();
-    if (!rect) return;
+    if (!rect || props.disabled) return;
     const below = window.innerHeight - rect.bottom - 12;
     const height = Math.min(280, Math.max(below, rect.top - 12));
     const width = Math.min(Math.max(rect.width, 160), window.innerWidth - 16);
@@ -91,7 +96,7 @@ export function Select({ children, value, defaultValue, onChange, onBlur, onKeyD
       <span>{selected?.label ?? '—'}</span><ChevronDown aria-hidden="true" size={14} />
     </button>
     {props.name && <input name={props.name} type="hidden" value={selected?.value ?? ''} />}
-    {open && createPortal(<div aria-label={props['aria-label'] ?? label} className="max-select-popup" id={id} onMouseDown={(event) => event.preventDefault()} ref={popup} role="listbox" style={position}>
+    {open && createPortal(<div aria-label={props['aria-label'] ?? label} className="max-select-popup" dir={trigger.current ? getComputedStyle(trigger.current).direction : undefined} id={id} onMouseDown={(event) => event.preventDefault()} ref={popup} role="listbox" style={position}>
       {options.map((option, index) => <div aria-disabled={option.disabled || undefined} aria-selected={option.value === selected?.value} className="max-select-option" data-active={index === active} id={`${id}-${index}`} key={`${option.value}-${index}`} onClick={(event) => { event.preventDefault(); event.stopPropagation(); choose(index); }} onMouseMove={() => { if (!option.disabled) setActive(index); }} role="option">
         <span>{option.label}</span>{option.value === selected?.value && <Check aria-hidden="true" size={14} />}
       </div>)}

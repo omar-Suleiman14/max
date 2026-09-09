@@ -1,9 +1,26 @@
+import { legacyRetailMigrationTemplate } from './legacy-retail-migration';
 import { describe, expect, it } from 'vitest';
 
 import { DatabaseService } from './database-service';
 import { phoneShopBlueprint } from '../../shared/starter-blueprints';
 
 describe('Max v0.2.0 Core Workspace Integration Tests', () => {
+  it('persists page content and carries it into new pages through templates', () => {
+    const db = new DatabaseService(':memory:');
+    db.initialize();
+    try {
+      const database = db.databases.createDatabase({ title: 'Projects' });
+      const page = db.records.createRecord({ databaseId: database.id, title: 'Brief' });
+      const contentJson = JSON.stringify([{ id: 'note', type: 'text', content: 'Define acceptance criteria.' }]);
+      db.records.updateRecord(page.id, { contentJson });
+      const saved = db.records.getRecord(page.id)!;
+      expect(saved.contentJson).toBe(contentJson);
+      const template = db.recordTemplates.create({ databaseId: database.id, name: 'Brief template', contentJson: saved.contentJson! });
+      const copy = db.records.createRecord({ databaseId: database.id, title: 'New brief', templateId: template.id });
+      expect(copy.contentJson).toBe(contentJson);
+      expect(db.records.getRecord(page.id)?.contentJson).toBe(contentJson);
+    } finally { db.close(); }
+  });
   function createTestDb(): DatabaseService {
     const db = new DatabaseService(':memory:');
     db.initialize();
@@ -11,6 +28,27 @@ describe('Max v0.2.0 Core Workspace Integration Tests', () => {
   }
 
   describe('Nodes & Hierarchy', () => {
+    it('archives and restores an owned database subtree without restoring previously trashed pages or linked sources', () => {
+      const db = createTestDb();
+      try {
+        const page = db.workspace.createNode({ kind: 'page', title: 'Research' });
+        const owned = db.databases.createDatabase({ title: 'Observations', parentNodeId: page.id });
+        const linked = db.databases.createDatabase({ title: 'Shared references' });
+        const record = db.records.createRecord({ databaseId: owned.id, title: 'A finding' });
+        const old = db.workspace.createNode({ kind: 'page', title: 'Earlier draft', parentNodeId: page.id });
+        db.workspace.archiveNode(old.id);
+        db.workspace.updateNode(page.id, { contentJson: JSON.stringify({ blocks: [{ type: 'database-view', databaseId: linked.id }] }) });
+        db.workspace.archiveNode(page.id);
+        expect(db.workspace.getNavigation().databases.map((item) => item.id)).toEqual([linked.id]);
+        expect(db.records.getRecord(record.id)?.archivedAt).not.toBeNull();
+        db.workspace.restoreNode(page.id);
+        expect(db.workspace.getNode(page.id)?.archivedAt).toBeNull();
+        expect(db.workspace.getNavigation().databases.map((item) => item.id)).toContain(owned.id);
+        expect(db.records.getRecord(record.id)?.archivedAt).toBeNull();
+        expect(db.workspace.getNode(old.id)?.archivedAt).not.toBeNull();
+        expect(db.workspace.getNode(linked.id)?.archivedAt).toBeNull();
+      } finally { db.close(); }
+    });
     it('creates pages and databases with order keys and builds navigation', () => {
       const db = createTestDb();
 
@@ -70,9 +108,9 @@ describe('Max v0.2.0 Core Workspace Integration Tests', () => {
       const priceProp = db.properties.createProperty({
         databaseId: createdDb.id,
         name: 'Selling Price',
-        type: 'money',
+        type: 'number',
       });
-      expect(priceProp.type).toBe('money');
+      expect(priceProp.type).toBe('number');
 
       // Add Category Select property
       const categoryProp = db.properties.createProperty({
@@ -407,7 +445,7 @@ describe('Max v0.2.0 Core Workspace Integration Tests', () => {
     it('imports full Retail Template and queries records via Universal FTS5 Search', () => {
       const db = createTestDb();
 
-      const template = db.workspaceTemplates.getRetailTemplate('en');
+      const template = legacyRetailMigrationTemplate('en');
       const importResult = db.workspaceTemplates.importBlueprintV2(template);
 
       expect(importResult.databaseCount).toBeGreaterThan(3);
@@ -440,17 +478,7 @@ describe('Max v0.2.0 Core Workspace Integration Tests', () => {
       expect(templatedRecord.icon).toBe('📱');
       expect(templatedRecord.contentJson).toContain('Device details');
 
-      const accountDb = importResult.databases.find(({ key }) => key === 'db_accounts')!;
-      const peopleDb = importResult.databases.find(({ key }) => key === 'db_people')!;
-      const account = db.records.createRecord({ databaseId: accountDb.id, title: 'Vodafone Cash' });
-      const customer = db.records.createRecord({ databaseId: peopleDb.id, title: 'Ahmed' });
-      const quickSale = db.workflows.listWorkflows().find(({ name }) => name === 'Quick Sale')!;
-      const saleResult = db.workflows.execute({ inputs: { account: account.id, date: today, fee: 7, person: customer.id, product: templatedRecord.id, quantity: 2, reference: 'SALE-001', unitPrice: 150 }, workflowId: quickSale.id });
-      expect(saleResult.status).toBe('completed');
-      const createdTransaction = db.records.getRecord(saleResult.createdRecordIds[0]!)!;
-      expect(createdTransaction.properties[amount.id]).toBe(300);
-      expect(createdTransaction.properties[transactionSchema.properties.find(({ name }) => name === 'Total Fee')!.id]).toBe(7);
-      expect(createdTransaction.properties[transactionSchema.properties.find(({ name }) => name === 'Net Amount')!.id]).toBe(293);
+      expect(db.workflows.listWorkflows()).toEqual([]);
 
       // Create a product record
       const prodDb = importResult.databases.find((d) => d.key === 'db_products')!;
@@ -633,7 +661,7 @@ describe('Max v0.2.0 Core Workspace Integration Tests', () => {
 
 it('validates workflow numeric input before writes and rejects archived workflows',()=>{
   const db=new DatabaseService(':memory:');db.initialize();
-  const workflow=db.workflows.createWorkflow({name:'Fee check',kind:'custom',inputSchema:{fields:[{key:'amount',label:'Amount',type:'money',required:true}]},steps:[{type:'CALCULATE_FEES',config:{}}]});
+  const workflow=db.workflows.createWorkflow({name:'Numeric check',kind:'custom',inputSchema:{fields:[{key:'amount',label:'Amount',type:'number',required:true}]},steps:[{type:'VALIDATE',config:{condition:'amount >= 0',errorMessage:'Value must be non-negative.'}}]});
   expect(()=>db.workflows.execute({workflowId:workflow.id,inputs:{amount:''}})).toThrow('required');
   expect(()=>db.workflows.execute({workflowId:workflow.id,inputs:{amount:'abc'}})).toThrow('finite');
   expect(()=>db.workflows.execute({workflowId:workflow.id,inputs:{amount:-5}})).toThrow('non-negative');

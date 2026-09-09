@@ -190,13 +190,13 @@ export function TemplateEditor({
                         onChange={(e) =>
                           setDefault(
                             propId,
-                            property.type === 'number' || property.type === 'money'
+                            property.type === 'number'
                               ? e.target.value === '' ? undefined : Number(e.target.value)
                               : e.target.value || undefined,
                           )
                         }
                         placeholder="Default value"
-                        type={property.type === 'number' || property.type === 'money' ? 'number' : 'text'}
+                        type={property.type === 'number' ? 'number' : 'text'}
                         value={defaults[propId] === undefined ? '' : String(defaults[propId])}
                       />
                     )}

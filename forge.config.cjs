@@ -60,18 +60,9 @@ const config = {
     icon: join(__dirname, 'assets', 'max'),
     electronZipDir: join(__dirname, '.cache', 'electron-zips'),
     executableName: process.platform === 'linux' ? 'max-shop-os' : 'max',
-    ignore: [
-      /^\/(?:\.cache|\.npm-cache|artifacts|backups|out)(?:\/|$)/,
-      /^\/\.env(?:\.|$)/,
-      /^\/(?:\.github|docs|scripts|src|worker)(?:\/|$)/,
-      /^\/node_modules\/(?:\.cache|\.vite)(?:\/|$)/,
-      /^\/node_modules\/\.package-lock\.json$/,
-      // Vite bundles every runtime dependency into main, preload, and renderer
-      // output. Shipping node_modules duplicated ~47 MiB in app.asar.
-      /^\/node_modules(?:\/|$)/,
-      /^\/(?:AGENTS\.md|README\.md|eslint\.config\.mjs|forge\.config\.cjs|index\.html|tsconfig[^/]*|vite\.[^/]*|vitest\.[^/]*)$/,
-      /^\/(?:\.editorconfig|\.gitattributes|\.gitignore|\.npmrc|\.nvmrc)$/,
-    ],
+    // Runtime dependencies are bundled by Vite. Ship only the app payload,
+    // never downloaded releases, workspace files, scratch scripts, or build logs.
+    ignore: [/^\/(?!(?:\.vite|assets)(?:\/|$)|package\.json$)/],
   },
   rebuildConfig: {},
   makers: [

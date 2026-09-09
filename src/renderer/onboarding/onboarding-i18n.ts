@@ -36,7 +36,7 @@ const copy = {
     readySubtitle: 'Your workspace is ready.',
     readyTitle: 'Setup complete',
     selectFile: 'Select JSON file',
-    shopNameHint: 'e.g., Al-Amal Telecom, Downtown Phones',
+    shopNameHint: 'e.g., my workspace',
     shopNameRequired: 'Enter a shop name between 1 and 120 characters.',
     shopNameSubtitle: 'Enter your business or shop name.',
     shopNameTitle: 'Shop name',

@@ -1,9 +1,16 @@
-import { Select } from '../ui/select';
+import { OptionValue } from './OptionValue';
+import { IconPickerDialog } from '../ui/icon-picker-dialog';
+import { PageIconRenderer } from '../ui/page-icon-renderer';
+import { RelationValue } from './RelationValue';
+import { PropertyEditor } from './PropertyEditor';
+import { generateOrderKey } from '../../shared/order-key';
+import { GripVertical, Plus } from 'lucide-react';
+import { MultiSelectValue } from './MultiSelectValue';
+
 import {
   Calendar,
   CheckSquare,
   CircleDot,
-  DollarSign,
   Hash,
   Link2,
   List,
@@ -11,21 +18,23 @@ import {
   Trash2,
   Type,
   X,
+  Copy,
+  File,
+  Maximize2,
 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 import type { Locale } from '../app/i18n';
 import type { DatabaseSchema } from '../../shared/database-contract';
-import type { WorkspaceProperty, WorkspaceRecord, WorkspaceRecordPatch } from '../../shared/property-contract';
+import type { WorkspaceRecord, WorkspaceRecordPatch } from '../../shared/property-contract';
 import { NotionBlockEditor, type NotionBlock } from '../ui/notion-block-editor';
-import { RelationPicker } from './RelationPicker';
 
 type RecordDrawerProps = Readonly<{
   isOpen: boolean;
   locale?: Locale;
+  pageMode?: 'side' | 'center' | 'full';
   onArchive: (recordId: string) => Promise<void>;
   onClose: () => void;
-  onUpdate: (recordId: string, patch: WorkspaceRecordPatch) => Promise<void>;
   record: WorkspaceRecord | null;
   schema: DatabaseSchema | null;
 }>;
@@ -41,114 +50,136 @@ function formatUnknown(value: unknown): string {
 export function RecordDrawer({
   isOpen,
   locale = 'en',
+  pageMode = 'center',
   onArchive,
   onClose,
-  onUpdate,
   record,
-  schema,
+  schema: sourceSchema,
 }: RecordDrawerProps) {
+  const [localSchema, setLocalSchema] = useState<DatabaseSchema | null>(null);
+  const schema = localSchema ?? sourceSchema;
+  const [addingProperty, setAddingProperty] = useState(false);
+  const [dragProperty, setDragProperty] = useState<string | null>(null);
+  const [dropProperty, setDropProperty] = useState<string | null>(null);
+  async function moveProperty(source: string, target: string) {
+    if (!schema || source === target) return;
+    const remaining = schema.properties.filter((property) => property.id !== source);
+    const index = remaining.findIndex((property) => property.id === target);
+    const moved = schema.properties.find((property) => property.id === source);
+    if (index < 0 || !moved) return;
+    const positionKey = generateOrderKey(remaining[index - 1]?.positionKey, remaining[index]!.positionKey);
+    const result = await window.maxApi.workspace.updateProperty(source, { positionKey });
+    if (!result.ok) { setSaveError(result.error.message); return; }
+    remaining.splice(index, 0, { ...moved, positionKey });
+    setLocalSchema({ ...schema, properties: remaining });
+    window.dispatchEvent(new Event('max:workspace-changed'));
+  }
+  const [icon, setIcon] = useState(record?.icon ?? '');
+  const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const [title, setTitle] = useState(record?.title || '');
   const [properties, setProperties] = useState<Record<string, unknown>>(() => ({ ...(record?.properties || {}) }));
-  const [activeRelationProp, setActiveRelationProp] = useState<WorkspaceProperty | null>(null);
-  const [relationPickerOpen, setRelationPickerOpen] = useState(false);
   const [blocks, setBlocks] = useState<readonly NotionBlock[]>([]);
+  const [saveError, setSaveError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [displayMode, setDisplayMode] = useState(pageMode);
+  const fullPage = displayMode === 'full';
+  const [templateName, setTemplateName] = useState<string | null>(null);
+  const [templateSaved, setTemplateSaved] = useState(false);
+  const saveQueue = useRef(Promise.resolve());
+  const pendingContent = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingPatch = useRef<WorkspaceRecordPatch | null>(null);
+  const failedPatch = useRef<WorkspaceRecordPatch | null>(null);
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const save = (patch: WorkspaceRecordPatch) => {
+    if (!record) return Promise.resolve();
+    const id = record.id;
+    setSaving(true);
+    saveQueue.current = saveQueue.current.then(async () => {
+      const result = await window.maxApi.workspace.updateRecord(id, patch);
+      if (!result.ok) throw new Error(result.error.message);
+      if (failedPatch.current === patch) failedPatch.current = null;
+      if (!failedPatch.current) setSaveError('');
+      window.dispatchEvent(new Event('max:workspace-changed'));
+    }).catch((cause: unknown) => { failedPatch.current = { ...failedPatch.current, ...patch, properties: { ...failedPatch.current?.properties, ...patch.properties } }; setSaveError(cause instanceof Error ? cause.message : String(cause)); })
+      .finally(() => setSaving(false));
+    return saveQueue.current;
+  };
+  const flush = () => {
+    if (pendingContent.current) clearTimeout(pendingContent.current);
+    const patch = pendingPatch.current;
+    pendingPatch.current = null;
+    return patch ? save(patch) : saveQueue.current;
+  };
+  const close = () => { void flush().then(() => { if (!failedPatch.current) onClose(); }); };
+  const flushRef = useRef(flush);
+  flushRef.current = flush;
+  useEffect(() => () => { void flushRef.current(); }, []);
+  useEffect(() => {
+    if (!isOpen) return;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    drawerRef.current?.querySelector<HTMLInputElement>('.record-drawer__title-input')?.focus();
+    return () => { if (previous?.isConnected) previous.focus(); };
+  }, [isOpen]);
 
   useEffect(() => {
     if (record) {
+      const empty: readonly NotionBlock[] = [{ id: `content_${record.id}`, type: 'text', content: '' }];
       setTitle(record.title);
       setProperties({ ...record.properties });
       if (record.contentJson) {
         try {
           const parsed = JSON.parse(record.contentJson) as unknown;
-          if (Array.isArray(parsed)) {
-            setBlocks(parsed as readonly NotionBlock[]);
-          }
+          const content = Array.isArray(parsed) ? parsed : parsed && typeof parsed === 'object' && 'blocks' in parsed ? parsed.blocks : null;
+          setBlocks(Array.isArray(content) && content.length ? content as readonly NotionBlock[] : empty);
         } catch {
-          setBlocks([]);
+          setBlocks(empty);
         }
       } else {
-        setBlocks([]);
+        setBlocks(empty);
       }
     }
   }, [record]);
-
-  useEffect(() => {
-    if (!isOpen || !record || !schema) return;
-    const relationProperties = schema.properties.filter(
-      (property) => property.type === 'relation' && typeof property.config.relationId === 'string',
-    );
-    void Promise.all(relationProperties.map(async (property) => {
-      const relationId = property.config.relationId;
-      if (typeof relationId !== 'string') return null;
-      const related = await window.maxApi.workspace.getRelatedRecords(record.id, relationId);
-      return { ids: related.map((candidate) => candidate.id), propertyId: property.id };
-    })).then((results) => {
-      setProperties((current) => {
-        const next = { ...current };
-        for (const result of results) {
-          if (result) next[result.propertyId] = result.ids;
-        }
-        return next;
-      });
-    });
-  }, [isOpen, record, schema]);
 
   if (!isOpen || !record || !schema) return null;
 
   const handleTitleBlur = () => {
     if (title.trim() !== record.title) {
-      void onUpdate(record.id, { title: title.trim() || 'Untitled' });
+      void save({ title: title.trim() || 'Untitled' });
     }
   };
 
   const handlePropertyChange = (propertyId: string, value: unknown) => {
     const next = { ...properties, [propertyId]: value };
     setProperties(next);
-    void onUpdate(record.id, { properties: { [propertyId]: value } });
+    void save({ properties: { [propertyId]: value } });
   };
 
   const handleBlocksChange = (newBlocks: readonly NotionBlock[]) => {
     setBlocks(newBlocks);
-    void onUpdate(record.id, { contentJson: JSON.stringify(newBlocks) });
-  };
-
-  const handleLinkRecord = async (targetId: string) => {
-    if (!activeRelationProp) return;
-    const relationId = activeRelationProp.config.relationId;
-    if (!relationId || typeof relationId !== 'string') return;
-    const result = await window.maxApi.workspace.linkRecords(relationId, record.id, targetId);
-    if (!result.ok) throw new Error(result.error.message);
-    const related = await window.maxApi.workspace.getRelatedRecords(record.id, relationId);
-    setProperties((current) => ({
-      ...current,
-      [activeRelationProp.id]: related.map((candidate) => candidate.id),
-    }));
-  };
-
-  const handleUnlinkRecord = async (targetId: string) => {
-    if (!activeRelationProp) return;
-    const relationId = activeRelationProp.config.relationId;
-    if (!relationId || typeof relationId !== 'string') return;
-    const result = await window.maxApi.workspace.unlinkRecords(relationId, record.id, targetId);
-    if (!result.ok) throw new Error(result.error.message);
-    const related = await window.maxApi.workspace.getRelatedRecords(record.id, relationId);
-    setProperties((current) => ({
-      ...current,
-      [activeRelationProp.id]: related.map((candidate) => candidate.id),
-    }));
+    pendingPatch.current = { contentJson: JSON.stringify(newBlocks) };
+    if (pendingContent.current) clearTimeout(pendingContent.current);
+    pendingContent.current = setTimeout(() => { void flush(); }, 400);
   };
 
   return (
     <>
-      <div className="drawer-backdrop" onClick={onClose} role="dialog" aria-modal="true">
-        <div className="drawer-container record-drawer" onClick={(e) => e.stopPropagation()}>
+      <div className="drawer-backdrop" data-page-mode={displayMode} onClick={close} onKeyDown={(event) => { if (event.key === 'Escape') { event.stopPropagation(); if (iconPickerOpen) setIconPickerOpen(false); else if (addingProperty) setAddingProperty(false); else close(); } }} role="dialog" aria-modal="true" aria-label={record.title}>
+        <div ref={drawerRef} className="drawer-container record-drawer" data-full-page={fullPage} onClick={(e) => e.stopPropagation()} onKeyDown={(event) => {
+          if (event.key !== 'Tab') return;
+          const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button:not([disabled]),input:not([disabled]),[contenteditable=true],[tabindex="0"]')).filter((element) => element.getClientRects().length > 0);
+          const first = controls[0], last = controls.at(-1);
+          if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+          if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+        }}>
           {/* Header */}
           <div className="drawer-header">
             <div className="flex items-center gap-2">
-              <span className="badge badge-secondary text-xs">#{record.sequence}</span>
-              <span className="text-xs text-muted">Created {new Date(record.createdAt).toLocaleDateString()}</span>
+              <span className="text-xs text-muted">{schema.database.title} / {title || 'Untitled'}</span>
+              <span className="text-xs text-muted" role="status">{saving ? (locale === 'ar' ? 'جارٍ الحفظ…' : 'Saving…') : (locale === 'ar' ? 'محفوظ' : 'Saved')}</span>
             </div>
             <div className="flex items-center gap-2">
+              <button type="button" className="btn-icon" aria-label={locale === 'ar' ? 'حفظ كقالب' : 'Save as template'} onClick={() => { setTemplateSaved(false); setTemplateName(title); }}><Copy size={16} /></button>
+              <button type="button" className="btn-icon" aria-label={fullPage ? (locale === 'ar' ? 'عرض منبثق' : 'Open as popup') : (locale === 'ar' ? 'فتح كصفحة كاملة' : 'Open as full page')} onClick={() => setDisplayMode(fullPage ? 'center' : 'full')}><Maximize2 size={16} /></button>
               <button
                 type="button"
                 className="btn-icon text-danger"
@@ -160,17 +191,34 @@ export function RecordDrawer({
               >
                 <Trash2 size={16} />
               </button>
-              <button type="button" className="btn-icon" onClick={onClose} aria-label="Close">
+              <button type="button" className="btn-icon" onClick={close} aria-label="Close">
                 <X size={18} />
               </button>
             </div>
           </div>
 
-          <div className="drawer-body">
+          <div className="drawer-body" onClick={(event) => { if (event.target === event.currentTarget) event.currentTarget.querySelector('.notion-editor-canvas')?.dispatchEvent(new Event('max:focus-page-end')); }}>
+            {saveError && <p className="form-error" role="alert">{saveError} {failedPatch.current && <button type="button" className="btn" onClick={() => { if (failedPatch.current) void save(failedPatch.current); }}>{locale === 'ar' ? 'إعادة المحاولة' : 'Retry'}</button>}</p>}
+            {templateName !== null && <form className="template-save-form" onSubmit={(event) => {
+              event.preventDefault();
+              void flush().then(async () => {
+                if (failedPatch.current) return;
+                const result = await window.maxApi.workspace.saveRecordTemplate(record.id, templateName);
+                if (!result.ok) { setSaveError(result.error.message); return; }
+                setTemplateName(null); setTemplateSaved(true);
+                window.dispatchEvent(new Event('max:workspace-changed'));
+              }).catch((cause: unknown) => setSaveError(String(cause)));
+            }}><input aria-label="Template name" className="input-field" value={templateName} onChange={(event) => setTemplateName(event.target.value)} required /><button className="btn btn-primary" type="submit">{locale === 'ar' ? 'حفظ القالب' : 'Save template'}</button><button type="button" className="btn" onClick={() => setTemplateName(null)}>{locale === 'ar' ? 'إلغاء' : 'Cancel'}</button></form>}
+            {templateSaved && <p role="status">{locale === 'ar' ? 'القالب متاح في قائمة جديد.' : 'Template added to the New menu.'}</p>}
+            <div className="record-page-icon-wrap">
+              <button type="button" className="record-page-icon" aria-label={locale === 'ar' ? 'تغيير أيقونة الصفحة' : 'Change page icon'} onClick={() => setIconPickerOpen(!iconPickerOpen)}><PageIconRenderer icon={icon || 'lucide:FileText'} size={40} /></button>
+              {iconPickerOpen && <IconPickerDialog currentIcon={icon} locale={locale} onClose={() => setIconPickerOpen(false)} onSelect={(next) => { setIcon(next); setIconPickerOpen(false); void save({ icon: next || null }); }} />}
+            </div>
             {/* Record Title Input */}
             <input
               type="text"
               className="record-drawer__title-input"
+              aria-label={locale === 'ar' ? 'عنوان الصفحة' : 'Page title'}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               onBlur={handleTitleBlur}
@@ -184,12 +232,12 @@ export function RecordDrawer({
                 const value = properties[prop.id];
 
                 return (
-                  <div key={prop.id} className="record-drawer__prop-row">
+                  <div key={prop.id} className="record-drawer__prop-row" data-drag-over={dropProperty === prop.id} onDragOver={(event) => { if (dragProperty) { event.preventDefault(); setDropProperty(prop.id); } }} onDrop={(event) => { event.preventDefault(); if (dragProperty) void moveProperty(dragProperty, prop.id); setDragProperty(null); setDropProperty(null); }}>
                     <div className="record-drawer__prop-label">
+                      <button type="button" className="record-property-grip" draggable aria-label={`${locale === 'ar' ? 'تحريك' : 'Move'} ${prop.name}`} onDragStart={(event) => { setDragProperty(prop.id); event.dataTransfer.setData('text/max-property', prop.id); event.dataTransfer.effectAllowed = 'move'; }} onDragEnd={() => { setDragProperty(null); setDropProperty(null); }} onKeyDown={(event) => { if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return; event.preventDefault(); const list = schema.properties.filter((property) => property.type !== 'title'); const index = list.findIndex((property) => property.id === prop.id); if (event.key === 'ArrowUp' && list[index - 1]) void moveProperty(prop.id, list[index - 1]!.id); if (event.key === 'ArrowDown' && list[index + 1]) void moveProperty(list[index + 1]!.id, prop.id); }}><GripVertical size={13} /></button>
                       {prop.type === 'text' && <Type size={14} className="text-muted" />}
                       {prop.type === 'number' && <Hash size={14} className="text-muted" />}
-                      {prop.type === 'money' && <DollarSign size={14} className="text-muted" />}
-                      {prop.type === 'select' && <CircleDot size={14} className="text-muted" />}
+                      {['select', 'status'].includes(prop.type) && <CircleDot size={14} className="text-muted" />}
                       {prop.type === 'multi_select' && <List size={14} className="text-muted" />}
                       {prop.type === 'date' && <Calendar size={14} className="text-muted" />}
                       {prop.type === 'checkbox' && <CheckSquare size={14} className="text-muted" />}
@@ -201,7 +249,7 @@ export function RecordDrawer({
 
                     <div className="record-drawer__prop-value">
                       {/* Text */}
-                      {prop.type === 'text' && (
+                      {['text', 'email', 'phone', 'url'].includes(prop.type) && (
                         <input
                           type="text"
                           className="input-clean"
@@ -224,22 +272,6 @@ export function RecordDrawer({
                         />
                       )}
 
-                      {/* Money */}
-                      {prop.type === 'money' && (
-                        <div className="flex items-center gap-1">
-                          <input
-                            type="number"
-                            step="0.01"
-                            className="input-clean"
-                            placeholder="0.00"
-                            value={typeof value === 'number' ? value : ''}
-                            onChange={(e) =>
-                              handlePropertyChange(prop.id, e.target.value === '' ? null : Number(e.target.value))
-                            }
-                          />
-                        </div>
-                      )}
-
                       {/* Checkbox */}
                       {prop.type === 'checkbox' && (
                         <input
@@ -252,18 +284,7 @@ export function RecordDrawer({
 
                       {/* Select / Status */}
                       {['select', 'status'].includes(prop.type) && (
-                        <Select
-                          className="select-clean"
-                          value={formatUnknown(value)}
-                          onChange={(e) => handlePropertyChange(prop.id, e.target.value || null)}
-                        >
-                          <option value="">(Empty)</option>
-                          {prop.options?.map((opt) => (
-                            <option key={opt.id || opt.label} value={opt.id || opt.label}>
-                              {opt.label}
-                            </option>
-                          ))}
-                        </Select>
+                        <OptionValue property={prop} value={value} locale={locale} onChange={(next) => handlePropertyChange(prop.id, next)} />
                       )}
 
                       {/* Date */}
@@ -277,24 +298,61 @@ export function RecordDrawer({
                       )}
 
                       {/* Relation */}
-                      {prop.type === 'relation' && (
-                        <button
-                          type="button"
-                          className="btn btn-secondary btn-sm"
-                          onClick={() => {
-                            setActiveRelationProp(prop);
-                            setRelationPickerOpen(true);
-                          }}
-                        >
-                          <Link2 size={13} className="mr-1" />
-                          {Array.isArray(value) && value.length > 0 ? `${value.length} connected` : 'Connect record...'}
-                        </button>
-                      )}
+                      {prop.type === 'relation' && <RelationValue recordId={record.id} property={prop} locale={locale} />}
+                      {prop.type === 'multi_select' && <MultiSelectValue property={prop} value={value} onChange={(next) => handlePropertyChange(prop.id, next)} />}
 
-                      {/* Formula / Rollup (Read-only) */}
-                      {['formula', 'rollup'].includes(prop.type) && (
+                      {/* File */}
+                      {prop.type === 'file' && (
+                        <div className="flex flex-col gap-1 w-full">
+                          {Array.isArray(value) && value.filter((item): item is string => typeof item === 'string').map((v, idx, files) => (
+                            <div key={idx} className="flex items-center gap-2">
+                              <button type="button" className="text-sm text-primary hover:underline break-all" onClick={() => { if (typeof v === 'string') void window.maxApi.workspace.openExternal(v); }}>
+                                {typeof v === 'string' ? v.split(/[/\\]/).pop() : 'Attachment'}
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-icon text-danger"
+                                onClick={() => {
+                                  const next = [...files];
+                                  next.splice(idx, 1);
+                                  handlePropertyChange(prop.id, next.length ? next : null);
+                                }}
+                              >
+                                <X size={12} />
+                              </button>
+                            </div>
+                          ))}
+                          <label className="btn btn-sm btn-secondary w-fit cursor-pointer mt-1">
+                            <input
+                              type="file"
+                              className="sr-only"
+                              onChange={(event) => { void (async () => {
+                                const file = event.target.files?.item(0);
+                                const filePath = file && 'path' in file && typeof file.path === 'string' ? file.path : undefined;
+                                if (!filePath) return;
+                                const result = await window.maxApi.workspace.importFile(filePath);
+                                if (result.ok) {
+                                  const current = Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+                                  handlePropertyChange(prop.id, [...current, result.value]);
+                                }
+                                event.target.value = '';
+                              })(); }}
+                            />
+                            <File size={14} className="mr-1" /> {locale === 'ar' ? 'إرفاق ملف' : 'Attach file'}
+                          </label>
+                        </div>
+                      )}
+                      {/* Formula / Rollup / Auto ID (Read-only) */}
+                      {['formula', 'rollup', 'auto_id'].includes(prop.type) && (
                         <span className="badge badge-primary font-mono">
                           {value !== undefined && value !== null ? formatUnknown(value) : '—'}
+                        </span>
+                      )}
+
+                      {/* Timestamps (Read-only) */}
+                      {['created_time', 'last_edited_time'].includes(prop.type) && (
+                        <span className="text-sm text-muted font-mono">
+                          {typeof value === 'string' || typeof value === 'number' ? new Date(value).toLocaleString(locale === 'ar' ? 'ar-EG' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' }) : '—'}
                         </span>
                       )}
                     </div>
@@ -303,33 +361,26 @@ export function RecordDrawer({
               })}
             </div>
 
+            <button type="button" className="page-add-property" onClick={() => setAddingProperty(true)}><Plus size={14} />{locale === 'ar' ? 'إضافة خاصية' : 'Add a property'}</button>
+            <PropertyEditor databaseId={record.databaseId} schema={schema} isOpen={addingProperty} onClose={() => setAddingProperty(false)} onSave={async (draft) => {
+              if (!('type' in draft)) return null;
+              const result = await window.maxApi.workspace.createProperty(draft);
+              if (!result.ok) { setSaveError(result.error.message); return null; }
+              const refreshed = await window.maxApi.workspace.getDatabaseSchema(record.databaseId);
+              setLocalSchema(refreshed);
+              window.dispatchEvent(new Event('max:workspace-changed'));
+              return result.value;
+            }} />
             <hr className="divider my-6" />
 
             {/* Notion Block Page Body */}
             <div className="record-drawer__notes">
-              <h4 className="text-sm font-semibold text-muted uppercase tracking-wider mb-3">Notes &amp; Content</h4>
               <NotionBlockEditor blocks={blocks} locale={locale} onChange={handleBlocksChange} />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Relation Picker Modal */}
-      {activeRelationProp && typeof activeRelationProp.config.relationId === 'string' && (
-        <RelationPicker
-          isOpen={relationPickerOpen}
-          onClose={() => {
-            setRelationPickerOpen(false);
-            setActiveRelationProp(null);
-          }}
-          relationId={activeRelationProp.config.relationId}
-          recordId={record.id}
-          selectedTargetIds={Array.isArray(properties[activeRelationProp.id]) ? (properties[activeRelationProp.id] as string[]) : []}
-          onLink={handleLinkRecord}
-          onUnlink={handleUnlinkRecord}
-          title={`Link ${activeRelationProp.name}`}
-        />
-      )}
     </>
   );
 }

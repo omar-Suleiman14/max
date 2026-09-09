@@ -8,8 +8,6 @@ import { BlueprintService } from './blueprint-service';
 import { DemoDataService } from './demo-data-service';
 import { migrations, type Migration } from './migrations';
 import { ObjectRepository } from './object-repository';
-import { PricingRepository } from './pricing-repository';
-import { PricingCatalogRepository } from './pricing-catalog-repository';
 import { ShopMetadataRepository } from './shop-metadata-repository';
 import { TemplateRepository } from './template-repository';
 import { TransactionRepository } from './transaction-repository';
@@ -24,7 +22,6 @@ const MIGRATIONS_TABLE_SQL = `
 
 import { BackupService } from './backup-service';
 import { PersonDebtService } from './person-debt-service';
-import { QuickEntryService } from './quick-entry-service';
 import { ReconciliationRepository } from './reconciliation-repository';
 import { normalizeSearchText, SearchService } from './search-service';
 import { ViewsPagesRepository } from './views-pages-repository';
@@ -55,9 +52,6 @@ export class DatabaseService {
   readonly demoData: DemoDataService;
   readonly objects: ObjectRepository;
   readonly personDebt: PersonDebtService;
-  readonly pricing: PricingRepository;
-  readonly pricingCatalog: PricingCatalogRepository;
-  readonly quickEntry: QuickEntryService;
   readonly reconciliation: ReconciliationRepository;
   readonly search: SearchService;
   readonly shopMetadata: ShopMetadataRepository;
@@ -108,9 +102,6 @@ export class DatabaseService {
     this.transactions = new TransactionRepository(this.#database);
     this.reconciliation = new ReconciliationRepository(this.#database, this.transactions);
     this.personDebt = new PersonDebtService(this.#database, this.transactions);
-    this.pricing = new PricingRepository(this.#database);
-    this.pricingCatalog = new PricingCatalogRepository(this.#database);
-    this.quickEntry = new QuickEntryService(this.#database, this.transactions, this.pricing, this.pricingCatalog, this.accounts);
     this.viewsPages = new ViewsPagesRepository(this.#database);
     this.search = new SearchService(this.#database);
     this.objects = new ObjectRepository(this.#database);
@@ -163,7 +154,9 @@ export class DatabaseService {
       this.unitOfWork,
       this.records,
       this.relations,
-      this.pricing,
+      this.properties,
+      this.databaseQuery,
+      this.computedProperties,
     );
     this.workspaceTemplates = new WorkspaceTemplateService(
       this.unitOfWork,
@@ -174,6 +167,7 @@ export class DatabaseService {
       this.workflows,
       this.workspace,
       this.recordTemplates,
+      this.records,
     );
     this.v020Migration = new V020MigrationService(
       this.#database,

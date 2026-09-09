@@ -5,16 +5,17 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['.cache/**', '.npm-cache/**', '.vite/**', 'coverage/**', 'dist/**', 'node_modules/**', 'out/**', 'worker/**'],
+    ignores: ['Max-*/**', 'test*.js', 'test*.ts', 'recover.js', '.cache/**', '.npm-cache/**', '.vite/**', 'coverage/**', 'dist/**', 'node_modules/**', 'out/**', 'worker/**'],
   },
   eslint.configs.recommended,
   {
-    files: ['scripts/**/*.cjs', 'forge.config.cjs'],
+    files: ['scripts/**/*.cjs', 'forge.config.cjs', 'recover.js'],
     languageOptions: {
       globals: {
         __dirname: 'readonly',
         process: 'readonly',
         require: 'readonly',
+        console: 'readonly',
       },
     },
   },

@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { useEffect, useRef, type KeyboardEvent, type ReactNode } from 'react';
 
 type FocusedOverlayProps = Readonly<{
@@ -54,7 +55,7 @@ export function FocusedOverlay({ children, className = '', labelId, onClose }: F
     }
   }
 
-  return (
+  return createPortal(
     <div
       className="overlay"
       onMouseDown={(event) => {
@@ -72,6 +73,7 @@ export function FocusedOverlay({ children, className = '', labelId, onClose }: F
       >
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

@@ -7,7 +7,6 @@ export type SemanticRole = (typeof semanticRoles)[number];
 export const propertyTypes = [
   'text',
   'number',
-  'money',
   'date',
   'checkbox',
   'select',

@@ -10,3 +10,7 @@ bucket_name = "max-backups"
 
 [observability]
 enabled = true
+
+[[r2_buckets]]
+binding = "RELEASES_BUCKET"
+bucket_name = "max-releases"

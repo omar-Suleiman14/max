@@ -2,17 +2,18 @@
  * Blueprint v2 and Workspace Template contracts for Max v0.2.0.
  */
 
-import type { PropertyType } from './property-contract';
-import type { ViewLayout } from './view-contract';
+import type { PropertyType, StatusCategory } from './property-contract';
+import type { ViewLayout, PropertyViewState } from './view-contract';
 import type { FilterNode, GroupRule, SortRule } from './query-contract';
-import type { WorkflowInputField, WorkflowStep } from './workflow-contract';
+import type { WorkflowInputSchema, WorkflowStep } from './workflow-contract';
 
 export type TemplateProperty = Readonly<{
   config?: Readonly<Record<string, unknown>>;
   defaultValue?: unknown;
   key: string;
   name: string;
-  options?: readonly Readonly<{ label: string; style?: { background?: string; color?: string } }>[];
+  options?: readonly Readonly<{ key?: string; label: string; statusGroupKey?: string; style?: { background?: string; color?: string } }>[];
+  statusGroups?: readonly Readonly<{ key: string; label: string; category: StatusCategory }>[];
   required?: boolean;
   type: PropertyType;
   uniqueValue?: boolean;
@@ -26,6 +27,7 @@ export type TemplateView = Readonly<{
   layoutConfig?: Readonly<Record<string, unknown>>;
   name: string;
   propertyKeys?: readonly string[];
+  propertyState?: PropertyViewState;
   sorts?: readonly SortRule[];
 }>;
 
@@ -39,6 +41,8 @@ export type TemplateRecordTemplate = Readonly<{
 }>;
 
 export type TemplateDatabase = Readonly<{
+  parentPageKey?: string;
+  positionKey?: string;
   defaultViewKey?: string;
   icon?: string;
   key: string;
@@ -60,18 +64,31 @@ export type TemplateRelation = Readonly<{
 }>;
 
 export type TemplateWorkflow = Readonly<{
+  enabled?: boolean;
   icon?: string;
-  inputSchema: Readonly<{ fields: readonly WorkflowInputField[] }>;
+  inputSchema: WorkflowInputSchema;
   key: string;
   name: string;
   steps: readonly WorkflowStep[];
 }>;
 
 export type TemplatePage = Readonly<{
+  parentPageKey?: string;
+  positionKey?: string;
   contentJson: string;
+  /** Emoji, or a Lucide icon encoded as lucide:IconName#RRGGBB. */
   icon?: string;
   key: string;
   title: string;
+}>;
+
+export type TemplateRecord = Readonly<{
+  key: string;
+  databaseKey: string;
+  title: string;
+  icon?: string;
+  contentJson?: string;
+  properties?: Readonly<Record<string, unknown>>;
 }>;
 
 export type WorkspaceTemplateV2 = Readonly<{
@@ -81,6 +98,7 @@ export type WorkspaceTemplateV2 = Readonly<{
   name: string;
   pages?: readonly TemplatePage[];
   recordTemplates?: readonly TemplateRecordTemplate[];
+  records?: readonly TemplateRecord[];
   relations: readonly TemplateRelation[];
   version: 2;
   workflows?: readonly TemplateWorkflow[];
@@ -92,6 +110,7 @@ export type TemplateImportResult = Readonly<{
   pageCount: number;
   pages: readonly { id: string; key: string; title: string }[];
   propertyCount: number;
+  recordCount: number;
   relationCount: number;
   workflowCount: number;
 }>;

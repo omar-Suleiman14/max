@@ -1,9 +1,9 @@
-const { readdir, readFile, stat } = require('node:fs/promises');
+const { readdir, stat } = require('node:fs/promises');
 const { join, resolve } = require('node:path');
 const { gzipSync } = require('node:zlib');
+const { extractFile } = require('@electron/asar');
 
 const ROOT = resolve(__dirname, '..');
-const RENDERER_ROOT = join(ROOT, '.vite', 'renderer', 'main_window');
 const OUT_ROOT = join(ROOT, 'out');
 
 const BUDGETS = {
@@ -74,17 +74,19 @@ async function pathSize(path) {
 }
 
 async function main() {
-  const indexHtml = await readFile(join(RENDERER_ROOT, 'index.html'), 'utf8');
+  // Verify what users install; Forge can clean the intermediate Vite directory.
+  const asarFiles = await findFiles(OUT_ROOT, 'app.asar');
+  if (asarFiles.length === 0) throw new Error('Could not find a packaged app.asar under out/.');
+  const rendererRoot = join('.vite', 'renderer', 'main_window');
+  const indexHtml = extractFile(asarFiles[0], join(rendererRoot, 'index.html')).toString('utf8');
   const entryMatch = indexHtml.match(/<script[^>]+src="\.\/(assets\/index-[^"]+\.js)"/u);
 
   if (!entryMatch?.[1]) {
     throw new Error('Could not find the renderer entry script in the production index.html.');
   }
 
-  const rendererEntry = join(RENDERER_ROOT, entryMatch[1]);
-  const rendererContents = await readFile(rendererEntry);
+  const rendererContents = extractFile(asarFiles[0], join(rendererRoot, ...entryMatch[1].split('/')));
   const rendererGzipBytes = gzipSync(rendererContents).byteLength;
-  const asarFiles = await findFiles(OUT_ROOT, 'app.asar');
   const localeResources = await findLocaleResources(OUT_ROOT);
 
   if (asarFiles.length === 0) {

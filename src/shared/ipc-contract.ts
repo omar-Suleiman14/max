@@ -1,4 +1,6 @@
+import type { UpdateApi } from './update-contract';
 import type { AccountDefinition, AccountDraft } from './account-contract';
+import type { PageGraph } from './page-links';
 import type {
   BackupMetadata,
   BackupTrigger,
@@ -24,10 +26,6 @@ import type {
   PropertyDraft,
 } from './object-contract';
 import type { TemplateDefinition, TemplateDraft } from './template-contract';
-import type {
-  PricingChannel, PricingChannelDraft, PricingProfile, PricingProfileDraft, PricingProvider, PricingProviderDraft,
-  PricingQuoteInput, PricingService, PricingServiceDraft, PricingSnapshot,
-} from './pricing-contract';
 import type {
   LedgerSummary,
   TransactionDraft,
@@ -78,12 +76,16 @@ import type {
 import type {
   WorkflowExecutionInput,
   WorkflowExecutionResult,
+  WorkflowFormEvaluation,
   WorkspaceWorkflow,
   WorkspaceWorkflowDraft,
 } from './workflow-contract';
 import type { TemplateImportResult, WorkspaceTemplateV2 } from './template-v2-contract';
 
 export const IPC_CHANNELS = {
+  updateStatus: 'max:update:status',
+  updateCheck: 'max:update:check',
+  updateInstall: 'max:update:install',
   accountArchive: 'max:accounts:archive',
   accountCreate: 'max:accounts:create',
   accountList: 'max:accounts:list',
@@ -121,26 +123,6 @@ export const IPC_CHANNELS = {
   peopleForgiveDebt: 'max:people:debt:forgive',
   peopleRepayDebt: 'max:people:debt:repay',
   peopleStatement: 'max:people:statement',
-  pricingArchive: 'max:pricing:archive',
-  pricingCreate: 'max:pricing:create',
-  pricingList: 'max:pricing:list',
-  pricingQuote: 'max:pricing:quote',
-  pricingUpdate: 'max:pricing:update',
-  pricingProviderArchive: 'max:pricing:providers:archive',
-  pricingProviderCreate: 'max:pricing:providers:create',
-  pricingProviderList: 'max:pricing:providers:list',
-  pricingProviderUpdate: 'max:pricing:providers:update',
-  pricingChannelArchive: 'max:pricing:channels:archive',
-  pricingChannelCreate: 'max:pricing:channels:create',
-  pricingChannelList: 'max:pricing:channels:list',
-  pricingChannelUpdate: 'max:pricing:channels:update',
-  pricingServiceArchive: 'max:pricing:services:archive',
-  pricingServiceCreate: 'max:pricing:services:create',
-  pricingServiceList: 'max:pricing:services:list',
-  pricingServiceUpdate: 'max:pricing:services:update',
-  quickEntryGetSuggestion: 'max:quick-entry:suggestion',
-  quickEntryQuotePricing: 'max:quick-entry:pricing-quote',
-  quickEntrySubmit: 'max:quick-entry:submit',
   reconciliationCloseSession: 'max:reconciliation:session:close',
   reconciliationCurrentSession: 'max:reconciliation:session:current',
   reconciliationExpectedClosing: 'max:reconciliation:session:expected',
@@ -176,6 +158,7 @@ export const IPC_CHANNELS = {
   workspaceCreateNode: 'max:workspace:nodes:create',
   workspaceUpdateNode: 'max:workspace:nodes:update',
   workspaceArchiveNode: 'max:workspace:nodes:archive',
+  workspacePermanentlyDeleteNode: 'max:workspace:nodes:permanently-delete',
   workspaceRestoreNode: 'max:workspace:nodes:restore',
   workspaceReorderNode: 'max:workspace:nodes:reorder',
   workspaceGetDatabase: 'max:workspace:databases:get',
@@ -186,6 +169,9 @@ export const IPC_CHANNELS = {
   workspaceDuplicateDatabase: 'max:workspace:databases:duplicate',
   workspaceListProperties: 'max:workspace:properties:list',
   workspaceListRecordTemplates: 'max:workspace:record-templates:list',
+  workspaceSaveRecordTemplate: 'max:workspace:record-templates:save-from-record',
+  workspaceEditRecordTemplate: 'max:workspace:record-templates:edit',
+  workspaceArchiveRecordTemplate: 'max:workspace:record-templates:archive',
   workspaceCreateProperty: 'max:workspace:properties:create',
   workspaceUpdateProperty: 'max:workspace:properties:update',
   workspaceArchiveProperty: 'max:workspace:properties:archive',
@@ -214,9 +200,15 @@ export const IPC_CHANNELS = {
   workspaceCreateWorkflow: 'max:workspace:workflows:create',
   workspaceUpdateWorkflow: 'max:workspace:workflows:update',
   workspaceArchiveWorkflow: 'max:workspace:workflows:archive',
+  workspaceEvaluateWorkflow: 'max:workspace:workflows:evaluate',
   workspaceExecuteWorkflow: 'max:workspace:workflows:execute',
   workspaceSearch: 'max:workspace:search:query',
   workspaceImportTemplate: 'max:workspace:templates:import',
+  workspaceGetPageGraph: 'max:workspace:pages:graph',
+  workspaceOpenExternal: 'max:workspace:open-external',
+  workspaceValidateTemplate: 'max:workspace:templates:validate',
+  workspaceExportTemplate: 'max:workspace:templates:export',
+  workspaceImportFile: 'max:workspace:files:import',
   workspaceMigrateV01: 'max:workspace:migration:v01-to-v02',
 } as const;
 
@@ -249,7 +241,6 @@ import type {
   PersonFinancialStatement,
   RepaymentDraft,
 } from './person-debt-contract';
-import type { QuickEntryDraft, QuickEntryPriceSuggestion } from './quick-entry-contract';
 import type {
   CloseSessionDraft,
   DailySession,
@@ -266,6 +257,7 @@ import type {
 } from './views-search-contract';
 
 export type MaxApi = Readonly<{
+  updates?: UpdateApi;
   accounts: Readonly<{
     archive: (id: string) => Promise<MutationResult<null>>;
     create: (draft: AccountDraft) => Promise<MutationResult<AccountDefinition>>;
@@ -317,36 +309,6 @@ export type MaxApi = Readonly<{
     getStatement: (personId: string) => Promise<PersonFinancialStatement>;
     repayDebt: (draft: RepaymentDraft) => Promise<MutationResult<TransactionRecord>>;
   }>;
-  pricing: Readonly<{
-    archive: (id: string) => Promise<MutationResult<null>>;
-    create: (draft: PricingProfileDraft) => Promise<MutationResult<PricingProfile>>;
-    list: () => Promise<readonly PricingProfile[]>;
-    quote: (profileId: string, input: PricingQuoteInput) => Promise<MutationResult<PricingSnapshot>>;
-    update: (id: string, draft: PricingProfileDraft) => Promise<MutationResult<PricingProfile>>;
-    providers: Readonly<{
-      archive: (id: string) => Promise<MutationResult<null>>;
-      create: (draft: PricingProviderDraft) => Promise<MutationResult<PricingProvider>>;
-      list: () => Promise<readonly PricingProvider[]>;
-      update: (id: string, draft: PricingProviderDraft) => Promise<MutationResult<PricingProvider>>;
-    }>;
-    channels: Readonly<{
-      archive: (id: string) => Promise<MutationResult<null>>;
-      create: (draft: PricingChannelDraft) => Promise<MutationResult<PricingChannel>>;
-      list: () => Promise<readonly PricingChannel[]>;
-      update: (id: string, draft: PricingChannelDraft) => Promise<MutationResult<PricingChannel>>;
-    }>;
-    services: Readonly<{
-      archive: (id: string) => Promise<MutationResult<null>>;
-      create: (draft: PricingServiceDraft) => Promise<MutationResult<PricingService>>;
-      list: () => Promise<readonly PricingService[]>;
-      update: (id: string, draft: PricingServiceDraft) => Promise<MutationResult<PricingService>>;
-    }>;
-  }>;
-  quickEntry: Readonly<{
-    getSuggestion: (itemId?: string, templateId?: string) => Promise<QuickEntryPriceSuggestion>;
-    quotePricing: (draft: QuickEntryDraft) => Promise<MutationResult<PricingSnapshot | null>>;
-    submit: (draft: QuickEntryDraft) => Promise<MutationResult<TransactionRecord>>;
-  }>;
   reconciliation: Readonly<{
     closeSession: (draft: CloseSessionDraft) => Promise<MutationResult<DailySession>>;
     getCurrentSession: (accountId?: string) => Promise<DailySession | null>;
@@ -392,6 +354,7 @@ export type MaxApi = Readonly<{
   workspace: Readonly<{
     archiveDatabase: (id: string) => Promise<WorkspaceMutationResult<null>>;
     archiveNode: (id: string) => Promise<WorkspaceMutationResult<null>>;
+    permanentlyDeleteNode: (id: string) => Promise<WorkspaceMutationResult<null>>;
     archiveProperty: (id: string) => Promise<WorkspaceMutationResult<null>>;
     archiveRecord: (id: string) => Promise<WorkspaceMutationResult<null>>;
     archiveRelation: (id: string) => Promise<WorkspaceMutationResult<null>>;
@@ -407,21 +370,29 @@ export type MaxApi = Readonly<{
     createView: (draft: WorkspaceViewDraft) => Promise<WorkspaceMutationResult<WorkspaceView>>;
     createWorkflow: (draft: WorkspaceWorkflowDraft) => Promise<WorkspaceMutationResult<WorkspaceWorkflow>>;
     duplicateDatabase: (id: string, options?: { includeRecords?: boolean; title?: string }) => Promise<WorkspaceMutationResult<WorkspaceDatabase>>;
+    evaluateWorkflow: (input: WorkflowExecutionInput) => Promise<WorkspaceMutationResult<WorkflowFormEvaluation>>;
     executeWorkflow: (input: WorkflowExecutionInput) => Promise<WorkspaceMutationResult<WorkflowExecutionResult>>;
     getDatabase: (id: string) => Promise<WorkspaceDatabase | null>;
     getDatabaseSchema: (id: string) => Promise<DatabaseSchema>;
     getNavigation: (includeArchived?: boolean) => Promise<WorkspaceNavigation>;
+    getPageGraph: () => Promise<PageGraph>;
+    openExternal: (url: string) => Promise<WorkspaceMutationResult<null>>;
     getNode: (id: string) => Promise<WorkspaceNode | null>;
     getRecord: (id: string) => Promise<WorkspaceRecord | null>;
     getRelatedRecords: (recordId: string, relationId: string) => Promise<readonly WorkspaceRecord[]>;
     getView: (id: string) => Promise<WorkspaceView | null>;
     getWorkflow: (id: string) => Promise<WorkspaceWorkflow | null>;
     importTemplate: (template: WorkspaceTemplateV2) => Promise<WorkspaceMutationResult<TemplateImportResult>>;
+    validateTemplate: (template: unknown) => Promise<WorkspaceMutationResult<null>>;
+    exportTemplate: () => Promise<WorkspaceMutationResult<WorkspaceTemplateV2>>;
     linkRecords: (relationId: string, sourceRecordId: string, targetRecordId: string) => Promise<WorkspaceMutationResult<null>>;
     listProperties: (databaseId: string) => Promise<readonly WorkspaceProperty[]>;
     listRecordTemplates: (databaseId: string) => Promise<readonly WorkspaceRecordTemplate[]>;
+    saveRecordTemplate: (recordId: string, name: string) => Promise<WorkspaceMutationResult<WorkspaceRecordTemplate>>;
+    editRecordTemplate: (databaseId: string, id: string | null, patch: Pick<WorkspaceRecordPatch, 'title' | 'contentJson' | 'icon' | 'positionKey'>) => Promise<WorkspaceMutationResult<WorkspaceRecordTemplate>>;
+    archiveRecordTemplate: (id: string) => Promise<WorkspaceMutationResult<void>>;
     listRelations: (databaseId: string) => Promise<readonly WorkspaceRelation[]>;
-    listViews: (databaseId: string) => Promise<readonly WorkspaceView[]>;
+    listViews: (ownerId: string, ownerType?: 'database' | 'block') => Promise<readonly WorkspaceView[]>;
     listWorkflows: () => Promise<readonly WorkspaceWorkflow[]>;
     migrateV01: (locale?: 'ar' | 'en') => Promise<WorkspaceMutationResult<MigrationSummary>>;
     previewTypeConversion: (propertyId: string, targetType: PropertyType) => Promise<TypeConversionPreview>;
@@ -437,5 +408,6 @@ export type MaxApi = Readonly<{
     updateRecord: (id: string, patch: WorkspaceRecordPatch) => Promise<WorkspaceMutationResult<WorkspaceRecord>>;
     updateView: (id: string, patch: WorkspaceViewPatch) => Promise<WorkspaceMutationResult<WorkspaceView>>;
     updateWorkflow: (id: string, patch: Partial<WorkspaceWorkflowDraft>) => Promise<WorkspaceMutationResult<WorkspaceWorkflow>>;
+    importFile: (sourcePath: string) => Promise<WorkspaceMutationResult<string>>;
   }>;
 }>;

@@ -6,8 +6,6 @@ import type { Blueprint, CompleteOnboardingDraft, ShopMetadata } from '../shared
 import { IPC_CHANNELS, type MaxApi } from '../shared/ipc-contract';
 import type { ConfigurableRecordDraft, ObjectKind, PropertyDraft } from '../shared/object-contract';
 import type { ForgivenessDraft, RepaymentDraft } from '../shared/person-debt-contract';
-import type { PricingChannelDraft, PricingProfileDraft, PricingProviderDraft, PricingQuoteInput, PricingServiceDraft } from '../shared/pricing-contract';
-import type { QuickEntryDraft } from '../shared/quick-entry-contract';
 import type { CloseSessionDraft, OpenSessionDraft } from '../shared/reconciliation-contract';
 import type { TemplateDraft } from '../shared/template-contract';
 import type { TransactionDraft, TransferDraft } from '../shared/transaction-contract';
@@ -29,6 +27,11 @@ import type { WorkflowExecutionInput, WorkspaceWorkflowDraft } from '../shared/w
 import type { WorkspaceNodeDraft, WorkspaceNodePatch } from '../shared/workspace-contract';
 
 const maxApi: MaxApi = Object.freeze({
+  updates: Object.freeze({
+    getStatus: () => ipcRenderer.invoke(IPC_CHANNELS.updateStatus),
+    check: () => ipcRenderer.invoke(IPC_CHANNELS.updateCheck),
+    install: () => ipcRenderer.invoke(IPC_CHANNELS.updateInstall),
+  }),
   accounts: Object.freeze({
     archive: (id: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.accountArchive, id) as ReturnType<MaxApi['accounts']['archive']>,
@@ -99,46 +102,6 @@ const maxApi: MaxApi = Object.freeze({
       ipcRenderer.invoke(IPC_CHANNELS.peopleStatement, personId) as ReturnType<MaxApi['people']['getStatement']>,
     repayDebt: (draft: RepaymentDraft) =>
       ipcRenderer.invoke(IPC_CHANNELS.peopleRepayDebt, draft) as ReturnType<MaxApi['people']['repayDebt']>,
-  }),
-  pricing: Object.freeze({
-    archive: (id: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.pricingArchive, id) as ReturnType<MaxApi['pricing']['archive']>,
-    create: (draft: PricingProfileDraft) =>
-      ipcRenderer.invoke(IPC_CHANNELS.pricingCreate, draft) as ReturnType<MaxApi['pricing']['create']>,
-    list: () =>
-      ipcRenderer.invoke(IPC_CHANNELS.pricingList) as ReturnType<MaxApi['pricing']['list']>,
-    quote: (profileId: string, input: PricingQuoteInput) =>
-      ipcRenderer.invoke(IPC_CHANNELS.pricingQuote, profileId, input) as ReturnType<MaxApi['pricing']['quote']>,
-    update: (id: string, draft: PricingProfileDraft) =>
-      ipcRenderer.invoke(IPC_CHANNELS.pricingUpdate, id, draft) as ReturnType<MaxApi['pricing']['update']>,
-    providers: Object.freeze({
-      archive: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.pricingProviderArchive, id) as ReturnType<MaxApi['pricing']['providers']['archive']>,
-      create: (draft: PricingProviderDraft) => ipcRenderer.invoke(IPC_CHANNELS.pricingProviderCreate, draft) as ReturnType<MaxApi['pricing']['providers']['create']>,
-      list: () => ipcRenderer.invoke(IPC_CHANNELS.pricingProviderList) as ReturnType<MaxApi['pricing']['providers']['list']>,
-      update: (id: string, draft: PricingProviderDraft) => ipcRenderer.invoke(IPC_CHANNELS.pricingProviderUpdate, id, draft) as ReturnType<MaxApi['pricing']['providers']['update']>,
-    }),
-    channels: Object.freeze({
-      archive: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.pricingChannelArchive, id) as ReturnType<MaxApi['pricing']['channels']['archive']>,
-      create: (draft: PricingChannelDraft) => ipcRenderer.invoke(IPC_CHANNELS.pricingChannelCreate, draft) as ReturnType<MaxApi['pricing']['channels']['create']>,
-      list: () => ipcRenderer.invoke(IPC_CHANNELS.pricingChannelList) as ReturnType<MaxApi['pricing']['channels']['list']>,
-      update: (id: string, draft: PricingChannelDraft) => ipcRenderer.invoke(IPC_CHANNELS.pricingChannelUpdate, id, draft) as ReturnType<MaxApi['pricing']['channels']['update']>,
-    }),
-    services: Object.freeze({
-      archive: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.pricingServiceArchive, id) as ReturnType<MaxApi['pricing']['services']['archive']>,
-      create: (draft: PricingServiceDraft) => ipcRenderer.invoke(IPC_CHANNELS.pricingServiceCreate, draft) as ReturnType<MaxApi['pricing']['services']['create']>,
-      list: () => ipcRenderer.invoke(IPC_CHANNELS.pricingServiceList) as ReturnType<MaxApi['pricing']['services']['list']>,
-      update: (id: string, draft: PricingServiceDraft) => ipcRenderer.invoke(IPC_CHANNELS.pricingServiceUpdate, id, draft) as ReturnType<MaxApi['pricing']['services']['update']>,
-    }),
-  }),
-  quickEntry: Object.freeze({
-    getSuggestion: (itemId?: string, templateId?: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.quickEntryGetSuggestion, itemId, templateId) as ReturnType<
-        MaxApi['quickEntry']['getSuggestion']
-      >,
-    quotePricing: (draft: QuickEntryDraft) =>
-      ipcRenderer.invoke(IPC_CHANNELS.quickEntryQuotePricing, draft) as ReturnType<MaxApi['quickEntry']['quotePricing']>,
-    submit: (draft: QuickEntryDraft) =>
-      ipcRenderer.invoke(IPC_CHANNELS.quickEntrySubmit, draft) as ReturnType<MaxApi['quickEntry']['submit']>,
   }),
   reconciliation: Object.freeze({
     closeSession: (draft: CloseSessionDraft) =>
@@ -241,6 +204,7 @@ const maxApi: MaxApi = Object.freeze({
       ipcRenderer.invoke(IPC_CHANNELS.workspaceArchiveDatabase, id) as ReturnType<MaxApi['workspace']['archiveDatabase']>,
     archiveNode: (id: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.workspaceArchiveNode, id) as ReturnType<MaxApi['workspace']['archiveNode']>,
+    permanentlyDeleteNode: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.workspacePermanentlyDeleteNode, id) as ReturnType<MaxApi['workspace']['permanentlyDeleteNode']>,
     archiveProperty: (id: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.workspaceArchiveProperty, id) as ReturnType<MaxApi['workspace']['archiveProperty']>,
     archiveRecord: (id: string) =>
@@ -271,6 +235,7 @@ const maxApi: MaxApi = Object.freeze({
       ipcRenderer.invoke(IPC_CHANNELS.workspaceCreateWorkflow, draft) as ReturnType<MaxApi['workspace']['createWorkflow']>,
     duplicateDatabase: (id: string, options?: { includeRecords?: boolean; title?: string }) =>
       ipcRenderer.invoke(IPC_CHANNELS.workspaceDuplicateDatabase, id, options) as ReturnType<MaxApi['workspace']['duplicateDatabase']>,
+    evaluateWorkflow: (input: WorkflowExecutionInput) => ipcRenderer.invoke(IPC_CHANNELS.workspaceEvaluateWorkflow, input) as ReturnType<MaxApi['workspace']['evaluateWorkflow']>,
     executeWorkflow: (input: WorkflowExecutionInput) =>
       ipcRenderer.invoke(IPC_CHANNELS.workspaceExecuteWorkflow, input) as ReturnType<MaxApi['workspace']['executeWorkflow']>,
     getDatabase: (id: string) =>
@@ -283,6 +248,10 @@ const maxApi: MaxApi = Object.freeze({
       ipcRenderer.invoke(IPC_CHANNELS.workspaceGetNode, id) as ReturnType<MaxApi['workspace']['getNode']>,
     getRecord: (id: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.workspaceGetRecord, id) as ReturnType<MaxApi['workspace']['getRecord']>,
+    saveRecordTemplate: (recordId: string, name: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceSaveRecordTemplate, recordId, name) as ReturnType<MaxApi['workspace']['saveRecordTemplate']>,
+    editRecordTemplate: (databaseId: string, id: string | null, patch: Parameters<MaxApi['workspace']['editRecordTemplate']>[2]) => ipcRenderer.invoke(IPC_CHANNELS.workspaceEditRecordTemplate, databaseId, id, patch) as ReturnType<MaxApi['workspace']['editRecordTemplate']>,
+    archiveRecordTemplate: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.workspaceArchiveRecordTemplate, id) as ReturnType<MaxApi['workspace']['archiveRecordTemplate']>,
     getRelatedRecords: (recordId: string, relationId: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.workspaceGetRelatedRecords, recordId, relationId) as ReturnType<MaxApi['workspace']['getRelatedRecords']>,
     getView: (id: string) =>
@@ -291,6 +260,12 @@ const maxApi: MaxApi = Object.freeze({
       ipcRenderer.invoke(IPC_CHANNELS.workspaceGetWorkflow, id) as ReturnType<MaxApi['workspace']['getWorkflow']>,
     importTemplate: (template: WorkspaceTemplateV2) =>
       ipcRenderer.invoke(IPC_CHANNELS.workspaceImportTemplate, template) as ReturnType<MaxApi['workspace']['importTemplate']>,
+    validateTemplate: (template: unknown) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceValidateTemplate, template) as ReturnType<MaxApi['workspace']['validateTemplate']>,
+    exportTemplate: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceExportTemplate) as ReturnType<MaxApi['workspace']['exportTemplate']>,
+    getPageGraph: () => ipcRenderer.invoke(IPC_CHANNELS.workspaceGetPageGraph) as ReturnType<MaxApi['workspace']['getPageGraph']>,
+    openExternal: (url: string) => ipcRenderer.invoke(IPC_CHANNELS.workspaceOpenExternal, url) as ReturnType<MaxApi['workspace']['openExternal']>,
     linkRecords: (relationId: string, sourceRecordId: string, targetRecordId: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.workspaceLinkRecords, relationId, sourceRecordId, targetRecordId) as ReturnType<MaxApi['workspace']['linkRecords']>,
     listProperties: (databaseId: string) =>
@@ -299,8 +274,8 @@ const maxApi: MaxApi = Object.freeze({
       ipcRenderer.invoke(IPC_CHANNELS.workspaceListRecordTemplates, databaseId) as ReturnType<MaxApi['workspace']['listRecordTemplates']>,
     listRelations: (databaseId: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.workspaceListRelations, databaseId) as ReturnType<MaxApi['workspace']['listRelations']>,
-    listViews: (databaseId: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.workspaceListViews, databaseId) as ReturnType<MaxApi['workspace']['listViews']>,
+    listViews: (ownerId: string, ownerType?: 'database' | 'block') =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceListViews, ownerId, ownerType) as ReturnType<MaxApi['workspace']['listViews']>,
     listWorkflows: () =>
       ipcRenderer.invoke(IPC_CHANNELS.workspaceListWorkflows) as ReturnType<MaxApi['workspace']['listWorkflows']>,
     migrateV01: (locale?: 'ar' | 'en') =>
@@ -331,6 +306,8 @@ const maxApi: MaxApi = Object.freeze({
       ipcRenderer.invoke(IPC_CHANNELS.workspaceUpdateView, id, patch) as ReturnType<MaxApi['workspace']['updateView']>,
     updateWorkflow: (id: string, patch: Partial<WorkspaceWorkflowDraft>) =>
       ipcRenderer.invoke(IPC_CHANNELS.workspaceUpdateWorkflow, id, patch) as ReturnType<MaxApi['workspace']['updateWorkflow']>,
+    importFile: (sourcePath: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceImportFile, sourcePath) as ReturnType<MaxApi['workspace']['importFile']>,
   }),
 });
 

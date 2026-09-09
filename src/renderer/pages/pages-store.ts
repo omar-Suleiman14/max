@@ -6,7 +6,7 @@ const CUSTOM_PAGES_KEY = 'max:custom_pages';
 const LEGACY_TRASHED_PAGES_KEY = 'max:trashed_pages';
 
 function fromWorkspacePage(page: WorkspaceNode): CustomPage {
-  let layout: { blocks?: readonly NotionBlock[]; favorite?: boolean; wiki?: boolean } = {};
+  let layout: { blocks?: readonly NotionBlock[]; favorite?: boolean; wiki?: boolean; properties?: CustomPage['properties'] } = {};
   try {
     const parsed = JSON.parse(page.contentJson) as unknown;
     layout = Array.isArray(parsed) ? { blocks: parsed as readonly NotionBlock[] } : parsed as typeof layout;
@@ -15,6 +15,7 @@ function fromWorkspacePage(page: WorkspaceNode): CustomPage {
   }
   return {
     blocks: Array.isArray(layout.blocks) ? layout.blocks : [],
+    properties: Array.isArray(layout.properties) ? layout.properties : [],
     createdAt: page.createdAt,
     favorite: layout.favorite,
     icon: page.icon ?? 'lucide:FileText',
@@ -29,7 +30,7 @@ function fromWorkspacePage(page: WorkspaceNode): CustomPage {
 
 function toWorkspacePatch(page: CustomPage) {
   return {
-    contentJson: JSON.stringify({ blocks: page.blocks, favorite: page.favorite ?? false, wiki: page.wiki ?? false }),
+    contentJson: JSON.stringify({ blocks: page.blocks, properties: page.properties ?? [], favorite: page.favorite ?? false, wiki: page.wiki ?? false }),
     icon: page.icon,
     parentNodeId: page.parentNodeId,
     positionKey: page.positionKey,
@@ -64,27 +65,36 @@ export async function createPersistentCustomPage(
 }
 
 export async function updatePersistentCustomPage(page: CustomPage, position: number): Promise<void> {
-  await window.maxApi.workspace.updateNode(page.id, {
+  const result = await window.maxApi.workspace.updateNode(page.id, {
     ...toWorkspacePatch(page),
     positionKey: `p${String(position).padStart(8, '0')}`,
   });
+  if (result.ok) window.dispatchEvent(new Event('max:page-content-changed'));
 }
 
 export async function archivePersistentCustomPage(page: CustomPage): Promise<void> {
   await window.maxApi.workspace.archiveNode(page.id);
 }
 
-export async function loadTrashedPages(): Promise<readonly CustomPage[]> {
+export async function loadTrashedPages(): Promise<readonly (CustomPage | WorkspaceNode)[]> {
   const navigation = await window.maxApi.workspace.getNavigation(true);
-  const nodes = await Promise.all(
-    navigation.pages.filter((page) => page.archivedAt && page.id !== 'home').map((page) => window.maxApi.workspace.getNode(page.id)),
-  );
-  return nodes.filter((node): node is WorkspaceNode => node !== null).map(fromWorkspacePage);
+
+  const trashedPages = navigation.pages.filter((page) => page.archivedAt && page.id !== 'home');
+  const trashedDatabases = navigation.databases.filter((db) => db.archivedAt);
+
+  const pageNodes = await Promise.all(trashedPages.map((page) => window.maxApi.workspace.getNode(page.id)));
+  const databaseNodes = await Promise.all(trashedDatabases.map((db) => window.maxApi.workspace.getNode(db.id)));
+
+  const customPages = pageNodes.filter((node): node is WorkspaceNode => node !== null).map(fromWorkspacePage);
+
+  return [...customPages, ...databaseNodes.filter((node): node is WorkspaceNode => node !== null && node.kind === 'database')];
 }
 
-export async function restoreTrashedPage(id: string): Promise<CustomPage | undefined> {
+export async function restoreTrashedPage(id: string): Promise<boolean> {
   const restored = await window.maxApi.workspace.restoreNode(id);
-  return restored.ok ? fromWorkspacePage(restored.value) : undefined;
+  if (!restored.ok) return false;
+  window.dispatchEvent(new Event('max:pages-restored'));
+  return true;
 }
 
 export async function emptyPageTrash(): Promise<void> {
@@ -92,68 +102,34 @@ export async function emptyPageTrash(): Promise<void> {
   // kept until a dedicated audited permanent-delete operation exists.
 }
 
-export async function loadPersistentHomePage(locale: 'ar' | 'en' = 'en'): Promise<CustomPage> {
-  const existing = await window.maxApi.workspace.getNode('home');
-  if (existing) return fromWorkspacePage(existing);
-
-  const local = loadHomePage(locale);
-  const created = await window.maxApi.workspace.createNode({
-    contentJson: JSON.stringify({ blocks: local.blocks, favorite: false, wiki: false }),
-    icon: local.icon,
-    id: 'home',
-    kind: 'page',
-    positionKey: 'p00000000',
-    title: local.title,
-  });
-  return created.ok ? fromWorkspacePage(created.value) : local;
+let homeInitialization: Promise<CustomPage> | undefined;
+export function loadPersistentHomePage(locale: 'ar' | 'en' = 'en'): Promise<CustomPage> {
+  if (homeInitialization) return homeInitialization;
+  homeInitialization = (async () => {
+    const existing = await window.maxApi.workspace.getNode('home');
+    if (existing) return fromWorkspacePage(existing);
+    const empty: CustomPage = { id: 'home', title: locale === 'ar' ? 'الرئيسية' : 'Home', icon: 'lucide:Home', blocks: [{ id: crypto.randomUUID(), type: 'text', content: '' }], properties: [], createdAt: '', updatedAt: '' };
+    try {
+      const created = await window.maxApi.workspace.createNode({ contentJson: JSON.stringify({ blocks: empty.blocks, properties: [] }), icon: empty.icon, id: 'home', kind: 'page', positionKey: 'p00000000', title: empty.title });
+      if (created.ok) return fromWorkspacePage(created.value);
+      const concurrent = await window.maxApi.workspace.getNode('home');
+      if (concurrent) return fromWorkspacePage(concurrent);
+      throw new Error(created.error.message);
+    } catch (error) {
+      const concurrent = await window.maxApi.workspace.getNode('home');
+      if (concurrent) return fromWorkspacePage(concurrent);
+      throw error;
+    }
+  })().finally(() => { homeInitialization = undefined; });
+  return homeInitialization;
 }
 
 export const defaultHomeBlocks: readonly NotionBlock[] = [
-  {
-    content: 'Welcome to Max. You can type **/** anywhere to insert headings, notes, bullet lists, or embed live interactive database tables directly into this page.',
-    id: 'block_welcome_callout',
-    type: 'callout',
-  },
-  {
-    content: '',
-    id: 'block_divider_1',
-    type: 'divider',
-  },
-  {
-    content: 'Quick Notes & Priorities',
-    id: 'block_notes_h2',
-    type: 'h2',
-  },
-  {
-    content: 'Track daily cash reconciliation before closing drawer.',
-    id: 'block_note_1',
-    type: 'bullet',
-  },
-  {
-    content: 'Review low stock items and contact suppliers for reorders.',
-    id: 'block_note_2',
-    type: 'bullet',
-  },
-  {
-    content: '',
-    id: 'block_divider_2',
-    type: 'divider',
-  },
-  {
-    content: 'items',
-    id: 'block_db_items',
-    type: 'database-view',
-  },
+  { content: '', id: 'block_home_1', type: 'text' },
 ];
 
 const defaultHomeBlocksArabic: readonly NotionBlock[] = [
-  { content: 'هذه مساحتك اليومية في ماكس. أضف ملاحظاتك أو أدرج جدولًا مباشرًا باستخدام الأمر /.', id: 'block_welcome_callout', type: 'callout' },
-  { content: '', id: 'block_divider_1', type: 'divider' },
-  { content: 'أولويات اليوم', id: 'block_notes_h2', type: 'h2' },
-  { content: 'راجِع رصيد الخزينة قبل الإغلاق.', id: 'block_note_1', type: 'bullet' },
-  { content: 'تابِع الأصناف قليلة المخزون وطلبات الموردين.', id: 'block_note_2', type: 'bullet' },
-  { content: '', id: 'block_divider_2', type: 'divider' },
-  { content: 'items', id: 'block_db_items', type: 'database-view' },
+  { content: '', id: 'block_home_1', type: 'text' },
 ];
 
 export function loadCustomPages(): readonly CustomPage[] {
@@ -259,6 +235,7 @@ export function loadHomePage(locale: 'ar' | 'en' = 'en'): CustomPage {
   let blocks = locale === 'ar' ? defaultHomeBlocksArabic : defaultHomeBlocks;
   let title = locale === 'ar' ? 'الرئيسية' : 'Home';
   let icon = 'lucide:Home';
+  let properties: CustomPage['properties'] = [];
 
   try {
     const rawBlocks = window.localStorage.getItem(HOME_PAGE_BLOCKS_KEY);
@@ -271,9 +248,10 @@ export function loadHomePage(locale: 'ar' | 'en' = 'en'): CustomPage {
 
     const rawMeta = window.localStorage.getItem(HOME_PAGE_META_KEY);
     if (rawMeta) {
-      const parsedMeta = JSON.parse(rawMeta) as { icon?: string; title?: string };
+      const parsedMeta = JSON.parse(rawMeta) as { icon?: string; title?: string; properties?: CustomPage['properties'] };
       if (typeof parsedMeta.title === 'string') title = parsedMeta.title;
       if (typeof parsedMeta.icon === 'string') icon = parsedMeta.icon;
+      if (Array.isArray(parsedMeta.properties)) properties = parsedMeta.properties;
     }
   } catch {
     // fallback
@@ -284,24 +262,25 @@ export function loadHomePage(locale: 'ar' | 'en' = 'en'): CustomPage {
     createdAt: '',
     icon,
     id: 'home',
+    properties,
     title,
     updatedAt: '',
   };
 }
 
-export function saveHomePage(page: Pick<CustomPage, 'blocks' | 'icon' | 'title'>): void {
+export function saveHomePage(page: Pick<CustomPage, 'blocks' | 'icon' | 'title' | 'properties'>): void {
   try {
     window.localStorage.setItem(HOME_PAGE_BLOCKS_KEY, JSON.stringify(page.blocks));
     window.localStorage.setItem(
       HOME_PAGE_META_KEY,
-      JSON.stringify({ icon: page.icon, title: page.title }),
+      JSON.stringify({ icon: page.icon, title: page.title, properties: page.properties ?? [] }),
     );
   } catch {
     // ignore
   }
   void window.maxApi.workspace.updateNode('home', {
-    contentJson: JSON.stringify({ blocks: page.blocks, favorite: false, wiki: false }),
+    contentJson: JSON.stringify({ blocks: page.blocks, properties: page.properties ?? [], favorite: false, wiki: false }),
     icon: page.icon,
     title: page.title.trim() || 'Home',
-  });
+  }).then((result) => { if (result.ok) window.dispatchEvent(new Event('max:page-content-changed')); });
 }

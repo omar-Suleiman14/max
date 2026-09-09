@@ -63,7 +63,7 @@ function normalizeRules(draft: PropertyDraft): PropertyRules {
     digitsOnly: draft.type === 'text' && draft.rules.digitsOnly,
     required: draft.rules.required,
     unique: draft.rules.unique,
-    ...(draft.type === 'number' || draft.type === 'money'
+    ...(draft.type === 'number'
       ? { maximum: draft.rules.maximum, minimum: draft.rules.minimum }
       : {}),
     ...(draft.type === 'text'
@@ -99,7 +99,7 @@ function validatePropertyDraft(draft: PropertyDraft): PropertyDraft {
     const compatible = draft.semanticRole === 'DISPLAY_NAME'
       ? ['text', 'select', 'status'].includes(draft.type)
       : draft.semanticRole === 'PRICE'
-        ? ['money', 'number'].includes(draft.type)
+        ? ['number'].includes(draft.type)
         : draft.type === 'number';
     if (!compatible) {
       throw new ObjectDomainError('invalid-input', `${draft.semanticRole} is not compatible with ${draft.type}.`);
@@ -518,8 +518,7 @@ export class ObjectRepository {
         }
         break;
       }
-      case 'number':
-      case 'money': {
+      case 'number': {
         if (typeof value !== 'number' || !Number.isFinite(value)) throw invalidPropertyError(property, 'enter a valid number.');
         if (property.rules.minimum !== undefined && value < property.rules.minimum) {
           throw invalidPropertyError(property, `the minimum is ${property.rules.minimum}.`);

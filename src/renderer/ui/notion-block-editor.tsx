@@ -1,3 +1,8 @@
+import { LegacyDatabaseLink } from '../databases/LegacyDatabaseLink';
+import { ExtraBlock } from '../pages/extra-blocks';
+import { renderInline, escapeText } from '../pages/rich-text';
+import { openPage } from '../pages/page-graph-store';
+import { safeWebUrl } from '../../shared/page-links';
 import {
   Check,
   Columns,
@@ -15,18 +20,88 @@ import {
   Plus,
   type LucideIcon,
 } from 'lucide-react';
-import React, { lazy, Suspense, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import React, { lazy, Suspense, useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 
 import type { Locale } from '../app/i18n';
 import type { NavigationItem } from '../../shared/workspace-contract';
 
-const AccountsWorkspace = lazy(() => import('../accounts/accounts-workspace').then((module) => ({ default: module.AccountsWorkspace })));
 const DatabasePage = lazy(() => import('../databases/DatabasePage').then((module) => ({ default: module.DatabasePage })));
-const ObjectWorkspace = lazy(() => import('../objects/object-workspace').then((module) => ({ default: module.ObjectWorkspace })));
-const ReconciliationWorkspace = lazy(() => import('../reconciliation/reconciliation-workspace').then((module) => ({ default: module.ReconciliationWorkspace })));
-const TransactionsWorkspace = lazy(() => import('../transactions/transactions-workspace').then((module) => ({ default: module.TransactionsWorkspace })));
+
+function parseInlineMarkdown(text: string) {
+  return renderInline(text);
+}
+
+/** Extract plain text from a contentEditable element, preserving markdown markers from formatting. */
+function htmlToMarkdown(el: HTMLElement): string {
+  let result = '';
+  for (const node of el.childNodes) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      result += (node.textContent ?? '').replace(/\u200b/g, '');
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      const tag = (node as HTMLElement).tagName.toLowerCase();
+      if (['script', 'style', 'iframe', 'object'].includes(tag)) continue;
+      const inner = htmlToMarkdown(node as HTMLElement);
+      if (tag === 'strong' || tag === 'b') result += `**${inner}**`;
+      else if (tag === 'em' || tag === 'i') result += `*${inner}*`;
+      else if (tag === 'del' || tag === 's') result += `~~${inner}~~`;
+      else if (tag === 'code') result += '`' + inner + '`';
+      else if (tag === 'u') result += '++' + inner + '++';
+      else if (tag === 'mark') result += '==' + inner + '==';
+      else if (tag === 'a') {
+        const element = node as HTMLElement;
+        const pageId = element.dataset.pageId;
+        const url = safeWebUrl(element.getAttribute('href') ?? '');
+        result += pageId ? `[${inner}](max-page:${encodeURIComponent(pageId)})` : url ? `[${inner}](${url})` : inner;
+      }
+      else if (tag === 'br') result += '\n';
+      else if (tag === 'div' || tag === 'p') result += (result && !result.endsWith('\n') ? '\n' : '') + inner;
+      else result += inner;
+    }
+  }
+  return result;
+}
+
+/** Save and restore caret position in a contentEditable element across innerHTML updates. */
+function getCaretOffset(el: HTMLElement): number {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || !el.contains(sel.anchorNode)) return -1;
+  const range = sel.getRangeAt(0).cloneRange();
+  range.selectNodeContents(el);
+  range.setEnd(sel.anchorNode!, sel.anchorOffset);
+  return range.toString().length;
+}
+
+function setCaretOffset(el: HTMLElement, offset: number) {
+  const sel = window.getSelection();
+  if (!sel) return;
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
+  let pos = 0;
+  let node: Node | null;
+  while ((node = walker.nextNode())) {
+    const len = (node.textContent ?? '').length;
+    if (pos + len >= offset) {
+      const range = document.createRange();
+      range.setStart(node, offset - pos);
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+      return;
+    }
+    pos += len;
+  }
+  // Fallback: place at end
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  range.collapse(false);
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
 
 export type BlockType =
+  | 'page-link' | 'embed' | 'bookmark' | 'image' | 'video' | 'audio' | 'file' | 'simple-table' | 'table-of-contents'
+  | 'quote'
+  | 'code'
+  | 'toggle'
   | 'bullet'
   | 'callout'
   | 'columns'
@@ -40,6 +115,10 @@ export type BlockType =
   | 'todo';
 
 export type NotionBlock = {
+  pageId?: string;
+  url?: string;
+  caption?: string;
+  cells?: readonly (readonly string[])[];
   calloutIcon?: string;
   checked?: boolean; // For todo items
   col1Blocks?: readonly NotionBlock[]; // For columns block (left)
@@ -51,6 +130,10 @@ export type NotionBlock = {
   type: BlockType;
   viewId?: string;
 };
+
+function duplicateBlock(block: NotionBlock): NotionBlock {
+  return { ...block, id: crypto.randomUUID(), col1Blocks: block.col1Blocks?.map(duplicateBlock), col2Blocks: block.col2Blocks?.map(duplicateBlock) };
+}
 
 type NotionBlockEditorProps = Readonly<{
   blocks: readonly NotionBlock[];
@@ -73,7 +156,160 @@ type SlashOption = {
   run: (blockId: string) => void;
 };
 
+type RichTextBlockProps = {
+  blockId: string;
+  content: string;
+  focused: boolean;
+  index: number;
+  locale: Locale;
+  onBlur: () => void;
+  onContentChange: (id: string, text: string) => void;
+  onFocus: () => void;
+  onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => void;
+  registerRef: (el: HTMLDivElement | null) => void;
+};
+
+/**
+ * A contentEditable rich text block that converts inline markdown to formatted
+ * HTML. Native editing (typing, backspace, selection+delete) is never
+ * interrupted; formatting is applied after a 500ms idle pause and whenever
+ * content changes externally (block split, merge, etc.).
+ */
+function RichTextBlock({ blockId, content, index, locale, onBlur, onContentChange, onFocus, onKeyDown, registerRef }: RichTextBlockProps) {
+  const divRef = useRef<HTMLDivElement | null>(null);
+  const savedSelection = useRef<Range | null>(null);
+  const [selectionOpen, setSelectionOpen] = useState(false);
+  const [linkEditing, setLinkEditing] = useState(false);
+  const [linkUrl, setLinkUrl] = useState('');
+  const [linkError, setLinkError] = useState('');
+  const composing = useRef(false);
+  // Tracks whether we are updating from inside (input) vs outside (prop change)
+  const isInternalUpdate = useRef(false);
+
+  // Apply formatting: re-render innerHTML from the current content
+  const applyFormatting = useCallback((el: HTMLDivElement, md: string) => {
+    const newHtml = parseInlineMarkdown(md);
+    if (el.innerHTML !== newHtml) {
+      const offset = getCaretOffset(el);
+      el.innerHTML = newHtml;
+      if (offset >= 0 && el === document.activeElement) {
+        const textLen = (el.textContent ?? '').length;
+        setCaretOffset(el, Math.min(offset, textLen));
+      }
+    }
+  }, []);
+
+  // Sync the div's innerHTML from the content prop when it changes externally
+  useEffect(() => {
+    if (isInternalUpdate.current) {
+      isInternalUpdate.current = false;
+      return;
+    }
+    const el = divRef.current;
+    if (!el) return;
+    applyFormatting(el, content);
+  }, [content, applyFormatting]);
+
+  // Ref callback — set innerHTML only on initial mount (when the div is empty)
+  // NOTE: no dependency on `content` to avoid ref churn on every keystroke
+  const setRef = useCallback((el: HTMLDivElement | null) => {
+    divRef.current = el;
+    registerRef(el);
+    if (el && !el.innerHTML) {
+      el.innerHTML = parseInlineMarkdown(content);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [registerRef]);
+
+  const handleInput = useCallback(() => {
+    const el = divRef.current;
+    if (!el) return;
+    const md = htmlToMarkdown(el);
+    isInternalUpdate.current = true;
+    onContentChange(blockId, md);
+
+  }, [blockId, onContentChange]);
+
+  function trackSelection() {
+    const selection = window.getSelection();
+    const valid = !!selection && !selection.isCollapsed && !!divRef.current?.contains(selection.anchorNode) && !!divRef.current?.contains(selection.focusNode);
+    if (valid && selection.rangeCount) savedSelection.current = selection.getRangeAt(0).cloneRange();
+    setSelectionOpen(valid);
+  }
+  function format(command: string, value?: string) {
+    const selection = window.getSelection();
+    if (!savedSelection.current || !selection) return;
+    divRef.current?.focus(); selection.removeAllRanges(); selection.addRange(savedSelection.current);
+    if (command === 'code' || command === 'mark') document.execCommand('insertHTML', false, `<${command}>${escapeText(selection.toString())}</${command}>`);
+    else document.execCommand(command, false, value);
+    handleInput(); trackSelection();
+  }
+
+  const placeholder = index === 0
+    ? locale === 'ar'
+      ? "اكتب شيئاً، أو اكتب '/' للأوامر..."
+      : "Type something, or press '/' for commands..."
+    : '';
+
+  return (
+    <div className="inline-rich-block"><div
+      ref={setRef}
+      aria-label={locale === 'ar' ? 'كتلة نصية' : 'Text block'}
+      className="notion-text-input notion-text-editable"
+      contentEditable
+      data-placeholder={placeholder}
+      onBlur={(event) => {
+        if ((event.relatedTarget as HTMLElement | null)?.closest('.inline-format-toolbar')) return;
+        // Apply formatting immediately when the block loses focus
+        const el = divRef.current;
+        if (el) applyFormatting(el, htmlToMarkdown(el));
+        setSelectionOpen(false); setLinkEditing(false);
+        onBlur();
+      }}
+      onFocus={onFocus}
+      onInput={() => { if (!composing.current) handleInput(); }}
+      onCompositionStart={() => { composing.current = true; }}
+      onCompositionEnd={() => { composing.current = false; handleInput(); }}
+      onMouseUp={trackSelection}
+      onKeyUp={trackSelection}
+      onKeyDown={(event) => { if (event.nativeEvent.isComposing) return; if ((event.ctrlKey || event.metaKey) && ['b', 'i', 'u'].includes(event.key.toLowerCase())) { event.preventDefault(); document.execCommand(({ b: 'bold', i: 'italic', u: 'underline' })[event.key.toLowerCase() as 'b' | 'i' | 'u']); handleInput(); return; } onKeyDown(event); }}
+      onPaste={(event) => { event.preventDefault(); const html = event.clipboardData.getData('text/html'); if (html) { const doc = new DOMParser().parseFromString(html, 'text/html'); document.execCommand('insertHTML', false, renderInline(htmlToMarkdown(doc.body))); } else document.execCommand('insertText', false, event.clipboardData.getData('text/plain')); handleInput(); }}
+      onClick={(event) => { const link = (event.target as Element).closest('a'); if (!link) return; event.preventDefault(); event.stopPropagation(); const id = link.getAttribute('data-page-id'); if (id) openPage(id); else { const url = safeWebUrl(link.getAttribute('href') ?? ''); if (url) void window.maxApi.workspace.openExternal(url).then((result) => { if (!result.ok) setLinkError(result.error.message); }).catch(() => setLinkError('Could not open link.')); } }}
+      role="textbox"
+      suppressContentEditableWarning
+    />
+    {selectionOpen && <div className="inline-format-toolbar" role="toolbar" aria-label={locale === 'ar' ? 'تنسيق النص' : 'Text formatting'} onMouseDown={(event) => { if (!(event.target instanceof HTMLInputElement)) event.preventDefault(); }}>
+      {(['bold', 'italic', 'underline', 'strikeThrough', 'code', 'mark'] as const).map((command) => <button type="button" key={command} title={command} aria-label={command} onClick={() => format(command)}>{({ bold: 'B', italic: 'I', underline: 'U', strikeThrough: 'S̶', code: '</>', mark: 'Highlight' })[command]}</button>)}
+      <button type="button" onClick={() => setLinkEditing(!linkEditing)}>{locale === 'ar' ? 'رابط' : 'Link'}</button>
+      <button type="button" onClick={() => format('removeFormat')}>{locale === 'ar' ? 'مسح التنسيق' : 'Clear format'}</button>
+      {linkEditing && <form onSubmit={(event) => { event.preventDefault(); const url = safeWebUrl(linkUrl); if (!url) { setLinkError(locale === 'ar' ? 'أدخل رابطاً صالحاً.' : 'Enter a valid web URL.'); return; } format('createLink', url); setLinkEditing(false); setLinkError(''); }}><input autoFocus type="url" aria-label={locale === 'ar' ? 'الرابط' : 'Link URL'} value={linkUrl} placeholder="https://…" onChange={(event) => setLinkUrl(event.target.value)} /><button type="submit">{locale === 'ar' ? 'حفظ' : 'Apply'}</button></form>}
+    </div>}
+    {linkError && <small role="alert">{linkError}</small>}
+    </div>
+  );
+}
 export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange, parentPageId }: NotionBlockEditorProps) {
+  const deletedSelection = useRef<readonly NotionBlock[] | null>(null);
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const selectionAnchor = useRef<number | null>(null);
+  const selecting = useRef(false);
+  const [selectedLines, setSelectedLines] = useState<readonly number[]>([]);
+  function selectLines(anchor: number, end: number) {
+    setSelectedLines(Array.from({ length: Math.abs(end - anchor) + 1 }, (_, index) => Math.min(anchor, end) + index));
+    window.getSelection()?.removeAllRanges();
+  }
+  function pageText(items: readonly NotionBlock[]): string {
+    return items.map((block) => block.type === 'columns'
+      ? [pageText(block.col1Blocks ?? []), pageText(block.col2Blocks ?? [])].join('\n')
+      : block.type === 'divider' ? '---' : block.type === 'todo' ? `${block.checked ? '[x]' : '[ ]'} ${block.content}` : block.content).join('\n');
+  }
+  useEffect(() => {
+    const finish = () => { selecting.current = false; };
+    window.addEventListener('pointerup', finish);
+    window.addEventListener('pointercancel', finish);
+    return () => { window.removeEventListener('pointerup', finish); window.removeEventListener('pointercancel', finish); };
+  }, []);
+  const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
   const [activeSlashBlockId, setActiveSlashBlockId] = useState<string | null>(null);
   const [slashQuery, setSlashQuery] = useState('');
   const [slashIndex, setSlashIndex] = useState(0);
@@ -81,6 +317,17 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [dragOverEdge, setDragOverEdge] = useState<'after' | 'before'>('before');
   const [blockMenuId, setBlockMenuId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!blockMenuId) return;
+    const close = (event: PointerEvent) => {
+      if (event.target instanceof Element && event.target.closest('.notion-block-gutter')) return;
+      setBlockMenuId(null);
+    };
+    const escape = (event: globalThis.KeyboardEvent) => { if (event.key === 'Escape') { event.stopPropagation(); setBlockMenuId(null); } };
+    document.addEventListener('pointerdown', close);
+    document.addEventListener('keydown', escape, true);
+    return () => { document.removeEventListener('pointerdown', close); document.removeEventListener('keydown', escape, true); };
+  }, [blockMenuId]);
   const [workspaceDatabases, setWorkspaceDatabases] = useState<readonly NavigationItem[]>([]);
   const [newDatabaseBlockId, setNewDatabaseBlockId] = useState<string | null>(null);
   const [newDatabaseTitle, setNewDatabaseTitle] = useState('');
@@ -90,7 +337,7 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
   const [linkDatabaseError, setLinkDatabaseError] = useState<string>();
   const [linkingDatabaseId, setLinkingDatabaseId] = useState<string>();
 
-  const inputRefs = useRef<Map<string, HTMLTextAreaElement | HTMLInputElement>>(new Map());
+  const inputRefs = useRef<Map<string, HTMLTextAreaElement | HTMLInputElement | HTMLDivElement>>(new Map());
 
   useEffect(() => {
     let active = true;
@@ -102,15 +349,45 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
     return () => { active = false; };
   }, []);
 
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const focusEnd = () => {
+      setSelectedLines([]); selectionAnchor.current = null; window.getSelection()?.removeAllRanges();
+      const last = blocks.at(-1);
+      if (!last || ['divider', 'database-view', 'columns'].includes(last.type)) insertBlockAfter(last?.id ?? '', 'text', '');
+      else focusBlock(last.id);
+    };
+    canvas?.addEventListener('max:focus-page-end', focusEnd);
+    return () => canvas?.removeEventListener('max:focus-page-end', focusEnd);
+  // Rebind when the document changes; insertBlockAfter captures this same block snapshot.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blocks]);
   // Focus management helper
   function focusBlock(id: string, cursorAtEnd = true) {
+    setFocusedBlockId(id);
     setTimeout(() => {
       const el = inputRefs.current.get(id);
       if (el) {
         el.focus();
-        if (cursorAtEnd) {
-          const len = el.value.length;
-          el.setSelectionRange(len, len);
+        if (el instanceof HTMLDivElement) {
+          // contentEditable element
+          if (cursorAtEnd) {
+            const sel = window.getSelection();
+            if (sel) {
+              const range = document.createRange();
+              range.selectNodeContents(el);
+              range.collapse(false);
+              sel.removeAllRanges();
+              sel.addRange(range);
+            }
+          } else {
+            setCaretOffset(el, 0);
+          }
+        } else if ('setSelectionRange' in el) {
+          if (cursorAtEnd) {
+            const len = el.value.length;
+            el.setSelectionRange(len, len);
+          }
         }
       }
     }, 20);
@@ -218,12 +495,13 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
         propertyState: source?.propertyState,
         sorts: source?.sorts,
       });
+      if (!linked.ok) throw new Error(linked.error.message);
       updateBlock(blockId, {
         content: '',
         databaseId: database.id,
         databaseKind: undefined,
         type: 'database-view',
-        viewId: linked.ok ? linked.value.id : source?.id,
+        viewId: linked.value.id,
       });
       setLinkDatabaseBlockId(null);
       setActiveSlashBlockId(null);
@@ -236,40 +514,48 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
 
   // Handle markdown shortcut triggers: #, ##, ###, -, *, 1., [], >, ---, /2col
   function handleContentChange(id: string, text: string) {
+    deletedSelection.current = null;
     // Check for markdown shortcuts at line start
     if (text === '# ') {
       updateBlock(id, { content: '', type: 'h1' });
       setActiveSlashBlockId(null);
+      setTimeout(() => { const element = inputRefs.current.get(id); if (element instanceof HTMLDivElement) element.innerHTML = ''; focusBlock(id, false); }, 0);
       return;
     }
     if (text === '## ') {
       updateBlock(id, { content: '', type: 'h2' });
       setActiveSlashBlockId(null);
+      setTimeout(() => { const element = inputRefs.current.get(id); if (element instanceof HTMLDivElement) element.innerHTML = ''; focusBlock(id, false); }, 0);
       return;
     }
     if (text === '### ') {
       updateBlock(id, { content: '', type: 'h3' });
       setActiveSlashBlockId(null);
+      setTimeout(() => { const element = inputRefs.current.get(id); if (element instanceof HTMLDivElement) element.innerHTML = ''; focusBlock(id, false); }, 0);
       return;
     }
     if (text === '- ' || text === '* ') {
       updateBlock(id, { content: '', type: 'bullet' });
       setActiveSlashBlockId(null);
+      setTimeout(() => { const element = inputRefs.current.get(id); if (element instanceof HTMLDivElement) element.innerHTML = ''; focusBlock(id, false); }, 0);
       return;
     }
     if (text === '1. ') {
       updateBlock(id, { content: '', type: 'number' });
       setActiveSlashBlockId(null);
+      setTimeout(() => { const element = inputRefs.current.get(id); if (element instanceof HTMLDivElement) element.innerHTML = ''; focusBlock(id, false); }, 0);
       return;
     }
     if (text === '[] ' || text === '[ ] ') {
       updateBlock(id, { checked: false, content: '', type: 'todo' });
       setActiveSlashBlockId(null);
+      setTimeout(() => { const element = inputRefs.current.get(id); if (element instanceof HTMLDivElement) element.innerHTML = ''; focusBlock(id, false); }, 0);
       return;
     }
     if (text === '> ') {
       updateBlock(id, { calloutIcon: '💡', content: '', type: 'callout' });
       setActiveSlashBlockId(null);
+      setTimeout(() => { const element = inputRefs.current.get(id); if (element instanceof HTMLDivElement) element.innerHTML = ''; focusBlock(id, false); }, 0);
       return;
     }
     if (text === '---') {
@@ -282,7 +568,7 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
     // Slash command trigger
     if (text.startsWith('/')) {
       setActiveSlashBlockId(id);
-      setSlashQuery(text.substring(1));
+      setSlashQuery(text.substring(1).replace(/[\u200B-\u200D\uFEFF]/g, '').trim());
       setSlashIndex(0);
     } else if (activeSlashBlockId === id) {
       setActiveSlashBlockId(null);
@@ -292,7 +578,7 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
     updateBlock(id, { content: text });
   }
 
-  function handleKeyDown(event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>, block: NotionBlock, index: number) {
+  function handleKeyDown(event: KeyboardEvent<HTMLDivElement | HTMLInputElement | HTMLTextAreaElement>, block: NotionBlock, index: number) {
     // If slash menu is open for this block
     if (activeSlashBlockId === block.id) {
       if (newDatabaseBlockId === block.id || linkDatabaseBlockId === block.id) {
@@ -336,9 +622,23 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
         updateBlock(block.id, { type: 'text' });
         return;
       }
-      const cursor = event.currentTarget.selectionStart ?? block.content.length;
-      const before = block.content.slice(0, cursor);
-      const after = block.content.slice(cursor);
+      const target = event.currentTarget;
+      let cursor: number;
+      let before: string, after: string;
+      if (target instanceof HTMLDivElement) {
+        const selection = window.getSelection();
+        if (selection?.rangeCount && target.contains(selection.anchorNode) && target.contains(selection.focusNode)) {
+          const range = selection.getRangeAt(0);
+          const prefix = range.cloneRange(); prefix.selectNodeContents(target); prefix.setEnd(range.startContainer, range.startOffset);
+          const suffix = range.cloneRange(); suffix.selectNodeContents(target); suffix.setStart(range.endContainer, range.endOffset);
+          const beforeElement = document.createElement('div'); beforeElement.append(prefix.cloneContents());
+          const afterElement = document.createElement('div'); afterElement.append(suffix.cloneContents());
+          before = htmlToMarkdown(beforeElement); after = htmlToMarkdown(afterElement);
+        } else { before = block.content; after = ''; }
+      } else {
+        cursor = target.selectionStart ?? block.content.length;
+        before = block.content.slice(0, cursor); after = block.content.slice(target.selectionEnd ?? cursor);
+      }
       const nextType: BlockType = block.type === 'bullet' ? 'bullet' : block.type === 'todo' ? 'todo' : block.type === 'number' ? 'number' : 'text';
       const newBlock: NotionBlock = { content: after, id: 'block_' + Math.random().toString(36).substring(2, 9), type: nextType };
       const next = [...blocks];
@@ -350,54 +650,78 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
     }
 
     // Backspace at the start merges with the previous block, matching document editors.
-    if (event.key === 'Backspace' && (event.currentTarget.selectionStart ?? 0) === 0) {
-      if (block.type !== 'text') {
-        event.preventDefault();
-        updateBlock(block.id, { type: 'text' });
+    // Only trigger merge when there is NO text selection (i.e. cursor is collapsed at position 0).
+    {
+      const target = event.currentTarget;
+      const isContentEditable = target instanceof HTMLDivElement;
+      let cursorAtStart = false;
+      let hasSelection = false;
+
+      if (isContentEditable) {
+        const sel = window.getSelection();
+        hasSelection = sel ? !sel.isCollapsed : false;
+        cursorAtStart = !hasSelection && (sel ? getCaretOffset(target) === 0 : false);
+      } else {
+        const start = target.selectionStart ?? 0;
+        const end = target.selectionEnd ?? 0;
+        hasSelection = start !== end;
+        cursorAtStart = !hasSelection && start === 0;
+      }
+
+      if (event.key === 'Backspace' && hasSelection) {
+        // Let the browser handle deletion of selected text natively.
         return;
       }
-      const previous = blocks[index - 1];
-      if (previous) {
-        event.preventDefault();
-        const boundary = previous.content.length;
-        const next = blocks.map((candidate) => candidate.id === previous.id ? { ...candidate, content: previous.content + block.content } : candidate).filter((candidate) => candidate.id !== block.id);
-        onChange(next);
-        setTimeout(() => {
-          const target = inputRefs.current.get(previous.id);
-          target?.focus();
-          target?.setSelectionRange(boundary, boundary);
-        }, 20);
-        return;
-      }
-    }
 
-    if (event.key === 'ArrowUp' && index > 0 && (event.currentTarget.selectionStart ?? 0) === 0) {
-      event.preventDefault();
-      focusBlock(blocks[index - 1]?.id ?? block.id);
-    } else if (event.key === 'ArrowDown' && index < blocks.length - 1 && (event.currentTarget.selectionStart ?? 0) === block.content.length) {
-      event.preventDefault();
-      focusBlock(blocks[index + 1]?.id ?? block.id, false);
-    }
-
-    // Arrow Up / Down navigation
-    if (event.key === 'ArrowUp' && index > 0) {
-      const prevBlock = blocks[index - 1];
-      if (prevBlock) {
-        const input = inputRefs.current.get(block.id);
-        if (input && input.selectionStart === 0) {
+      if (event.key === 'Backspace' && cursorAtStart) {
+        if (block.type !== 'text') {
           event.preventDefault();
-          focusBlock(prevBlock.id);
+          updateBlock(block.id, { type: 'text' });
+          return;
+        }
+        const previous = blocks[index - 1];
+        if (previous) {
+          event.preventDefault();
+          const boundary = previous.content.length;
+          const next = blocks.map((candidate) => candidate.id === previous.id ? { ...candidate, content: previous.content + block.content } : candidate).filter((candidate) => candidate.id !== block.id);
+          onChange(next);
+          setTimeout(() => {
+            const prevEl = inputRefs.current.get(previous.id);
+            if (prevEl) {
+              prevEl.focus();
+              if (prevEl instanceof HTMLDivElement) {
+                setCaretOffset(prevEl, boundary);
+              } else if ('setSelectionRange' in prevEl) {
+                prevEl.setSelectionRange(boundary, boundary);
+              }
+            }
+          }, 20);
+          return;
         }
       }
     }
-    if (event.key === 'ArrowDown' && index < blocks.length - 1) {
-      const nextBlock = blocks[index + 1];
-      if (nextBlock) {
-        const input = inputRefs.current.get(block.id);
-        if (input && input.selectionStart === input.value.length) {
-          event.preventDefault();
-          focusBlock(nextBlock.id, false);
-        }
+
+    // Arrow Up / Down navigation (works for both input/textarea and contentEditable)
+    {
+      const target = event.currentTarget;
+      let cursorPos: number;
+      let contentLen: number;
+
+      if (target instanceof HTMLDivElement) {
+        cursorPos = getCaretOffset(target);
+        if (cursorPos < 0) cursorPos = 0;
+        contentLen = (target.textContent ?? '').length;
+      } else {
+        cursorPos = target.selectionStart ?? 0;
+        contentLen = ('value' in target) ? (target as HTMLInputElement).value.length : 0;
+      }
+
+      if (event.key === 'ArrowUp' && index > 0 && cursorPos === 0) {
+        event.preventDefault();
+        focusBlock(blocks[index - 1]?.id ?? block.id);
+      } else if (event.key === 'ArrowDown' && index < blocks.length - 1 && cursorPos === contentLen) {
+        event.preventDefault();
+        focusBlock(blocks[index + 1]?.id ?? block.id, false);
       }
     }
   }
@@ -562,6 +886,22 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
       },
     },
 
+    ...(['quote', 'code', 'toggle'] as const).map((type): SlashOption => ({
+      category: 'basic', id: type, icon: type === 'code' ? FileText : type === 'quote' ? Lightbulb : List,
+      label: { quote: 'Quote', code: 'Code', toggle: 'Toggle list' }[type],
+      labelAr: { quote: 'اقتباس', code: 'كود', toggle: 'قائمة قابلة للطي' }[type],
+      description: { quote: 'Highlight a quotation', code: 'Code with preserved spacing', toggle: 'Collapsible notes under a heading' }[type],
+      descriptionAr: { quote: 'إبراز اقتباس', code: 'كتابة كود', toggle: 'ملاحظات قابلة للطي' }[type],
+      keywords: [type, 'block'], run: (id) => { updateBlock(id, { type, content: '', col1Blocks: type === 'toggle' ? [{ id: crypto.randomUUID(), type: 'text', content: '' }] : undefined }); setActiveSlashBlockId(null); focusBlock(id); },
+    })),
+    ...(['page-link', 'embed', 'bookmark', 'image', 'video', 'audio', 'file', 'simple-table', 'table-of-contents'] as const).map((type): SlashOption => ({
+      category: 'basic', id: type, icon: FileText,
+      label: { 'page-link': 'Link to page', embed: 'Embed', bookmark: 'Web bookmark', image: 'Image', video: 'Video', audio: 'Audio', file: 'File link', 'simple-table': 'Simple table', 'table-of-contents': 'Table of contents' }[type],
+      labelAr: { 'page-link': 'رابط صفحة', embed: 'تضمين', bookmark: 'إشارة ويب', image: 'صورة', video: 'فيديو', audio: 'صوت', file: 'رابط ملف', 'simple-table': 'جدول بسيط', 'table-of-contents': 'محتويات الصفحة' }[type],
+      description: type === 'page-link' ? 'Link a workspace page with automatic backlinks' : type === 'simple-table' ? 'Rows and columns without a database' : type === 'table-of-contents' ? 'Navigate headings on this page' : 'Add content using a web URL',
+      descriptionAr: 'إضافة محتوى إلى الصفحة', keywords: [type, 'media', 'link'],
+      run: (id) => { updateBlock(id, { type, content: '' }); setActiveSlashBlockId(null); },
+    })),
     // Databases
     {
       category: 'database',
@@ -596,7 +936,7 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
 
   const filteredSlashOptions = slashOptions.filter((opt) => {
     if (!slashQuery) return true;
-    const q = slashQuery.toLowerCase();
+    const q = slashQuery.replace(/[\u200B-\u200D\uFEFF]/g, '').trim().toLowerCase();
     return (
       opt.label.toLowerCase().includes(q) ||
       opt.labelAr.includes(q) ||
@@ -652,12 +992,71 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
 
   return (
     <div
+      ref={canvasRef}
+      tabIndex={-1}
       className="notion-editor-canvas"
+      onContextMenu={(event) => {
+        const target = event.target as Element;
+        if (target.closest('.notion-editor-canvas') !== event.currentTarget || target.closest('.database-page-container,button,a')) return;
+        event.preventDefault(); event.stopPropagation();
+        const row = target.closest('.notion-block-row');
+        const index = row ? Array.from(event.currentTarget.children).indexOf(row) : blocks.length - 1;
+        const block = blocks[index];
+        if (block && block.type === 'text' && ['', '/'].includes(block.content.replace(/[\u200B-\u200D\uFEFF]/g, '').trim())) {
+          setActiveSlashBlockId(block.id); setSlashQuery(''); setSlashIndex(0); focusBlock(block.id);
+        } else openInsertMenu(block?.id ?? '');
+      }}
+      onPointerDown={(event) => {
+        if (event.target !== event.currentTarget) return;
+        setSelectedLines([]); selectionAnchor.current = null;
+        window.getSelection()?.removeAllRanges();
+      }}
+      onKeyDownCapture={(event) => {
+        if ((event.target as Element).closest('.notion-editor-canvas') !== event.currentTarget) return;
+        if (event.nativeEvent.isComposing || (event.target as Element).closest('input,textarea,.inline-format-toolbar')) return;
+        if ((event.target as Element).closest('.database-page-container,.notion-slash-menu,.notion-block-action-menu')) return;
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
+          event.preventDefault(); event.stopPropagation();
+          selectionAnchor.current = 0;
+          if (blocks.length) selectLines(0, blocks.length - 1);
+          event.currentTarget.focus();
+          return;
+        }
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z' && deletedSelection.current) {
+          event.preventDefault(); event.stopPropagation(); onChange(deletedSelection.current); deletedSelection.current = null;
+          event.currentTarget.focus(); return;
+        }
+        if ((event.target as Element).closest('[contenteditable="true"]') && !selectedLines.length) return;
+        if (selectedLines.length && (event.key === 'Backspace' || event.key === 'Delete')) {
+          event.preventDefault(); event.stopPropagation();
+          deletedSelection.current = blocks;
+          const next = blocks.filter((_, index) => !selectedLines.includes(index));
+          const fallback: NotionBlock = { id: crypto.randomUUID(), type: 'text', content: '' };
+          onChange(next.length ? next : [fallback]);
+          setSelectedLines([]); selectionAnchor.current = null;
+          focusBlock((next.at(-1) ?? fallback).id);
+        } else if (event.shiftKey && ['ArrowUp', 'ArrowDown'].includes(event.key)) {
+          const current = blocks.findIndex((block) => block.id === focusedBlockId);
+          const anchor = selectionAnchor.current ?? Math.max(0, current);
+          const edge = selectedLines.length ? (event.key === 'ArrowDown' ? selectedLines.at(-1)! : selectedLines[0]!) : anchor;
+          event.preventDefault(); event.stopPropagation(); selectionAnchor.current = anchor;
+          selectLines(anchor, Math.max(0, Math.min(blocks.length - 1, edge + (event.key === 'ArrowDown' ? 1 : -1))));
+          event.currentTarget.focus();
+        } else if (event.key === 'Escape') {
+          setSelectedLines([]); selectionAnchor.current = null;
+        }
+      }}
+      onCopy={(event) => {
+        if (!selectedLines.length || (event.target as Element).closest('.notion-editor-canvas') !== event.currentTarget) return;
+        event.preventDefault(); event.stopPropagation();
+        event.clipboardData.setData('text/plain', pageText(blocks.filter((_, index) => selectedLines.includes(index))));
+      }}
       onClick={(event) => {
+        if (selectedLines.length || !window.getSelection()?.isCollapsed) return;
         if (event.target !== event.currentTarget) return;
         const last = blocks.at(-1);
         if (!last) insertBlockAfter('', 'text', '');
-        else if (last.type === 'divider' || last.type === 'database-view' || last.type === 'columns') insertBlockAfter(last.id, 'text', '');
+        else if (['divider', 'database-view', 'columns', 'page-link', 'embed', 'bookmark', 'image', 'video', 'audio', 'file', 'simple-table', 'table-of-contents'].includes(last.type)) insertBlockAfter(last.id, 'text', '');
         else focusBlock(last.id);
       }}
     >
@@ -665,17 +1064,47 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
         const isDragging = draggedIndex === index;
         const isDragOver = dragOverIndex === index;
         const isSlashActive = activeSlashBlockId === block.id;
+        let listNumber = 1;
+        for (let previous = index - 1; previous >= 0 && blocks[previous]?.type === 'number'; previous--) listNumber++;
+        const richText = <RichTextBlock blockId={block.id} content={block.content} focused={focusedBlockId === block.id} index={index} locale={locale} onContentChange={handleContentChange} onFocus={() => setFocusedBlockId(block.id)} onBlur={() => setFocusedBlockId(null)} onKeyDown={(event) => handleKeyDown(event, block, index)} registerRef={(element) => { if (element) inputRefs.current.set(block.id, element); else inputRefs.current.delete(block.id); }} />;
 
         return (
           <div
             key={block.id}
             className="notion-block-row"
+            data-block-id={block.id}
+            onKeyDown={(event) => {
+              if (block.type !== 'page-link' || event.key !== 'Backspace' || event.ctrlKey || event.metaKey || event.altKey) return;
+              const target = event.target as Element;
+              if (!target.closest('.page-link-row')) return;
+              event.preventDefault(); event.stopPropagation(); removeBlock(block.id);
+            }}
+            data-line-selected={selectedLines.includes(index)}
+            onPointerDown={(event) => {
+              const target = event.target as Element;
+              if (target.closest('.notion-editor-canvas') !== canvasRef.current || target.closest('button,.database-page-container,.notion-slash-menu')) return;
+              if (target.closest('input,textarea,[contenteditable="true"],a')) { selecting.current = false; return; }
+              if (event.shiftKey && selectionAnchor.current !== null) {
+                event.preventDefault(); selectLines(selectionAnchor.current, index); canvasRef.current?.focus();
+              } else { selectionAnchor.current = index; setSelectedLines([]); selecting.current = true; }
+            }}
+            onPointerEnter={(event) => {
+              if (!selecting.current || !event.buttons || selectionAnchor.current === null || selectionAnchor.current === index) return;
+              selectLines(selectionAnchor.current, index); canvasRef.current?.focus();
+            }}
             data-scroll-kind={block.type}
             data-scroll-label={block.type === 'database-view' ? (block.databaseKind || (locale === 'ar' ? 'عرض قاعدة البيانات' : 'Database view')) : undefined}
             data-drag-over={isDragOver}
             data-dragging={isDragging}
             data-drop-edge={isDragOver ? dragOverEdge : undefined}
             data-type={block.type}
+            onClick={(e) => {
+              if (selectedLines.length || !window.getSelection()?.isCollapsed) return;
+              // Focus the block input if the user clicked the row padding/empty space
+              if (e.target === e.currentTarget || (e.target as Element).classList.contains('notion-block-body')) {
+                focusBlock(block.id);
+              }
+            }}
             onDragEnd={() => {
               setDraggedIndex(null);
               setDragOverIndex(null);
@@ -698,7 +1127,10 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
                 aria-label={locale === 'ar' ? 'خيارات السطر' : 'Block actions'}
                 className="notion-gutter-btn notion-gutter-btn--drag"
                 draggable
-                onClick={() => setBlockMenuId(blockMenuId === block.id ? null : block.id)}
+                aria-haspopup="menu"
+                aria-expanded={blockMenuId === block.id}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={(event) => { event.stopPropagation(); setBlockMenuId(current => current === block.id ? null : block.id); }}
                 onDragStart={(event) => handleDragStart(event, index)}
                 onKeyDown={(event) => {
                   if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
@@ -706,7 +1138,7 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
                     moveBlock(index, event.key === 'ArrowUp' ? -1 : 1);
                   }
                 }}
-                title={locale === 'ar' ? 'سحب للترتيب' : 'Drag to reorder'}
+                title={locale === 'ar' ? 'انقر للخيارات، اسحب للترتيب' : 'Click for options · Drag to reorder'}
                 type="button"
               >
                 <GripVertical size={14} />
@@ -715,7 +1147,10 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
                 <div className="notion-block-action-menu" role="menu">
                   <button onClick={() => { setBlockMenuId(null); updateBlock(block.id, { type: 'text' }); }} role="menuitem" type="button">{locale === 'ar' ? 'نص' : 'Text'}</button>
                   <button onClick={() => { setBlockMenuId(null); updateBlock(block.id, { type: 'h2' }); }} role="menuitem" type="button">{locale === 'ar' ? 'عنوان' : 'Heading'}</button>
-                  <button onClick={() => { const copy = { ...block, id: 'block_' + Math.random().toString(36).substring(2, 9) }; const next = [...blocks]; next.splice(index + 1, 0, copy); onChange(next); setBlockMenuId(null); }} role="menuitem" type="button">{locale === 'ar' ? 'إنشاء نسخة' : 'Duplicate'}</button>
+                  <button onClick={() => { const next = [...blocks]; next.splice(index + 1, 0, duplicateBlock(block)); onChange(next); setBlockMenuId(null); }} role="menuitem" type="button">{locale === 'ar' ? 'إنشاء نسخة' : 'Duplicate'}</button>
+                  <button disabled={index === 0} onClick={() => { moveBlock(index, -1); setBlockMenuId(null); }} role="menuitem" type="button">{locale === 'ar' ? 'نقل لأعلى' : 'Move up'}</button>
+                  <button disabled={index === blocks.length - 1} onClick={() => { moveBlock(index, 1); setBlockMenuId(null); }} role="menuitem" type="button">{locale === 'ar' ? 'نقل لأسفل' : 'Move down'}</button>
+                  {['text', 'h1', 'h2', 'h3', 'bullet', 'number', 'todo', 'quote', 'code'].includes(block.type) && <details><summary>{locale === 'ar' ? 'تحويل إلى' : 'Turn into'}</summary>{(['text', 'h1', 'h2', 'h3', 'bullet', 'number', 'todo', 'quote', 'code'] as const).map((type) => <button type="button" role="menuitem" key={type} onClick={() => { updateBlock(block.id, { type }); setBlockMenuId(null); }}>{({ text: 'Text', h1: 'Heading 1', h2: 'Heading 2', h3: 'Heading 3', bullet: 'Bulleted list', number: 'Numbered list', todo: 'To-do', quote: 'Quote', code: 'Code' })[type]}</button>)}</details>}
                   <button className="danger" onClick={() => { setBlockMenuId(null); removeBlock(block.id); }} role="menuitem" type="button">{locale === 'ar' ? 'حذف' : 'Delete'}</button>
                 </div>
               )}
@@ -723,71 +1158,14 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
 
             {/* Block Body */}
             <div className="notion-block-body">
-              {block.type === 'text' && (
-                <textarea
-                  ref={(el) => {
-                    if (el) inputRefs.current.set(block.id, el);
-                    else inputRefs.current.delete(block.id);
-                  }}
-                  className="notion-text-input"
-                  onChange={(e) => handleContentChange(block.id, e.target.value)}
-                  onKeyDown={(e) => handleKeyDown(e, block, index)}
-                  placeholder={
-                    index === 0
-                      ? locale === 'ar'
-                        ? "اكتب شيئاً، أو اكتب '/' للأوامر..."
-                        : "Type something, or press '/' for commands..."
-                      : ''
-                  }
-                  rows={1}
-                  value={block.content}
-                />
-              )}
-
-              {block.type === 'h1' && (
-                <input
-                  ref={(el) => {
-                    if (el) inputRefs.current.set(block.id, el);
-                    else inputRefs.current.delete(block.id);
-                  }}
-                  className="notion-heading-input notion-heading-input--h1"
-                  onChange={(e) => handleContentChange(block.id, e.target.value)}
-                  onKeyDown={(e) => handleKeyDown(e, block, index)}
-                  placeholder={locale === 'ar' ? 'عنوان 1...' : 'Heading 1...'}
-                  value={block.content}
-                />
-              )}
-
-              {block.type === 'h2' && (
-                <input
-                  ref={(el) => {
-                    if (el) inputRefs.current.set(block.id, el);
-                    else inputRefs.current.delete(block.id);
-                  }}
-                  className="notion-heading-input notion-heading-input--h2"
-                  onChange={(e) => handleContentChange(block.id, e.target.value)}
-                  onKeyDown={(e) => handleKeyDown(e, block, index)}
-                  placeholder={locale === 'ar' ? 'عنوان 2...' : 'Heading 2...'}
-                  value={block.content}
-                />
-              )}
-
-              {block.type === 'h3' && (
-                <input
-                  ref={(el) => {
-                    if (el) inputRefs.current.set(block.id, el);
-                    else inputRefs.current.delete(block.id);
-                  }}
-                  className="notion-heading-input notion-heading-input--h3"
-                  onChange={(e) => handleContentChange(block.id, e.target.value)}
-                  onKeyDown={(e) => handleKeyDown(e, block, index)}
-                  placeholder={locale === 'ar' ? 'عنوان 3...' : 'Heading 3...'}
-                  value={block.content}
-                />
-              )}
+              {['page-link', 'embed', 'bookmark', 'image', 'video', 'audio', 'file', 'simple-table', 'table-of-contents'].includes(block.type) && <ExtraBlock block={block} blocks={blocks} locale={locale} onChange={(patch) => updateBlock(block.id, patch)} />}
+              {block.type === 'text' && richText}
+              {(block.type === 'quote' || block.type === 'code') && <textarea ref={(element) => { if (element) inputRefs.current.set(block.id, element); else inputRefs.current.delete(block.id); }} className={'notion-extra-block notion-extra-block--' + block.type} aria-label={block.type} rows={Math.max(2, block.content.split('\n').length)} value={block.content} onChange={(event) => updateBlock(block.id, { content: event.target.value })} onKeyDown={(event) => { if (block.type !== 'code') handleKeyDown(event, block, index); }} />}
+              {block.type === 'toggle' && <details className="notion-toggle-block" open><summary><input ref={(element) => { if (element) inputRefs.current.set(block.id, element); else inputRefs.current.delete(block.id); }} placeholder={locale === 'ar' ? 'عنوان' : 'Toggle heading'} value={block.content} onChange={(event) => updateBlock(block.id, { content: event.target.value })} /></summary><NotionBlockEditor blocks={block.col1Blocks ?? []} locale={locale} onChange={(next) => updateBlock(block.id, { col1Blocks: next })} parentPageId={parentPageId} onWorkspaceChange={onWorkspaceChange} /></details>}
+              {['h1', 'h2', 'h3'].includes(block.type) && richText}
 
               {block.type === 'todo' && (
-                <div className="notion-todo-wrap">
+                <div className="notion-todo-wrap" data-checked={Boolean(block.checked)}>
                   <button
                     aria-checked={Boolean(block.checked)}
                     aria-label="Toggle task"
@@ -798,70 +1176,28 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
                   >
                     {block.checked && <Check size={13} strokeWidth={3} />}
                   </button>
-                  <input
-                    ref={(el) => {
-                      if (el) inputRefs.current.set(block.id, el);
-                      else inputRefs.current.delete(block.id);
-                    }}
-                    className="notion-todo-input"
-                    data-checked={Boolean(block.checked)}
-                    onChange={(e) => handleContentChange(block.id, e.target.value)}
-                    onKeyDown={(e) => handleKeyDown(e, block, index)}
-                    placeholder={locale === 'ar' ? 'مهمة...' : 'To-do item...'}
-                    value={block.content}
-                  />
+                  {richText}
                 </div>
               )}
 
               {block.type === 'bullet' && (
                 <div className="notion-bullet-wrap">
                   <span className="notion-bullet-dot" />
-                  <input
-                    ref={(el) => {
-                      if (el) inputRefs.current.set(block.id, el);
-                      else inputRefs.current.delete(block.id);
-                    }}
-                    className="notion-bullet-input"
-                    onChange={(e) => handleContentChange(block.id, e.target.value)}
-                    onKeyDown={(e) => handleKeyDown(e, block, index)}
-                    placeholder={locale === 'ar' ? 'عنصر قائمة...' : 'List item...'}
-                    value={block.content}
-                  />
+                  {richText}
                 </div>
               )}
 
               {block.type === 'number' && (
                 <div className="notion-number-wrap">
-                  <span className="notion-number-prefix">{index + 1}.</span>
-                  <input
-                    ref={(el) => {
-                      if (el) inputRefs.current.set(block.id, el);
-                      else inputRefs.current.delete(block.id);
-                    }}
-                    className="notion-number-input"
-                    onChange={(e) => handleContentChange(block.id, e.target.value)}
-                    onKeyDown={(e) => handleKeyDown(e, block, index)}
-                    placeholder={locale === 'ar' ? 'عنصر مرقم...' : 'List item...'}
-                    value={block.content}
-                  />
+                  <span className="notion-number-prefix">{listNumber}.</span>
+                  {richText}
                 </div>
               )}
 
               {block.type === 'callout' && (
                 <div className="notion-callout-card">
                   <span className="notion-callout-icon">{block.calloutIcon || '💡'}</span>
-                  <textarea
-                    ref={(el) => {
-                      if (el) inputRefs.current.set(block.id, el);
-                      else inputRefs.current.delete(block.id);
-                    }}
-                    className="notion-callout-input"
-                    onChange={(e) => handleContentChange(block.id, e.target.value)}
-                    onKeyDown={(e) => handleKeyDown(e, block, index)}
-                    placeholder={locale === 'ar' ? 'ملاحظة هامة...' : 'Callout note...'}
-                    rows={1}
-                    value={block.content}
-                  />
+                  {richText}
                 </div>
               )}
 
@@ -910,16 +1246,8 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
                     <Suspense fallback={<div aria-live="polite" className="notion-embedded-db-loading" role="status">{locale === 'ar' ? 'جارٍ تحميل قاعدة البيانات…' : 'Loading database…'}</div>}>
                     {block.databaseId ? (
                       <DatabasePage databaseId={block.databaseId} embedded initialViewId={block.viewId} locale={locale} />
-                    ) : (block.databaseKind ?? block.content) === 'items' ? (
-                      <ObjectWorkspace createRequest={0} locale={locale} objectKind="item" />
-                    ) : (block.databaseKind ?? block.content) === 'people' ? (
-                      <ObjectWorkspace createRequest={0} locale={locale} objectKind="person" />
-                    ) : (block.databaseKind ?? block.content) === 'transactions' ? (
-                      <TransactionsWorkspace createRequest={0} locale={locale} />
-                    ) : (block.databaseKind ?? block.content) === 'accounts' ? (
-                      <AccountsWorkspace createRequest={0} locale={locale} />
                     ) : (
-                      <ReconciliationWorkspace locale={locale} />
+                      <LegacyDatabaseLink alias={block.databaseKind ?? block.content} locale={locale} />
                     )}
                     </Suspense>
                   </div>
@@ -1022,28 +1350,6 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
         );
       })}
 
-      {/* Bottom click-to-add row */}
-      <div
-        className="notion-canvas-bottom-click-target"
-        onClick={() => {
-          const last = blocks.at(-1);
-          if (!last) insertBlockAfter('', 'text', '');
-          else if (last.type === 'divider' || last.type === 'database-view' || last.type === 'columns') insertBlockAfter(last.id, 'text', '');
-          else focusBlock(last.id);
-        }}
-      >
-        <button
-          className="notion-add-content-button"
-          onClick={(event) => {
-            event.stopPropagation();
-            openInsertMenu(blocks.at(-1)?.id ?? '');
-          }}
-          type="button"
-        >
-          <Plus aria-hidden="true" size={14} />
-          {locale === 'ar' ? 'أضف نصًا أو قاعدة بيانات' : 'Add text or database'}
-        </button>
-      </div>
     </div>
   );
 }

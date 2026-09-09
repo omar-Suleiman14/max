@@ -39,7 +39,11 @@ export function ScrollOutline({ locale, pageKey }: { locale: Locale; pageKey: st
       });
     };
 
-    const observer = new MutationObserver(collect);
+    let collectTimeout: ReturnType<typeof setTimeout>;
+    const observer = new MutationObserver(() => {
+      clearTimeout(collectTimeout);
+      collectTimeout = setTimeout(collect, 200);
+    });
     observer.observe(root, { childList: true, subtree: true, characterData: true });
 
     const resize = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(collect);
@@ -50,6 +54,7 @@ export function ScrollOutline({ locale, pageKey }: { locale: Locale; pageKey: st
 
     return () => {
       cancelAnimationFrame(frame);
+      clearTimeout(collectTimeout);
       observer.disconnect();
       resize?.disconnect();
       root.removeEventListener('scroll', update);
@@ -97,7 +102,6 @@ export function ScrollOutline({ locale, pageKey }: { locale: Locale; pageKey: st
             <span
               aria-hidden="true"
               className="scroll-outline__line"
-              style={{ width: isCurrent ? 28 : 10 + Math.min(10, section.title.length / 5) }}
             />
             <span aria-hidden="true" className="scroll-outline__preview">
               <strong>{section.title}</strong>

@@ -1,3 +1,4 @@
+import { legacyRetailMigrationTemplate } from './legacy-retail-migration';
 import type { DatabaseSync } from 'node:sqlite';
 
 import type { PropertyType } from '../../shared/property-contract';
@@ -131,7 +132,7 @@ export class V020MigrationService {
     if (this.#persistent) this.#backupService.createBackup('pre-migration');
     return this.#unitOfWork.run(() => {
       // 1. Install Retail Template structure if databases not already created
-      const template = this.#templateService.getRetailTemplate(locale);
+      const template = legacyRetailMigrationTemplate(locale);
       const { databaseMap, propertyMap } = this.#templateService.importTemplate(template);
 
       const productsDbId = databaseMap.get('db_products')!;
@@ -183,7 +184,7 @@ export class V020MigrationService {
                 ? (rules.choices ?? []).map((label) => ({ label }))
                 : undefined,
               required: rules.required,
-              type: property.property_type,
+              type: String(property.property_type) === 'money' ? 'number' : property.property_type,
               uniqueValue: rules.unique,
             });
         if (existing && ['select', 'status'].includes(property.property_type)) {
@@ -676,7 +677,7 @@ export class V020MigrationService {
         AS value
     `);
     const migratedMoney = scalar(`
-      SELECT COALESCE(SUM(value.money_minor_value), 0) / 100.0 AS value
+      SELECT COALESCE(SUM(value.number_value), 0) AS value
       FROM workspace_records record
       JOIN workspace_property_values value ON value.record_id = record.id
       WHERE record.database_id = (
@@ -686,7 +687,7 @@ export class V020MigrationService {
     `, moneyAmountId);
     const legacyTransactions = scalar('SELECT COALESCE(SUM(total_amount), 0) AS value FROM shop_transactions');
     const migratedTransactions = scalar(`
-      SELECT COALESCE(SUM(value.money_minor_value), 0) / 100.0 AS value
+      SELECT COALESCE(SUM(value.number_value), 0) AS value
       FROM workspace_migration_map map
       JOIN workspace_property_values value ON value.record_id = map.workspace_id
       WHERE map.legacy_entity_type = 'transaction' AND value.property_id = ?

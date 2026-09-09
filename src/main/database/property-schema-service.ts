@@ -159,8 +159,6 @@ export class PropertySchemaService {
     switch (type) {
       case 'number':
         return row.number_value;
-      case 'money':
-        return row.money_minor_value !== null ? row.money_minor_value / 100 : null;
       case 'checkbox':
         return row.boolean_value !== null ? Boolean(row.boolean_value) : null;
       case 'date':
@@ -178,7 +176,7 @@ export class PropertySchemaService {
       return true;
     }
 
-    if (toType === 'number' || toType === 'money') {
+    if (toType === 'number') {
       const num = Number(val);
       return Number.isFinite(num);
     }
@@ -207,10 +205,6 @@ export class PropertySchemaService {
       return Number.isFinite(num) ? num : null;
     }
 
-    if (toType === 'money') {
-      const num = Number(val);
-      return Number.isFinite(num) ? num : null;
-    }
 
     if (toType === 'checkbox') {
       return Boolean(val);
@@ -227,13 +221,12 @@ export class PropertySchemaService {
   #applyConvertedValue(recordId: string, propertyId: string, targetType: PropertyType, val: unknown, now: string): void {
     let textVal: string | null = null;
     let numVal: number | null = null;
-    let moneyMinor: number | null = null;
+    const moneyMinor = null;
     let boolVal: number | null = null;
     let dateStart: string | null = null;
 
     if (val !== null && val !== undefined) {
       if (targetType === 'number') numVal = Number(val);
-      else if (targetType === 'money') moneyMinor = Math.round(Number(val) * 100);
       else if (targetType === 'checkbox') boolVal = val ? 1 : 0;
       else if (targetType === 'date') dateStart = dateValueToText(val);
       else textVal = valueToText(val);

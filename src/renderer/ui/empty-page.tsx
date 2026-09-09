@@ -7,8 +7,9 @@ import {
   ReceiptText,
   Scale,
   Search,
-  Sparkles,
 } from 'lucide-react';
+
+import maxLogo from '../assets/max-logo.png';
 
 import type { AppPage } from '../app/app-types';
 import { type Locale, type TranslationKey, translate } from '../app/i18n';
@@ -42,7 +43,7 @@ function HomePage({ locale, onNavigate, onOpenCommand }: Pick<EmptyPageProps, 'l
     <div className="home-page">
       <section className="home-hero">
         <div className="home-page__icon" aria-hidden="true">
-          <Sparkles size={31} strokeWidth={1.55} />
+          <img alt="Max" className="home-page__logo" src={maxLogo} />
         </div>
         <h2>{translate(locale, 'homeTitle')}</h2>
         <p>{translate(locale, 'homeBody')}</p>
@@ -98,7 +99,11 @@ export function EmptyPage({ locale, onCreate, onNavigate, onOpenCommand, page }:
     return <HomePage locale={locale} onNavigate={onNavigate} onOpenCommand={onOpenCommand} />;
   }
 
-  const content = pageContent[page];
+  const content = pageContent[page] || {
+    body: 'unknownPageError',
+    empty: 'unknownPage',
+    icon: Plus, // or any valid icon
+  };
   const Icon = content.icon;
   return (
     <section className="empty-state">

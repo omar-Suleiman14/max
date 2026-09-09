@@ -1,14 +1,18 @@
 import maxLogo from '../assets/max-logo.png';
 import {
+  AlertTriangle,
   BadgeDollarSign,
   Archive,
-  ArrowLeftToLine,
-  ArrowRightToLine,
+  ArrowLeft,
+  ArrowRight,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
   ChevronDown,
   ChevronRight,
   Copy,
   Database,
-  GripVertical,
   MoreHorizontal,
   Pencil,
   Palette,
@@ -44,10 +48,11 @@ type SidebarProps = Readonly<{
   onResize: (width: number) => void;
   onSettingsSectionChange: (section: SettingsSectionId) => void;
   onToggleFavorite: (id: string, favorite: boolean) => void;
-  onReorderPages: (pages: readonly CustomPage[]) => void;
+  onReorderNodes: (orderedIds: string[], movedId?: string, parentNodeId?: string | null) => void;
   page: AppPage;
   settingsSection: SettingsSectionId;
   width: number;
+  runtimePlatform?: 'linux' | 'macos' | 'windows';
 }>;
 
 type WorkspaceNodeRow = Readonly<{
@@ -75,24 +80,31 @@ function SidebarAction({
   isActive,
   label,
   onClick,
+  shortcut,
+  title,
 }: Readonly<{
   collapsed: boolean;
   icon: LucideIcon;
   isActive?: boolean;
   label: string;
   onClick: () => void;
+  shortcut?: string;
+  title?: string;
 }>) {
   return (
     <button
       aria-current={isActive ? 'page' : undefined}
       aria-label={label}
+      aria-keyshortcuts={shortcut === '⌘ ,' ? 'Meta+,' : shortcut === 'Ctrl ,' ? 'Control+,' : undefined}
+      title={title ?? label}
       className="sidebar-action"
       data-active={isActive}
       onClick={onClick}
       type="button"
     >
       <Icon aria-hidden="true" size={18} strokeWidth={1.8} />
-      {!collapsed && <span>{label}</span>}
+      {!collapsed && <span className="sidebar-action__label">{label}</span>}
+      {!collapsed && shortcut && <kbd className="sidebar-action__shortcut">{shortcut}</kbd>}
     </button>
   );
 }
@@ -115,10 +127,11 @@ export function Sidebar({
   onResize,
   onSettingsSectionChange,
   onToggleFavorite,
-  onReorderPages,
+  onReorderNodes,
   page,
   settingsSection,
   width,
+  runtimePlatform,
 }: SidebarProps) {
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
@@ -130,7 +143,6 @@ export function Sidebar({
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const resizeStartRef = useRef<{ pointerId: number; startWidth: number; startX: number } | undefined>(undefined);
 
-  // Unified list of all pages (Home + Custom Pages) - all movable and reorderable!
   const allWorkspacePages = useMemo(() => [homePage, ...customPages], [customPages, homePage]);
   const favoritePages = allWorkspacePages.filter((candidate) => candidate.favorite);
 
@@ -174,6 +186,8 @@ export function Sidebar({
     };
   }, [menuPageId]);
 
+
+
   function moveFocus(event: KeyboardEvent<HTMLButtonElement>, index: number) {
     if (!['ArrowDown', 'ArrowUp', 'End', 'Home'].includes(event.key)) return;
     const items = itemRefs.current.filter((item): item is HTMLButtonElement => item !== null);
@@ -190,7 +204,7 @@ export function Sidebar({
 
   function handleDragStart(event: React.DragEvent, index: number) {
     event.dataTransfer.effectAllowed = 'move';
-    event.dataTransfer.setData('text/plain', allWorkspacePages[index]?.id ?? '');
+    event.dataTransfer.setData('text/plain', rootRows[index]?.id ?? '');
     setDraggedIndex(index);
   }
 
@@ -210,27 +224,33 @@ export function Sidebar({
       setDragOverIndex(null);
       return;
     }
-    const next = [...allWorkspacePages];
+    const next = [...rootRows];
     const [moved] = next.splice(draggedIndex, 1);
     if (moved) {
       const adjustedTarget = draggedIndex < targetIndex ? targetIndex - 1 : targetIndex;
       const insertAt = Math.max(0, adjustedTarget + (dragOverEdge === 'after' ? 1 : 0));
       next.splice(insertAt, 0, moved);
-      onReorderPages(next);
+      const destination = rootRows[targetIndex];
+      let parentNodeId: string | null = null;
+      if (destination && destination.depth > 0 && moved.id !== 'home') {
+        for (let i = targetIndex - 1; i >= 0; i--) {
+          if (rootRows[i]!.depth < destination.depth) { parentNodeId = rootRows[i]!.id; break; }
+        }
+      }
+      if (parentNodeId !== moved.id) onReorderNodes(next.map(r => r.id), moved.id, parentNodeId);
     }
     setDraggedIndex(null);
     setDragOverIndex(null);
   }
 
-  function movePage(index: number, direction: -1 | 1) {
+  function moveNode(index: number, direction: -1 | 1) {
     const target = index + direction;
-    if (target < 0 || target >= allWorkspacePages.length) return;
-    const next = [...allWorkspacePages];
+    if (target < 0 || target >= rootRows.length) return;
+    const next = [...rootRows];
     const [moved] = next.splice(index, 1);
     if (!moved) return;
     next.splice(target, 0, moved);
-    onReorderPages(next);
-    requestAnimationFrame(() => itemRefs.current[target]?.focus());
+    onReorderNodes(next.map(r => r.id));
   }
 
   const workspaceRows = useMemo<readonly WorkspaceRow[]>(() => {
@@ -252,11 +272,11 @@ export function Sidebar({
         parentNodeId: candidate.id === 'home' ? null : candidate.parentNodeId,
         positionKey: candidate.positionKey ?? (candidate.id === 'home' ? '00000000' : candidate.id),
       })),
-      ...databases.map((database) => ({
+      ...databases.filter((database) => !(embeddedDatabaseParent.has(database.id) && database.parentNodeId === embeddedDatabaseParent.get(database.id))).map((database) => ({
         database,
         id: database.id,
         kind: 'database' as const,
-        parentNodeId: nodeIds.has(database.parentNodeId ?? '')
+        parentNodeId: database.parentNodeId === null ? null : nodeIds.has(database.parentNodeId ?? '')
           ? database.parentNodeId
           : embeddedDatabaseParent.get(database.id),
         positionKey: database.positionKey,
@@ -271,8 +291,6 @@ export function Sidebar({
       childrenByParent.set(node.parentNodeId, children);
     }
     const sortNodes = (candidates: typeof nodes) => candidates.sort((left, right) => {
-      if (left.id === 'home') return -1;
-      if (right.id === 'home') return 1;
       return left.positionKey.localeCompare(right.positionKey);
     });
     for (const children of childrenByParent.values()) sortNodes(children);
@@ -294,10 +312,11 @@ export function Sidebar({
               : legacyKind === 'transactions' ? 'transaction' : undefined;
         views = target ? legacyViewNames[target] ?? [] : [];
       }
+      const embeddedViews = node.kind === 'page' ? node.page.blocks.flatMap((block) => block.type === 'database-view' && block.databaseId ? (databaseViewNames[block.databaseId] ?? []).map((view) => ({ ...view, databaseId: block.databaseId! })) : []) : [];
       rows.push({
         database: node.kind === 'database' ? node.database : undefined,
         depth,
-        hasChildren: childNodes.length > 0 || views.length > 0,
+        hasChildren: childNodes.length > 0 || views.length > 0 || embeddedViews.length > 0,
         id: node.id,
         kind: node.kind,
         page: node.kind === 'page' ? node.page : undefined,
@@ -306,28 +325,44 @@ export function Sidebar({
       if (node.kind === 'database') {
         for (const view of views) rows.push({ databaseId: node.id, depth: depth + 1, id: view.id, kind: 'view', name: view.name });
       }
+      for (const view of embeddedViews) rows.push({ databaseId: view.databaseId, depth: depth + 1, id: view.id, kind: 'view', name: view.name });
       for (const child of childNodes) walk(child, depth + 1);
     };
 
     const roots = sortNodes(nodes.filter((node) => !node.parentNodeId || !nodeById.has(node.parentNodeId) || node.id === 'home'));
     for (const root of roots) walk(root, 0);
-    for (const node of nodes) walk(node, 0);
+
     return rows;
   }, [allWorkspacePages, databaseViewNames, databases, expandedPageIds, legacyViewNames]);
+
+  const [settingsSearch, setSettingsSearch] = useState(() => {
+    try { return window.localStorage.getItem('max:settings-search') || ''; } catch { return ''; }
+  });
+  useEffect(() => {
+    try { window.localStorage.setItem('max:settings-search', settingsSearch); } catch { /* Storage may be unavailable. */ }
+  }, [settingsSearch]);
+
+  const rootRows = useMemo(() => workspaceRows.filter((r): r is WorkspaceNodeRow => r.kind !== 'view'), [workspaceRows]);
 
   const isRtl = locale === 'ar';
   const isSettings = page === 'settings';
   const collapseLabel = translate(locale, collapsed ? 'expandSidebar' : 'collapseSidebar');
   const CollapseIcon = collapsed
-    ? (isRtl ? ArrowLeftToLine : ArrowRightToLine)
-    : (isRtl ? ArrowRightToLine : ArrowLeftToLine);
+    ? (isRtl ? PanelRightOpen : PanelLeftOpen)
+    : (isRtl ? PanelRightClose : PanelLeftClose);
   const settingsSections: readonly Readonly<{ icon: LucideIcon; id: SettingsSectionId; label: string }>[] = [
     { icon: Store, id: 'settings-general', label: locale === 'ar' ? 'عام' : 'General' },
-    { icon: BadgeDollarSign, id: 'settings-pricing', label: locale === 'ar' ? 'التسعير' : 'Pricing' },
+    { icon: BadgeDollarSign, id: 'settings-quick-actions', label: locale === 'ar' ? 'الإجراءات السريعة' : 'Quick Actions' },
     { icon: Palette, id: 'settings-appearance', label: locale === 'ar' ? 'المظهر' : 'Appearance' },
     { icon: Database, id: 'settings-backup', label: locale === 'ar' ? 'النسخ الاحتياطي' : 'Backup' },
     { icon: Archive, id: 'settings-archive', label: locale === 'ar' ? 'الأرشيف والمهملات' : 'Archive & trash' },
+    { icon: AlertTriangle, id: 'settings-danger', label: locale === 'ar' ? 'خطر' : 'Danger' },
   ];
+  const filteredSettingsSections = (() => {
+    const q = settingsSearch.trim().toLowerCase();
+    if (!q) return settingsSections;
+    return settingsSections.filter(s => s.label.toLowerCase().includes(q));
+  })();
 
   function handleResizePointerDown(event: React.PointerEvent<HTMLDivElement>) {
     resizeStartRef.current = { pointerId: event.pointerId, startWidth: width, startX: event.clientX };
@@ -355,8 +390,8 @@ export function Sidebar({
     onResize(Math.min(420, Math.max(180, width + visualDirection * (isRtl ? -12 : 12))));
   }
 
-  const SettingsActionIcon = isSettings ? (isRtl ? ArrowRightToLine : ArrowLeftToLine) : Settings;
-  const settingsActionLabel = translate(locale, isSettings ? 'backToApp' : 'settings');
+  const SettingsActionIcon = isSettings ? (isRtl ? ArrowRight : ArrowLeft) : Settings;
+  const settingsActionLabel = translate(locale, isSettings ? 'back' : 'settings');
   const handleSettingsClick = isSettings ? () => onNavigate('home') : onOpenSettings;
 
   return (
@@ -370,192 +405,217 @@ export function Sidebar({
         </button>
       </div>
 
-      {isSettings ? (
-        <>
-          {!collapsed && <p className="sidebar__section-label">{locale === 'ar' ? 'الإعدادات' : 'Settings'}</p>}
-          <nav aria-label={locale === 'ar' ? 'أقسام الإعدادات' : 'Settings sections'} className="sidebar__nav">
-            {settingsSections.map(({ icon, id, label }) => (
-              <SidebarAction
-                collapsed={collapsed}
-                icon={icon}
-                isActive={settingsSection === id}
-                key={id}
-                label={label}
-                onClick={() => onSettingsSectionChange(id)}
-              />
-            ))}
-          </nav>
-        </>
-      ) : (
-        <>
-          {favoritePages.length > 0 && (
-            <>
-              {!collapsed && <p className="sidebar__section-label">{locale === 'ar' ? 'المفضلة' : 'Favorites'}</p>}
-              <nav aria-label={locale === 'ar' ? 'المفضلة' : 'Favorites'} className="sidebar__nav sidebar__nav--favorites">
-                {favoritePages.map((favorite) => (
-                  <div className="sidebar-favorite-row" key={`favorite-${favorite.id}`}>
-                    <button
-                      aria-current={page === favorite.id ? 'page' : undefined}
-                      aria-label={favorite.title.trim() || translate(locale, favorite.id === 'home' ? 'home' : 'untitledPage')}
-                      className="nav-item nav-item--favorite"
-                      onClick={() => onNavigate(favorite.id)}
-                      type="button"
-                    >
-                      <PageIconRenderer className="nav-item__custom-icon" fallback="lucide:Star" icon={favorite.icon || 'lucide:Star'} size={17} />
-                      {!collapsed && <span className="nav-item__title">{favorite.title.trim() || translate(locale, favorite.id === 'home' ? 'home' : 'untitledPage')}</span>}
-                    </button>
-                    {!collapsed && favorite.id !== 'home' && (
+      <div className="sidebar__scroll">
+        {isSettings ? (
+          <>
+            {!collapsed && (
+              <div style={{ padding: '8px 14px' }}>
+                <input
+                  id="settings-search-input"
+                  type="text"
+                  autoFocus
+                  placeholder={locale === 'ar' ? 'البحث في الإعدادات...' : 'Search settings...'}
+                  value={settingsSearch}
+                  onChange={(e) => setSettingsSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      if (settingsSearch) {
+                        setSettingsSearch('');
+                        e.stopPropagation();
+                      } else {
+                        onNavigate('home');
+                      }
+                    }
+                  }}
+                  style={{
+                    width: '100%',
+                    background: 'var(--canvas-subtle)',
+                    border: '1px solid var(--line)',
+                    borderRadius: '6px',
+                    padding: '4px 8px',
+                    fontSize: '13px',
+                    color: 'var(--text)',
+                    marginBottom: '8px'
+                  }}
+                />
+              </div>
+            )}
+            {!collapsed && <p className="sidebar__section-label">{locale === 'ar' ? 'الإعدادات' : 'Settings'}</p>}
+            <nav aria-label={locale === 'ar' ? 'أقسام الإعدادات' : 'Settings sections'} className="sidebar__nav">
+              {filteredSettingsSections.map(({ icon, id, label }) => (
+                <SidebarAction
+                  collapsed={collapsed}
+                  icon={icon}
+                  isActive={settingsSection === id}
+                  key={id}
+                  label={label}
+                  onClick={() => onSettingsSectionChange(id)}
+                />
+              ))}
+            </nav>
+          </>
+        ) : (
+          <>
+            {favoritePages.length > 0 && (
+              <>
+                {!collapsed && <p className="sidebar__section-label">{locale === 'ar' ? 'المفضلة' : 'Favorites'}</p>}
+                <nav aria-label={locale === 'ar' ? 'المفضلة' : 'Favorites'} className="sidebar__nav sidebar__nav--favorites">
+                  {favoritePages.map((favorite) => (
+                    <div className="sidebar-favorite-row" key={`favorite-${favorite.id}`}>
                       <button
-                        aria-label={locale === 'ar' ? `إزالة ${favorite.title || 'الصفحة'} من المفضلة` : `Remove ${favorite.title || 'page'} from favorites`}
-                        className="sidebar-favorite-remove"
-                        onClick={() => onToggleFavorite(favorite.id, false)}
-                        title={locale === 'ar' ? 'إزالة من المفضلة' : 'Remove from favorites'}
+                        aria-current={page === favorite.id ? 'page' : undefined}
+                        aria-label={favorite.title.trim() || translate(locale, favorite.id === 'home' ? 'home' : 'untitledPage')}
+                        className="nav-item nav-item--favorite"
+                        onClick={() => onNavigate(favorite.id)}
                         type="button"
                       >
-                        <Star aria-hidden="true" fill="currentColor" size={13} />
+                        <PageIconRenderer className="nav-item__custom-icon" fallback="lucide:Star" icon={favorite.icon || 'lucide:Star'} size={17} />
+                        {!collapsed && <span className="nav-item__title">{favorite.title.trim() || translate(locale, favorite.id === 'home' ? 'home' : 'untitledPage')}</span>}
+                      </button>
+                      {!collapsed && favorite.id !== 'home' && (
+                        <button
+                          aria-label={locale === 'ar' ? `إزالة ${favorite.title || 'الصفحة'} من المفضلة` : `Remove ${favorite.title || 'page'} from favorites`}
+                          className="sidebar-favorite-remove"
+                          onClick={() => onToggleFavorite(favorite.id, false)}
+                          title={locale === 'ar' ? 'إزالة من المفضلة' : 'Remove from favorites'}
+                          type="button"
+                        >
+                          <Star aria-hidden="true" fill="currentColor" size={13} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </nav>
+              </>
+            )}
+            {!collapsed && <p className="sidebar__section-label">{translate(locale, 'workspace')}</p>}
+            <nav aria-label={translate(locale, 'workspace')} className="sidebar__nav">
+              {workspaceRows.map((row, visibleIndex) => {
+                if (row.kind === 'view') {
+                  return (
+                    <button
+                      className="sidebar-view-row"
+                      key={`${row.databaseId}-${row.id}`}
+                      onClick={() => onNavigateView(row.databaseId, row.id)}
+                      style={{ '--sidebar-tree-depth': row.depth } as React.CSSProperties}
+                      type="button"
+                    >
+                      <span aria-hidden="true" className="sidebar-view-dot">•</span>
+                      <span>{row.name}</span>
+                    </button>
+                  );
+                }
+
+                const p = row.page;
+                const database = row.database;
+                const isHome = row.id === 'home';
+                const isCurrent = page === row.id;
+                const rootIndex = rootRows.findIndex(({ id }) => id === row.id);
+                const isDragging = rootIndex >= 0 && draggedIndex === rootIndex;
+                const isDragOver = rootIndex >= 0 && dragOverIndex === rootIndex;
+                const title = database?.title ?? p?.title.trim() ?? '';
+                const pageTitle = title || (isHome ? translate(locale, 'home') : translate(locale, 'untitledPage'));
+                const icon = database?.icon ?? p?.icon ?? (isHome ? 'lucide:Home' : row.kind === 'database' ? 'lucide:Database' : 'lucide:FileText');
+
+                return (
+                  <div
+                    className="sidebar-page-tree"
+                    data-drop-edge={isDragOver ? dragOverEdge : undefined}
+                    draggable={rootIndex >= 0}
+                    title={locale === 'ar' ? 'اسحب لإعادة الترتيب' : 'Drag to reorder'}
+                    key={row.id}
+                    onDragEnd={() => { setDraggedIndex(null); setDragOverIndex(null); }}
+                    onDragOver={rootIndex >= 0 ? (event) => handleDragOver(event, rootIndex) : undefined}
+                    onDragStart={(event) => { if (rootIndex >= 0) handleDragStart(event, rootIndex); }}
+                    onDrop={rootIndex >= 0 ? (event) => { event.preventDefault(); event.stopPropagation(); handleDrop(rootIndex); } : undefined}
+                    style={{ '--sidebar-tree-depth': row.depth } as React.CSSProperties}
+                  >
+                    <button
+                      aria-current={isCurrent ? 'page' : undefined}
+                      aria-label={pageTitle}
+                      className="nav-item nav-item--custom-page"
+                      data-drag-over={isDragOver}
+                      data-dragging={isDragging}
+                      onClick={() => onNavigate(row.id)}
+                      onKeyDown={(event) => {
+                        if (rootIndex >= 0 && event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+                          event.preventDefault();
+                          moveNode(rootIndex, event.key === 'ArrowUp' ? -1 : 1);
+                          return;
+                        }
+                        moveFocus(event, visibleIndex);
+                      }}
+                      ref={(element) => { itemRefs.current[visibleIndex] = element; }}
+                      type="button"
+                    >
+                      <span className="nav-item__icon-slot">
+                        <PageIconRenderer className="nav-item__custom-icon" fallback={row.kind === 'database' ? 'lucide:Database' : isHome ? 'lucide:Home' : 'lucide:FileText'} icon={icon} size={18} />
+                        {row.hasChildren && (
+                          <span
+                            aria-label={locale === 'ar' ? `إظهار محتويات ${pageTitle}` : `Show ${pageTitle} contents`}
+                            aria-expanded={expandedPageIds.has(row.id)}
+                            className="nav-item__expand"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setExpandedPageIds((current) => {
+                                const next = new Set(current);
+                                if (next.has(row.id)) next.delete(row.id); else next.add(row.id);
+                                return next;
+                              });
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key !== 'Enter' && event.key !== ' ') return;
+                              event.preventDefault();
+                              event.stopPropagation();
+                              setExpandedPageIds((current) => {
+                                const next = new Set(current);
+                                if (next.has(row.id)) next.delete(row.id); else next.add(row.id);
+                                return next;
+                              });
+                            }}
+                            role="button"
+                            tabIndex={0}
+                          >
+                            {expandedPageIds.has(row.id) ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                          </span>
+                        )}
+                      </span>
+                      {!collapsed && <span className="nav-item__title">{pageTitle}</span>}
+                    </button>
+                    {!collapsed && p && !isHome && (
+                      <button aria-label={locale === 'ar' ? 'إعدادات الصفحة' : 'Page settings'} className="nav-item__menu-trigger" onClick={() => setMenuPageId(menuPageId === p.id ? undefined : p.id)} type="button">
+                        <MoreHorizontal size={15} />
                       </button>
                     )}
+                    {p && menuPageId === p.id && (
+                      <div className="sidebar-page-menu" role="menu">
+                        <button onClick={() => { setMenuPageId(undefined); setExpandedPageIds((current) => new Set(current).add(p.id)); onAddSubpage(p.id); }} role="menuitem" type="button"><Plus size={14} />{locale === 'ar' ? 'إضافة صفحة فرعية' : 'Add sub-page'}</button>
+                        <button onClick={() => { setMenuPageId(undefined); onToggleFavorite(p.id, !p.favorite); }} role="menuitem" type="button"><Star fill={p.favorite ? 'currentColor' : 'none'} size={14} />{p.favorite ? (locale === 'ar' ? 'إزالة من المفضلة' : 'Remove from favorites') : (locale === 'ar' ? 'إضافة للمفضلة' : 'Add to favorites')}</button>
+                        <button onClick={() => { setMenuPageId(undefined); onRenamePage(p.id, window.prompt(locale === 'ar' ? 'اسم الصفحة' : 'Page name', p.title) ?? p.title); }} role="menuitem" type="button"><Pencil size={15} />{locale === 'ar' ? 'إعادة تسمية' : 'Rename'}</button>
+                        <button onClick={() => { setMenuPageId(undefined); onDuplicatePage(p.id); }} role="menuitem" type="button"><Copy size={15} />{locale === 'ar' ? 'إنشاء نسخة' : 'Duplicate'}</button>
+                        <div className="sidebar-page-menu__separator" />
+                        <button className="danger" onClick={() => { setMenuPageId(undefined); onDeletePage(p.id); }} role="menuitem" type="button"><Trash2 size={15} />{locale === 'ar' ? 'نقل إلى المهملات' : 'Move to trash'}</button>
+                      </div>
+                    )}
                   </div>
-                ))}
-              </nav>
-            </>
-          )}
-          {!collapsed && <p className="sidebar__section-label">{translate(locale, 'workspace')}</p>}
-          <nav aria-label={translate(locale, 'workspace')} className="sidebar__nav">
-        {workspaceRows.map((row, visibleIndex) => {
-          if (row.kind === 'view') {
-            return (
+                );
+              })}
+
+              {/* ADD A PAGE BUTTON (Visible in both Expanded & Minimized sidebar) */}
               <button
-                className="sidebar-view-row"
-                key={`${row.databaseId}-${row.id}`}
-                onClick={() => onNavigateView(row.databaseId, row.id)}
-                style={{ '--sidebar-tree-depth': row.depth } as React.CSSProperties}
+                aria-label={translate(locale, 'addPage')}
+                className="sidebar-add-page-btn"
+                onClick={onAddCustomPage}
+                title={translate(locale, 'addPage')}
                 type="button"
               >
-                <span className="sidebar-view-dot" />
-                <span>{row.name}</span>
+                <Plus size={15} />
+                {!collapsed && <span>{translate(locale, 'addPage')}</span>}
               </button>
-            );
-          }
-
-          const p = row.page;
-          const database = row.database;
-          const isHome = row.id === 'home';
-          const isCurrent = page === row.id;
-          const pageIndex = p ? allWorkspacePages.findIndex(({ id }) => id === p.id) : -1;
-          const isDragging = pageIndex >= 0 && draggedIndex === pageIndex;
-          const isDragOver = pageIndex >= 0 && dragOverIndex === pageIndex;
-          const title = database?.title ?? p?.title.trim() ?? '';
-          const pageTitle = title || (isHome ? translate(locale, 'home') : translate(locale, 'untitledPage'));
-          const icon = database?.icon ?? p?.icon ?? (isHome ? 'lucide:Home' : row.kind === 'database' ? 'lucide:Database' : 'lucide:FileText');
-
-          return (
-            <div
-              className="sidebar-page-tree"
-              data-drop-edge={isDragOver ? dragOverEdge : undefined}
-              key={row.id}
-              onDragEnd={() => { setDraggedIndex(null); setDragOverIndex(null); }}
-              onDragOver={pageIndex >= 0 ? (event) => handleDragOver(event, pageIndex) : undefined}
-              onDrop={pageIndex >= 0 ? () => handleDrop(pageIndex) : undefined}
-              style={{ '--sidebar-tree-depth': row.depth } as React.CSSProperties}
-            >
-              <button
-                aria-current={isCurrent ? 'page' : undefined}
-                aria-label={pageTitle}
-                className="nav-item nav-item--custom-page"
-                data-drag-over={isDragOver}
-                data-dragging={isDragging}
-                onClick={() => onNavigate(row.id)}
-                onKeyDown={(event) => {
-                  if (pageIndex >= 0 && event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
-                    event.preventDefault();
-                    movePage(pageIndex, event.key === 'ArrowUp' ? -1 : 1);
-                    return;
-                  }
-                  moveFocus(event, visibleIndex);
-                }}
-                ref={(element) => { itemRefs.current[visibleIndex] = element; }}
-                type="button"
-              >
-                {!collapsed && p && (
-                  <span
-                    aria-label={locale === 'ar' ? 'اسحب لترتيب الصفحة' : 'Drag to reorder page'}
-                    className="nav-item__grip"
-                    draggable
-                    onDragEnd={() => { setDraggedIndex(null); setDragOverIndex(null); }}
-                    onDragStart={(event) => { event.stopPropagation(); handleDragStart(event, pageIndex); }}
-                    role="img"
-                  >
-                    <GripVertical aria-hidden="true" size={12} />
-                  </span>
-                )}
-                <span className="nav-item__icon-slot">
-                  <PageIconRenderer className="nav-item__custom-icon" fallback={row.kind === 'database' ? 'lucide:Database' : isHome ? 'lucide:Home' : 'lucide:FileText'} icon={icon} size={18} />
-                  {row.hasChildren && (
-                    <span
-                      aria-label={locale === 'ar' ? `إظهار محتويات ${pageTitle}` : `Show ${pageTitle} contents`}
-                      aria-expanded={expandedPageIds.has(row.id)}
-                      className="nav-item__expand"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setExpandedPageIds((current) => {
-                          const next = new Set(current);
-                          if (next.has(row.id)) next.delete(row.id); else next.add(row.id);
-                          return next;
-                        });
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key !== 'Enter' && event.key !== ' ') return;
-                        event.preventDefault();
-                        event.stopPropagation();
-                        setExpandedPageIds((current) => {
-                          const next = new Set(current);
-                          if (next.has(row.id)) next.delete(row.id); else next.add(row.id);
-                          return next;
-                        });
-                      }}
-                      role="button"
-                      tabIndex={0}
-                    >
-                      {expandedPageIds.has(row.id) ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
-                    </span>
-                  )}
-                </span>
-                {!collapsed && <span className="nav-item__title">{pageTitle}</span>}
-              </button>
-              {!collapsed && p && !isHome && (
-                <button aria-label={locale === 'ar' ? 'إعدادات الصفحة' : 'Page settings'} className="nav-item__menu-trigger" onClick={() => setMenuPageId(menuPageId === p.id ? undefined : p.id)} type="button">
-                  <MoreHorizontal size={15} />
-                </button>
-              )}
-              {p && menuPageId === p.id && (
-                <div className="sidebar-page-menu" role="menu">
-                  <button onClick={() => { setMenuPageId(undefined); setExpandedPageIds((current) => new Set(current).add(p.id)); onAddSubpage(p.id); }} role="menuitem" type="button"><Plus size={14} />{locale === 'ar' ? 'إضافة صفحة فرعية' : 'Add sub-page'}</button>
-                  <button onClick={() => { setMenuPageId(undefined); onToggleFavorite(p.id, !p.favorite); }} role="menuitem" type="button"><Star fill={p.favorite ? 'currentColor' : 'none'} size={14} />{p.favorite ? (locale === 'ar' ? 'إزالة من المفضلة' : 'Remove from favorites') : (locale === 'ar' ? 'إضافة للمفضلة' : 'Add to favorites')}</button>
-                  <button onClick={() => { setMenuPageId(undefined); onRenamePage(p.id, window.prompt(locale === 'ar' ? 'اسم الصفحة' : 'Page name', p.title) ?? p.title); }} role="menuitem" type="button"><Pencil size={15} />{locale === 'ar' ? 'إعادة تسمية' : 'Rename'}</button>
-                  <button onClick={() => { setMenuPageId(undefined); onDuplicatePage(p.id); }} role="menuitem" type="button"><Copy size={15} />{locale === 'ar' ? 'إنشاء نسخة' : 'Duplicate'}</button>
-                  <div className="sidebar-page-menu__separator" />
-                  <button className="danger" onClick={() => { setMenuPageId(undefined); onDeletePage(p.id); }} role="menuitem" type="button"><Trash2 size={15} />{locale === 'ar' ? 'نقل إلى المهملات' : 'Move to trash'}</button>
-                </div>
-              )}
-            </div>
-          );
-        })}
-
-        {/* ADD A PAGE BUTTON (Visible in both Expanded & Minimized sidebar) */}
-        <button
-          aria-label={translate(locale, 'addPage')}
-          className="sidebar-add-page-btn"
-          onClick={onAddCustomPage}
-          title={translate(locale, 'addPage')}
-          type="button"
-        >
-          <Plus size={15} />
-          {!collapsed && <span>{translate(locale, 'addPage')}</span>}
-        </button>
-          </nav>
-        </>
-      )}
+            </nav>
+          </>
+        )}
+      </div>
 
       <div className="sidebar__footer">
         <SidebarAction
@@ -563,6 +623,8 @@ export function Sidebar({
           icon={SettingsActionIcon}
           label={settingsActionLabel}
           onClick={handleSettingsClick}
+          title={locale === 'ar' ? 'الإعدادات (Ctrl+, / ⌘+,)' : 'Settings (Ctrl+, / ⌘+,)'}
+          shortcut={runtimePlatform === 'macos' ? '⌘ ,' : 'Ctrl ,'}
         />
       </div>
       {!collapsed && (

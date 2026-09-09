@@ -105,7 +105,7 @@ import {
   Zap,
   type LucideIcon,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 
 import type { Locale } from '../app/i18n';
 import { PageIconRenderer } from './page-icon-renderer';
@@ -373,6 +373,18 @@ export function IconPickerDialog({
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
   const [recentIcons, setRecentIcons] = useState<readonly string[]>(() => loadRecentIcons());
 
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleOutsideClick(e: MouseEvent) {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    }
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [onClose]);
+
   // Close on Escape
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -391,46 +403,69 @@ export function IconPickerDialog({
     onClose();
   }, [onClose, onSelect]);
 
+  const [emojiCatalog, setEmojiCatalog] = useState<readonly EmojiItem[]>(EMOJI_CATALOG);
+  const lucideCatalog: readonly LucideItem[] = LUCIDE_CATALOG;
+
+  useEffect(() => {
+    let mounted = true;
+    import('./emoji-data.json').then((module) => {
+      if (mounted && module.default) {
+        setEmojiCatalog(module.default as unknown as EmojiItem[]);
+      }
+    }).catch(() => {});
+    return () => { mounted = false; };
+  }, []);
+
   const handleShuffle = useCallback(() => {
     if (activeTab === 'icons') {
-      const randomIdx = Math.floor(Math.random() * LUCIDE_CATALOG.length);
-      const chosen = LUCIDE_CATALOG[randomIdx];
+      const randomIdx = Math.floor(Math.random() * lucideCatalog.length);
+      const chosen = lucideCatalog[randomIdx];
       if (chosen) {
         const finalId = selectedColor && selectedColor !== 'e0e0e0' ? `${chosen.id}#${selectedColor}` : chosen.id;
         handleSelectIcon(finalId);
       }
     } else {
-      const randomIdx = Math.floor(Math.random() * EMOJI_CATALOG.length);
-      const chosen = EMOJI_CATALOG[randomIdx];
+      const randomIdx = Math.floor(Math.random() * emojiCatalog.length);
+      const chosen = emojiCatalog[randomIdx];
       if (chosen) {
         handleSelectIcon(chosen.char);
       }
     }
-  }, [activeTab, handleSelectIcon, selectedColor]);
+  }, [activeTab, handleSelectIcon, selectedColor, lucideCatalog, emojiCatalog]);
 
   const filteredEmojis = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return EMOJI_CATALOG;
-    return EMOJI_CATALOG.filter((item) => (
+    if (!q) return emojiCatalog;
+    return emojiCatalog.filter((item) => (
       item.char === q ||
       item.name.toLowerCase().includes(q) ||
       item.tags.some((t) => t.toLowerCase().includes(q))
     ));
-  }, [searchQuery]);
+  }, [searchQuery, emojiCatalog]);
 
   const filteredLucide = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return LUCIDE_CATALOG;
-    return LUCIDE_CATALOG.filter((item) => (
+    if (!q) return lucideCatalog;
+    return lucideCatalog.filter((item) => (
       item.name.toLowerCase().includes(q) ||
       item.tags.some((t) => t.toLowerCase().includes(q))
     ));
-  }, [searchQuery]);
+  }, [searchQuery, lucideCatalog]);
+
+  const [renderLimit, setRenderLimit] = useState(150);
+  useEffect(() => { setRenderLimit(150); }, [activeTab, searchQuery]);
+
+  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+    if (scrollHeight - scrollTop - clientHeight < 200) {
+      setRenderLimit((prev) => prev + 150);
+    }
+  }, []);
 
   return (
     <>
-      <div className="icon-picker-popover-backdrop" onClick={onClose} role="presentation" />
       <div
+        ref={popoverRef}
         aria-label={locale === 'ar' ? 'اختيار الرمز' : 'Select Icon'}
         aria-modal="true"
         className="icon-picker-popover"
@@ -558,7 +593,7 @@ export function IconPickerDialog({
         )}
 
         {/* Popover Content */}
-        <div className="icon-picker-popover__body">
+        <div className="icon-picker-popover__body" onScroll={handleScroll}>
           {/* Recent Section (shown when no search query) */}
           {!searchQuery && recentIcons.length > 0 && (
             <div className="icon-picker-popover__section">
@@ -591,7 +626,7 @@ export function IconPickerDialog({
             {activeTab === 'icons' ? (
               filteredLucide.length > 0 ? (
                 <div className="icon-picker-popover__grid">
-                  {filteredLucide.map((item) => {
+                  {filteredLucide.slice(0, renderLimit).map((item) => {
                     const IconComp = item.icon;
                     const fullIconId = selectedColor && selectedColor !== 'e0e0e0' ? `${item.id}#${selectedColor}` : item.id;
                     const isSelected = currentIcon === fullIconId || currentIcon === item.id;
@@ -616,7 +651,7 @@ export function IconPickerDialog({
               )
             ) : filteredEmojis.length > 0 ? (
               <div className="icon-picker-popover__grid">
-                {filteredEmojis.map((item) => {
+                {filteredEmojis.slice(0, renderLimit).map((item) => {
                   const isSelected = currentIcon === item.char;
                   return (
                     <button

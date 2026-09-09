@@ -1,167 +1,148 @@
-import { Select } from '../ui/select';
-import { Play, Plus, Save, Settings2, Trash2, X } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
-
-import type {
-  WorkflowInputField,
-  WorkflowInputSchema,
-  WorkflowStep,
-  WorkspaceWorkflow,
-} from '../../shared/workflow-contract';
+import { ReactiveActionForm } from './reactive-action-form';
+import { hasReactiveFields } from './reactive-config';
+import { WorkflowInputForm } from './workflow-input-form';
+import { inputDefaults } from './input-defaults';
+import { useEffect, useRef, useState } from 'react';
+import type { WorkspaceWorkflow } from '../../shared/workflow-contract';
 import type { Locale } from '../app/i18n';
 import { FocusedOverlay } from '../ui/focused-overlay';
+import './quick-actions.css';
 
-type Props = Readonly<{ locale: Locale; onClose: () => void }>;
-
-function inputKey(field: WorkflowInputField, index: number): string {
-  return field.key ?? field.id ?? `input_${index + 1}`;
+function isEditableTarget(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement && Boolean(target.closest('input, textarea, select, [contenteditable="true"]'));
 }
 
-function coerceInput(field: WorkflowInputField, value: string | boolean): unknown {
-  if (field.type === 'boolean') return Boolean(value);
-  if (field.type === 'money' || field.type === 'number') {
-    if (value === '') return '';
-    const number = Number(value);
-    return Number.isFinite(number) ? number : value;
-  }
-  return value;
-}
-
-function initialInputValue(value: unknown): string | boolean {
-  if (typeof value === 'boolean') return value;
-  if (typeof value === 'string' || typeof value === 'number') return String(value);
-  return '';
-}
-
-export function WorkflowLauncherDialog({ locale, onClose }: Props) {
+export function WorkflowLauncherDialog({ locale, onClose, onConfigure }: { locale: Locale; onClose: () => void; onConfigure: () => void }) {
   const ar = locale === 'ar';
-  const [workflows, setWorkflows] = useState<readonly WorkspaceWorkflow[]>([]);
-  const [selectedId, setSelectedId] = useState<string>();
-  const [inputs, setInputs] = useState<Readonly<Record<string, string | boolean>>>({});
-  const [recordOptions, setRecordOptions] = useState<Readonly<Record<string, readonly { id: string; title: string }[]>>>({});
-  const [message, setMessage] = useState<string>();
+  const [actions, setActions] = useState<readonly WorkspaceWorkflow[]>([]);
+  const [selectedId, setSelectedId] = useState('');
+  const [values, setValues] = useState<Record<string, unknown>>({});
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [editorName, setEditorName] = useState('');
-  const [editorInputs, setEditorInputs] = useState('{\n  "fields": []\n}');
-  const [editorSteps, setEditorSteps] = useState('[]');
-
-  const selected = useMemo(() => workflows.find((workflow) => workflow.id === selectedId), [selectedId, workflows]);
-
-  const reload = async (preferredId?: string) => {
-    const rows = await window.maxApi.workspace.listWorkflows();
-    setWorkflows(rows);
-    setSelectedId(preferredId ?? selectedId ?? rows[0]?.id);
-  };
+  const [completed, setCompleted] = useState(false);
+  const [formInstance, setFormInstance] = useState(0);
+  const lock = useRef(false);
+  const selected = actions.find((action) => action.id === selectedId);
 
   useEffect(() => {
-    void window.maxApi.workspace.listWorkflows().then((rows) => {
-      setWorkflows(rows);
-      setSelectedId(rows[0]?.id);
-    });
-  }, []);
+    let active = true;
+    void window.maxApi.workspace.listWorkflows()
+      .then((rows) => {
+        if (!active) return;
+        const enabled = rows.filter((row) => row.enabled);
+        setActions(enabled);
+        setSelectedId((current) => enabled.some((action) => action.id === current) ? current : enabled[0]?.id ?? '');
+      })
+      .catch(() => setError(ar ? 'تعذر تحميل الإجراءات.' : 'Could not load actions.'))
+      .finally(() => setLoading(false));
+    return () => { active = false; };
+  }, [ar]);
 
   useEffect(() => {
-    if (!selected) return;
-    setInputs(Object.fromEntries(selected.inputSchema.fields.map((field, index) => [
-      inputKey(field, index),
-      initialInputValue(field.defaultValue),
-    ])));
-    for (const [index, field] of selected.inputSchema.fields.entries()) {
-      const key = inputKey(field, index);
-      if (field.type === 'record' && field.databaseId) {
-        void window.maxApi.workspace.queryDatabase({ databaseId: field.databaseId, limit: 100 }).then((result) => {
-          setRecordOptions((current) => ({
-            ...current,
-            [key]: result.records.map((record) => ({ id: record.id, title: record.title })),
-          }));
-        });
-      }
-    }
-  }, [selected]);
+    setCompleted(false);
+    setError('');
+    setValues(inputDefaults(selected?.inputSchema.fields ?? []));
+  }, [selected, ar, formInstance]);
 
-  const openEditor = (workflow?: WorkspaceWorkflow) => {
-    setEditorName(workflow?.name ?? '');
-    setEditorInputs(JSON.stringify(workflow?.inputSchema ?? { fields: [] }, null, 2));
-    setEditorSteps(JSON.stringify(workflow?.steps ?? [], null, 2));
-    setEditing(true);
-    setMessage(undefined);
-  };
+  useEffect(() => {
+    const chooseByNumber = (event: KeyboardEvent) => {
+      if (event.ctrlKey || event.metaKey || event.altKey || isEditableTarget(event.target)) return;
+      const index = Number(event.key) - 1;
+      if (!Number.isInteger(index) || index < 0 || index > 8 || !actions[index] || running) return;
+      event.preventDefault();
+      setSelectedId(actions[index].id);
+    };
+    document.addEventListener('keydown', chooseByNumber);
+    return () => document.removeEventListener('keydown', chooseByNumber);
+  }, [actions, running]);
 
-  const saveWorkflow = async () => {
-    try {
-      const inputSchema = JSON.parse(editorInputs) as WorkflowInputSchema;
-      const steps = JSON.parse(editorSteps) as readonly WorkflowStep[];
-      const result = selected && selectedId
-        ? await window.maxApi.workspace.updateWorkflow(selectedId, { inputSchema, name: editorName, steps })
-        : await window.maxApi.workspace.createWorkflow({ inputSchema, name: editorName, steps });
-      if (!result.ok) throw new Error(result.error.message);
-      setEditing(false);
-      await reload(result.value.id);
-      setMessage(ar ? 'تم حفظ سير العمل.' : 'Workflow saved.');
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error));
-    }
-  };
-
-  const execute = async (testMode: boolean) => {
-    if (!selected) return;
+  const execute = async () => {
+    if (!selected || lock.current || completed) return;
+    lock.current = true;
     setRunning(true);
-    setMessage(undefined);
-    const values = Object.fromEntries(selected.inputSchema.fields.map((field, index) => {
-      const key = inputKey(field, index);
-      return [key, coerceInput(field, inputs[key] ?? '')];
-    }));
-    const result = await window.maxApi.workspace.executeWorkflow({ inputs: values, testMode, workflowId: selected.id });
-    setRunning(false);
-    setMessage(result.ok
-      ? testMode
-        ? (ar ? 'نجح الاختبار وتم التراجع عن كل التغييرات.' : 'Test passed; all changes were rolled back.')
-        : (ar ? 'اكتمل سير العمل بنجاح.' : 'Workflow completed successfully.')
-      : result.error.message);
+    setError('');
+    try {
+      const result = await window.maxApi.workspace.executeWorkflow({ workflowId: selected.id, inputs: values });
+      if (!result.ok) setError(result.error.message);
+      else {
+        setCompleted(true);
+        window.dispatchEvent(new Event('max:workspace-changed'));
+      }
+    } catch {
+      setError(ar ? 'تعذر تنفيذ الإجراء.' : 'Could not execute action.');
+    } finally {
+      lock.current = false;
+      setRunning(false);
+    }
+  };
+
+  const resetCurrentAction = () => {
+    setCompleted(false);
+    setFormInstance((current) => current + 1);
   };
 
   return (
-    <FocusedOverlay className="modal-backdrop" labelId="workflow-dialog-title" onClose={onClose}>
-      <div className="modal-container" role="document">
-        <div className="modal-header">
-          <h2 id="workflow-dialog-title">{ar ? 'سير العمل' : 'Workflows'}</h2>
-          <button aria-label={ar ? 'إغلاق' : 'Close'} className="btn-icon" onClick={onClose} type="button"><X size={17} /></button>
+    <FocusedOverlay className="quick-actions-overlay" labelId="quick-action-title" onClose={() => { if (!lock.current) onClose(); }}>
+      <div className="quick-action-runtime" role="document">
+        <div className="quick-action-runtime__header">
+          <div>
+            <h2 id="quick-action-title">{ar ? 'الإجراءات السريعة' : 'Quick Actions'}</h2>
+            {!loading && actions.length > 1 && <p>{ar ? 'اضغط ١–٩ للتبديل بسرعة.' : 'Press 1–9 to switch actions.'}</p>}
+          </div>
+          <button className="quick-action-runtime__close" type="button" disabled={running} aria-label={ar ? 'إغلاق' : 'Close'} onClick={onClose}>×</button>
         </div>
-        <div className="modal-body grid gap-4" style={{ gridTemplateColumns: 'minmax(180px, .7fr) minmax(280px, 1.3fr)' }}>
-          <aside className="space-y-2">
-            {workflows.map((workflow) => (
-              <button className={`btn w-full justify-start ${selectedId === workflow.id ? 'btn-primary' : 'btn-secondary'}`} key={workflow.id} onClick={() => { setSelectedId(workflow.id); setEditing(false); }} type="button">
-                <Play size={14} /> {workflow.name}
-              </button>
-            ))}
-            <button className="btn btn-secondary w-full" onClick={() => { setSelectedId(undefined); openEditor(); }} type="button"><Plus size={14} />{ar ? 'سير عمل جديد' : 'New workflow'}</button>
-          </aside>
-          <section>
-            {editing ? (
-              <div className="space-y-3">
-                <label className="form-group"><span className="form-label">{ar ? 'الاسم' : 'Name'}</span><input className="input-field" onChange={(event) => setEditorName(event.target.value)} value={editorName} /></label>
-                <label className="form-group"><span className="form-label">{ar ? 'مخطط المدخلات (JSON)' : 'Input schema (JSON)'}</span><textarea className="input-field font-mono" onChange={(event) => setEditorInputs(event.target.value)} rows={8} value={editorInputs} /></label>
-                <label className="form-group"><span className="form-label">{ar ? 'الخطوات (JSON)' : 'Steps (JSON)'}</span><textarea className="input-field font-mono" onChange={(event) => setEditorSteps(event.target.value)} rows={12} value={editorSteps} /></label>
-                <button className="btn btn-primary" disabled={!editorName.trim()} onClick={() => void saveWorkflow()} type="button"><Save size={14} />{ar ? 'حفظ' : 'Save'}</button>
+
+        {loading ? <div className="quick-action-runtime__empty"><p>{ar ? 'جار التحميل…' : 'Loading…'}</p></div> : !actions.length ? (
+          <div className="quick-action-runtime__empty"><p>{ar ? 'لا توجد إجراءات سريعة بعد. قم بإعدادها في إعدادات مساحة العمل.' : 'No quick actions yet. Configure them in Workspace Settings.'}</p></div>
+        ) : <>
+          <div className="quick-action-tabs" aria-label={ar ? 'الإجراءات السريعة' : 'Quick actions'} role="tablist">
+            {actions.map((action, index) => {
+              const selectedTab = action.id === selectedId;
+              return <button
+                aria-controls="quick-action-panel"
+                aria-selected={selectedTab}
+                className="quick-action-tab"
+                data-active={selectedTab || undefined}
+                disabled={running}
+                key={action.id}
+                onClick={() => setSelectedId(action.id)}
+                role="tab"
+                tabIndex={selectedTab ? 0 : -1}
+                title={index < 9 ? `${index + 1}. ${action.name}` : action.name}
+                type="button"
+              >
+                {index < 9 && <kbd>{index + 1}</kbd>}
+                <span>{action.name}</span>
+              </button>;
+            })}
+          </div>
+
+          {selected && <section className="quick-action-runtime__panel" id="quick-action-panel" role="tabpanel">
+            <div className="quick-action-runtime__action-title">
+              <h3>{selected.name}</h3>
+            </div>
+            {completed ? (
+              <div className="quick-action-runtime__complete" role="status">
+                <strong>{ar ? 'اكتمل الإجراء' : 'Action completed'}</strong>
+                <p>{ar ? 'تم حفظ التغييرات في مساحة العمل.' : 'Your changes have been saved to the workspace.'}</p>
+                <button className="btn btn-primary" type="button" onClick={resetCurrentAction}>{ar ? 'تشغيل مرة أخرى' : 'Run again'}</button>
               </div>
-            ) : selected ? (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between"><div><h3>{selected.name}</h3><small>v{selected.version}</small></div><button className="btn btn-secondary btn-sm" onClick={() => openEditor(selected)} type="button"><Settings2 size={14} />{ar ? 'تحرير' : 'Edit'}</button></div>
-                {selected.inputSchema.fields.map((field, index) => {
-                  const key = inputKey(field, index);
-                  return <label className="form-group" key={key}><span className="form-label">{field.label}{field.required ? ' *' : ''}</span>
-                    {field.type === 'boolean' ? <input checked={Boolean(inputs[key])} onChange={(event) => setInputs((current) => ({ ...current, [key]: event.target.checked }))} type="checkbox" />
-                      : field.type === 'select' || field.type === 'record' ? <Select className="input-field" onChange={(event) => setInputs((current) => ({ ...current, [key]: event.target.value }))} value={String(inputs[key] ?? '')}><option value="">{ar ? 'اختر…' : 'Choose…'}</option>{(field.type === 'record' ? recordOptions[key] ?? [] : field.options ?? []).map((option) => <option key={'id' in option ? option.id : option.value} value={'id' in option ? option.id : option.value}>{'id' in option ? option.title : option.label}</option>)}</Select>
-                        : <input className="input-field" onChange={(event) => setInputs((current) => ({ ...current, [key]: event.target.value }))} type={field.type === 'date' ? 'date' : field.type === 'money' || field.type === 'number' ? 'number' : 'text'} value={String(inputs[key] ?? '')} />}
-                  </label>;
-                })}
-                <div className="flex gap-2"><button className="btn btn-primary" disabled={running} onClick={() => void execute(false)} type="button"><Play size={14} />{ar ? 'تشغيل' : 'Run'}</button><button className="btn btn-secondary" disabled={running} onClick={() => void execute(true)} type="button">{ar ? 'اختبار دون حفظ' : 'Test without saving'}</button><button className="btn btn-ghost text-danger" onClick={() => void window.maxApi.workspace.archiveWorkflow(selected.id).then(() => reload())} type="button"><Trash2 size={14} /></button></div>
-              </div>
-            ) : <p>{ar ? 'أنشئ سير عمل للبدء.' : 'Create a workflow to get started.'}</p>}
-            {message && <div className="alert mt-3">{message}</div>}
-          </section>
-        </div>
+            ) : hasReactiveFields(selected.inputSchema) ? (
+              <ReactiveActionForm key={`${selected.id}:${formInstance}`} workflow={selected} locale={locale} onCompleted={() => setCompleted(true)} onBusy={(busy) => { lock.current = busy; setRunning(busy); }} />
+            ) : (
+              <form key={`${selected.id}:${formInstance}`} onSubmit={(event) => { event.preventDefault(); void execute(); }}>
+                <WorkflowInputForm fields={selected.inputSchema.fields} values={values} onChange={setValues} disabled={running} locale={locale} />
+                <button className="btn btn-primary" type="submit" disabled={running}>{running ? (ar ? 'جار التنفيذ…' : 'Running…') : (ar ? 'تشغيل' : 'Run')}</button>
+              </form>
+            )}
+          </section>}
+        </>}
+
+        {error && <p className="quick-action-runtime__error" role="alert">{error}</p>}
+        <footer className="quick-action-runtime__footer">
+          <button className="btn btn-ghost" type="button" disabled={running} onClick={onConfigure}>{ar ? 'إدارة الإجراءات السريعة' : 'Manage Quick Actions'}</button>
+        </footer>
       </div>
     </FocusedOverlay>
   );

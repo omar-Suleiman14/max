@@ -127,6 +127,16 @@ export class RecordRepository {
     const propertyDefs = this.#propertyRepo.listProperties(row.database_id);
     const propMap = this.batchLoadProperties([id], propertyDefs).get(id) ?? {};
 
+    for (const p of propertyDefs) {
+      if (p.type === 'created_time') propMap[p.id] = row.created_at;
+      else if (p.type === 'last_edited_time') propMap[p.id] = row.updated_at;
+      else if (p.type === 'auto_id') {
+        const prefix = p.config?.autoId?.prefix ?? '';
+        const padding = p.config?.autoId?.zeroPadding ?? 0;
+        propMap[p.id] = prefix + String(row.sequence).padStart(padding, '0');
+      }
+    }
+
     return {
       archivedAt: row.archived_at,
       contentJson: row.content_json,
@@ -168,6 +178,20 @@ export class RecordRepository {
     const propertyDefs = this.#propertyRepo.listProperties(databaseId);
     const propertyData = this.batchLoadProperties(recordIds, propertyDefs);
 
+    for (const row of rows) {
+      const props = propertyData.get(row.id);
+      if (!props) continue;
+      for (const p of propertyDefs) {
+        if (p.type === 'created_time') props[p.id] = row.created_at;
+        else if (p.type === 'last_edited_time') props[p.id] = row.updated_at;
+        else if (p.type === 'auto_id') {
+          const prefix = p.config?.autoId?.prefix ?? '';
+          const padding = p.config?.autoId?.zeroPadding ?? 0;
+          props[p.id] = prefix + String(row.sequence).padStart(padding, '0');
+        }
+      }
+    }
+
     return rows.map((row) => ({
       archivedAt: row.archived_at,
       contentJson: row.content_json,
@@ -191,8 +215,9 @@ export class RecordRepository {
       throw new WorkspaceDomainError('not-found', `Record not found: ${id}`);
     }
 
-    if (patch.title !== undefined || patch.icon !== undefined || patch.positionKey !== undefined) {
+    if (patch.title !== undefined || patch.icon !== undefined || patch.positionKey !== undefined || patch.contentJson !== undefined) {
       this.#workspaceRepo.updateNode(id, {
+        contentJson: patch.contentJson === null ? '[]' : patch.contentJson,
         icon: patch.icon,
         positionKey: patch.positionKey,
         title: patch.title,
@@ -314,14 +339,11 @@ export class RecordRepository {
           case 'number':
             val = row.number_value;
             break;
-          case 'money':
-            val = row.money_minor_value !== null ? row.money_minor_value / 100 : null;
-            break;
           case 'checkbox':
             val = row.boolean_value !== null ? Boolean(row.boolean_value) : false;
             break;
           case 'date':
-            val = row.date_start ? { hasTime: Boolean(row.date_has_time), start: row.date_start } : null;
+            val = row.date_start ? { hasTime: Boolean(row.date_has_time), start: row.date_start, ...(row.date_end ? { end: row.date_end } : {}) } : null;
             break;
           case 'select':
           case 'status':
@@ -437,7 +459,7 @@ export class RecordRepository {
 
     let textVal: string | null = null;
     let numVal: number | null = null;
-    let moneyMinor: number | null = null;
+    const moneyMinor = null;
     let boolVal: number | null = null;
     let dateStart: string | null = null;
     let dateEnd: string | null = null;
@@ -451,13 +473,6 @@ export class RecordRepository {
           numVal = typeof value === 'number' ? value : Number(value);
           if (!Number.isFinite(numVal)) numVal = null;
           break;
-        case 'money': {
-          const mNum = typeof value === 'number' ? value : Number(value);
-          if (Number.isFinite(mNum)) {
-            moneyMinor = Math.round(mNum * 100);
-          }
-          break;
-        }
         case 'checkbox':
           boolVal = value ? 1 : 0;
           break;

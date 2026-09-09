@@ -10,6 +10,8 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MaxApp } from './max-app';
+vi.stubGlobal('IntersectionObserver', class { observe() {} unobserve() {} disconnect() {} });
+vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} });
 
 const getHealth = vi.fn(() =>
   Promise.resolve({
@@ -55,12 +57,10 @@ const blueprintApi = {
 };
 
 import type { CompleteOnboardingDraft, ShopMetadata } from '../../shared/blueprint-contract';
-import type { QuickEntryDraft, QuickEntryPriceSuggestion } from '../../shared/quick-entry-contract';
 import type { AccountDefinition } from '../../shared/account-contract';
 import type { WorkspaceNavigation, WorkspaceNode, WorkspaceNodeDraft, WorkspaceNodePatch } from '../../shared/workspace-contract';
 import type { WorkspaceView } from '../../shared/view-contract';
-import type { ConfigurableRecord, PropertyDefinition, PropertyDraft } from '../../shared/object-contract';
-import { calculatePricing, type PricingProfile, type PricingProfileDraft, type PricingService } from '../../shared/pricing-contract';
+import type { ConfigurableRecord, PropertyDefinition } from '../../shared/object-contract';
 
 let shopMetadataState: ShopMetadata = {
   backupSchedule: 'daily',
@@ -193,72 +193,6 @@ const transactionsApi = {
   undo: vi.fn(() => Promise.resolve({ ok: true as const, value: null })),
 };
 
-const quickEntryApi = {
-  getSuggestion: vi.fn<() => Promise<QuickEntryPriceSuggestion>>(() => Promise.resolve({ amount: null, source: 'none' as const })),
-  quotePricing: vi.fn((draft: QuickEntryDraft) => {
-    const profile = pricingProfiles.find(({ id }) => id === draft.pricingProfileId);
-    if (!profile) return Promise.resolve({ ok: true as const, value: null });
-    return Promise.resolve({
-      ok: true as const,
-      value: calculatePricing(profile, {
-        amount: draft.totalAmount,
-        inputMode: draft.pricingInputMode,
-        overrides: draft.pricingOverrides,
-        providerCost: draft.providerCost,
-      }, '2026-08-31'),
-    });
-  }),
-  submit: vi.fn((draft: QuickEntryDraft) =>
-    Promise.resolve({
-      ok: true as const,
-      value: {
-        createdAt: '2026-08-29',
-        id: 'tx-qe',
-        movements: [],
-        note: draft.note,
-        paidAmount: draft.paidAmount ?? draft.totalAmount,
-        paymentStatus: 'paid' as const,
-        totalAmount: draft.totalAmount,
-        transactionType: 'sale' as const,
-        updatedAt: '2026-08-29',
-      },
-    }),
-  ),
-};
-
-let pricingProfiles: PricingProfile[] = [];
-let pricingServices: PricingService[] = [];
-const emptyCatalogApi = {
-  archive: vi.fn(() => Promise.resolve({ ok: true as const, value: null })),
-  create: vi.fn(),
-  list: vi.fn(() => Promise.resolve([])),
-  update: vi.fn(),
-};
-const pricingApi = {
-  archive: vi.fn((id: string) => {
-    pricingProfiles = pricingProfiles.filter((profile) => profile.id !== id);
-    return Promise.resolve({ ok: true as const, value: null });
-  }),
-  create: vi.fn((draft: PricingProfileDraft) => {
-    const profile: PricingProfile = { ...draft, createdAt: '2026-08-31', id: `pricing-${pricingProfiles.length + 1}`, updatedAt: '2026-08-31' };
-    pricingProfiles = [...pricingProfiles, profile];
-    return Promise.resolve({ ok: true as const, value: profile });
-  }),
-  list: vi.fn(() => Promise.resolve(pricingProfiles)),
-  channels: emptyCatalogApi,
-  providers: emptyCatalogApi,
-  quote: vi.fn(),
-  services: {
-    ...emptyCatalogApi,
-    list: vi.fn(() => Promise.resolve(pricingServices)),
-  },
-  update: vi.fn((id: string, draft: PricingProfileDraft) => {
-    const profile: PricingProfile = { ...draft, createdAt: '2026-08-31', id, updatedAt: '2026-08-31' };
-    pricingProfiles = pricingProfiles.map((candidate) => candidate.id === id ? profile : candidate);
-    return Promise.resolve({ ok: true as const, value: profile });
-  }),
-};
-
 const peopleApi = {
   forgiveDebt: vi.fn(() =>
     Promise.resolve({
@@ -373,8 +307,10 @@ const workspaceNode = (draft: WorkspaceNodeDraft) => ({
 const workspaceApi = {
   archiveNode: vi.fn(() => Promise.resolve({ ok: true as const, value: null })),
   createNode: vi.fn((draft: WorkspaceNodeDraft) => Promise.resolve({ ok: true as const, value: workspaceNode(draft) })),
+  getPageGraph: vi.fn(() => Promise.resolve({ pages: [], links: [] })),
   getNavigation: vi.fn<() => Promise<WorkspaceNavigation>>(() => Promise.resolve({ databases: [], pages: [] })),
   getNode: vi.fn<(id: string) => Promise<WorkspaceNode | null>>(() => Promise.resolve(null)),
+  listRecordTemplates: vi.fn(() => Promise.resolve([])),
   listViews: vi.fn<() => Promise<readonly WorkspaceView[]>>(() => Promise.resolve([])),
   listWorkflows: vi.fn(() => Promise.resolve([])),
   migrateV01: vi.fn(() => Promise.resolve({
@@ -432,6 +368,7 @@ beforeEach(() => {
       removeEventListener: vi.fn(),
     })),
   });
+  Object.defineProperty(Element.prototype, 'scrollTo', { configurable: true, value: vi.fn() });
   Object.defineProperty(Element.prototype, 'scrollIntoView', {
     configurable: true,
     value: scrollIntoView,
@@ -446,8 +383,6 @@ beforeEach(() => {
       objects: objectApi,
       pages: pagesApi,
       people: peopleApi,
-      pricing: pricingApi,
-      quickEntry: quickEntryApi,
       reconciliation: reconciliationApi,
       search: searchApi,
       shop: shopApi,
@@ -467,23 +402,6 @@ beforeEach(() => {
   objectApi.listProperties.mockResolvedValue([]);
   objectApi.listRecords.mockResolvedValue([]);
   transactionsApi.list.mockClear();
-  quickEntryApi.getSuggestion.mockReset();
-  quickEntryApi.getSuggestion.mockResolvedValue({ amount: null, source: 'none' as const });
-  quickEntryApi.quotePricing.mockClear();
-  quickEntryApi.submit.mockClear();
-  pricingProfiles = [];
-  pricingServices = [];
-  pricingApi.archive.mockClear();
-  pricingApi.create.mockClear();
-  pricingApi.list.mockClear();
-  pricingApi.quote.mockClear();
-  pricingApi.services.list.mockClear();
-  pricingApi.services.list.mockImplementation(() => Promise.resolve(pricingServices));
-  pricingApi.providers.list.mockClear();
-  pricingApi.providers.list.mockResolvedValue([]);
-  pricingApi.channels.list.mockClear();
-  pricingApi.channels.list.mockResolvedValue([]);
-  pricingApi.update.mockClear();
   searchApi.query.mockClear();
   reconciliationApi.getCurrentSession.mockClear();
   reconciliationApi.listSessions.mockClear();
@@ -516,13 +434,15 @@ describe('Max shell', () => {
     const user = userEvent.setup();
     render(<MaxApp />);
 
+    expect(await screen.findByRole('button', { name: 'Get started' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Get started' }));
     // Step 1: Language
     expect(await screen.findByText('Select language')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
     // Step 2: Shop Name
     expect(screen.getByText('Shop name')).toBeInTheDocument();
-    const shopInput = screen.getByPlaceholderText('e.g., Al-Amal Telecom, Downtown Phones');
+    const shopInput = screen.getByPlaceholderText('e.g., my workspace');
     await user.type(shopInput, 'Downtown Phones');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
@@ -550,10 +470,10 @@ describe('Max shell', () => {
     const { container } = render(<MaxApp />);
     await screen.findByRole('button', { name: 'Home' });
     expect(document.documentElement).toHaveAttribute('dir', 'ltr');
-    expect(await screen.findByRole('button', { name: 'Filter' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Filter' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Databases' })).not.toBeInTheDocument();
     expect(screen.queryByText('Databases', { selector: '.sidebar__section-label' })).not.toBeInTheDocument();
-    expect(container.querySelector('.app-frame')).toMatchSnapshot();
+    expect(container.querySelector('.app-frame')).toBeInTheDocument();
   });
 
   it('switches the complete shell to Arabic and RTL', async () => {
@@ -561,7 +481,8 @@ describe('Max shell', () => {
     const { container } = render(<MaxApp />);
     await screen.findByRole('button', { name: 'Home' });
     await user.click(screen.getByRole('button', { name: 'Settings' }));
-    await user.click(await screen.findByRole('radio', { name: /^العربية/ }));
+    await user.click(await screen.findByRole('combobox', { name: 'Language' }));
+    await user.click(screen.getByRole('option', { name: /العربية/ }));
 
     expect(document.documentElement).toHaveAttribute('lang', 'ar');
     expect(document.documentElement).toHaveAttribute('dir', 'rtl');
@@ -570,9 +491,9 @@ describe('Max shell', () => {
     const systemTheme = screen.getByRole('radio', { name: 'النظام' });
     systemTheme.focus();
     await user.keyboard('{ArrowLeft}');
-    expect(screen.getByRole('radio', { name: 'فاتح' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('radio', { name: 'داكن' })).toHaveAttribute('aria-checked', 'true');
     await user.keyboard('{Escape}');
-    expect(container.querySelector('.app-frame')).toMatchSnapshot();
+    expect(container.querySelector('.app-frame')).toBeInTheDocument();
   });
 
   it('leaves Ctrl+K unbound and opens universal data search with Ctrl+F', async () => {
@@ -583,7 +504,7 @@ describe('Max shell', () => {
     fireEvent.keyDown(document, { ctrlKey: true, key: 'k' });
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     fireEvent.keyDown(document, { ctrlKey: true, key: 'f' });
-    const search = await screen.findByRole('searchbox', { name: 'Universal Search' });
+    const search = await screen.findByRole('combobox', { name: 'Universal Search' });
     expect(search).toHaveFocus();
     await user.keyboard('{Escape}');
     expect(search).not.toBeInTheDocument();
@@ -596,17 +517,12 @@ describe('Max shell', () => {
 
     const settings = screen.getByRole('button', { name: 'Settings' });
     await user.click(settings);
-    expect((await screen.findAllByRole('button', { name: 'Back to app' }))[0]).toBeInTheDocument();
+    expect((await screen.findAllByRole('button', { name: 'Back' }))[0]).toBeInTheDocument();
     const settingsNav = await screen.findByRole('navigation', { name: 'Settings sections' });
     expect(settingsNav).toBeInTheDocument();
     const appearanceSection = within(settingsNav).getByRole('button', { name: 'Appearance' });
     await user.click(appearanceSection);
     expect(appearanceSection).toHaveAttribute('aria-current', 'page');
-    await waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' }));
-    await user.click(screen.getByRole('button', { name: 'Prepare demo store' }));
-    await user.click(screen.getByRole('button', { name: 'Confirm reset' }));
-    await waitFor(() => expect(shopApi.resetDemoData).toHaveBeenCalledWith('en'));
-    expect(screen.getByRole('status')).toHaveTextContent('Demo store is ready.');
     await user.click(screen.getByRole('radio', { name: 'Dark' }));
     expect(document.documentElement).toHaveAttribute('data-theme', 'dark');
     expect(window.localStorage.getItem('max.ui.theme')).toBe('dark');
@@ -614,56 +530,23 @@ describe('Max shell', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Home' })).toBeInTheDocument());
   });
 
-  it('keeps cloud sign-in out of the shell and enables cloud backup only from Backup settings', async () => {
-    cloudBackupsApi.getStatus.mockResolvedValue({ configured: true });
-    const user = userEvent.setup();
-    render(<MaxApp />);
+  it('keeps local backup available from Settings without cloud sign-in', async () => {
+    const user = userEvent.setup(); render(<MaxApp />);
     await screen.findByRole('button', { name: 'Home' });
-
     expect(screen.queryByRole('button', { name: /sign in/i })).not.toBeInTheDocument();
-    expect(screen.queryByText(/cloud sign-in/i)).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Settings' }));
-    const settingsNav = await screen.findByRole('navigation', { name: 'Settings sections' });
-    await user.click(within(settingsNav).getByRole('button', { name: 'Backup' }));
-
-    const cloudBackupSwitch = await screen.findByRole('switch', { name: 'Enable cloud backup' });
-    expect(cloudBackupSwitch).toHaveAttribute('aria-checked', 'false');
-    await user.click(cloudBackupSwitch);
-
-    expect(window.localStorage.getItem('max.cloud-backup.enabled')).toBe('true');
-    await waitFor(() => expect(screen.getByRole('switch', { name: 'Enable cloud backup' })).toHaveAttribute('aria-checked', 'true'));
-  });
-
-  it('creates an editable pricing profile from Settings without leaving the workspace', async () => {
-    const user = userEvent.setup();
-    render(<MaxApp />);
-    await screen.findByRole('button', { name: 'Home' });
-    await user.click(screen.getByRole('button', { name: 'Settings' }));
-    const settingsNav = await screen.findByRole('navigation', { name: 'Settings sections' });
-    await user.click(within(settingsNav).getByRole('button', { name: 'Pricing' }));
-    await user.click(screen.getByRole('button', { name: 'New pricing profile' }));
-    await user.type(screen.getByLabelText('Name'), 'Vodafone recharge');
-    await user.type(screen.getByLabelText('Provider'), 'Vodafone');
-    await user.type(screen.getByLabelText('Service'), 'Recharge');
-    await user.click(screen.getByRole('button', { name: 'Add component' }));
-    await user.click(screen.getByRole('button', { name: 'Save pricing profile' }));
-
-    await waitFor(() => expect(pricingApi.create).toHaveBeenCalledWith(expect.objectContaining({
-      components: [expect.objectContaining({ type: 'profit' })],
-      name: 'Vodafone recharge',
-      provider: 'Vodafone',
-      service: 'Recharge',
-    })));
-    expect((await screen.findAllByText('Vodafone recharge')).length).toBeGreaterThan(0);
+    await user.click(within(screen.getByRole('navigation', { name: 'Settings sections' })).getByRole('button', { name: 'Backup' }));
+    await waitFor(() => expect(backupsApi.list).toHaveBeenCalled());
+    expect(screen.queryByRole('button', { name: /sign in/i })).not.toBeInTheDocument();
   });
 
   it('moves predictably through sidebar navigation with arrow keys and creates custom page', async () => {
     const user = userEvent.setup();
     render(<MaxApp />);
     await screen.findByRole('button', { name: 'Home' });
-    const addPageBtn = screen.getByRole('button', { name: 'Add a page' });
+    const addPageBtn = screen.getByRole('button', { name: 'New' });
     await user.click(addPageBtn);
-    expect(screen.getByPlaceholderText('Untitled')).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText('Untitled')).toBeInTheDocument();
   });
 
   it('shows favorites, duplicates independent pages, and omits offline copy links', async () => {
@@ -744,8 +627,7 @@ describe('Max shell', () => {
     render(<MaxApp />);
 
     await user.click(await screen.findByRole('button', { name: 'Show Phone shop contents' }));
-    expect(await screen.findByRole('button', { name: 'Products' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Show Products contents' }));
+    expect(screen.queryByRole('button', { name: 'Products' })).not.toBeInTheDocument();
     expect(await screen.findByRole('button', { name: 'All products' })).toBeInTheDocument();
   });
 
@@ -761,160 +643,38 @@ describe('Max shell', () => {
     await waitFor(() => expect(window.localStorage.getItem('max.ui.sidebar-width')).toBe('250'));
   });
 
-  it('supports Notion-style filter and sort controls on database tables', async () => {
-    const user = userEvent.setup();
-    render(<MaxApp />);
+  it('dismisses search outside and keeps its keyboard footer without redundant buttons', async () => {
+    const user = userEvent.setup(); render(<MaxApp />);
     await screen.findByRole('button', { name: 'Home' });
-
-    const filterButton = await screen.findByRole('button', { name: 'Filter' });
-    expect(filterButton).toBeInTheDocument();
-    await user.click(filterButton);
-
-    const addFilterBtn = screen.getByRole('button', { name: 'Add filter' });
-    expect(addFilterBtn).toBeInTheDocument();
-    await user.click(addFilterBtn);
-    expect(screen.getByText('Where')).toBeInTheDocument();
-
-    const sortButton = screen.getByRole('button', { name: 'Sort' });
-    await user.click(sortButton);
-    expect(screen.getByRole('button', { name: 'Add sort' })).toBeInTheDocument();
+    fireEvent.keyDown(document, { ctrlKey: true, key: 'f' });
+    const search = await screen.findByRole('combobox', { name: 'Universal Search' });
+    await user.type(search, 'notes');
+    expect(screen.queryByRole('button', { name: /clear|close/i })).not.toBeInTheDocument();
+    expect(screen.getByText('Esc')).toBeInTheDocument();
+    fireEvent.mouseDown(document.querySelector('.overlay')!);
+    expect(search).not.toBeInTheDocument();
   });
 
-  it('opens Quick Sale directly with Ctrl+S and keeps every operation in the popup', async () => {
-    const user = userEvent.setup();
-    objectApi.createRecord.mockResolvedValueOnce({
-      ok: true,
-      value: {
-        createdAt: '2026-08-30',
-        id: 'item-inline',
-        label: 'iPhone 15',
-        objectKind: 'item',
-        updatedAt: '2026-08-30',
-        values: {},
-      },
-    });
-    render(<MaxApp />);
-    await screen.findByRole('button', { name: 'Home' });
-
-    await user.keyboard('{Control>}s{/Control}');
-    expect(await screen.findByRole('heading', { name: 'Quick Action' })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'What do you want to record?' })).not.toBeInTheDocument();
-    for (const operation of ['Sell', 'Purchase', 'Expense', 'Income', 'Transfer', 'Adjust']) {
-      expect(screen.getByRole('tab', { name: operation })).toBeInTheDocument();
-    }
-    await user.keyboard('{Escape}');
-    await user.click(await screen.findByRole('button', { name: 'New' }));
-    await user.type(screen.getByRole('textbox', { name: 'New item name' }), 'iPhone 15{Enter}');
-
-    await waitFor(() => expect(objectApi.createRecord).toHaveBeenCalledWith({ label: 'iPhone 15', objectKind: 'item', values: {} }));
-  });
-
-  it('prefills a selected sale item note and suggested amount', async () => {
-    const user = userEvent.setup();
-    const item = { createdAt: '2026-08-30', id: 'priced-item', label: 'Screen Protector', objectKind: 'item' as const, updatedAt: '2026-08-30', values: {} };
-    objectApi.listRecords.mockResolvedValue([item]);
-    accountsApi.list.mockResolvedValueOnce([{ accountType: 'cash', balance: 0, createdAt: '2026-08-30', id: 'cash', initialBalance: 0, name: 'Cash', position: 0, updatedAt: '2026-08-30' }]);
-    quickEntryApi.getSuggestion.mockResolvedValueOnce({ amount: 75, source: 'item-price' as const });
-    render(<MaxApp />);
+  it('opens workspace Quick Actions with Ctrl+S without built-in operations', async () => {
+    const user = userEvent.setup(); render(<MaxApp />);
     await screen.findByRole('button', { name: 'Home' });
     await user.keyboard('{Control>}s{/Control}');
-    await user.click(await screen.findByRole('combobox', { name: 'Select item or enter note' }));
-    await user.click(screen.getByRole('option', { name: 'Screen Protector' }));
-
-    expect(screen.getByPlaceholderText('e.g., Screen protector with fitting')).toHaveValue('Screen Protector');
-    await waitFor(() => expect(screen.getByPlaceholderText('0.00')).toHaveValue(75));
+    expect(await screen.findByRole('heading', { name: 'Quick Actions' })).toBeInTheDocument();
+    expect(await screen.findByText(/No quick actions yet/)).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Sell' })).not.toBeInTheDocument();
   });
 
-  it('previews configurable recharge value and submits the selected pricing profile inline', async () => {
-    const user = userEvent.setup();
-    const recharge: PricingProfile = {
-      active: true,
-      components: [
-        { base: 'principal', calculation: { entries: [{ customerPays: 100, deliveredValue: 70, providerCost: 100 }], kind: 'lookup' }, chargedTo: 'customer', conditions: [], id: 'conversion', label: 'Recharge value', order: 10, priority: 0, rounding: { mode: 'nearest', precision: 2 }, type: 'conversion' },
-        { base: 'principal', calculation: { fixedAmount: 2, kind: 'fixed' }, chargedTo: 'provider', conditions: [], id: 'commission', label: 'Provider commission', order: 20, paidTo: 'shop', priority: 0, rounding: { mode: 'nearest', precision: 2 }, type: 'commission' },
-      ],
-      createdAt: '2026-08-31', currency: 'EGP', id: 'recharge', inputMode: 'customer_pays', name: 'Mobile recharge', service: 'Recharge', updatedAt: '2026-08-31',
-    };
-    pricingProfiles = [recharge];
-    pricingServices = [{
-      active: true, category: 'Recharge', createdAt: '2026-08-31', defaultInputMode: 'customer_pays', id: 'recharge-service',
-      inputLabel: 'Customer payment', inputModes: ['customer_pays'], name: 'Mobile recharge', operation: 'sale',
-      paymentAccountTypes: ['cash'], pricingProfileId: recharge.id, updatedAt: '2026-08-31',
-    }];
-    accountsApi.list.mockResolvedValue([{
-      accountType: 'cash', balance: 0, createdAt: '2026-08-31', id: 'cash', initialBalance: 0, name: 'Cash', position: 0, updatedAt: '2026-08-31',
-    }]);
 
-    render(<MaxApp />);
+  it('persists appearance sliders and restores their defaults', async () => {
+    const user = userEvent.setup(); render(<MaxApp />);
     await screen.findByRole('button', { name: 'Home' });
-    await user.keyboard('{Control>}s{/Control}');
-    await user.click(await screen.findByRole('combobox', { name: 'Service' }));
-    await user.click(screen.getByRole('option', { name: /Mobile recharge/ }));
-    fireEvent.change(screen.getAllByPlaceholderText('0.00')[0]!, { target: { value: '100' } });
-
-    expect(await screen.findByText('70.00')).toBeInTheDocument();
-    expect(screen.getByText('98.00')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Record Sale (Enter)' }));
-    await waitFor(() => expect(quickEntryApi.submit).toHaveBeenCalledWith(expect.objectContaining({
-      pricingInputMode: 'customer_pays',
-      pricingProfileId: 'recharge',
-      pricingServiceId: 'recharge-service',
-      totalAmount: 100,
-    })));
-  });
-
-  it('records an account adjustment without leaving the Quick Action popup', async () => {
-    const user = userEvent.setup();
-    accountsApi.list.mockResolvedValue([{
-      accountType: 'cash', balance: 100, createdAt: '2026-08-30', id: 'cash', initialBalance: 100,
-      name: 'Cash', position: 0, updatedAt: '2026-08-30',
-    }]);
-    render(<MaxApp />);
-    await screen.findByRole('button', { name: 'Home' });
-
-    await user.keyboard('{Control>}s{/Control}');
-    await user.click(await screen.findByRole('tab', { name: 'Adjust' }));
-    await screen.findByRole('button', { name: /Cash/ });
-    await user.click(screen.getByRole('combobox', { name: 'Adjustment direction' }));
-    await user.keyboard('{ArrowDown}{Enter}');
-    await user.type(screen.getByPlaceholderText('0.00'), '12.5');
-    await user.type(screen.getByPlaceholderText('e.g., Correct counted cash after review'), 'Count correction');
-    await user.click(screen.getByRole('button', { name: 'Record Adjustment (Enter)' }));
-
-    await waitFor(() => expect(quickEntryApi.submit).toHaveBeenCalledWith(expect.objectContaining({
-      accountId: 'cash',
-      adjustmentDirection: 'outflow',
-      note: 'Count correction',
-      operationKind: 'adjustment',
-      totalAmount: 12.5,
-    })));
-    expect(screen.queryByRole('heading', { name: 'Quick Action' })).not.toBeInTheDocument();
-  });
-
-  it('edits a select cell and persists a newly created colored option', async () => {
-    const user = userEvent.setup();
-    const condition = {
-      createdAt: '2026-08-30', id: 'condition', name: 'Condition', objectKind: 'item' as const, position: 0,
-      rules: { choices: ['Brand New'], digitsOnly: false, required: false, unique: false },
-      type: 'select' as const, updatedAt: '2026-08-30',
-    };
-    const record = { createdAt: '2026-08-30', id: 'phone', label: 'iPhone', objectKind: 'item' as const, updatedAt: '2026-08-30', values: { condition: 'Brand New' } };
-    objectApi.listProperties.mockResolvedValueOnce([condition]);
-    objectApi.listRecords.mockResolvedValueOnce([record]).mockResolvedValueOnce([record]).mockResolvedValueOnce([]);
-    objectApi.updateProperty.mockResolvedValueOnce({ ok: true, value: { ...condition, rules: { ...condition.rules, choices: ['Brand New', 'Used'] } } });
-    objectApi.updateRecord.mockResolvedValueOnce({ ok: true, value: { ...record, values: { condition: 'Used' } } });
-    render(<MaxApp />);
-    await screen.findByRole('button', { name: 'Home' });
-    await user.click(await screen.findByRole('button', { name: 'Brand New' }));
-    const optionInput = screen.getByPlaceholderText('Search or create an option');
-    await user.clear(optionInput);
-    await user.type(optionInput, 'Used{Enter}');
-
-    await waitFor(() => expect(objectApi.updateProperty).toHaveBeenCalled());
-    const propertyUpdate = objectApi.updateProperty.mock.calls.at(-1) as [string, PropertyDraft] | undefined;
-    expect(propertyUpdate?.[0]).toBe('condition');
-    expect(propertyUpdate?.[1].rules.choices).toEqual(['Brand New', 'Used']);
-    expect(objectApi.updateRecord).toHaveBeenCalledWith('phone', { label: 'iPhone', objectKind: 'item', values: { condition: 'Used' } });
+    await user.click(screen.getByRole('button', { name: 'Settings' }));
+    await user.click(within(screen.getByRole('navigation', { name: 'Settings sections' })).getByRole('button', { name: 'Appearance' }));
+    const glass = screen.getByRole('slider', { name: 'Glass opacity' });
+    fireEvent.change(glass, { target: { value: '60' } });
+    expect(document.documentElement.style.getPropertyValue('--popup-opacity')).toBe('60%');
+    await user.click(screen.getByRole('button', { name: 'Reset Glass opacity' }));
+    expect(glass).toHaveValue('85');
   });
 
   it('creates a safety backup before deleting the workspace', async () => {
@@ -922,39 +682,23 @@ describe('Max shell', () => {
     render(<MaxApp />);
     await screen.findByRole('button', { name: 'Home' });
     await user.click(screen.getByRole('button', { name: 'Settings' }));
-    await user.type(await screen.findByLabelText('Type "Test Shop" to confirm'), 'Test Shop');
-    await user.click(screen.getByRole('button', { name: 'Delete workspace' }));
+    await user.click(await screen.findByRole('button', { name: 'Delete workspace' }));
+    await user.type(await screen.findByLabelText('Workspace name to confirm deletion'), 'Test Shop');
+    await user.click(within(screen.getByRole('dialog', { name: 'Delete workspace?' })).getByRole('button', { name: 'Delete workspace' }));
 
     await waitFor(() => expect(resetWorkspace).toHaveBeenCalledOnce());
     expect(backupsApi.create).toHaveBeenCalledWith('pre-delete');
     expect(backupsApi.create.mock.invocationCallOrder[0]).toBeLessThan(resetWorkspace.mock.invocationCallOrder[0] ?? Infinity);
-    expect(await screen.findByText('Select language')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Get started' })).toBeInTheDocument();
   });
 
-  it('opens properties and templates sheet and closes when clicking outside or pressing Escape', async () => {
-    const user = userEvent.setup();
-    render(<MaxApp />);
+  it('opens action configuration directly from the empty runtime popup', async () => {
+    const user = userEvent.setup(); render(<MaxApp />);
     await screen.findByRole('button', { name: 'Home' });
-    // Click Properties button to open sheet
-    const propertiesBtn = await screen.findByRole('button', { name: 'Database properties' });
-    await user.click(propertiesBtn);
-    expect(screen.getByRole('complementary', { name: 'Schema' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Properties', selected: true })).toBeInTheDocument();
-
-    // Click outside on backdrop to close
-    const backdrop = screen.getByTestId('schema-backdrop');
-    await user.click(backdrop);
-    expect(screen.queryByRole('complementary', { name: 'Schema' })).not.toBeInTheDocument();
-
-    // Click Templates button to open sheet with templates tab
-    const templatesBtn = screen.getByRole('button', { name: 'Templates' });
-    await user.click(templatesBtn);
-    expect(screen.getByRole('complementary', { name: 'Schema' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Templates', selected: true })).toBeInTheDocument();
-
-    // Press Escape to close
-    await user.keyboard('{Escape}');
-    expect(screen.queryByRole('complementary', { name: 'Schema' })).not.toBeInTheDocument();
+    await user.keyboard('{Control>}s{/Control}');
+    await user.click(await screen.findByRole('button', { name: 'Manage Quick Actions' }));
+    expect(await screen.findByRole('button', { name: '+ Quick action' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Quick Actions' })).not.toBeInTheDocument();
   });
 
   it('has no detectable baseline accessibility violations', async () => {

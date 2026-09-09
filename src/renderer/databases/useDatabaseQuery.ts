@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { readSessionValue, writeSessionValue } from '../app/page-session';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { DatabaseSchema } from '../../shared/database-contract';
 import type { WorkspaceProperty, WorkspacePropertyDraft, WorkspacePropertyPatch, WorkspaceRecord, WorkspaceRecordDraft, WorkspaceRecordPatch } from '../../shared/property-contract';
@@ -55,10 +56,14 @@ export function useDatabaseQuery(databaseId: string, initialViewId?: string): Us
   const [groups, setGroups] = useState<readonly RecordGroup[]>([]);
   const [page, setPage] = useState<number>(0);
   const pageSize = 50;
+  const selectedViewId = useRef<string | null>(null);
+  const queryGeneration = useRef(0);
+  const metadataGeneration = useRef(0);
 
   // 1. Load Database Schema and Views
   const loadMetadata = useCallback(async () => {
     if (!databaseId) return;
+    const generation = ++metadataGeneration.current;
     try {
       const [fetchedSchema, databaseViews, requestedView] = await Promise.all([
         window.maxApi.workspace.getDatabaseSchema(databaseId),
@@ -66,23 +71,29 @@ export function useDatabaseQuery(databaseId: string, initialViewId?: string): Us
         initialViewId ? window.maxApi.workspace.getView(initialViewId) : Promise.resolve(null),
       ]);
       const fetchedViews = requestedView?.databaseId === databaseId && requestedView.ownerType === 'block'
-        ? [requestedView]
+        ? await window.maxApi.workspace.listViews(requestedView.ownerId, 'block')
         : databaseViews;
+      if (generation !== metadataGeneration.current) return;
       setSchema(fetchedSchema);
       setViews(fetchedViews);
 
       if (fetchedViews.length > 0) {
-        const defaultView = fetchedViews.find((view) => view.id === initialViewId)
+        const defaultView = fetchedViews.find((view) => view.id === selectedViewId.current)
+          ?? fetchedViews.find((view) => view.id === initialViewId)
+          ?? fetchedViews.find((view) => view.id === readSessionValue(`database-view:${databaseId}`, ''))
           ?? fetchedViews.find((view) => view.id === fetchedSchema.database.defaultViewId)
           ?? fetchedViews[0];
-        setActiveView((previous) => initialViewId ? defaultView ?? null : previous ?? defaultView ?? null);
-        if (defaultView?.filterAst) {
-          setFilterAst(defaultView.filterAst);
-        }
-        if (defaultView?.sorts) {
-          setSorts(defaultView.sorts);
-        }
+        selectedViewId.current = defaultView?.id ?? null;
+        setActiveView(defaultView ?? null);
+        setFilterAst(defaultView?.filterAst ?? null);
+        setSorts(defaultView?.sorts ?? []);
         setGroup(defaultView?.group ?? null);
+      } else {
+        selectedViewId.current = null;
+        setActiveView(null);
+        setFilterAst(null);
+        setSorts([]);
+        setGroup(null);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load database schema.');
@@ -92,6 +103,7 @@ export function useDatabaseQuery(databaseId: string, initialViewId?: string): Us
   // 2. Query Records based on current filters, sorts, pagination
   const fetchRecords = useCallback(async () => {
     if (!databaseId) return;
+    const generation = ++queryGeneration.current;
     setLoading(true);
     setError(null);
 
@@ -116,27 +128,46 @@ export function useDatabaseQuery(databaseId: string, initialViewId?: string): Us
       };
 
       const res = await window.maxApi.workspace.queryDatabase(params);
+      if (generation !== queryGeneration.current) return;
       setRecords(res.records);
       setTotalCount(res.totalCount);
       setCalculations(res.calculations);
       setGroups(res.groups ?? []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to query database.');
+      if (generation === queryGeneration.current) setError(err instanceof Error ? err.message : 'Failed to query database.');
     } finally {
-      setLoading(false);
+      if (generation === queryGeneration.current) setLoading(false);
     }
   }, [activeView, databaseId, filterAst, group, page, pageSize, searchQuery, sorts]);
 
   useEffect(() => {
+    selectedViewId.current = null;
+    setPage(0);
+    setSearchQuery('');
     void loadMetadata();
+    const metadata = metadataGeneration, query = queryGeneration;
+    return () => { metadata.current++; query.current++; };
   }, [loadMetadata]);
 
   useEffect(() => {
     void fetchRecords();
+    const query = queryGeneration;
+    return () => { query.current++; };
   }, [fetchRecords]);
+
+  useEffect(() => {
+    const changed = () => { void loadMetadata(); void fetchRecords(); };
+    window.addEventListener('max:workspace-changed', changed);
+    return () => window.removeEventListener('max:workspace-changed', changed);
+  }, [fetchRecords, loadMetadata]);
+
+  const queryKey = JSON.stringify([filterAst, group, searchQuery, sorts]);
+  useEffect(() => { setPage(0); }, [queryKey]);
 
   // View Switch
   const handleSetActiveView = useCallback((view: WorkspaceView | null) => {
+    selectedViewId.current = view?.id ?? null;
+    if (view) writeSessionValue(`database-view:${databaseId}`, view.id);
     setActiveView(view);
     if (view) {
       setFilterAst(view.filterAst || null);
@@ -144,7 +175,7 @@ export function useDatabaseQuery(databaseId: string, initialViewId?: string): Us
       setGroup(view.group ?? null);
       setPage(0);
     }
-  }, []);
+  }, [databaseId]);
 
   // CRUD Records
   const createRecord = useCallback(async (draft: WorkspaceRecordDraft): Promise<WorkspaceRecord | null> => {
@@ -152,6 +183,7 @@ export function useDatabaseQuery(databaseId: string, initialViewId?: string): Us
       const res = await window.maxApi.workspace.createRecord(draft);
       if (res.ok) {
         await fetchRecords();
+        window.dispatchEvent(new Event('max:workspace-changed'));
         return res.value;
       }
       setError(res.error.message);
@@ -179,8 +211,10 @@ export function useDatabaseQuery(databaseId: string, initialViewId?: string): Us
 
       const res = await window.maxApi.workspace.updateRecord(recordId, patch);
       if (!res.ok) {
-        setError(res.error.message);
         await fetchRecords();
+        setError(res.error.message);
+      } else {
+        window.dispatchEvent(new Event('max:workspace-changed'));
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update record.');
@@ -195,6 +229,8 @@ export function useDatabaseQuery(databaseId: string, initialViewId?: string): Us
       if (!res.ok) {
         setError(res.error.message);
         await fetchRecords();
+      } else {
+        window.dispatchEvent(new Event('max:workspace-changed'));
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to archive record.');
@@ -209,6 +245,7 @@ export function useDatabaseQuery(databaseId: string, initialViewId?: string): Us
       if (res.ok) {
         await loadMetadata();
         await fetchRecords();
+        window.dispatchEvent(new Event('max:workspace-changed'));
         return res.value;
       }
       setError(res.error.message);
@@ -226,10 +263,11 @@ export function useDatabaseQuery(databaseId: string, initialViewId?: string): Us
         await loadMetadata();
         await fetchRecords();
       } else {
-        setError(res.error.message);
+        throw new Error(res.error.message);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update property.');
+      throw err;
     }
   }, [fetchRecords, loadMetadata]);
 
@@ -250,10 +288,10 @@ export function useDatabaseQuery(databaseId: string, initialViewId?: string): Us
   // CRUD Views
   const createView = useCallback(async (draft: WorkspaceViewDraft): Promise<WorkspaceView | null> => {
     try {
-      const res = await window.maxApi.workspace.createView(draft);
+      const res = await window.maxApi.workspace.createView(activeView?.ownerType === 'block' ? { ...draft, ownerType: 'block', ownerId: activeView.ownerId } : draft);
       if (res.ok) {
         await loadMetadata();
-        setActiveView(res.value);
+        handleSetActiveView(res.value);
         return res.value;
       }
       setError(res.error.message);
@@ -262,7 +300,7 @@ export function useDatabaseQuery(databaseId: string, initialViewId?: string): Us
       setError(err instanceof Error ? err.message : 'Failed to create view.');
       return null;
     }
-  }, [loadMetadata]);
+  }, [activeView, handleSetActiveView, loadMetadata]);
 
   const updateView = useCallback(async (viewId: string, patch: WorkspaceViewPatch): Promise<void> => {
     try {

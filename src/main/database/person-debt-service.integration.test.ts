@@ -16,11 +16,10 @@ describe('PersonDebtService', () => {
     const person = db.objects.createRecord({ label: 'Tarek Ahmed', objectKind: 'person', values: {} });
 
     // 1. Partial sale: Total 500, Paid 200 => Debt 300
-    db.quickEntry.submit({
-      accountId: cash.id,
-      operationKind: 'sale',
+    db.transactions.createTransaction({
+      movements: [{ accountId: cash.id, amount: 200, movementType: 'inflow' }],
+      transactionType: 'sale',
       paidAmount: 200,
-      paymentMode: 'partial',
       personId: person.id,
       totalAmount: 500,
     });
@@ -32,9 +31,10 @@ describe('PersonDebtService', () => {
     expect(stmt.unpaidTransactions).toHaveLength(1);
 
     // 2. Unpaid sale on credit: Total 400 => Debt becomes 700
-    db.quickEntry.submit({
-      operationKind: 'sale',
-      paymentMode: 'later',
+    db.transactions.createTransaction({
+      transactionType: 'sale',
+      paidAmount: 0,
+      movements: [],
       personId: person.id,
       totalAmount: 400,
     });
@@ -73,11 +73,10 @@ describe('PersonDebtService', () => {
     const cash = db.accounts.createAccount({ accountType: 'cash', initialBalance: 500, name: 'Safe' });
     const person = db.objects.createRecord({ label: 'Sara Hassan', objectKind: 'person', values: {} });
 
-    const tx = db.quickEntry.submit({
-      accountId: cash.id,
-      operationKind: 'sale',
+    const tx = db.transactions.createTransaction({
+      movements: [{ accountId: cash.id, amount: 100, movementType: 'inflow' }],
+      transactionType: 'sale',
       paidAmount: 100,
-      paymentMode: 'partial',
       personId: person.id,
       totalAmount: 600,
     });

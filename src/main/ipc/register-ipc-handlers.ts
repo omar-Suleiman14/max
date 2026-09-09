@@ -1,5 +1,10 @@
+import type { UpdateService } from '../platform/windows/update-service';
 import { TERMS_VERSION } from '../../shared/terms';
-import { app, ipcMain } from 'electron';
+import { app, ipcMain, shell } from 'electron';
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { safeWebUrl } from '../../shared/page-links';
 
 import {
   accountTypes,
@@ -28,8 +33,6 @@ import type {
   ForgivenessDraft,
   RepaymentDraft,
 } from '../../shared/person-debt-contract';
-import type { PaymentMode, QuickEntryDraft } from '../../shared/quick-entry-contract';
-import type { PricingChannelDraft, PricingProfileDraft, PricingProviderDraft, PricingQuoteInput, PricingServiceDraft } from '../../shared/pricing-contract';
 import type {
   CloseSessionDraft,
   OpenSessionDraft,
@@ -81,6 +84,7 @@ import {
 } from './workspace-input-parsers';
 
 type RegisterIpcHandlersOptions = Readonly<{
+  updates?: UpdateService;
   cloudBackups: CloudBackupService;
   database: DatabaseService;
   developmentServerUrl?: string;
@@ -328,88 +332,6 @@ function parseTransferDraft(value: unknown): TransferDraft {
   };
 }
 
-function parseQuickEntryDraft(value: unknown): QuickEntryDraft {
-  if (!isObject(value)) {
-    throw new ObjectDomainError('invalid-input', 'A valid quick entry draft is required.');
-  }
-  const totalAmount = Number(value.totalAmount);
-  if (!Number.isFinite(totalAmount) || totalAmount <= 0) {
-    throw new ObjectDomainError('invalid-input', 'Total amount must be greater than zero.');
-  }
-  if (!['full', 'partial', 'later'].includes(String(value.paymentMode))) {
-    throw new ObjectDomainError('invalid-input', 'A valid payment mode is required.');
-  }
-
-  const validOperations = ['sale', 'purchase', 'expense', 'income', 'transfer', 'adjustment', 'reconciliation'];
-  const operationKind = typeof value.operationKind === 'string' && validOperations.includes(value.operationKind)
-    ? value.operationKind as QuickEntryDraft['operationKind']
-    : 'sale';
-
-  return {
-    accountId: typeof value.accountId === 'string' ? value.accountId : undefined,
-    adjustmentDirection: value.adjustmentDirection === 'outflow' ? 'outflow' : 'inflow',
-    collectorId: typeof value.collectorId === 'string' ? value.collectorId : undefined,
-    itemId: typeof value.itemId === 'string' ? value.itemId : undefined,
-    note: typeof value.note === 'string' ? value.note : undefined,
-    operationKind,
-    paidAmount: typeof value.paidAmount === 'number' ? value.paidAmount : undefined,
-    paymentMode: value.paymentMode as PaymentMode,
-    personId: typeof value.personId === 'string' ? value.personId : undefined,
-    pricingCustomerType: typeof value.pricingCustomerType === 'string' ? value.pricingCustomerType : undefined,
-    pricingInputMode: value.pricingInputMode === 'customer_receives' ? 'customer_receives' : value.pricingInputMode === 'customer_pays' ? 'customer_pays' : undefined,
-    pricingOverrides: Array.isArray(value.pricingOverrides) ? value.pricingOverrides as QuickEntryDraft['pricingOverrides'] : undefined,
-    pricingProfileId: typeof value.pricingProfileId === 'string' ? value.pricingProfileId : undefined,
-    pricingServiceId: typeof value.pricingServiceId === 'string' ? value.pricingServiceId : undefined,
-    providerCost: typeof value.providerCost === 'number' ? value.providerCost : undefined,
-    providerFee: typeof value.providerFee === 'number' ? value.providerFee : undefined,
-    quantity: typeof value.quantity === 'number' ? value.quantity : undefined,
-    serviceFee: typeof value.serviceFee === 'number' ? value.serviceFee : undefined,
-    templateId: typeof value.templateId === 'string' ? value.templateId : undefined,
-    toAccountId: typeof value.toAccountId === 'string' ? value.toAccountId : undefined,
-    totalAmount,
-  };
-}
-
-function parsePricingProfileDraft(value: unknown): PricingProfileDraft {
-  if (!isObject(value) || typeof value.name !== 'string' || !Array.isArray(value.components)) {
-    throw new ObjectDomainError('invalid-input', 'A valid pricing profile is required.');
-  }
-  if (value.currency !== 'EGP' || (value.inputMode !== 'customer_pays' && value.inputMode !== 'customer_receives')) {
-    throw new ObjectDomainError('invalid-input', 'Pricing profile currency or input mode is invalid.');
-  }
-  return value as unknown as PricingProfileDraft;
-}
-
-function parsePricingQuoteInput(value: unknown): PricingQuoteInput {
-  if (!isObject(value)) throw new ObjectDomainError('invalid-input', 'A valid pricing quote input is required.');
-  const amount = Number(value.amount);
-  if (!Number.isFinite(amount) || amount < 0) throw new ObjectDomainError('invalid-input', 'Pricing amount must be non-negative.');
-  return {
-    amount,
-    context: isObject(value.context) ? value.context : undefined,
-    inputMode: value.inputMode === 'customer_receives' ? 'customer_receives' : value.inputMode === 'customer_pays' ? 'customer_pays' : undefined,
-    overrides: Array.isArray(value.overrides) ? value.overrides as PricingQuoteInput['overrides'] : undefined,
-    providerCost: optionalNumber(value.providerCost, 'Provider cost'),
-  };
-}
-
-function parsePricingProviderDraft(value: unknown): PricingProviderDraft {
-  if (!isObject(value) || typeof value.name !== 'string') throw new ObjectDomainError('invalid-input', 'A valid provider is required.');
-  return { active: value.active === true, name: value.name };
-}
-
-function parsePricingChannelDraft(value: unknown): PricingChannelDraft {
-  if (!isObject(value) || typeof value.name !== 'string') throw new ObjectDomainError('invalid-input', 'A valid channel is required.');
-  return { active: value.active === true, name: value.name, providerId: typeof value.providerId === 'string' ? value.providerId : undefined };
-}
-
-function parsePricingServiceDraft(value: unknown): PricingServiceDraft {
-  if (!isObject(value) || typeof value.name !== 'string' || typeof value.category !== 'string' || typeof value.pricingProfileId !== 'string') {
-    throw new ObjectDomainError('invalid-input', 'A valid service template is required.');
-  }
-  return value as unknown as PricingServiceDraft;
-}
-
 function parseRepaymentDraft(value: unknown): RepaymentDraft {
   if (!isObject(value) || typeof value.personId !== 'string' || typeof value.accountId !== 'string') {
     throw new ObjectDomainError('invalid-input', 'A valid repayment draft is required.');
@@ -551,6 +473,7 @@ async function asyncMutation<T>(work: () => Promise<T>): Promise<MutationResult<
 }
 
 export function registerIpcHandlers({
+  updates,
   cloudBackups,
   database,
   developmentServerUrl,
@@ -564,6 +487,9 @@ export function registerIpcHandlers({
     assertTrustedSender(senderUrl, developmentServerUrl);
   }
 
+  for (const [channel, method] of [[IPC_CHANNELS.updateStatus, 'getStatus'], [IPC_CHANNELS.updateCheck, 'check'], [IPC_CHANNELS.updateInstall, 'install']] as const) {
+    ipcMain.handle(channel, (event) => { trust(event); return updates?.[method]() ?? { state: 'unsupported', currentVersion: app.getVersion() }; });
+  }
   ipcMain.handle(IPC_CHANNELS.systemHealth, (event): SystemHealth => {
     trust(event);
 
@@ -751,59 +677,6 @@ export function registerIpcHandlers({
     trust(event);
     return database.transactions.getLedgerSummary();
   });
-  // Quick Entry
-  ipcMain.handle(IPC_CHANNELS.quickEntryGetSuggestion, (event, itemId: unknown, templateId: unknown) => {
-    trust(event);
-    return database.quickEntry.getSuggestion(
-      typeof itemId === 'string' ? itemId : undefined,
-      typeof templateId === 'string' ? templateId : undefined,
-    );
-  });
-  ipcMain.handle(IPC_CHANNELS.quickEntrySubmit, (event, draft: unknown) => {
-    trust(event);
-    return mutation(() => database.quickEntry.submit(parseQuickEntryDraft(draft)));
-  });
-  ipcMain.handle(IPC_CHANNELS.quickEntryQuotePricing, (event, draft: unknown) => {
-    trust(event);
-    return mutation(() => database.quickEntry.previewPricing(parseQuickEntryDraft(draft)));
-  });
-
-  // Pricing
-  ipcMain.handle(IPC_CHANNELS.pricingList, (event) => {
-    trust(event);
-    return database.pricing.listProfiles();
-  });
-  ipcMain.handle(IPC_CHANNELS.pricingCreate, (event, draft: unknown) => {
-    trust(event);
-    return mutation(() => database.pricing.createProfile(parsePricingProfileDraft(draft)));
-  });
-  ipcMain.handle(IPC_CHANNELS.pricingUpdate, (event, id: unknown, draft: unknown) => {
-    trust(event);
-    return mutation(() => database.pricing.updateProfile(parseId(id), parsePricingProfileDraft(draft)));
-  });
-  ipcMain.handle(IPC_CHANNELS.pricingArchive, (event, id: unknown) => {
-    trust(event);
-    return mutation(() => {
-      database.pricing.archiveProfile(parseId(id));
-      return null;
-    });
-  });
-  ipcMain.handle(IPC_CHANNELS.pricingQuote, (event, id: unknown, input: unknown) => {
-    trust(event);
-    return mutation(() => database.pricing.quote(parseId(id), parsePricingQuoteInput(input)));
-  });
-  ipcMain.handle(IPC_CHANNELS.pricingProviderList, (event) => { trust(event); return database.pricingCatalog.listProviders(); });
-  ipcMain.handle(IPC_CHANNELS.pricingProviderCreate, (event, draft: unknown) => { trust(event); return mutation(() => database.pricingCatalog.createProvider(parsePricingProviderDraft(draft))); });
-  ipcMain.handle(IPC_CHANNELS.pricingProviderUpdate, (event, id: unknown, draft: unknown) => { trust(event); return mutation(() => database.pricingCatalog.updateProvider(parseId(id), parsePricingProviderDraft(draft))); });
-  ipcMain.handle(IPC_CHANNELS.pricingProviderArchive, (event, id: unknown) => { trust(event); return mutation(() => { database.pricingCatalog.archiveProvider(parseId(id)); return null; }); });
-  ipcMain.handle(IPC_CHANNELS.pricingChannelList, (event) => { trust(event); return database.pricingCatalog.listChannels(); });
-  ipcMain.handle(IPC_CHANNELS.pricingChannelCreate, (event, draft: unknown) => { trust(event); return mutation(() => database.pricingCatalog.createChannel(parsePricingChannelDraft(draft))); });
-  ipcMain.handle(IPC_CHANNELS.pricingChannelUpdate, (event, id: unknown, draft: unknown) => { trust(event); return mutation(() => database.pricingCatalog.updateChannel(parseId(id), parsePricingChannelDraft(draft))); });
-  ipcMain.handle(IPC_CHANNELS.pricingChannelArchive, (event, id: unknown) => { trust(event); return mutation(() => { database.pricingCatalog.archiveChannel(parseId(id)); return null; }); });
-  ipcMain.handle(IPC_CHANNELS.pricingServiceList, (event) => { trust(event); return database.pricingCatalog.listServices(); });
-  ipcMain.handle(IPC_CHANNELS.pricingServiceCreate, (event, draft: unknown) => { trust(event); return mutation(() => database.pricingCatalog.createService(parsePricingServiceDraft(draft))); });
-  ipcMain.handle(IPC_CHANNELS.pricingServiceUpdate, (event, id: unknown, draft: unknown) => { trust(event); return mutation(() => database.pricingCatalog.updateService(parseId(id), parsePricingServiceDraft(draft))); });
-  ipcMain.handle(IPC_CHANNELS.pricingServiceArchive, (event, id: unknown) => { trust(event); return mutation(() => { database.pricingCatalog.archiveService(parseId(id)); return null; }); });
 
   // People Debt
   ipcMain.handle(IPC_CHANNELS.peopleBalances, (event) => {
@@ -971,6 +844,14 @@ export function registerIpcHandlers({
     workspaceMutationResult(() => database.unitOfWork.run(work));
 
   // Nodes & Navigation
+  ipcMain.handle(IPC_CHANNELS.workspaceGetPageGraph, (event) => { trust(event); return database.workspace.getPageGraph(); });
+  ipcMain.handle(IPC_CHANNELS.workspaceOpenExternal, async (event, value: unknown): Promise<WorkspaceMutationResult<null>> => {
+    trust(event);
+    const url = typeof value === 'string' ? safeWebUrl(value) : null;
+    if (!url) return { ok: false, error: { code: 'invalid-input', message: 'Use an HTTP or HTTPS URL.' } };
+    try { await shell.openExternal(url); return { ok: true, value: null }; }
+    catch { return { ok: false, error: { code: 'invalid-input', message: 'Could not open this link.' } }; }
+  });
   ipcMain.handle(IPC_CHANNELS.workspaceGetNavigation, (event, includeArchived?: unknown) => {
     trust(event);
     return database.workspace.getNavigation(includeArchived === true);
@@ -997,6 +878,10 @@ export function registerIpcHandlers({
   ipcMain.handle(IPC_CHANNELS.workspaceRestoreNode, (event, id: unknown) => {
     trust(event);
     return workspaceMutation(() => database.workspace.restoreNode(parseId(id)));
+  });
+  ipcMain.handle(IPC_CHANNELS.workspacePermanentlyDeleteNode, (event, id: unknown) => {
+    trust(event);
+    return workspaceMutation(() => { database.workspace.permanentlyDeleteNode(parseId(id)); return null; });
   });
   ipcMain.handle(IPC_CHANNELS.workspaceReorderNode, (event, id: unknown, targetPosKey: unknown, newParentId: unknown) => {
     trust(event);
@@ -1087,6 +972,30 @@ export function registerIpcHandlers({
     trust(event);
     return database.recordTemplates.list(parseId(databaseId));
   });
+  ipcMain.handle(IPC_CHANNELS.workspaceSaveRecordTemplate, (event, recordId: unknown, name: unknown) => {
+    trust(event);
+    return workspaceMutation(() => {
+      const record = database.records.getRecord(parseId(recordId));
+      if (!record || record.archivedAt) throw new Error('Page not found.');
+      const parsedName = parseWorkspaceRecordPatch({ title: name }).title;
+      if (!parsedName) throw new Error('Template name is required.');
+      const properties = database.properties.listProperties(record.databaseId);
+      const editable = new Set(properties.filter((property) => !['title', 'relation', 'formula', 'rollup'].includes(property.type) && !property.uniqueValue).map((property) => property.id));
+      return database.recordTemplates.create({
+        databaseId: record.databaseId, name: parsedName, icon: record.icon ?? undefined,
+        contentJson: record.contentJson ?? '[]',
+        defaults: Object.fromEntries(Object.entries(record.properties).filter(([id]) => editable.has(id))),
+      });
+    });
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceEditRecordTemplate, (event, databaseId: unknown, id: unknown, patch: unknown) => {
+    trust(event);
+    return workspaceMutation(() => database.recordTemplates.edit(parseId(databaseId), id === null ? null : parseId(id), parseWorkspaceRecordPatch(patch)));
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceArchiveRecordTemplate, (event, id: unknown) => {
+    trust(event);
+    return workspaceMutation(() => database.recordTemplates.archive(parseId(id)));
+  });
   ipcMain.handle(IPC_CHANNELS.workspaceUpdateRecord, (event, id: unknown, patch: unknown) => {
     trust(event);
     return workspaceMutation(() => database.records.updateRecord(parseId(id), parseWorkspaceRecordPatch(patch)));
@@ -1148,9 +1057,10 @@ export function registerIpcHandlers({
   });
 
   // Views & Queries
-  ipcMain.handle(IPC_CHANNELS.workspaceListViews, (event, databaseId: unknown) => {
+  ipcMain.handle(IPC_CHANNELS.workspaceListViews, (event, ownerId: unknown, ownerType: unknown) => {
     trust(event);
-    return database.views.listViews(parseId(databaseId));
+    if (ownerType !== undefined && ownerType !== 'database' && ownerType !== 'block') throw new Error('Invalid view owner type.');
+    return database.views.listViews(parseId(ownerId), ownerType);
   });
   ipcMain.handle(IPC_CHANNELS.workspaceGetView, (event, id: unknown) => {
     trust(event);
@@ -1200,6 +1110,8 @@ export function registerIpcHandlers({
       return null;
     });
   });
+  ipcMain.handle(IPC_CHANNELS.workspaceEvaluateWorkflow, (event, input: unknown) => { trust(event); return workspaceMutationResult(() => database.workflows.evaluateForm(parseWorkflowExecutionInput(input))); });
+
   ipcMain.handle(IPC_CHANNELS.workspaceExecuteWorkflow, (event, input: unknown) => {
     trust(event);
     return workspaceMutationResult(() => database.workflows.execute(parseWorkflowExecutionInput(input)));
@@ -1213,9 +1125,39 @@ export function registerIpcHandlers({
       typeof limit === 'number' && Number.isInteger(limit) && limit > 0 && limit <= 100 ? limit : 20,
     );
   });
+  const blueprintMutation = <T>(work: () => T): WorkspaceMutationResult<T> => {
+    try { return workspaceMutationResult(work); }
+    catch { return { ok: false, error: { code: 'invalid-input', message: 'Blueprint operation failed. Check the file and its references. No import changes were saved.' } }; }
+  };
   ipcMain.handle(IPC_CHANNELS.workspaceImportTemplate, (event, template: unknown) => {
     trust(event);
-    return workspaceMutationResult(() => database.workspaceTemplates.importBlueprintV2(parseWorkspaceTemplateV2(template)));
+    return blueprintMutation(() => database.workspaceTemplates.importBlueprintV2(parseWorkspaceTemplateV2(template)));
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceValidateTemplate, (event, template: unknown) => {
+    trust(event);
+    return blueprintMutation(() => { database.workspaceTemplates.validateTemplate(parseWorkspaceTemplateV2(template)); return null; });
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceExportTemplate, (event) => {
+    trust(event);
+    return blueprintMutation(() => database.workspaceTemplates.exportTemplate());
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceImportFile, async (event, sourcePath: unknown) => {
+    trust(event);
+    if (typeof sourcePath !== 'string') return { ok: false, error: { code: 'invalid-input', message: 'Invalid file path' } };
+    try {
+      const assetsDir = path.join(app.getPath('userData'), 'assets');
+      await fs.mkdir(assetsDir, { recursive: true });
+
+      const ext = path.extname(sourcePath);
+      const newFileName = `${randomUUID()}${ext}`;
+      const destPath = path.join(assetsDir, newFileName);
+
+      await fs.copyFile(sourcePath, destPath);
+
+      return { ok: true, value: destPath };
+    } catch (e) {
+      return { ok: false, error: { code: 'internal-error', message: String(e) } };
+    }
   });
   ipcMain.handle(IPC_CHANNELS.workspaceMigrateV01, (event, locale: unknown) => {
     trust(event);

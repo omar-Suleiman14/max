@@ -1,18 +1,21 @@
+import { getPlatformAdapter } from '../platform/platform-adapter';
+import { windowChromeOptions } from '../platform/window-chrome';
 import { app, BrowserWindow } from 'electron';
 import { join } from 'node:path';
 
 import { isTrustedNavigationUrl } from '../security/trusted-sender';
 
 export async function createMainWindow(): Promise<BrowserWindow> {
+  const platform = getPlatformAdapter();
   const window = new BrowserWindow({
-    autoHideMenuBar: true,
+    ...windowChromeOptions(platform.platform),
     icon: join(app.getAppPath(), 'assets', 'max.png'),
     width: 1180,
     height: 760,
     minWidth: 760,
     minHeight: 520,
     show: false,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0e1117',
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -21,6 +24,7 @@ export async function createMainWindow(): Promise<BrowserWindow> {
     },
   });
 
+  if (platform.platform !== 'macos') window.setMenu(null);
   window.once('ready-to-show', () => window.show());
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', (event, url) => {

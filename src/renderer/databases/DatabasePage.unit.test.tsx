@@ -66,6 +66,9 @@ describe('DatabasePage record creation', () => {
       configurable: true,
       value: {
         workspace: {
+          getNode: vi.fn(() => Promise.resolve({ id: 'db-products', kind: 'database', title: 'Products' })),
+          getNavigation: vi.fn(() => Promise.resolve({ databases: [], pages: [] })),
+          getPageGraph: vi.fn(() => Promise.resolve({ pages: [], links: [] })),
           listRecordTemplates: vi.fn(() => Promise.resolve([{
             createdAt: '2026-09-02',
             databaseId: 'db-products',
@@ -84,8 +87,8 @@ describe('DatabasePage record creation', () => {
 
     expect(screen.getByRole('button', { name: 'New' })).toBeInTheDocument();
     expect(screen.queryByText('Retail sale')).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'New record options' }));
-    await user.click(await screen.findByRole('menuitem', { name: /Retail sale/ }));
+    await user.click(screen.getByRole('button', { name: 'Templates' }));
+    await user.click(await screen.findByRole('button', { name: /^(?!Options for|Reorder).*Retail sale/ }));
 
     await waitFor(() => expect(createRecord).toHaveBeenCalledWith(expect.objectContaining({
       databaseId: 'db-products',

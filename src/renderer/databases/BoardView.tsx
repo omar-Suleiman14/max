@@ -7,6 +7,7 @@ import type { WorkspaceRecord, WorkspaceRecordDraft, WorkspaceRecordPatch } from
 
 type BoardViewProps = Readonly<{
   databaseId: string;
+  groupPropertyId?: string;
   onArchiveRecord?: (recordId: string) => Promise<void>;
   onCreateRecord: (draft: WorkspaceRecordDraft) => Promise<WorkspaceRecord | null>;
   onOpenRecord: (record: WorkspaceRecord) => void;
@@ -17,6 +18,7 @@ type BoardViewProps = Readonly<{
 
 export function BoardView({
   databaseId,
+  groupPropertyId,
   onCreateRecord,
   onOpenRecord,
   onUpdateRecord,
@@ -24,7 +26,8 @@ export function BoardView({
   schema,
 }: BoardViewProps) {
   // Find group property (first select or status property)
-  const groupProp = schema?.properties.find((p) => ['select', 'status'].includes(p.type)) || null;
+  const groupProp = schema?.properties.find((p) => p.id === groupPropertyId && ['select', 'status'].includes(p.type))
+    ?? schema?.properties.find((p) => ['select', 'status'].includes(p.type)) ?? null;
 
   const [newCardTitles, setNewCardTitles] = useState<Record<string, string>>({});
   const [addingColumnId, setAddingColumnId] = useState<string | null>(null);
@@ -70,7 +73,6 @@ export function BoardView({
     const nextVal = targetColumnId === '__no_group__' ? null : targetColumnId;
     void onUpdateRecord(record.id, {
       properties: {
-        ...record.properties,
         [groupProp.id]: nextVal,
       },
     });
@@ -89,7 +91,11 @@ export function BoardView({
           });
 
           return (
-            <div key={col.id} className="board-column">
+            <div key={col.id} className="board-column" onDragOver={(event) => event.preventDefault()} onDrop={(event) => {
+              event.preventDefault();
+              const record = records.find((candidate) => candidate.id === event.dataTransfer.getData('text/max-record'));
+              if (record) handleMoveRecord(record, col.id);
+            }}>
               {/* Column Header */}
               <div className="board-column__header">
                 <div className="flex items-center gap-2">
@@ -113,6 +119,11 @@ export function BoardView({
                   <div
                     key={record.id}
                     className="board-card"
+                    draggable
+                    role="button"
+                    tabIndex={0}
+                    onDragStart={(event) => { event.dataTransfer.setData('text/max-record', record.id); event.dataTransfer.effectAllowed = 'move'; }}
+                    onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onOpenRecord(record); } }}
                     onClick={() => onOpenRecord(record)}
                   >
                     <div className="flex items-center justify-between mb-1.5">

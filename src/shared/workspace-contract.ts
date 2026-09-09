@@ -37,6 +37,8 @@ export type WorkspaceNodePatch = Readonly<{
 }>;
 
 export type NavigationItem = Readonly<{
+  /** Compatibility identifier for links saved before generic databases. */
+  legacyAlias?: string;
   archivedAt?: string | null;
   icon?: string | null;
   id: string;

@@ -33,11 +33,6 @@ export class SortCompiler {
           SELECT pv.number_value FROM workspace_property_values pv
           WHERE pv.record_id = r.id AND pv.property_id = '${sort.propertyId}'
         ) ${dir}`);
-      } else if (prop?.type === 'money') {
-        clauses.push(`(
-          SELECT pv.money_minor_value FROM workspace_property_values pv
-          WHERE pv.record_id = r.id AND pv.property_id = '${sort.propertyId}'
-        ) ${dir}`);
       } else if (prop?.type === 'date') {
         clauses.push(`(
           SELECT pv.date_start FROM workspace_property_values pv

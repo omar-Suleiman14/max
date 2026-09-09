@@ -1,10 +1,18 @@
 import type { DatabaseSync } from 'node:sqlite';
+import { randomUUID } from 'node:crypto';
 
 export class DatabaseUnitOfWork {
   readonly #database: DatabaseSync;
 
   constructor(database: DatabaseSync) {
     this.#database = database;
+  }
+
+  preview<T>(operation: () => T): T {
+    const name = `preview_${randomUUID().replaceAll('-', '')}`;
+    this.#database.exec(`SAVEPOINT ${name};`);
+    try { return operation(); }
+    finally { this.#database.exec(`ROLLBACK TO ${name}; RELEASE ${name};`); }
   }
 
   run<T>(operation: () => T): T {

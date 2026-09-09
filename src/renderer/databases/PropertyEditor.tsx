@@ -1,10 +1,15 @@
+import { DatabasePopover } from '../ui/database-popover';
+import { IconPickerDialog } from '../ui/icon-picker-dialog';
+import { PropertyIcon } from './PropertyIcon';
 import { Select } from '../ui/select';
 import {
   Binary,
   Calendar,
   CheckSquare,
   CircleDot,
-  DollarSign,
+  CircleDashed,
+  Clock,
+  File,
   Hash,
   Link2,
   List,
@@ -41,18 +46,22 @@ type PropertyEditorProps = Readonly<{
 const propertyTypeOptions: { description: string; icon: typeof Type; label: string; type: PropertyType }[] = [
   { description: 'Single-line plain text or names', icon: Type, label: 'Text', type: 'text' },
   { description: 'Numbers, quantities, counts', icon: Hash, label: 'Number', type: 'number' },
-  { description: 'Currency amounts with formatted cents', icon: DollarSign, label: 'Money', type: 'money' },
   { description: 'Single selection from colored tags', icon: CircleDot, label: 'Select', type: 'select' },
   { description: 'Multiple tags selection', icon: List, label: 'Multi-select', type: 'multi_select' },
-  { description: 'Workflow progress stages', icon: CircleDot, label: 'Status', type: 'status' },
+  { description: 'Workflow progress stages', icon: CircleDashed, label: 'Status', type: 'status' },
   { description: 'Dates, timestamps, deadlines', icon: Calendar, label: 'Date', type: 'date' },
   { description: 'True/false interactive checkbox', icon: CheckSquare, label: 'Checkbox', type: 'checkbox' },
   { description: 'Link records from another database', icon: Link2, label: 'Relation', type: 'relation' },
+  ...(['url', 'email', 'phone'] as const).map(type => ({ description: 'Contact information', icon: Link2, label: ({ url: 'URL', email: 'Email', phone: 'Phone' })[type], type })),
   { description: 'Calculated expressions from properties', icon: Sigma, label: 'Formula', type: 'formula' },
   { description: 'Summarize values across relations', icon: Binary, label: 'Rollup', type: 'rollup' },
+  { description: 'Upload files and media', icon: File, label: 'File', type: 'file' },
+  { description: 'Record creation timestamp', icon: Clock, label: 'Created time', type: 'created_time' },
+  { description: 'Last modified timestamp', icon: Clock, label: 'Last edited time', type: 'last_edited_time' },
+  { description: 'Auto-incrementing unique ID', icon: Hash, label: 'Auto ID', type: 'auto_id' },
 ];
 
-const colorOptions = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ef4444', '#64748b'];
+const colorOptions = ['blue', 'pink', 'yellow', 'green', 'brown', 'purple', 'red', 'gray'].map(color => `var(--option-${color}-bg)`);
 
 export function PropertyEditor({
   databaseId,
@@ -64,6 +73,8 @@ export function PropertyEditor({
 }: PropertyEditorProps) {
   const isEditing = Boolean(property);
 
+  const [icon, setIcon] = useState(typeof property?.config.icon === 'string' ? property.config.icon : '');
+  const [pickingIcon, setPickingIcon] = useState(false);
   const [name, setName] = useState(property?.name || '');
   const [type, setType] = useState<PropertyType>(property?.type || 'text');
   const [required, setRequired] = useState(property?.required || false);
@@ -95,12 +106,27 @@ export function PropertyEditor({
   const [databases, setDatabases] = useState<readonly NavigationItem[]>([]);
   const [relationTargetDatabaseId, setRelationTargetDatabaseId] = useState('');
   const [inversePropertyName, setInversePropertyName] = useState('');
+  const [relationLimit, setRelationLimit] = useState<'one' | 'many'>('many');
+  const [targetProperties, setTargetProperties] = useState<readonly WorkspaceProperty[]>([]);
   const [conversionStrategy, setConversionStrategy] = useState<TypeConversionStrategy>('convert_all');
 
   // Type Conversion Preview
   const [preview, setPreview] = useState<TypeConversionPreview | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isOpen || type !== 'rollup' || !rollupRelationId) return;
+    let active = true;
+    void window.maxApi.workspace.listRelations(databaseId).then(async (relations) => {
+      const relation = relations.find((item) => item.sourcePropertyId === rollupRelationId || item.inversePropertyId === rollupRelationId);
+      if (!relation) { if (active) setTargetProperties([]); return; }
+      const targetId = relation.sourcePropertyId === rollupRelationId ? relation.targetDatabaseId : relation.sourceDatabaseId;
+      const properties = await window.maxApi.workspace.listProperties(targetId);
+      if (active) setTargetProperties(properties);
+    }).catch((cause: unknown) => { if (active) setError(String(cause)); });
+    return () => { active = false; };
+  }, [databaseId, isOpen, rollupRelationId, type]);
 
   useEffect(() => {
     if (property) {
@@ -207,6 +233,7 @@ export function PropertyEditor({
         };
       }
 
+      config = { ...property?.config, ...config, icon };
       if (isEditing && property) {
         if (property.type !== type) {
           const conversion = await window.maxApi.workspace.applyTypeConversion(property.id, type, conversionStrategy);
@@ -229,12 +256,14 @@ export function PropertyEditor({
           type,
           uniqueValue,
         });
+        if (!createdProperty) throw new Error('Property could not be saved. Check the name and constraints.');
         if (type === 'relation') {
           if (!createdProperty || !relationTargetDatabaseId) {
             throw new Error('A target database is required for a relation.');
           }
           const relation = await window.maxApi.workspace.createRelation({
-            inversePropertyName: inversePropertyName.trim() || null,
+            inversePropertyName: inversePropertyName.trim() || schema?.database.title || 'Related pages',
+            sourceCardinality: relationLimit,
             sourceDatabaseId: databaseId,
             sourcePropertyId: createdProperty.id,
             targetDatabaseId: relationTargetDatabaseId,
@@ -246,6 +275,7 @@ export function PropertyEditor({
         }
       }
 
+      window.dispatchEvent(new Event('max:workspace-changed'));
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save property.');
@@ -257,12 +287,12 @@ export function PropertyEditor({
   const relationProperties = schema?.properties.filter((p) => p.type === 'relation') || [];
 
   return (
-    <div className="modal-backdrop" onClick={onClose} role="dialog" aria-modal="true">
+    <DatabasePopover onClose={onClose}>
       <div className="modal-container property-editor-modal" onClick={(e) => e.stopPropagation()}>
         <form onSubmit={(e) => { void handleSubmit(e); }}>
           <div className="modal-header">
             <div className="modal-header__title">
-              <Type size={18} className="text-primary" />
+              <button type="button" className="property-icon-button" aria-label="Choose property icon" onClick={() => setPickingIcon(true)}><PropertyIcon type={type} icon={icon} /></button>
               <h3>{isEditing ? 'Edit Property' : 'New Property'}</h3>
             </div>
             <button className="btn-icon" onClick={onClose} type="button" aria-label="Close">
@@ -279,7 +309,7 @@ export function PropertyEditor({
               <input
                 type="text"
                 className="input-field"
-                placeholder="e.g. Price, Customer, Status..."
+                placeholder="Property name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 autoFocus
@@ -291,28 +321,7 @@ export function PropertyEditor({
             {(!isEditing || property?.type !== 'title') && (
               <div className="form-group">
                 <label className="form-label">Property Type</label>
-                <div className="property-type-grid">
-                  {propertyTypeOptions.map((opt) => {
-                    const Icon = opt.icon;
-                    const isSelected = type === opt.type;
-                    return (
-                      <button
-                        key={opt.type}
-                        type="button"
-                        className={`property-type-card ${isSelected ? 'property-type-card--selected' : ''}`}
-                        onClick={() => setType(opt.type)}
-                      >
-                        <div className="property-type-card__icon">
-                          <Icon size={16} />
-                        </div>
-                        <div className="property-type-card__text">
-                          <span className="property-type-card__label">{opt.label}</span>
-                          <span className="property-type-card__desc">{opt.description}</span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
+                <div className="property-type-menu" aria-label="Property type">{propertyTypeOptions.map(option => <button type="button" aria-pressed={type === option.type} key={option.type} onClick={() => setType(option.type)}><option.icon size={17} />{option.label}</button>)}</div>
               </div>
             )}
 
@@ -355,11 +364,12 @@ export function PropertyEditor({
                   <input
                     className="input-field"
                     onChange={(event) => setInversePropertyName(event.target.value)}
-                    placeholder="e.g. Repairs"
+                    placeholder={schema?.database.title ?? 'Related pages'}
                     type="text"
                     value={inversePropertyName}
                   />
                 </div>
+                <div className="form-group"><label className="form-label">Page limit</label><Select value={relationLimit} onChange={(event) => setRelationLimit(event.target.value as 'one' | 'many')}><option value="many">No limit</option><option value="one">One page</option></Select></div>
               </div>
             )}
 
@@ -441,15 +451,13 @@ export function PropertyEditor({
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Target Property ID</label>
-                  <input
-                    type="text"
-                    className="input-field font-mono text-sm"
-                    placeholder="e.g. prop_inv_delta or prop_amount"
+                  <label className="form-label">Property to summarize</label>
+                  <Select
+                    className="select-field"
                     value={rollupTargetPropId}
                     onChange={(e) => setRollupTargetPropId(e.target.value)}
                     required
-                  />
+                  ><option value="">Choose a property…</option>{targetProperties.map((target) => <option key={target.id} value={target.id}>{target.name}</option>)}</Select>
                 </div>
 
                 <div className="form-group">
@@ -470,27 +478,7 @@ export function PropertyEditor({
               </div>
             )}
 
-            {/* Constraint checkboxes */}
-            <div className="flex gap-4 pt-2">
-              <label className="flex items-center gap-2 cursor-pointer text-sm">
-                <input
-                  type="checkbox"
-                  checked={required}
-                  onChange={(e) => setRequired(e.target.checked)}
-                  className="checkbox-custom"
-                />
-                Required
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer text-sm">
-                <input
-                  type="checkbox"
-                  checked={uniqueValue}
-                  onChange={(e) => setUniqueValue(e.target.checked)}
-                  className="checkbox-custom"
-                />
-                Unique Value
-              </label>
-            </div>
+
           </div>
 
           <div className="modal-footer">
@@ -502,7 +490,8 @@ export function PropertyEditor({
             </button>
           </div>
         </form>
+        {pickingIcon && <IconPickerDialog locale="en" currentIcon={icon} onClose={() => setPickingIcon(false)} onSelect={(value) => { setIcon(value); setPickingIcon(false); }} />}
       </div>
-    </div>
+    </DatabasePopover>
   );
 }

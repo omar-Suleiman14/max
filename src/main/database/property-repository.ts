@@ -171,6 +171,21 @@ export class PropertyRepository {
       `)
       .run(name, required, uniqueValue, defaultValueJson ?? null, configJson, positionKey, now, id);
 
+    if (patch.options !== undefined) {
+      const existing = new Map((current.options ?? []).map((option) => [option.id, option]));
+      for (const option of patch.options) {
+        if (option.id && !existing.has(option.id)) throw new WorkspaceDomainError('invalid-input', 'Option does not belong to this property.');
+      }
+      const kept = new Set<string>();
+      let previous: string | null = null;
+      for (const option of patch.options) {
+        const positionKey = generateOrderKey(previous, null);
+        if (option.id) { this.updateOption(option.id, { ...option, positionKey }); kept.add(option.id); }
+        else kept.add(this.createOption(id, { ...option, positionKey }).id);
+        previous = positionKey;
+      }
+      for (const option of existing.values()) if (!kept.has(option.id)) this.archiveOption(option.id);
+    }
     return this.getProperty(id)!;
   }
 

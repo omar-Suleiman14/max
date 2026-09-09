@@ -8,7 +8,6 @@ import {
   Search,
   Users,
   Wallet,
-  X,
 } from 'lucide-react';
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 
@@ -62,6 +61,7 @@ export function UniversalSearchDialog({ locale, onClose, onSelect }: UniversalSe
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [loading, setLoading] = useState(false);
 
+  const resultsRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -70,9 +70,12 @@ export function UniversalSearchDialog({ locale, onClose, onSelect }: UniversalSe
 
   useEffect(() => {
     const trimmed = term.trim();
+    setResults([]);
+    setSelectedIndex(0);
     if (!trimmed) {
       setResults([]);
       setSelectedIndex(0);
+      setLoading(false);
       return;
     }
 
@@ -114,7 +117,12 @@ export function UniversalSearchDialog({ locale, onClose, onSelect }: UniversalSe
     };
   }, [term]);
 
+  useEffect(() => {
+    resultsRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });
+  }, [selectedIndex, results]);
+
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.nativeEvent.isComposing) return;
     if (event.key === 'ArrowDown') {
       event.preventDefault();
       setSelectedIndex((idx) => (results.length > 0 ? (idx + 1) % results.length : 0));
@@ -123,7 +131,7 @@ export function UniversalSearchDialog({ locale, onClose, onSelect }: UniversalSe
       setSelectedIndex((idx) => (results.length > 0 ? (idx - 1 + results.length) % results.length : 0));
     } else if (event.key === 'Enter') {
       event.preventDefault();
-      if (results[selectedIndex]) {
+      if (!loading && results[selectedIndex]) {
         onSelect(results[selectedIndex]);
         onClose();
       }
@@ -132,25 +140,31 @@ export function UniversalSearchDialog({ locale, onClose, onSelect }: UniversalSe
 
   return (
     <FocusedOverlay className="search-dialog-overlay" labelId="search-dialog-title" onClose={onClose}>
-      <div className="search-dialog">
+      <div className="search-dialog" dir={locale === 'ar' ? 'rtl' : 'ltr'}>
+        <h2 id="search-dialog-title" className="sr-only">{searchCopy(locale, 'search')}</h2>
         <div className="search-dialog__input-wrapper">
           <Search aria-hidden="true" className="search-dialog__search-icon" size={20} />
           <input
             ref={inputRef}
+            data-autofocus="true"
+            role="combobox"
+            aria-expanded="true"
+            aria-autocomplete="list"
+            aria-controls="workspace-search-results"
+            aria-activedescendant={results[selectedIndex] ? 'workspace-search-result-' + selectedIndex : undefined}
             aria-label={searchCopy(locale, 'search')}
             className="search-dialog__input"
             onChange={(e) => setTerm(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={searchCopy(locale, 'searchPlaceholder')}
-            type="search"
+            placeholder={locale === 'ar' ? 'ابحث في الصفحات وقواعد البيانات والسجلات...' : 'Search pages, databases, and records...'}
+            type="text"
             value={term}
           />
-          <button aria-label="Close" className="icon-button" onClick={onClose} type="button">
-            <X aria-hidden="true" size={18} />
-          </button>
         </div>
 
-        <div aria-busy={loading} className="search-dialog__results">
+        <div ref={resultsRef} id="workspace-search-results" role="listbox" aria-label={searchCopy(locale, 'search')} aria-busy={loading} className="search-dialog__results">
+          {!term.trim() && <div className="search-dialog__empty">{locale === 'ar' ? 'ابحث عن صفحة أو قاعدة بيانات أو سجل' : 'Search pages, databases, and records'}</div>}
+          {loading && <div className="search-dialog__empty" role="status">{locale === 'ar' ? 'جارٍ البحث…' : 'Searching…'}</div>}
           {term.trim() && !loading && results.length === 0 && (
             <div className="search-dialog__empty">
               <p>
@@ -164,6 +178,8 @@ export function UniversalSearchDialog({ locale, onClose, onSelect }: UniversalSe
             return (
               <div
                 key={`${item.kind}-${item.id}`}
+                id={`workspace-search-result-${index}`}
+                onMouseDown={(event) => event.preventDefault()}
                 aria-selected={isSelected}
                 className={`search-result-item ${isSelected ? 'search-result-item--active' : ''}`}
                 onClick={() => {
@@ -184,6 +200,7 @@ export function UniversalSearchDialog({ locale, onClose, onSelect }: UniversalSe
             );
           })}
         </div>
+        <footer className="search-dialog__footer"><span><kbd>↑</kbd><kbd>↓</kbd> {locale === 'ar' ? 'تنقل' : 'Navigate'}</span><span><kbd>Enter</kbd> {locale === 'ar' ? 'فتح' : 'Select'}</span><span><kbd>Esc</kbd> {locale === 'ar' ? 'إغلاق' : 'Close'}</span></footer>
       </div>
     </FocusedOverlay>
   );

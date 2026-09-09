@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' http://localhost:* ws://localhost:*; img-src 'self' data:"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' http://localhost:* ws://localhost:*; img-src 'self' data: https: http:; media-src 'self' https: http:; frame-src https: http:; object-src 'none'"
     />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Max</title>
@@ -15,8 +15,12 @@
       rel="stylesheet"
     />
   </head>
-  <body>
-    <div id="root"></div>
+  <body style="margin:0;background:#0e1117;">
+    <div id="root">
+      <div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#0e1117;">
+        <img src="/src/renderer/assets/max-logo.png" alt="Max" width="64" height="64" style="opacity:.85;" />
+      </div>
+    </div>
     <script type="module" src="/src/renderer/main.tsx"></script>
   </body>
 </html>

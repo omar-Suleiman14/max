@@ -56,6 +56,7 @@ export function handleWindowsSquirrelLifecycle(): boolean {
     runUpdate(updateExecutable, args, done) {
       const child = spawn(updateExecutable, args, {
         detached: true,
+        windowsHide: true,
         stdio: 'ignore',
       });
       let finished = false;

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { pageContentWeight, pageGraphMetadata, pageLinkTargets, type PageGraph } from '../../shared/page-links';
 import type { DatabaseSync } from 'node:sqlite';
 
 import { generateOrderKey } from '../../shared/order-key';
@@ -11,6 +12,7 @@ import {
   type WorkspaceNodePatch,
 } from '../../shared/workspace-contract';
 import type { WorkspaceSearchService } from './workspace-search-service';
+import { DatabaseUnitOfWork } from './database-unit-of-work';
 
 type NodeRow = Readonly<{
   archived_at: string | null;
@@ -140,32 +142,60 @@ export class WorkspaceRepository {
   }
 
   archiveNode(id: string): void {
-    const current = this.getNode(id);
-    if (!current) {
-      throw new WorkspaceDomainError('not-found', `Workspace node not found: ${id}`);
-    }
+    new DatabaseUnitOfWork(this.#database).run(() => this.#archiveNode(id));
+  }
 
+  #archiveNode(id: string): void {
+    const current = this.getNode(id);
+    if (!current) throw new WorkspaceDomainError('not-found', 'Workspace page not found.');
+    if (current.archivedAt) return;
     const now = new Date().toISOString();
-    this.#database
-      .prepare('UPDATE workspace_nodes SET archived_at = ?, updated_at = ? WHERE id = ?')
-      .run(now, now, id);
-    this.#search?.removeIndex(id);
+    const nodes = this.#database.prepare(`WITH RECURSIVE owned(id) AS (SELECT ? UNION SELECT n.id FROM workspace_nodes n JOIN owned p ON n.parent_node_id = p.id) SELECT n.id FROM workspace_nodes n JOIN owned ON owned.id = n.id WHERE n.archived_at IS NULL`).all(id) as { id: string }[];
+    this.#database.prepare("INSERT INTO workspace_audit_log (entity_kind, entity_id, action, actor_id, before_json, metadata_json, created_at) VALUES ('node', ?, 'archived', 'local-user', ?, '{}', ?)").run(id, JSON.stringify(nodes.map((n) => n.id)), now);
+    for (const node of nodes) {
+      this.#database.prepare('UPDATE workspace_nodes SET archived_at = ?, updated_at = ? WHERE id = ?').run(now, now, node.id);
+      this.#database.prepare('UPDATE workspace_records SET archived_at = ?, updated_at = ? WHERE (id = ? OR database_id = ?) AND archived_at IS NULL').run(now, now, node.id, node.id);
+      this.#search?.removeIndex(node.id);
+    }
   }
 
   restoreNode(id: string): WorkspaceNode {
+    return new DatabaseUnitOfWork(this.#database).run(() => this.#restoreNode(id));
+  }
+
+  permanentlyDeleteNode(id: string): void {
+    new DatabaseUnitOfWork(this.#database).run(() => {
+      const root = this.getNode(id);
+      if (!root?.archivedAt) throw new WorkspaceDomainError('invalid-input', 'Only items in Trash can be permanently deleted.');
+      const nodes = this.#database.prepare(`WITH RECURSIVE owned(id) AS (SELECT ? UNION SELECT n.id FROM workspace_nodes n JOIN owned p ON n.parent_node_id = p.id) SELECT n.id, n.archived_at FROM workspace_nodes n JOIN owned ON owned.id = n.id`).all(id) as { id: string; archived_at: string | null }[];
+      if (nodes.some((node) => !node.archived_at)) throw new WorkspaceDomainError('invalid-input', 'Restore this item and move its contents to Trash before permanently deleting it.');
+      // Remove record rows first: their database foreign keys deliberately restrict deletion.
+      for (const node of nodes) this.#database.prepare('DELETE FROM workspace_records WHERE id = ?').run(node.id);
+      for (const node of nodes) {
+        this.#search?.removeIndex(node.id);
+        this.#database.prepare('DELETE FROM workspace_dependencies WHERE source_id = ? OR target_id = ?').run(node.id, node.id);
+        this.#database.prepare('DELETE FROM workspace_nodes WHERE id = ?').run(node.id);
+      }
+      this.#database.prepare("INSERT INTO workspace_audit_log (entity_kind, entity_id, action, actor_id, metadata_json, created_at) VALUES ('node', ?, 'archived', 'local-user', ?, ?)").run(id, JSON.stringify({ permanentlyDeleted: true, title: root.title, nodeCount: nodes.length }), new Date().toISOString());
+    });
+  }
+
+  #restoreNode(id: string): WorkspaceNode {
     const current = this.getNode(id);
-    if (!current) {
-      throw new WorkspaceDomainError('not-found', `Workspace node not found: ${id}`);
-    }
-
+    if (!current) throw new WorkspaceDomainError('not-found', 'Workspace page not found.');
+    if (!current.archivedAt) return current;
+    const audit = this.#database.prepare("SELECT before_json FROM workspace_audit_log WHERE entity_kind = 'node' AND entity_id = ? AND action = 'archived' ORDER BY id DESC LIMIT 1").get(id) as { before_json: string } | undefined;
+    const ids = audit ? JSON.parse(audit.before_json) as string[] : [id];
     const now = new Date().toISOString();
-    this.#database
-      .prepare('UPDATE workspace_nodes SET archived_at = NULL, updated_at = ? WHERE id = ?')
-      .run(now, id);
-
-    const restored = this.getNode(id)!;
-    this.#search?.indexNode(restored);
-    return restored;
+    for (const nodeId of ids) {
+      const node = this.getNode(nodeId);
+      if (!node || node.archivedAt !== current.archivedAt) continue;
+      this.#database.prepare('UPDATE workspace_nodes SET archived_at = NULL, updated_at = ? WHERE id = ?').run(now, nodeId);
+      this.#database.prepare('UPDATE workspace_records SET archived_at = NULL, updated_at = ? WHERE (id = ? OR database_id = ?) AND archived_at = ?').run(now, nodeId, nodeId, current.archivedAt);
+      this.#search?.indexNode(this.getNode(nodeId)!);
+    }
+    this.#database.prepare("INSERT INTO workspace_audit_log (entity_kind, entity_id, action, actor_id, metadata_json, created_at) VALUES ('node', ?, 'restored', 'local-user', '{}', ?)").run(id, now);
+    return this.getNode(id)!;
   }
 
   reorderNode(id: string, targetPositionKey: string, newParentNodeId?: string | null): WorkspaceNode {
@@ -232,7 +262,11 @@ export class WorkspaceRepository {
       title: row.title,
     }));
 
+    const legacyAliases: Record<string, string> = { db_products: 'items', db_people: 'people', db_accounts: 'accounts', db_transactions: 'transactions' };
+    const migrations = this.#database.prepare("SELECT legacy_id, workspace_id FROM workspace_migration_map WHERE legacy_entity_type = 'template_database'").all() as { legacy_id: string; workspace_id: string }[];
+    const aliases = new Map(migrations.map((entry) => [entry.workspace_id, legacyAliases[entry.legacy_id]]));
     const databases: NavigationItem[] = databaseRows.map((row) => ({
+      legacyAlias: aliases.get(row.id),
       archivedAt: row.archived_at,
       icon: row.icon,
       id: row.id,
@@ -257,6 +291,41 @@ export class WorkspaceRepository {
       .all() as NodeRow[];
 
     return rows.map(nodeFromRow);
+  }
+
+  getPageGraph(): PageGraph {
+    const pages = this.listPages();
+    const activeIds = new Set(pages.map((page) => page.id));
+    const pagesById = new Map(pages.map((page) => [page.id, page] as const));
+    const workspacePath = (page: WorkspaceNode): string => {
+      const parts = [page.title];
+      const visited = new Set([page.id]);
+      let parentId = page.parentNodeId;
+      while (parentId && !visited.has(parentId)) {
+        visited.add(parentId);
+        const parent = pagesById.get(parentId);
+        if (!parent) break;
+        parts.unshift(parent.title);
+        parentId = parent.parentNodeId;
+      }
+      return parts.join('/');
+    };
+    return {
+      pages: pages.map((page) => {
+        const { properties, text } = pageGraphMetadata(page.contentJson);
+        return {
+          id: page.id,
+          title: page.title,
+          icon: page.icon,
+          parentNodeId: page.parentNodeId,
+          contentWeight: pageContentWeight(page.contentJson),
+          path: workspacePath(page),
+          properties,
+          text,
+        };
+      }),
+      links: pages.flatMap((page) => pageLinkTargets(page.contentJson).filter((id) => activeIds.has(id)).map((targetId) => ({ sourceId: page.id, targetId }))),
+    };
   }
 
   #nextPositionKey(kind: string, parentNodeId?: string | null): string {

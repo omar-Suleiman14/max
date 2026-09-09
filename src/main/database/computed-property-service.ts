@@ -31,6 +31,7 @@ export class ComputedPropertyService {
   computeForRecord(
     record: WorkspaceRecord,
     properties: readonly WorkspaceProperty[],
+    now?: string,
   ): Record<string, unknown> {
     const computedValues: Record<string, unknown> = { ...record.properties };
 
@@ -43,6 +44,7 @@ export class ComputedPropertyService {
             const ast = this.#formulaParser.parse(expression);
             const val = evaluateFormula(ast, {
               properties: computedValues,
+              now,
               recordTitle: record.title,
             });
             computedValues[prop.id] = val;

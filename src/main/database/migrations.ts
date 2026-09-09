@@ -1082,4 +1082,13 @@ export const migrations: readonly Migration[] = [
       `);
     },
   },
+  { id: 17, name: 'generic_workspace_actions', up(database) { database.exec(`
+    UPDATE object_properties SET property_type = 'number' WHERE property_type = 'money';
+    UPDATE workspace_property_values SET number_value = money_minor_value / 100.0, money_minor_value = NULL WHERE property_id IN (SELECT id FROM workspace_properties WHERE type = 'money');
+    UPDATE workspace_properties SET type = 'number', config_json = json_remove(config_json, '$.money') WHERE type = 'money';
+    CREATE TRIGGER workspace_no_money_insert BEFORE INSERT ON workspace_properties WHEN NEW.type = 'money' BEGIN SELECT RAISE(ABORT, 'Unsupported property type'); END;
+    CREATE TRIGGER workspace_no_money_update BEFORE UPDATE OF type ON workspace_properties WHEN NEW.type = 'money' BEGIN SELECT RAISE(ABORT, 'Unsupported property type'); END;
+    ALTER TABLE workspace_workflows ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0, 1));
+    UPDATE workspace_workflows SET enabled = 0, archived_at = COALESCE(archived_at, datetime('now')) WHERE kind = 'built_in' OR EXISTS (SELECT 1 FROM json_each(steps_json) WHERE json_extract(value, '$.type') NOT IN ('VALIDATE','COMPUTE','CREATE_RECORD','FIND_RECORD','UPDATE_RECORD','RETURN_RESULT'));
+  `); } },
 ];

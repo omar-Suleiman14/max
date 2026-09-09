@@ -1,5 +1,7 @@
-import { app, BrowserWindow, dialog, session } from 'electron';
-import { join } from 'node:path';
+import { existsSync } from 'node:fs';
+import { UpdateService } from './platform/windows/update-service';
+import { app, autoUpdater, BrowserWindow, dialog, session } from 'electron';
+import { dirname, join } from 'node:path';
 
 import { CloudBackupService } from './cloud/cloud-backup-service';
 import { DatabaseService } from './database/database-service';
@@ -33,6 +35,8 @@ if (handledInstallerLifecycle) {
   app.quit();
 } else {
   let database: DatabaseService | undefined;
+  let updates: UpdateService | undefined;
+  let backupTimer: ReturnType<typeof setInterval> | undefined;
 
   app.on('second-instance', () => {
     const existingWindow = BrowserWindow.getAllWindows()[0];
@@ -61,13 +65,28 @@ if (handledInstallerLifecycle) {
         join(app.getPath('userData'), 'cloud-backup-state.json'),
       );
 
+      const installedWindows = platform.platform === 'windows' && app.isPackaged && existsSync(join(dirname(process.execPath), '..', 'Update.exe'));
+      updates = new UpdateService(installedWindows ? autoUpdater : undefined, app.getVersion(), MAX_UPDATE_WORKER_URL + '/v1/releases/windows/' + process.arch);
+      if (process.env.MAX_SMOKE_TEST !== '1') updates.start();
       registerIpcHandlers({
+        updates,
         cloudBackups,
         database,
         developmentServerUrl: MAIN_WINDOW_VITE_DEV_SERVER_URL,
         platform,
       });
 
+      const checkBackup = () => {
+        if (!database) return;
+        try {
+          const metadata = database.shopMetadata.getMetadata();
+          if (!metadata.onboardingCompleted || metadata.backupSchedule === 'manual') return;
+          const interval = (metadata.backupSchedule === 'weekly' ? 7 : 1) * 86400000;
+          const latest = database.backups.listBackups().filter(b => b.trigger === 'daily' || b.trigger === 'weekly').reduce((last, b) => Math.max(last, Date.parse(b.createdAt) || 0), 0);
+          if (Date.now() - latest >= interval) database.backups.createBackup(metadata.backupSchedule);
+        } catch (error) { console.error('Scheduled local backup failed:', error); }
+      };
+      if (process.env.MAX_SMOKE_TEST !== '1') { checkBackup(); backupTimer = setInterval(checkBackup, 60000); }
       const mainWindow = await createMainWindow();
 
       if (process.env.MAX_SMOKE_TEST === '1') {
@@ -103,6 +122,8 @@ if (handledInstallerLifecycle) {
   });
 
   app.on('before-quit', () => {
+    if (backupTimer) clearInterval(backupTimer);
+    updates?.dispose();
     removeIpcHandlers();
     database?.close();
   });
