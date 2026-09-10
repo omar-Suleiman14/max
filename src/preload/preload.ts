@@ -202,6 +202,8 @@ const maxApi: MaxApi = Object.freeze({
   workspace: Object.freeze({
     archiveDatabase: (id: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.workspaceArchiveDatabase, id) as ReturnType<MaxApi['workspace']['archiveDatabase']>,
+    permanentlyDeleteDatabase: (id: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspacePermanentlyDeleteDatabase, id) as ReturnType<MaxApi['workspace']['permanentlyDeleteDatabase']>,
     archiveNode: (id: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.workspaceArchiveNode, id) as ReturnType<MaxApi['workspace']['archiveNode']>,
     permanentlyDeleteNode: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.workspacePermanentlyDeleteNode, id) as ReturnType<MaxApi['workspace']['permanentlyDeleteNode']>,

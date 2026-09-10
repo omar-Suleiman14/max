@@ -918,6 +918,13 @@ export function registerIpcHandlers({
       return null;
     });
   });
+  ipcMain.handle(IPC_CHANNELS.workspacePermanentlyDeleteDatabase, (event, id: unknown) => {
+    trust(event);
+    return workspaceMutation(() => {
+      database.databases.permanentlyDeleteDatabase(parseId(id));
+      return null;
+    });
+  });
   ipcMain.handle(IPC_CHANNELS.workspaceDuplicateDatabase, (event, id: unknown, options: unknown) => {
     trust(event);
     return workspaceMutation(() => {

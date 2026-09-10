@@ -6,6 +6,9 @@ html[lang=en] :is(body,button,input,textarea,h1,h2,h3,h4,h5) { font-family: ui-s
 [data-embedded=true] .notion-db-heading { padding: 14px 0 8px; gap: 8px; }
 [data-embedded=true] .notion-db-heading h2 { font-size: 20px; letter-spacing: -.3px; }
 .notion-db-toolbar { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line); min-height: 42px; z-index: 5; }
+/* Each embedded database creates its own stacking context. Lift the open
+   toolbar itself so its menu stays above controls in later database blocks. */
+.notion-db-toolbar:has(.notion-db-menu) { z-index: 120; }
 .notion-db-tabs { display: flex; align-items: center; gap: 2px; min-width: 0; overflow-x: auto; }
 .notion-db-tabs > button { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; min-height: 42px; padding: 8px 11px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); font-size: 14px; }
 .notion-db-tabs > button[aria-selected=true] { color: var(--text); border-bottom-color: var(--text); font-weight: 600; }

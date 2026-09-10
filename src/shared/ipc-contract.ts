@@ -166,6 +166,7 @@ export const IPC_CHANNELS = {
   workspaceCreateDatabase: 'max:workspace:databases:create',
   workspaceUpdateDatabase: 'max:workspace:databases:update',
   workspaceArchiveDatabase: 'max:workspace:databases:archive',
+  workspacePermanentlyDeleteDatabase: 'max:workspace:databases:permanently-delete',
   workspaceDuplicateDatabase: 'max:workspace:databases:duplicate',
   workspaceListProperties: 'max:workspace:properties:list',
   workspaceListRecordTemplates: 'max:workspace:record-templates:list',
@@ -353,6 +354,7 @@ export type MaxApi = Readonly<{
   }>;
   workspace: Readonly<{
     archiveDatabase: (id: string) => Promise<WorkspaceMutationResult<null>>;
+    permanentlyDeleteDatabase: (id: string) => Promise<WorkspaceMutationResult<null>>;
     archiveNode: (id: string) => Promise<WorkspaceMutationResult<null>>;
     permanentlyDeleteNode: (id: string) => Promise<WorkspaceMutationResult<null>>;
     archiveProperty: (id: string) => Promise<WorkspaceMutationResult<null>>;

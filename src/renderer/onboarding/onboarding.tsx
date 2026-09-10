@@ -22,18 +22,32 @@ function playWelcomeSound(): void {
   try {
     const context = new AudioContextConstructor();
     const gain = context.createGain();
-    const oscillator = context.createOscillator();
     const now = context.currentTime;
-    oscillator.type = 'sine';
-    oscillator.frequency.setValueAtTime(523.25, now);
-    oscillator.frequency.exponentialRampToValueAtTime(783.99, now + 0.19);
-    oscillator.frequency.exponentialRampToValueAtTime(1046.5, now + 0.46);
     gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.045, now + 0.05);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.58);
-    oscillator.connect(gain); gain.connect(context.destination);
-    oscillator.start(now); oscillator.stop(now + 0.6);
-    oscillator.addEventListener('ended', () => { void context.close(); }, { once: true });
+    gain.gain.exponentialRampToValueAtTime(0.055, now + 0.12);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 2.8);
+    gain.connect(context.destination);
+    // A custom, slow four-note arrival cue. It has the warmth and duration of
+    // an operating-system welcome without using or imitating a branded sound.
+    const notes = [
+      { at: 0, duration: 1.25, frequency: 261.63 },
+      { at: 0.32, duration: 1.2, frequency: 329.63 },
+      { at: 0.68, duration: 1.35, frequency: 392 },
+      { at: 1.12, duration: 1.55, frequency: 523.25 },
+    ];
+    for (const note of notes) {
+      const oscillator = context.createOscillator();
+      const voiceGain = context.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(note.frequency, now + note.at);
+      oscillator.detune.setValueAtTime(-4, now + note.at);
+      voiceGain.gain.setValueAtTime(0.0001, now + note.at);
+      voiceGain.gain.exponentialRampToValueAtTime(0.42, now + note.at + 0.11);
+      voiceGain.gain.exponentialRampToValueAtTime(0.0001, now + note.at + note.duration);
+      oscillator.connect(voiceGain); voiceGain.connect(gain);
+      oscillator.start(now + note.at); oscillator.stop(now + note.at + note.duration + 0.05);
+    }
+    window.setTimeout(() => { void context.close(); }, 3_000);
   } catch { /* Audio is an optional welcome enhancement. */ }
 }
 
@@ -130,14 +144,18 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
     return (
       <div className="onboarding-container onboarding-container--welcome" dir="ltr">
         <main className="onboarding-welcome" aria-labelledby="welcome-to-max">
+          <div className="onboarding-welcome__ambient onboarding-welcome__ambient--one" aria-hidden="true" />
+          <div className="onboarding-welcome__ambient onboarding-welcome__ambient--two" aria-hidden="true" />
           <div className="onboarding-welcome__ripple onboarding-welcome__ripple--one" aria-hidden="true" />
           <div className="onboarding-welcome__ripple onboarding-welcome__ripple--two" aria-hidden="true" />
-          <div className="onboarding-welcome__halo" aria-hidden="true" />
-          <img alt="" className="onboarding-welcome__logo" src={maxLogoReference} />
-          <p className="onboarding-welcome__eyebrow"><Sparkles size={14} aria-hidden="true" /> Your local workspace</p>
-          <h1 id="welcome-to-max">Welcome to Max</h1>
-          <p>Build your workspace around the way you work.</p>
-          <button autoFocus className="apple-button onboarding-welcome__button" onClick={() => setShowWelcome(false)} type="button">Get started</button>
+          <div className="onboarding-welcome__content">
+            <div className="onboarding-welcome__mark-wrap"><div className="onboarding-welcome__halo" aria-hidden="true" /><img alt="" className="onboarding-welcome__logo" src={maxLogoReference} /></div>
+            <p className="onboarding-welcome__eyebrow"><Sparkles size={14} aria-hidden="true" /> A workspace that feels like yours</p>
+            <h1 id="welcome-to-max">Make room for<br />what matters.</h1>
+            <p>Max brings your pages, data, and daily work into one calm local space.</p>
+            <button autoFocus className="apple-button onboarding-welcome__button" onClick={() => setShowWelcome(false)} type="button">Get started</button>
+          </div>
+          <span className="onboarding-welcome__footer">Private by default · Always yours</span>
         </main>
       </div>
     );

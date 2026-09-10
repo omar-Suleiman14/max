@@ -26,9 +26,10 @@ type DatabasePageProps = Readonly<{
   locale?: Locale;
   onOpenRecordId?: string | null;
   onArchived?: () => void;
+  onRemoveEmbeddedView?: () => void;
 }>;
 
-export function DatabasePage({ databaseId, embedded = false, initialViewId, locale = 'en', onOpenRecordId, onArchived }: DatabasePageProps) {
+export function DatabasePage({ databaseId, embedded = false, initialViewId, locale = 'en', onOpenRecordId, onArchived, onRemoveEmbeddedView }: DatabasePageProps) {
   const {
     activeView,
     archiveRecord,
@@ -213,6 +214,7 @@ export function DatabasePage({ databaseId, embedded = false, initialViewId, loca
         }).catch((cause: unknown) => setExportError(String(cause)));
       }}>{schema?.database.title}</h2></div>
       <DatabaseToolbar locale={locale} databaseId={databaseId} activeView={activeView} views={views} templates={recordTemplates}
+        embedded={embedded} onRemoveEmbeddedView={onRemoveEmbeddedView}
         onArchived={() => { setUnavailable(true); onArchived?.(); }}
         search={searchQuery} onSearch={setSearchQuery} onSelectView={setActiveView} filterCount={activeFilterCount} sortCount={sorts.length}
         onCreate={(templateId) => { void handleCreateBlankRecord(templateId); }} onCreateView={createView} onUpdateView={updateView} onArchiveView={archiveView}
