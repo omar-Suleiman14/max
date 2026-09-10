@@ -73,6 +73,15 @@ const config = {
         description: 'Offline-first configurable shop operating system',
         name: 'Max',
         setupIcon: join(__dirname, 'assets', 'max.ico'),
+        // Windows SmartScreen warns about unsigned installers. Supply an
+        // Authenticode certificate through the environment to sign the build;
+        // without one the installer is produced unsigned, as before.
+        ...(process.env.WINDOWS_CERTIFICATE_FILE
+          ? {
+            certificateFile: process.env.WINDOWS_CERTIFICATE_FILE,
+            certificatePassword: process.env.WINDOWS_CERTIFICATE_PASSWORD,
+          }
+          : {}),
       },
     },
     {

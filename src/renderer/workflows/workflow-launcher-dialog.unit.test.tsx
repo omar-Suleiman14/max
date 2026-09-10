@@ -62,7 +62,8 @@ describe('Workspace Quick Actions UI', () => {
     expect(draft.inputSchema.fields[0]?.visibleWhen).toEqual({ source: 'literal', value: true });
     expect(draft.inputSchema.rules?.[0]?.message).toBe('Review the value');
     expect(draft.inputSchema.summary?.[0]?.label).toBe('Preview');
-  });
+    // Roughly twenty typed interactions; slower CI runners need more than the 5s default.
+  }, 30_000);
   it('creates workspace definitions through settings without a JSON editor', async () => {
     const workspace = api(); const user = userEvent.setup();
     render(<QuickActionSettings locale="en" />);
