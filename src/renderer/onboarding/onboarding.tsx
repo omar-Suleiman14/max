@@ -4,7 +4,7 @@ import {
   Database,
   Check,
   Globe2,
-  Sparkles,
+  ArrowRight,
 } from 'lucide-react';
 import { useEffect, useState, type FormEvent, type ChangeEvent } from 'react';
 
@@ -24,30 +24,32 @@ function playWelcomeSound(): void {
     const gain = context.createGain();
     const now = context.currentTime;
     gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.055, now + 0.12);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 2.8);
+    gain.gain.exponentialRampToValueAtTime(0.07, now + 0.18);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 4.1);
     gain.connect(context.destination);
-    // A custom, slow four-note arrival cue. It has the warmth and duration of
-    // an operating-system welcome without using or imitating a branded sound.
+    // An original, slowly resolving five-note arrival cue. It is deliberately
+    // longer than an interaction sound, without reproducing a branded chime.
     const notes = [
-      { at: 0, duration: 1.25, frequency: 261.63 },
-      { at: 0.32, duration: 1.2, frequency: 329.63 },
-      { at: 0.68, duration: 1.35, frequency: 392 },
-      { at: 1.12, duration: 1.55, frequency: 523.25 },
+      { at: 0, duration: 1.7, frequency: 220 },
+      { at: 0.48, duration: 1.8, frequency: 293.66 },
+      { at: 0.96, duration: 1.95, frequency: 369.99 },
+      { at: 1.52, duration: 2.05, frequency: 440 },
+      { at: 2.1, duration: 1.8, frequency: 587.33 },
     ];
     for (const note of notes) {
       const oscillator = context.createOscillator();
       const voiceGain = context.createGain();
-      oscillator.type = 'sine';
+      oscillator.type = note.at === 0 ? 'triangle' : 'sine';
       oscillator.frequency.setValueAtTime(note.frequency, now + note.at);
-      oscillator.detune.setValueAtTime(-4, now + note.at);
+      oscillator.detune.setValueAtTime(-7, now + note.at);
       voiceGain.gain.setValueAtTime(0.0001, now + note.at);
-      voiceGain.gain.exponentialRampToValueAtTime(0.42, now + note.at + 0.11);
+      voiceGain.gain.exponentialRampToValueAtTime(0.34, now + note.at + 0.16);
       voiceGain.gain.exponentialRampToValueAtTime(0.0001, now + note.at + note.duration);
       oscillator.connect(voiceGain); voiceGain.connect(gain);
       oscillator.start(now + note.at); oscillator.stop(now + note.at + note.duration + 0.05);
     }
-    window.setTimeout(() => { void context.close(); }, 3_000);
+    void context.resume();
+    window.setTimeout(() => { void context.close(); }, 4_400);
   } catch { /* Audio is an optional welcome enhancement. */ }
 }
 
@@ -113,7 +115,7 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
   useEffect(() => {
     function handleGlobalKeyDown(e: KeyboardEvent) {
       if (e.key === 'Enter' && !e.defaultPrevented) {
-        const btn = document.querySelector<HTMLButtonElement>('.onboarding-actions .apple-button');
+        const btn = document.querySelector<HTMLButtonElement>('.onboarding-welcome__button, .onboarding-actions .apple-button');
         if (btn && !btn.disabled) {
           e.preventDefault();
           btn.click();
@@ -146,16 +148,12 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
         <main className="onboarding-welcome" aria-labelledby="welcome-to-max">
           <div className="onboarding-welcome__ambient onboarding-welcome__ambient--one" aria-hidden="true" />
           <div className="onboarding-welcome__ambient onboarding-welcome__ambient--two" aria-hidden="true" />
-          <div className="onboarding-welcome__ripple onboarding-welcome__ripple--one" aria-hidden="true" />
-          <div className="onboarding-welcome__ripple onboarding-welcome__ripple--two" aria-hidden="true" />
+          <div className="onboarding-welcome__orb" aria-hidden="true" />
           <div className="onboarding-welcome__content">
-            <div className="onboarding-welcome__mark-wrap"><div className="onboarding-welcome__halo" aria-hidden="true" /><img alt="" className="onboarding-welcome__logo" src={maxLogoReference} /></div>
-            <p className="onboarding-welcome__eyebrow"><Sparkles size={14} aria-hidden="true" /> A workspace that feels like yours</p>
-            <h1 id="welcome-to-max">Make room for<br />what matters.</h1>
-            <p>Max brings your pages, data, and daily work into one calm local space.</p>
-            <button autoFocus className="apple-button onboarding-welcome__button" onClick={() => setShowWelcome(false)} type="button">Get started</button>
+            <h1 id="welcome-to-max" className="sr-only">Welcome to Max</h1>
+            <div className="onboarding-welcome__mark-wrap"><img alt="" className="onboarding-welcome__logo" src={maxLogoReference} /></div>
+            <button autoFocus aria-label="Continue to setup" className="onboarding-welcome__button" onClick={() => setShowWelcome(false)} type="button"><ArrowRight aria-hidden="true" size={18} /></button>
           </div>
-          <span className="onboarding-welcome__footer">Private by default · Always yours</span>
         </main>
       </div>
     );
