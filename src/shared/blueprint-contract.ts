@@ -1,4 +1,5 @@
 import type { ObjectKind, PropertyRules, PropertyType, PropertyValue, SemanticRole } from './object-contract';
+import type { WorkspaceTemplateV2 } from './template-v2-contract';
 
 export const backupSchedules = ['daily', 'weekly', 'manual'] as const;
 export type BackupSchedule = (typeof backupSchedules)[number];
@@ -54,7 +55,7 @@ export type ShopMetadata = Readonly<{
 export type CompleteOnboardingDraft = Readonly<{
   acceptedTermsVersion?: string;
   backupSchedule: BackupSchedule;
-  blueprint?: Blueprint;
+  blueprint?: Blueprint | WorkspaceTemplateV2;
   includeDemoData?: boolean;
   locale: 'ar' | 'en';
   shopName: string;

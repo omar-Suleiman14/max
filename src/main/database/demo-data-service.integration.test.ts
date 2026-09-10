@@ -5,6 +5,22 @@ import { calculateFee } from '../../shared/account-contract';
 import { DatabaseService } from './database-service';
 
 describe('DemoDataService', () => {
+  it('imports a v2 blueprint during onboarding and rolls back a failed setup', () => {
+    const source = new DatabaseService(':memory:');
+    source.initialize();
+    source.databases.createDatabase({ title: 'Observations' });
+    const blueprint = source.workspaceTemplates.exportTemplate();
+    const database = new DatabaseService(':memory:');
+    database.initialize();
+    const draft = { backupSchedule: 'manual' as const, locale: 'en' as const, blueprint, shopName: 'Workspace', templateId: 'custom' as const };
+    expect(() => database.completeOnboarding({ ...draft, shopName: '' })).toThrow();
+    expect(database.shopMetadata.getMetadata().onboardingCompleted).toBe(false);
+    expect(database.workspaceTemplates.exportTemplate().databases).toHaveLength(0);
+    expect(database.completeOnboarding(draft).onboardingCompleted).toBe(true);
+    expect(database.workspaceTemplates.exportTemplate().databases.map((entry) => entry.title)).toEqual(['Observations']);
+    database.close();
+    source.close();
+  });
   it('atomically prefills a new starter workspace with coherent demo data and pages', () => {
     const database = new DatabaseService(':memory:');
     database.initialize();

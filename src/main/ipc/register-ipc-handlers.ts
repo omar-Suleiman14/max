@@ -236,7 +236,9 @@ function parseCompleteOnboardingDraft(value: unknown): CompleteOnboardingDraft {
   return {
     acceptedTermsVersion: TERMS_VERSION,
     backupSchedule: value.backupSchedule as CompleteOnboardingDraft['backupSchedule'],
-    blueprint: value.blueprint as Blueprint | undefined,
+    blueprint: isObject(value.blueprint) && value.blueprint.version === 2
+      ? parseWorkspaceTemplateV2(value.blueprint)
+      : value.blueprint as Blueprint | undefined,
     includeDemoData: value.includeDemoData === true,
     locale: value.locale,
     shopName: value.shopName,

@@ -8,7 +8,8 @@ import {
 } from 'lucide-react';
 import { useEffect, useState, type FormEvent, type ChangeEvent } from 'react';
 
-import type { BackupSchedule, Blueprint } from '../../shared/blueprint-contract';
+import type { BackupSchedule } from '../../shared/blueprint-contract';
+import type { WorkspaceTemplateV2 as Blueprint } from '../../shared/template-v2-contract';
 import type { Locale } from '../app/i18n';
 import { Button } from '../ui/button';
 import { onboardingCopy } from './onboarding-i18n';
@@ -148,11 +149,10 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
         <main className="onboarding-welcome" aria-labelledby="welcome-to-max">
           <div className="onboarding-welcome__ambient onboarding-welcome__ambient--one" aria-hidden="true" />
           <div className="onboarding-welcome__ambient onboarding-welcome__ambient--two" aria-hidden="true" />
-          <div className="onboarding-welcome__orb" aria-hidden="true" />
           <div className="onboarding-welcome__content">
             <h1 id="welcome-to-max" className="sr-only">Welcome to Max</h1>
-            <div className="onboarding-welcome__mark-wrap"><img alt="" className="onboarding-welcome__logo" src={maxLogoReference} /></div>
-            <button autoFocus aria-label="Continue to setup" className="onboarding-welcome__button" onClick={() => setShowWelcome(false)} type="button"><ArrowRight aria-hidden="true" size={18} /></button>
+            <p aria-hidden="true" className="onboarding-welcome__title">Welcome to<br />Max.</p>
+            <button autoFocus aria-label="Get started" className="onboarding-welcome__button" onClick={() => setShowWelcome(false)} type="button"><ArrowRight aria-hidden="true" size={18} /></button>
           </div>
         </main>
       </div>

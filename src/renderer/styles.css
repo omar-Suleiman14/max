@@ -875,19 +875,17 @@ kbd { display: inline-flex; min-width: 23px; min-height: 20px; align-items: cent
   color: rgba(255, 255, 255, 0.8);
 }
 
-.onboarding-container--welcome { position:relative; display:grid; place-items:center; isolation:isolate; overflow:hidden; background:#171718; }
-.onboarding-container--welcome::before { content:''; position:absolute; inset:0; pointer-events:none; background:radial-gradient(ellipse 75% 58% at 50% 12%,#6d3a9d59,transparent 62%),radial-gradient(ellipse 48% 42% at 10% 86%,#d7765742,transparent 74%),radial-gradient(ellipse 42% 48% at 91% 80%,#3266ba42,transparent 72%),linear-gradient(130deg,#0b0b0c,#202022 51%,#101011); }
-.onboarding-welcome { position:relative; z-index:1; display:grid; width:100%; min-height:100%; overflow:hidden; align-items:center; justify-items:center; text-align:center; animation:onboarding-welcome-in 900ms cubic-bezier(.16,1,.3,1) both; }
-.onboarding-welcome::before { content:''; position:absolute; inset:0; pointer-events:none; opacity:.64; background:linear-gradient(118deg,#fff0 24%,#fff1 48%,#fff0 61%); transform:translateX(-48%); animation:onboarding-welcome-sheen 2.2s .28s cubic-bezier(.16,1,.3,1) both; }
+.onboarding-container--welcome { position:relative; display:grid; place-items:center; isolation:isolate; overflow:hidden; background:#151516; }
+.onboarding-container--welcome::before { content:''; position:absolute; inset:0; pointer-events:none; background:radial-gradient(ellipse at 15% 20%,#8b9cad,transparent 65%),radial-gradient(ellipse at 95% 35%,#655b82,transparent 68%),linear-gradient(120deg,#778696,#647d91 48%,#544b68); }
+.onboarding-welcome { position:relative; z-index:1; display:grid; width:100%; height:100%; overflow:hidden; align-items:center; justify-items:center; text-align:center; }
+.onboarding-welcome::before { content:''; position:absolute; inset:-20%; pointer-events:none; opacity:0; background:linear-gradient(118deg,transparent 24%,#c6d2df55 48%,transparent 68%); animation:onboarding-welcome-arrival 4.1s .32s ease-in-out both; }
 .onboarding-welcome__content { position:relative; z-index:1; display:grid; justify-items:center; max-width:510px; }
-.onboarding-welcome__ambient { position:absolute; z-index:0; width:440px; height:310px; border-radius:47% 53% 56% 44%; filter:blur(34px); opacity:.72; pointer-events:none; }
-.onboarding-welcome__ambient--one { top:-190px; right:-130px; background:radial-gradient(circle at 35% 52%,#b35ad4a6,transparent 65%); animation:onboarding-welcome-drift 15s ease-in-out infinite alternate; }
-.onboarding-welcome__ambient--two { bottom:-205px; left:-160px; background:radial-gradient(circle at 60% 35%,#d4866c91,transparent 66%); animation:onboarding-welcome-drift 18s -5s ease-in-out infinite alternate-reverse; }
-.onboarding-welcome__orb { position:absolute; z-index:0; width:370px; aspect-ratio:1; border:1px solid #fff2; border-radius:50%; background:radial-gradient(circle at 31% 27%,#f6c4ed42,#aa6ddb16 42%,transparent 69%); box-shadow:0 0 190px #ab5de12c,inset 0 0 75px #fff1; animation:onboarding-welcome-orb 7s ease-in-out infinite alternate; }
-.onboarding-welcome__mark-wrap { position:relative; display:grid; width:114px; height:114px; place-items:center; border:1px solid #fff3; border-radius:35px; background:linear-gradient(135deg,#ffffff18,#ffffff05); box-shadow:0 19px 46px #0005,inset 0 1px #fff3; }
-.onboarding-welcome__logo { width:59px; height:59px; object-fit:contain; filter:drop-shadow(0 11px 16px #0006); animation:onboarding-welcome-mark 920ms cubic-bezier(.16,1,.3,1) both; }
-.onboarding-welcome__button { position:absolute; inset:auto 28px 28px auto; display:grid; width:38px; height:38px; min-width:0; min-height:0; padding:0; place-items:center; border:1px solid #fff3; border-radius:50%; background:#ffffff13; color:#fff; box-shadow:inset 0 1px #fff2; animation:onboarding-welcome-copy 720ms 430ms cubic-bezier(.16,1,.3,1) both; }
-.onboarding-welcome__button:hover:not(:disabled) { background:#ffffff26; }
+.onboarding-welcome__ambient { position:absolute; z-index:0; width:440px; height:310px; border-radius:47% 53% 56% 44%; filter:blur(40px); opacity:.54; pointer-events:none; }
+.onboarding-welcome__ambient--one { top:-150px; left:-130px; background:#b2bec9; animation:onboarding-welcome-arrival 4.1s .32s ease-in-out both; }
+.onboarding-welcome__ambient--two { bottom:-185px; right:-160px; background:#746887; animation:onboarding-welcome-arrival 4.1s .32s ease-in-out both; }
+.onboarding-welcome__title { position:relative; z-index:1; margin:0; color:#fff; font-size:clamp(38px,5vw,64px); font-weight:720; letter-spacing:-.045em; line-height:1.03; text-shadow:0 2px 20px #27303f30; animation:onboarding-welcome-copy 1.5s .8s cubic-bezier(.16,1,.3,1) both; }
+.onboarding-welcome__button { display:grid; width:34px; height:28px; margin-top:32px; padding:0; place-items:center; border:1px solid #ffffff18; border-radius:5px; background:#3d3e5d65; color:#fff; animation:onboarding-welcome-copy 1.3s 2.4s cubic-bezier(.16,1,.3,1) both; }
+.onboarding-welcome__button:hover:not(:disabled) { background:#241d72c4; }
 .language-heading { display: flex; align-items: center; gap: 9px; margin-bottom: 6px; color: var(--accent); }
 .language-heading h2 { margin: 0; color: var(--text); }
 .language-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; max-width: 490px; overflow: visible; border: 0; background: transparent; }
@@ -907,7 +905,7 @@ kbd { display: inline-flex; min-width: 23px; min-height: 20px; align-items: cent
 @keyframes onboarding-welcome-mark { 0% { opacity: 0; transform: scale(.46) rotate(-11deg); } 62% { opacity: 1; transform: scale(1.055) rotate(1.5deg); } 100% { opacity: 1; transform: scale(1) rotate(0); } }
 @keyframes onboarding-welcome-copy { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes onboarding-welcome-sheen { to { transform:translateX(64%); } }
-@keyframes onboarding-welcome-orb { to { transform:scale(1.06) translateY(-12px); filter:hue-rotate(14deg); } }
+@keyframes onboarding-welcome-arrival { 0% { opacity:0; transform:translateX(-12%) scale(.94); } 40% { opacity:.8; } 100% { opacity:.35; transform:translateX(8%) scale(1.1); } }
 @keyframes onboarding-welcome-drift { to { transform:translate3d(30px,18px,0) rotate(11deg); } }
 @media (max-width: 480px) { .language-list { grid-template-columns: 1fr; max-width: 340px; } .language-item { min-height: 88px; } }
 

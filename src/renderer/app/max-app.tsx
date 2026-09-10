@@ -24,7 +24,8 @@ import {
 } from 'lucide-react';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { BackupSchedule, Blueprint } from '../../shared/blueprint-contract';
+import type { BackupSchedule } from '../../shared/blueprint-contract';
+import type { WorkspaceTemplateV2 as Blueprint } from '../../shared/template-v2-contract';
 import type { WorkspaceNavigation } from '../../shared/workspace-contract';
 import { CustomPageView } from '../pages/custom-page-view';
 import {

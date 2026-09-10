@@ -312,7 +312,8 @@ export class DatabaseService {
     this.#assertInitialized();
     this.#database.exec('BEGIN IMMEDIATE;');
     try {
-      if (draft.blueprint) this.blueprints.importBlueprint(draft.blueprint);
+      if (draft.blueprint?.version === 2) this.workspaceTemplates.importBlueprintV2(draft.blueprint);
+      else if (draft.blueprint) this.blueprints.importBlueprint(draft.blueprint);
       if (draft.includeDemoData) this.demoData.seed(draft.locale);
       this.#database.prepare(`
         INSERT INTO app_metadata (key, value, updated_at) VALUES ('workspace.template.id', ?, ?)
