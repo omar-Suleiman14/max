@@ -462,13 +462,13 @@ describe('Max shell', () => {
     await user.click(screen.getByRole('button', { name: 'Open workspace' }));
 
     // Transition into main workspace
-    await screen.findByRole('button', { name: 'Home' });
-    expect(screen.getByRole('main', { name: 'Home' })).toBeInTheDocument();
+    await screen.findByRole('button', { name: 'Settings' });
+    expect(screen.getByRole('button', { name: 'New note' })).toBeInTheDocument();
   });
 
   it('renders the English page-first shell without a databases section in the sidebar', async () => {
     const { container } = render(<MaxApp />);
-    await screen.findByRole('button', { name: 'Home' });
+    await screen.findByRole('button', { name: 'Settings' });
     expect(document.documentElement).toHaveAttribute('dir', 'ltr');
     expect(screen.queryByRole('button', { name: 'Filter' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Databases' })).not.toBeInTheDocument();
@@ -479,7 +479,7 @@ describe('Max shell', () => {
   it('switches the complete shell to Arabic and RTL', async () => {
     const user = userEvent.setup();
     const { container } = render(<MaxApp />);
-    await screen.findByRole('button', { name: 'Home' });
+    await screen.findByRole('button', { name: 'Settings' });
     await user.click(screen.getByRole('button', { name: 'Settings' }));
     await user.click(await screen.findByRole('combobox', { name: 'Language' }));
     await user.click(screen.getByRole('option', { name: /العربية/ }));
@@ -499,7 +499,7 @@ describe('Max shell', () => {
   it('leaves Ctrl+K unbound and opens universal data search with Ctrl+F', async () => {
     const user = userEvent.setup();
     render(<MaxApp />);
-    await screen.findByRole('button', { name: 'Home' });
+    await screen.findByRole('button', { name: 'Settings' });
 
     fireEvent.keyDown(document, { ctrlKey: true, key: 'k' });
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -513,7 +513,7 @@ describe('Max shell', () => {
   it('persists theme choice and navigates back to app when settings closes', async () => {
     const user = userEvent.setup();
     render(<MaxApp />);
-    await screen.findByRole('button', { name: 'Home' });
+    await screen.findByRole('button', { name: 'Settings' });
 
     const settings = screen.getByRole('button', { name: 'Settings' });
     await user.click(settings);
@@ -527,12 +527,12 @@ describe('Max shell', () => {
     expect(document.documentElement).toHaveAttribute('data-theme', 'dark');
     expect(window.localStorage.getItem('max.ui.theme')).toBe('dark');
     await user.keyboard('{Escape}');
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Home' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument());
   });
 
   it('keeps local backup available from Settings without cloud sign-in', async () => {
     const user = userEvent.setup(); render(<MaxApp />);
-    await screen.findByRole('button', { name: 'Home' });
+    await screen.findByRole('button', { name: 'Settings' });
     expect(screen.queryByRole('button', { name: /sign in/i })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Settings' }));
     await user.click(within(screen.getByRole('navigation', { name: 'Settings sections' })).getByRole('button', { name: 'Backup' }));
@@ -543,7 +543,7 @@ describe('Max shell', () => {
   it('moves predictably through sidebar navigation with arrow keys and creates custom page', async () => {
     const user = userEvent.setup();
     render(<MaxApp />);
-    await screen.findByRole('button', { name: 'Home' });
+    await screen.findByRole('button', { name: 'Settings' });
     const addPageBtn = screen.getByRole('button', { name: 'New' });
     await user.click(addPageBtn);
     expect(await screen.findByPlaceholderText('Untitled')).toBeInTheDocument();
@@ -627,14 +627,16 @@ describe('Max shell', () => {
     render(<MaxApp />);
 
     await user.click(await screen.findByRole('button', { name: 'Show Phone shop contents' }));
-    expect(screen.queryByRole('button', { name: 'Products' })).not.toBeInTheDocument();
+    // The database belongs to the page it was created in, so it is listed under
+    // that page rather than as a top-level sidebar entry.
+    expect(await screen.findByRole('button', { name: 'Products' })).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: 'All products' })).toBeInTheDocument();
   });
 
   it('resizes the app sidebar with an accessible persistent handle', async () => {
     const user = userEvent.setup();
     render(<MaxApp />);
-    await screen.findByRole('button', { name: 'Home' });
+    await screen.findByRole('button', { name: 'Settings' });
     const handle = screen.getByRole('separator', { name: 'Resize sidebar' });
     expect(handle).toHaveAttribute('aria-valuenow', '238');
     handle.focus();
@@ -645,7 +647,7 @@ describe('Max shell', () => {
 
   it('dismisses search outside and keeps its keyboard footer without redundant buttons', async () => {
     const user = userEvent.setup(); render(<MaxApp />);
-    await screen.findByRole('button', { name: 'Home' });
+    await screen.findByRole('button', { name: 'Settings' });
     fireEvent.keyDown(document, { ctrlKey: true, key: 'f' });
     const search = await screen.findByRole('combobox', { name: 'Universal Search' });
     await user.type(search, 'notes');
@@ -657,7 +659,7 @@ describe('Max shell', () => {
 
   it('opens workspace Quick Actions with Ctrl+S without built-in operations', async () => {
     const user = userEvent.setup(); render(<MaxApp />);
-    await screen.findByRole('button', { name: 'Home' });
+    await screen.findByRole('button', { name: 'Settings' });
     await user.keyboard('{Control>}s{/Control}');
     expect(await screen.findByRole('heading', { name: 'Quick Actions' })).toBeInTheDocument();
     expect(await screen.findByText(/No quick actions yet/)).toBeInTheDocument();
@@ -667,7 +669,7 @@ describe('Max shell', () => {
 
   it('persists appearance sliders and restores their defaults', async () => {
     const user = userEvent.setup(); render(<MaxApp />);
-    await screen.findByRole('button', { name: 'Home' });
+    await screen.findByRole('button', { name: 'Settings' });
     await user.click(screen.getByRole('button', { name: 'Settings' }));
     await user.click(within(screen.getByRole('navigation', { name: 'Settings sections' })).getByRole('button', { name: 'Appearance' }));
     const glass = screen.getByRole('slider', { name: 'Glass opacity' });
@@ -680,7 +682,7 @@ describe('Max shell', () => {
   it('creates a safety backup before deleting the workspace', async () => {
     const user = userEvent.setup();
     render(<MaxApp />);
-    await screen.findByRole('button', { name: 'Home' });
+    await screen.findByRole('button', { name: 'Settings' });
     await user.click(screen.getByRole('button', { name: 'Settings' }));
     await user.click(await screen.findByRole('button', { name: 'Delete workspace' }));
     await user.type(await screen.findByLabelText('Workspace name to confirm deletion'), 'Test Shop');
@@ -694,7 +696,7 @@ describe('Max shell', () => {
 
   it('opens action configuration directly from the empty runtime popup', async () => {
     const user = userEvent.setup(); render(<MaxApp />);
-    await screen.findByRole('button', { name: 'Home' });
+    await screen.findByRole('button', { name: 'Settings' });
     await user.keyboard('{Control>}s{/Control}');
     await user.click(await screen.findByRole('button', { name: 'Manage Quick Actions' }));
     expect(await screen.findByRole('button', { name: '+ Quick action' })).toBeInTheDocument();
@@ -703,7 +705,7 @@ describe('Max shell', () => {
 
   it('has no detectable baseline accessibility violations', async () => {
     const { container } = render(<MaxApp />);
-    await screen.findByRole('button', { name: 'Home' });
+    await screen.findByRole('button', { name: 'Settings' });
     const result = await axe.run(container, { rules: { 'color-contrast': { enabled: false } } });
     expect(result.violations).toEqual([]);
   });

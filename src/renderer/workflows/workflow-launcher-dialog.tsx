@@ -1,7 +1,7 @@
 import { ReactiveActionForm } from './reactive-action-form';
 import { hasReactiveFields } from './reactive-config';
 import { WorkflowInputForm } from './workflow-input-form';
-import { inputDefaults } from './input-defaults';
+import { lastUsedInputs, readLastSelectedAction, rememberInputs, rememberSelectedAction } from './last-used-inputs';
 import { useEffect, useRef, useState } from 'react';
 import type { WorkspaceWorkflow } from '../../shared/workflow-contract';
 import type { Locale } from '../app/i18n';
@@ -31,8 +31,11 @@ export function WorkflowLauncherDialog({ locale, onClose, onConfigure }: { local
       .then((rows) => {
         if (!active) return;
         const enabled = rows.filter((row) => row.enabled);
+        const lastSelected = readLastSelectedAction();
         setActions(enabled);
-        setSelectedId((current) => enabled.some((action) => action.id === current) ? current : enabled[0]?.id ?? '');
+        setSelectedId((current) => enabled.some((action) => action.id === current)
+          ? current
+          : enabled.some((action) => action.id === lastSelected) ? lastSelected : enabled[0]?.id ?? '');
       })
       .catch(() => setError(ar ? 'تعذر تحميل الإجراءات.' : 'Could not load actions.'))
       .finally(() => setLoading(false));
@@ -42,7 +45,7 @@ export function WorkflowLauncherDialog({ locale, onClose, onConfigure }: { local
   useEffect(() => {
     setCompleted(false);
     setError('');
-    setValues(inputDefaults(selected?.inputSchema.fields ?? []));
+    setValues(selected ? lastUsedInputs(selected.id, selected.inputSchema.fields) : {});
   }, [selected, ar, formInstance]);
 
   useEffect(() => {
@@ -66,6 +69,7 @@ export function WorkflowLauncherDialog({ locale, onClose, onConfigure }: { local
       const result = await window.maxApi.workspace.executeWorkflow({ workflowId: selected.id, inputs: values });
       if (!result.ok) setError(result.error.message);
       else {
+        rememberInputs(selected.id, values);
         setCompleted(true);
         window.dispatchEvent(new Event('max:workspace-changed'));
       }
@@ -106,7 +110,7 @@ export function WorkflowLauncherDialog({ locale, onClose, onConfigure }: { local
                 data-active={selectedTab || undefined}
                 disabled={running}
                 key={action.id}
-                onClick={() => setSelectedId(action.id)}
+                onClick={() => { setSelectedId(action.id); rememberSelectedAction(action.id); }}
                 role="tab"
                 tabIndex={selectedTab ? 0 : -1}
                 title={index < 9 ? `${index + 1}. ${action.name}` : action.name}

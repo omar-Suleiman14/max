@@ -26,10 +26,16 @@ function setup() {
   const completed = vi.fn(); render(<ReactiveActionForm workflow={f.workflow} locale="en" onCompleted={completed} onBusy={vi.fn()}/>);
   return { db, f, api, completed, user: userEvent.setup() };
 }
+/** Optional inputs start collapsed, so reveal them before asserting on them. */
+async function revealOptionalFields(user: ReturnType<typeof userEvent.setup>) {
+  for (const toggle of screen.queryAllByRole('button', { name: /optional field/, expanded: false })) await user.click(toggle);
+}
+
 describe('Live Quick Action form', () => {
   it('shows filtered details, recalculates, preserves/reset overrides, conditions and confirms warnings once', async () => {
     const { user, completed, api } = setup();
     await waitFor(() => expect(api.evaluateWorkflow).toHaveBeenCalled());
+    await revealOptionalFields(user);
     await user.click(screen.getByRole('combobox', { name: 'Source' }));
     await user.click(await screen.findByRole('option', { name: 'Alpha · 20' }));
     await waitFor(() => expect(screen.getByLabelText('Calculated')).toHaveValue(10));
@@ -66,6 +72,7 @@ describe('Live Quick Action form', () => {
     await user.click(within(create).getByRole('button', { name: 'Create and select' }));
     await waitFor(() => expect(screen.queryByRole('group', { name: 'New record' })).not.toBeInTheDocument());
     await waitFor(() => expect(screen.getByRole('combobox', { name: 'Source' })).toHaveTextContent('Gamma'));
+    await revealOptionalFields(user);
     expect(screen.getByLabelText('Calculated')).toHaveValue(20);
     fireEvent.change(screen.getByLabelText('Amount *'), { target: { value: '-1' } });
     expect(await screen.findByText('Amount cannot be negative.')).toBeInTheDocument();

@@ -29,11 +29,12 @@
 .quick-action-runtime__header p, .quick-action-runtime__action-title p { margin: 5px 0 0; color: var(--muted); font-size: 12px; }
 .quick-action-runtime__close { width: 30px; height: 30px; border: 0; border-radius: 50%; color: var(--muted); background: var(--canvas-subtle); font-size: 21px; line-height: 1; }
 .quick-action-runtime__close:hover { color: var(--text); background: var(--line); }
-.quick-action-tabs { display: flex; gap: 6px; overflow-x: auto; padding: 0 24px 14px; border-bottom: 1px solid var(--line); scrollbar-width: none; }
-.quick-action-tabs::-webkit-scrollbar { display: none; }
-.quick-action-tab { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 7px; min-height: 33px; padding: 5px 10px 5px 7px; border: 1px solid transparent; border-radius: 9px; color: var(--muted); background: transparent; font: inherit; font-size: 13px; transition: color .16s ease, background .16s ease, border-color .16s ease; }
+/* Every action stays visible; a hidden horizontal scroller clipped the last tabs. */
+.quick-action-tabs { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 24px 14px; border-bottom: 1px solid var(--line); }
+.quick-action-tab { flex: 0 1 auto; min-width: 0; display: inline-flex; align-items: center; gap: 7px; min-height: 33px; padding: 5px 10px 5px 7px; border: 1px solid transparent; border-radius: 9px; color: var(--muted); background: transparent; font: inherit; font-size: 13px; transition: color .16s ease, background .16s ease, border-color .16s ease; }
 .quick-action-tab:hover { color: var(--text); background: var(--canvas-subtle); }
 .quick-action-tab[data-active] { color: var(--text); background: color-mix(in srgb, var(--accent) 14%, var(--canvas-subtle)); border-color: color-mix(in srgb, var(--accent) 36%, var(--line)); }
+.quick-action-tab > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .quick-action-tab kbd { min-width: 18px; padding: 1px 4px; border: 1px solid color-mix(in srgb, currentColor 24%, transparent); border-radius: 5px; color: inherit; font: 11px/16px ui-monospace, SFMono-Regular, Menlo, monospace; text-align: center; }
 .quick-action-runtime__panel { min-height: 0; overflow: auto; padding: 20px 24px 24px; scrollbar-gutter: stable; }
 .quick-action-runtime__action-title { margin-bottom: 20px; }
@@ -46,18 +47,25 @@
 .quick-action-runtime__error { margin: 0 24px 14px; color: #df746b; font-size: 13px; }
 .quick-action-runtime__footer { display: flex; justify-content: flex-end; padding: 12px 24px 16px; border-top: 1px solid var(--line); }
 .quick-action-runtime__footer .btn { color: var(--muted); font-size: 12px; }
-.quick-action-runtime .action-field { padding: 11px 12px; border: 1px solid var(--line); border-radius: 12px; background: color-mix(in srgb, var(--canvas-subtle) 64%, transparent); }
-.quick-action-runtime .action-field[data-required] { border-color: color-mix(in srgb, var(--accent) 30%, var(--line)); }
-.quick-action-runtime .form-group { display: grid; gap: 7px; margin: 0; font-size: 13px; font-weight: 600; }
-.quick-action-runtime .form-group > span { display: flex; align-items: center; gap: 4px; }
-.quick-action-runtime .form-group > span::first-letter { color: inherit; }
-.quick-action-runtime .form-group input:not([type=checkbox]), .quick-action-runtime .form-group button[role=combobox] { min-height: 36px; width: 100%; border-radius: 8px; }
-.quick-action-runtime .action-reset { margin: 8px 0 0; padding: 0; border: 0; background: transparent; color: var(--muted); }
-.quick-action-runtime .action-collection { margin: 0; padding: 13px; border-radius: 13px; background: color-mix(in srgb, var(--canvas-subtle) 58%, transparent); }
-.quick-action-runtime .action-collection legend { padding: 0 5px; }
-.quick-action-runtime .action-collection-row { align-items: flex-start; padding: 10px 0; }
-.quick-action-runtime .action-collection-row > button { width: 27px; height: 27px; margin-top: 2px; border-radius: 7px; }
-.quick-action-runtime .action-row-number { padding-top: 11px; min-width: 14px; font-variant-numeric: tabular-nums; }
+/* One bordered control per field. No cards wrapping cards. */
+.quick-action-runtime .action-field { min-width: 0; padding: 0; border: 0; border-radius: 0; background: none; }
+.quick-action-runtime .form-group { display: grid; gap: 6px; margin: 0; font-size: 12px; font-weight: 500; }
+.quick-action-runtime .form-group > span { display: flex; align-items: center; gap: 4px; color: var(--muted); }
+.quick-action-runtime .form-group input:not([type=checkbox]), .quick-action-runtime .form-group button[role=combobox] { min-height: 34px; width: 100%; padding: 6px 10px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--canvas-subtle); color: var(--text); font-size: 13px; font-weight: 400; }
+.quick-action-runtime .form-group input:not([type=checkbox]):focus-visible, .quick-action-runtime .form-group button[role=combobox]:focus-visible { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+.quick-action-runtime .action-reset { margin: 6px 0 0; padding: 0; border: 0; background: transparent; color: var(--muted); font-size: 12px; }
+
+/* Repeated rows read as a list with rules, not a stack of panels. */
+.quick-action-runtime .action-collection { margin: 2px 0 0; padding: 0; border: 0; border-radius: 0; background: none; }
+.quick-action-runtime .action-collection legend { padding: 0; color: var(--muted); font-size: 12px; font-weight: 500; }
+.quick-action-runtime .action-collection-row { display: grid; grid-template-columns: 16px minmax(0, 1fr) 26px; align-items: start; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.quick-action-runtime .action-collection-row:last-of-type { border-bottom: 0; }
+.quick-action-runtime .action-collection-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 10px; }
+.quick-action-runtime .action-row-number { padding-top: 26px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.quick-action-runtime .action-collection-row > button { width: 26px; height: 26px; margin-top: 23px; padding: 0; border: 0; border-radius: 7px; color: var(--muted); background: transparent; }
+.quick-action-runtime .action-collection-row > button:hover:not(:disabled) { color: var(--text); background: var(--canvas-subtle); }
+.quick-action-runtime .action-collection > button { margin-top: 10px; padding: 5px 10px; border: 1px solid var(--line-strong); border-radius: 8px; color: var(--text); background: transparent; font-size: 12px; }
+.quick-action-runtime .action-collection > button:hover:not(:disabled) { background: var(--canvas-subtle); }
 @media (max-width: 620px) {
   .quick-action-runtime { width: min(100vw - 16px, 700px); max-height: calc(100vh - 16px); border-radius: 16px; }
   .quick-action-runtime__header { padding: 18px 18px 14px; }
@@ -89,3 +97,7 @@
 .action-warning-confirm { padding: 12px; border: 1px solid #ab895260; border-radius: 10px; }
 .action-reset { color: var(--muted); font-size: 12px; margin-block: 4px 8px; }
 .action-field { min-width: 0; }
+
+.action-optional-toggle { justify-self: start; display: inline-flex; align-items: center; gap: 6px; margin-top: 2px; padding: 4px 8px; border: 0; border-radius: 7px; color: var(--muted); background: transparent; font-size: 12px; }
+.action-optional-toggle:hover:not(:disabled) { color: var(--text); background: var(--canvas-subtle); }
+.action-collection-fields .action-optional-toggle { grid-column: 1 / -1; }

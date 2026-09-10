@@ -16,3 +16,9 @@ artifacts/
 !.env.example
 .DS_Store
 Thumbs.db
+
+# Release artifacts downloaded from GitHub Actions for local inspection.
+Max-flatpak/
+Max-macos-latest/
+Max-ubuntu-latest/
+Max-windows-latest/

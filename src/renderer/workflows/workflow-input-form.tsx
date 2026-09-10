@@ -11,6 +11,7 @@ export function WorkflowInputForm({ fields, values, onChange, disabled, locale, 
   const latest = useRef({ values, onChange }); latest.current = { values, onChange };
   const [records, setRecords] = useState<Record<string, readonly WorkspaceRecord[]>>({});
   const [creating, setCreating] = useState<string>();
+  const [optionalShown, setOptionalShown] = useState(false);
   const [error, setError] = useState(''); const ar = locale === 'ar';
   useEffect(() => {
     if (evaluation) return;
@@ -52,7 +53,14 @@ export function WorkflowInputForm({ fields, values, onChange, disabled, locale, 
     .filter(({ state }) => state?.visible !== false)
     .sort((left, right) => Number(Boolean(right.required)) - Number(Boolean(left.required)) || left.index - right.index);
 
-  return <>{error && <p role="alert">{error}</p>}{displayFields.map(({ field, key, address, value, state, required }) => {
+  // Only what the action actually needs is asked for up front. Optional fields
+  // stay one click away, unless every field is optional and hiding them all
+  // would leave an empty form.
+  const optionalCount = displayFields.filter(({ required }) => !required).length;
+  const collapsible = optionalCount > 0 && optionalCount < displayFields.length;
+  const visibleFields = collapsible && !optionalShown ? displayFields.filter(({ required }) => required) : displayFields;
+
+  return <>{error && <p role="alert">{error}</p>}{visibleFields.map(({ field, key, address, value, state, required }) => {
     const fieldDisabled = disabled || state?.disabled;
     if (field.type === 'collection') {
       const rows = Array.isArray(value) ? value as Record<string, unknown>[] : [];
@@ -60,5 +68,7 @@ export function WorkflowInputForm({ fields, values, onChange, disabled, locale, 
       return <fieldset className="action-collection" key={key} disabled={fieldDisabled}><legend>{field.label}{required ? ' *' : ''}</legend>{rows.map((row, i) => <div className="action-collection-row" key={i}><span className="action-row-number">{i + 1}</span><div className="action-collection-fields"><WorkflowInputForm fields={field.fields ?? []} values={row} onChange={next => onChange({ ...values, [key]: rows.map((r, j) => i === j ? next : r) })} disabled={!!fieldDisabled} locale={locale} evaluation={evaluation} path={[...path, key, i]} onEdit={onEdit}/></div><button type="button" disabled={fieldDisabled || rows.length <= minimum} aria-label={(ar ? 'حذف الصف ' : 'Remove row ') + (i + 1)} onClick={() => { onEdit?.(address, false, i); onChange({ ...values, [key]: rows.filter((_, j) => i !== j) }); }}>×</button></div>)}<button type="button" disabled={fieldDisabled || rows.length >= (field.maxItems ?? 100)} onClick={() => onChange({ ...values, [key]: [...rows, inputDefaults(field.fields ?? [])] })}>{ar ? '+ صف' : '+ Add row'}</button><small>{rows.length} / {field.maxItems ?? 100}</small></fieldset>;
     }
     return <div className="action-field" data-required={required || undefined} key={key}><label className="form-group"><span>{field.label}{required ? ' *' : ''}</span>{field.type === 'boolean' ? <input type="checkbox" disabled={fieldDisabled} checked={Boolean(value)} onChange={e => update(field, key, e.target.checked)}/> : field.type === 'record' || field.type === 'select' ? <Select aria-label={field.label} disabled={fieldDisabled} value={scalarText(value ?? '')} onChange={e => update(field, key, e.target.value)}><option value="">{ar ? 'اختر…' : 'Choose…'}</option>{field.type === 'record' ? (state?.options ?? records[field.databaseId ?? ''])?.map(r => <option key={r.id} value={r.id}>{r.title}{'secondary' in r && r.secondary ? ' · ' + String(r.secondary) : ''}</option>) : field.options?.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</Select> : <input disabled={fieldDisabled} required={required} step="any" type={field.type === 'datetime' ? 'datetime-local' : ['date', 'number'].includes(field.type) ? field.type : 'text'} value={scalarText(value ?? '')} onChange={e => update(field, key, field.type === 'number' && e.target.value !== '' ? Number(e.target.value) : e.target.value)}/>}</label>{field.derived?.allowOverride && <button type="button" className="action-reset" disabled={disabled || !state?.overridden} onClick={() => onEdit?.(address, true)}>{state?.overridden ? (ar ? 'إعادة الحساب' : 'Reset calculated value') : (ar ? 'محسوب · قابل للتعديل' : 'Calculated · editable')}</button>}{field.type === 'record' && field.allowCreate && !fieldDisabled && <button type="button" className="action-reset" onClick={() => setCreating(key)}>{ar ? '+ سجل جديد' : '+ Add new'}</button>}{creating === key && field.databaseId && <RecordCreateForm databaseId={field.databaseId} locale={locale} onCancel={() => setCreating(undefined)} onCreated={r => { update(field, key, r.id); setCreating(undefined); }}/>}</div>;
-  })}</>;
+  })}{collapsible && <button aria-expanded={optionalShown} className="action-optional-toggle" disabled={disabled} onClick={() => setOptionalShown(shown => !shown)} type="button">{optionalShown
+    ? (ar ? 'إخفاء الحقول الاختيارية' : 'Hide optional fields')
+    : (ar ? `… ${optionalCount} حقول اختيارية` : `… ${optionalCount} optional field${optionalCount === 1 ? '' : 's'}`)}</button>}</>;
 }

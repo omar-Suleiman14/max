@@ -97,6 +97,16 @@ function setCaretOffset(el: HTMLElement, offset: number) {
   sel.addRange(range);
 }
 
+/**
+ * True when the caret already sits inside this element. A deferred focus must
+ * not reposition it, or a fast typist loses the characters they just entered.
+ */
+function holdsCaret(el: HTMLElement): boolean {
+  if (document.activeElement !== el) return false;
+  const sel = window.getSelection();
+  return Boolean(sel && sel.rangeCount > 0 && el.contains(sel.anchorNode));
+}
+
 export type BlockType =
   | 'page-link' | 'embed' | 'bookmark' | 'image' | 'video' | 'audio' | 'file' | 'simple-table' | 'table-of-contents'
   | 'quote'
@@ -376,7 +386,7 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
     setFocusedBlockId(id);
     setTimeout(() => {
       const el = inputRefs.current.get(id);
-      if (el) {
+      if (el && !holdsCaret(el)) {
         el.focus();
         if (el instanceof HTMLDivElement) {
           // contentEditable element
@@ -696,7 +706,7 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
           onChange(next);
           setTimeout(() => {
             const prevEl = inputRefs.current.get(previous.id);
-            if (prevEl) {
+            if (prevEl && !holdsCaret(prevEl)) {
               prevEl.focus();
               if (prevEl instanceof HTMLDivElement) {
                 setCaretOffset(prevEl, boundary);

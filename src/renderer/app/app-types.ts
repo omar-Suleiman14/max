@@ -1,3 +1,6 @@
+/** Landing page shown when the workspace has no pages or databases yet. */
+export const EMPTY_WORKSPACE_PAGE = 'workspace-empty';
+
 import type { LucideIcon } from 'lucide-react';
 import type { NotionBlock } from '../ui/notion-block-editor';
 import type { PageProperty } from '../pages/page-properties';
@@ -5,7 +8,6 @@ import type { PageProperty } from '../pages/page-properties';
 export type AppPage =
   | 'accounts'
   | 'databases'
-  | 'home'
   | 'items'
   | 'people'
   | 'reconciliation'

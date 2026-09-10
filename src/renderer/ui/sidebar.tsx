@@ -34,8 +34,8 @@ type SidebarProps = Readonly<{
   collapsed: boolean;
   customPages: readonly CustomPage[];
   databases: readonly NavigationItem[];
-  homePage: CustomPage;
   locale: Locale;
+  onExitSettings: () => void;
   onAddCustomPage: () => void;
   onAddSubpage: (parentId: string) => void;
   onCollapse: () => void;
@@ -113,13 +113,13 @@ export function Sidebar({
   collapsed,
   customPages,
   databases,
-  homePage,
   locale,
   onAddCustomPage,
   onAddSubpage,
   onCollapse,
   onDeletePage,
   onDuplicatePage,
+  onExitSettings,
   onNavigate,
   onNavigateView,
   onOpenSettings,
@@ -143,8 +143,7 @@ export function Sidebar({
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const resizeStartRef = useRef<{ pointerId: number; startWidth: number; startX: number } | undefined>(undefined);
 
-  const allWorkspacePages = useMemo(() => [homePage, ...customPages], [customPages, homePage]);
-  const favoritePages = allWorkspacePages.filter((candidate) => candidate.favorite);
+  const favoritePages = customPages.filter((candidate) => candidate.favorite);
 
   useEffect(() => {
     const kinds = ['account', 'item', 'person', 'transaction'] as const;
@@ -232,7 +231,7 @@ export function Sidebar({
       next.splice(insertAt, 0, moved);
       const destination = rootRows[targetIndex];
       let parentNodeId: string | null = null;
-      if (destination && destination.depth > 0 && moved.id !== 'home') {
+      if (destination && destination.depth > 0) {
         for (let i = targetIndex - 1; i >= 0; i--) {
           if (rootRows[i]!.depth < destination.depth) { parentNodeId = rootRows[i]!.id; break; }
         }
@@ -254,38 +253,38 @@ export function Sidebar({
   }
 
   const workspaceRows = useMemo<readonly WorkspaceRow[]>(() => {
-    const pageIds = new Set(allWorkspacePages.map(({ id }) => id));
-    const databaseIds = new Set(databases.map(({ id }) => id));
-    const nodeIds = new Set([...pageIds, ...databaseIds]);
+    const pageIds = new Set(customPages.map(({ id }) => id));
     const embeddedDatabaseParent = new Map<string, string>();
-    for (const candidate of allWorkspacePages) {
+    for (const candidate of customPages) {
       for (const block of candidate.blocks) {
         if (block.type === 'database-view' && block.databaseId) embeddedDatabaseParent.set(block.databaseId, candidate.id);
       }
     }
 
     const nodes = [
-      ...allWorkspacePages.map((candidate) => ({
+      ...customPages.map((candidate) => ({
         id: candidate.id,
         kind: 'page' as const,
         page: candidate,
-        parentNodeId: candidate.id === 'home' ? null : candidate.parentNodeId,
-        positionKey: candidate.positionKey ?? (candidate.id === 'home' ? '00000000' : candidate.id),
+        parentNodeId: candidate.parentNodeId,
+        positionKey: candidate.positionKey ?? candidate.id,
       })),
-      ...databases.filter((database) => !(embeddedDatabaseParent.has(database.id) && database.parentNodeId === embeddedDatabaseParent.get(database.id))).map((database) => ({
-        database,
-        id: database.id,
-        kind: 'database' as const,
-        parentNodeId: database.parentNodeId === null ? null : nodeIds.has(database.parentNodeId ?? '')
-          ? database.parentNodeId
-          : embeddedDatabaseParent.get(database.id),
-        positionKey: database.positionKey,
-      })),
+      // A database belongs to the page it was created in: prefer the page that
+      // embeds it, then its stored parent. Databases with no owning page are
+      // left out entirely rather than listed alongside pages; they stay
+      // reachable through search and the pages that reference them.
+      ...databases.flatMap((database) => {
+        const owner = embeddedDatabaseParent.get(database.id)
+          ?? (pageIds.has(database.parentNodeId ?? '') ? database.parentNodeId : undefined);
+        return owner
+          ? [{ database, id: database.id, kind: 'database' as const, parentNodeId: owner, positionKey: database.positionKey }]
+          : [];
+      }),
     ];
     const nodeById = new Map(nodes.map((node) => [node.id, node] as const));
     const childrenByParent = new Map<string, typeof nodes>();
     for (const node of nodes) {
-      if (!node.parentNodeId || !nodeById.has(node.parentNodeId) || node.id === 'home') continue;
+      if (!node.parentNodeId || !nodeById.has(node.parentNodeId)) continue;
       const children = childrenByParent.get(node.parentNodeId) ?? [];
       children.push(node);
       childrenByParent.set(node.parentNodeId, children);
@@ -329,11 +328,11 @@ export function Sidebar({
       for (const child of childNodes) walk(child, depth + 1);
     };
 
-    const roots = sortNodes(nodes.filter((node) => !node.parentNodeId || !nodeById.has(node.parentNodeId) || node.id === 'home'));
+    const roots = sortNodes(nodes.filter((node) => !node.parentNodeId || !nodeById.has(node.parentNodeId)));
     for (const root of roots) walk(root, 0);
 
     return rows;
-  }, [allWorkspacePages, databaseViewNames, databases, expandedPageIds, legacyViewNames]);
+  }, [customPages, databaseViewNames, databases, expandedPageIds, legacyViewNames]);
 
   const [settingsSearch, setSettingsSearch] = useState(() => {
     try { return window.localStorage.getItem('max:settings-search') || ''; } catch { return ''; }
@@ -392,7 +391,7 @@ export function Sidebar({
 
   const SettingsActionIcon = isSettings ? (isRtl ? ArrowRight : ArrowLeft) : Settings;
   const settingsActionLabel = translate(locale, isSettings ? 'back' : 'settings');
-  const handleSettingsClick = isSettings ? () => onNavigate('home') : onOpenSettings;
+  const handleSettingsClick = isSettings ? onExitSettings : onOpenSettings;
 
   return (
     <aside className="sidebar" data-collapsed={collapsed} style={collapsed ? undefined : { width }}>
@@ -423,7 +422,7 @@ export function Sidebar({
                         setSettingsSearch('');
                         e.stopPropagation();
                       } else {
-                        onNavigate('home');
+                        onExitSettings();
                       }
                     }
                   }}
@@ -464,15 +463,15 @@ export function Sidebar({
                     <div className="sidebar-favorite-row" key={`favorite-${favorite.id}`}>
                       <button
                         aria-current={page === favorite.id ? 'page' : undefined}
-                        aria-label={favorite.title.trim() || translate(locale, favorite.id === 'home' ? 'home' : 'untitledPage')}
+                        aria-label={favorite.title.trim() || translate(locale, 'untitledPage')}
                         className="nav-item nav-item--favorite"
                         onClick={() => onNavigate(favorite.id)}
                         type="button"
                       >
                         <PageIconRenderer className="nav-item__custom-icon" fallback="lucide:Star" icon={favorite.icon || 'lucide:Star'} size={17} />
-                        {!collapsed && <span className="nav-item__title">{favorite.title.trim() || translate(locale, favorite.id === 'home' ? 'home' : 'untitledPage')}</span>}
+                        {!collapsed && <span className="nav-item__title">{favorite.title.trim() || translate(locale, 'untitledPage')}</span>}
                       </button>
-                      {!collapsed && favorite.id !== 'home' && (
+                      {!collapsed && (
                         <button
                           aria-label={locale === 'ar' ? `إزالة ${favorite.title || 'الصفحة'} من المفضلة` : `Remove ${favorite.title || 'page'} from favorites`}
                           className="sidebar-favorite-remove"
@@ -508,14 +507,13 @@ export function Sidebar({
 
                 const p = row.page;
                 const database = row.database;
-                const isHome = row.id === 'home';
                 const isCurrent = page === row.id;
                 const rootIndex = rootRows.findIndex(({ id }) => id === row.id);
                 const isDragging = rootIndex >= 0 && draggedIndex === rootIndex;
                 const isDragOver = rootIndex >= 0 && dragOverIndex === rootIndex;
                 const title = database?.title ?? p?.title.trim() ?? '';
-                const pageTitle = title || (isHome ? translate(locale, 'home') : translate(locale, 'untitledPage'));
-                const icon = database?.icon ?? p?.icon ?? (isHome ? 'lucide:Home' : row.kind === 'database' ? 'lucide:Database' : 'lucide:FileText');
+                const pageTitle = title || translate(locale, 'untitledPage');
+                const icon = database?.icon ?? p?.icon ?? (row.kind === 'database' ? 'lucide:Database' : 'lucide:FileText');
 
                 return (
                   <div
@@ -549,7 +547,7 @@ export function Sidebar({
                       type="button"
                     >
                       <span className="nav-item__icon-slot">
-                        <PageIconRenderer className="nav-item__custom-icon" fallback={row.kind === 'database' ? 'lucide:Database' : isHome ? 'lucide:Home' : 'lucide:FileText'} icon={icon} size={18} />
+                        <PageIconRenderer className="nav-item__custom-icon" fallback={row.kind === 'database' ? 'lucide:Database' : 'lucide:FileText'} icon={icon} size={18} />
                         {row.hasChildren && (
                           <span
                             aria-label={locale === 'ar' ? `إظهار محتويات ${pageTitle}` : `Show ${pageTitle} contents`}
@@ -582,7 +580,7 @@ export function Sidebar({
                       </span>
                       {!collapsed && <span className="nav-item__title">{pageTitle}</span>}
                     </button>
-                    {!collapsed && p && !isHome && (
+                    {!collapsed && p && (
                       <button aria-label={locale === 'ar' ? 'إعدادات الصفحة' : 'Page settings'} className="nav-item__menu-trigger" onClick={() => setMenuPageId(menuPageId === p.id ? undefined : p.id)} type="button">
                         <MoreHorizontal size={15} />
                       </button>

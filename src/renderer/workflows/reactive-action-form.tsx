@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import type { WorkflowFormEvaluation, WorkspaceWorkflow } from '../../shared/workflow-contract';
 import type { Locale } from '../app/i18n';
-import { inputDefaults } from './input-defaults';
+import { lastUsedInputs, rememberInputs } from './last-used-inputs';
 import { WorkflowInputForm } from './workflow-input-form';
 import { scalarText } from '../../shared/scalar-text';
 
 export function ReactiveActionForm({ workflow, locale, onCompleted, onBusy }: { workflow: WorkspaceWorkflow; locale: Locale; onCompleted: () => void; onBusy: (busy: boolean) => void }) {
-  const ar = locale === 'ar'; const [values, setValues] = useState(() => inputDefaults(workflow.inputSchema.fields));
+  const ar = locale === 'ar'; const [values, setValues] = useState(() => lastUsedInputs(workflow.id, workflow.inputSchema.fields));
   const [overrides, setOverrides] = useState<string[]>([]), [evaluation, setEvaluation] = useState<WorkflowFormEvaluation>();
   const [error, setError] = useState(''), [snapshot, setSnapshot] = useState('');
   const [revision, setRevision] = useState(0), [confirming, setConfirming] = useState(false), [running, setRunning] = useState(false);
@@ -34,7 +34,7 @@ export function ReactiveActionForm({ workflow, locale, onCompleted, onBusy }: { 
     try {
       const result = await window.maxApi.workspace.executeWorkflow({ workflowId: workflow.id, inputs: values, overrides, evaluationToken: evaluation.token, confirmedWarnings: confirmed ? warnings.map(w => w.id) : [] });
       if (!result.ok) { setError(result.error.message); setConfirming(false); setRevision(v => v + 1); }
-      else { onCompleted(); window.dispatchEvent(new Event('max:workspace-changed')); }
+      else { rememberInputs(workflow.id, values); onCompleted(); window.dispatchEvent(new Event('max:workspace-changed')); }
     } catch { setError(ar ? 'تعذر تنفيذ الإجراء.' : 'Could not execute action.'); }
     finally { lock.current = false; setRunning(false); onBusy(false); }
   };

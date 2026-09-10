@@ -6,7 +6,7 @@ import {
   Globe2,
   ArrowRight,
 } from 'lucide-react';
-import { useEffect, useState, type FormEvent, type ChangeEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ChangeEvent } from 'react';
 
 import type { BackupSchedule } from '../../shared/blueprint-contract';
 import type { WorkspaceTemplateV2 as Blueprint } from '../../shared/template-v2-contract';
@@ -15,7 +15,9 @@ import { Button } from '../ui/button';
 import { onboardingCopy } from './onboarding-i18n';
 import maxLogoReference from '../assets/max-logo.png';
 
-function playWelcomeSound(): void {
+function playWelcomeSound(surface: HTMLElement): (() => void) | undefined {
+  const beginMotion = () => { surface.dataset.arriving = 'true'; };
+  beginMotion();
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const audioWindow = window as typeof window & { webkitAudioContext?: typeof AudioContext };
   const AudioContextConstructor = audioWindow.AudioContext ?? audioWindow.webkitAudioContext;
@@ -23,6 +25,12 @@ function playWelcomeSound(): void {
   try {
     const context = new AudioContextConstructor();
     const gain = context.createGain();
+    let stopped = false;
+    const stop = () => {
+      if (stopped) return;
+      stopped = true;
+      void context.close().catch(() => {});
+    };
     const now = context.currentTime;
     gain.gain.setValueAtTime(0.0001, now);
     gain.gain.exponentialRampToValueAtTime(0.07, now + 0.18);
@@ -49,8 +57,12 @@ function playWelcomeSound(): void {
       oscillator.connect(voiceGain); voiceGain.connect(gain);
       oscillator.start(now + note.at); oscillator.stop(now + note.at + note.duration + 0.05);
     }
-    void context.resume();
-    window.setTimeout(() => { void context.close(); }, 4_400);
+    // Restart the authored entrance at playback, rather than measuring volume.
+    void context.resume().then(() => {
+      if (!stopped) surface.getAnimations({ subtree: true }).forEach((animation) => { animation.currentTime = 0; });
+    }).catch(() => {});
+    const timeout = window.setTimeout(stop, 4_400);
+    return () => { window.clearTimeout(timeout); stop(); };
   } catch { /* Audio is an optional welcome enhancement. */ }
 }
 
@@ -67,6 +79,7 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
   const [step, setStep] = useState(1);
   const [locale, setLocale] = useState<Locale>(initialLocale);
   const [showWelcome, setShowWelcome] = useState(!preview);
+  const welcomeRef = useRef<HTMLElement>(null);
   const [shopName, setShopName] = useState('');
   const [template, setTemplate] = useState<'blank' | 'custom'>('blank');
   const [backupSchedule, setBackupSchedule] = useState<BackupSchedule>('daily');
@@ -109,8 +122,11 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
 
   useEffect(() => {
     if (!showWelcome) return;
-    const timer = window.setTimeout(playWelcomeSound, 320);
-    return () => window.clearTimeout(timer);
+    let stop: (() => void) | undefined;
+    const timer = window.setTimeout(() => {
+      if (welcomeRef.current) stop = playWelcomeSound(welcomeRef.current);
+    }, 320);
+    return () => { window.clearTimeout(timer); stop?.(); };
   }, [showWelcome]);
 
   useEffect(() => {
@@ -146,14 +162,17 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
   if (showWelcome) {
     return (
       <div className="onboarding-container onboarding-container--welcome" dir="ltr">
-        <main className="onboarding-welcome" aria-labelledby="welcome-to-max">
-          <div className="onboarding-welcome__ambient onboarding-welcome__ambient--one" aria-hidden="true" />
-          <div className="onboarding-welcome__ambient onboarding-welcome__ambient--two" aria-hidden="true" />
+        <main ref={welcomeRef} className="onboarding-welcome" aria-labelledby="welcome-to-max">
+          <svg className="onboarding-welcome__colors" viewBox="0 0 1200 800" preserveAspectRatio="none" aria-hidden="true">
+            <path className="onboarding-welcome__wash onboarding-welcome__wash--one" d="M-200-200H1400V80C1080-70 1060 300 760 190S570 400 270 290S-70 510-200 360Z" />
+            <path className="onboarding-welcome__wash onboarding-welcome__wash--two" d="M-180 870C-80 530 120 720 280 440S570 100 810 310S1120 320 1400 140V1000Z" />
+            <path className="onboarding-welcome__wash onboarding-welcome__wash--three" d="M-160 730C180 520 240 930 520 660S670 380 960 470S1140 600 1410 380V1060H-160Z" />
+          </svg>
           <div className="onboarding-welcome__content">
             <h1 id="welcome-to-max" className="sr-only">Welcome to Max</h1>
-            <p aria-hidden="true" className="onboarding-welcome__title">Welcome to<br />Max.</p>
-            <button autoFocus aria-label="Get started" className="onboarding-welcome__button" onClick={() => setShowWelcome(false)} type="button"><ArrowRight aria-hidden="true" size={18} /></button>
+            <img alt="" src={maxLogoReference} className="onboarding-welcome__logo" />
           </div>
+          <button autoFocus aria-label="Get started" className="onboarding-welcome__button" onClick={() => setShowWelcome(false)} type="button"><ArrowRight aria-hidden="true" size={18} /></button>
         </main>
       </div>
     );

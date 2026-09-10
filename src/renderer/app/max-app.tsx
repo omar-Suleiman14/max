@@ -29,14 +29,11 @@ import type { WorkspaceTemplateV2 as Blueprint } from '../../shared/template-v2-
 import type { WorkspaceNavigation } from '../../shared/workspace-contract';
 import { CustomPageView } from '../pages/custom-page-view';
 import {
-  loadHomePage,
-  loadPersistentHomePage,
-  saveHomePage,
   createPersistentCustomPage,
   loadPersistentCustomPages,
   updatePersistentCustomPage,
 } from '../pages/pages-store';
-import type { AppPage, CustomPage, EngineStatus, SettingsSectionId } from './app-types';
+import { EMPTY_WORKSPACE_PAGE, type AppPage, type CustomPage, type EngineStatus, type SettingsSectionId } from './app-types';
 import { localeDirection, type Locale, type TranslationKey, translate } from './i18n';
 import {
   preferenceKeys,
@@ -106,7 +103,7 @@ function firstWorkspacePageId(
     ...workspacePages.map((p) => ({ id: p.id, key: p.positionKey })),
     ...databases.map((d) => ({ id: d.id, key: d.positionKey })),
   ].sort((a, b) => a.key.localeCompare(b.key));
-  return all[0]?.id ?? 'databases';
+  return all[0]?.id ?? EMPTY_WORKSPACE_PAGE;
 }
 
 function isEditingTarget(target: EventTarget | null): boolean {
@@ -121,13 +118,16 @@ export function MaxApp() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => readSidebarCollapsed(window.localStorage));
   const [sidebarWidth, setSidebarWidth] = useState(() => readSidebarWidth(window.localStorage));
   const [settingsSection, setSettingsSection] = useState<SettingsSectionId>('settings-general');
-  const [page, setPage] = useState<AppPage>(() => readSessionValue('page', 'home'));
-  const previousPage = useRef<AppPage>(page === 'settings' ? 'home' : page);
+  const [page, setPage] = useState<AppPage>(() => {
+    // Sessions stored before the home page was removed still point at it.
+    const restored = readSessionValue('page', '');
+    return restored === 'home' ? '' : restored;
+  });
+  const previousPage = useRef<AppPage>(page === 'settings' ? '' : page);
   usePagePosition(page);
   useEffect(() => { if (page !== 'settings') previousPage.current = page; }, [page]);
   const [customPages, setCustomPages] = useState<readonly CustomPage[]>([]);
   const [workspaceNavigation, setWorkspaceNavigation] = useState<WorkspaceNavigation>({ databases: [], pages: [] });
-  const [homePage, setHomePage] = useState<CustomPage>(() => loadHomePage(locale));
   const [commandOpen, setCommandOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [blueprintModalTab, setBlueprintModalTab] = useState<'export' | 'import'>();
@@ -145,7 +145,6 @@ export function MaxApp() {
   const [shopName, setShopName] = useState('');
   const [onboardingPreview, setOnboardingPreview] = useState(false);
   const [openRecordId, setOpenRecordId] = useState<string>();
-  const startupLocale = useRef(locale);
 
   const effectiveTheme = resolveTheme(theme, systemUsesDark);
 
@@ -233,14 +232,12 @@ export function MaxApp() {
         if (data.onboardingCompleted) {
           const migration = await window.maxApi.workspace.migrateV01(data.locale);
           if (!migration.ok) throw new Error(migration.error.message);
-          const [pages, persistedHome, navigation] = await Promise.all([
+          const [pages, navigation] = await Promise.all([
             loadPersistentCustomPages(),
-            loadPersistentHomePage(data.locale ?? startupLocale.current),
             window.maxApi.workspace.getNavigation(),
           ]);
           if (active) {
             setCustomPages(pages);
-            setHomePage(persistedHome);
             setWorkspaceNavigation(navigation);
             setPage((current) => current === 'settings'
               || current in pageLabels
@@ -255,6 +252,7 @@ export function MaxApp() {
       .catch(() => {
         if (active) {
           setOnboardingCompleted(true);
+          setPage((current) => current || EMPTY_WORKSPACE_PAGE);
         }
       });
 
@@ -379,15 +377,6 @@ export function MaxApp() {
     } catch { alert(locale === 'ar' ? 'تعذر نقل العنصر إلى المهملات.' : 'Could not move this item to Trash.'); }
   }
 
-  function handleUpdateHomePage(_id: string, update: Partial<Omit<CustomPage, 'createdAt' | 'id'>>) {
-    const updated = {
-      ...homePage,
-      ...update,
-    };
-    setHomePage(updated);
-    saveHomePage(updated);
-  }
-
   async function handleCompleteOnboarding(
     nextShopName: string,
     nextLocale: Locale,
@@ -409,18 +398,16 @@ export function MaxApp() {
     if (res.ok) {
       setShopName(res.value.shopName);
       setLocale(res.value.locale);
-      setHomePage(loadHomePage(res.value.locale));
       setOnboardingCompleted(true);
       const migration = await window.maxApi.workspace.migrateV01(res.value.locale);
       if (migration.ok) {
-        const [pages, persistedHome, navigation] = await Promise.all([
+        const [pages, navigation] = await Promise.all([
           loadPersistentCustomPages(),
-          loadPersistentHomePage(res.value.locale),
           window.maxApi.workspace.getNavigation(),
         ]);
         setCustomPages(pages);
-        setHomePage(persistedHome);
         setWorkspaceNavigation(navigation);
+        setPage(firstWorkspacePageId(pages, navigation.pages, navigation.databases));
         if (templateId === 'custom' && !blueprint) {
           setBlueprintModalTab('import');
         }
@@ -510,23 +497,25 @@ export function MaxApp() {
     return <Suspense fallback={null}><Onboarding initialLocale={locale} onClose={() => setOnboardingPreview(false)} onComplete={() => { setOnboardingPreview(false); return Promise.resolve(); }} preview /></Suspense>;
   }
 
-  const isHomePage = page === 'home';
-  const isCustomPage = isHomePage || customPages.some((candidate) => candidate.id === page);
-  const activeCustomPage = isHomePage ? homePage : customPages.find((p) => p.id === page);
+  // The landing page is resolved from the workspace once navigation loads.
+  if (!page) return null;
+
+  const isCustomPage = customPages.some((candidate) => candidate.id === page);
+  const activeCustomPage = customPages.find((p) => p.id === page);
   const activeWorkspaceDatabase = workspaceNavigation.databases.find((database) => database.id === page || database.legacyAlias === page);
 
-  const pageLabel = isHomePage
-    ? activeCustomPage?.title || translate(locale, 'home')
-    : isCustomPage
+  const pageLabel = isCustomPage
       ? activeCustomPage?.title || translate(locale, 'untitledPage')
       : activeWorkspaceDatabase
         ? activeWorkspaceDatabase.title
       : page in pageLabels && pageLabels[page]
         ? translate(locale, pageLabels[page])
+      : page === EMPTY_WORKSPACE_PAGE
+        ? translate(locale, 'workspace')
         : page;
 
   const PageIcon: LucideIcon = (!isCustomPage && page in pageIcons && pageIcons[page]) ? pageIcons[page] : FileText;
-  const showPageHeader = !isCustomPage && !activeWorkspaceDatabase && !['databases', 'settings'].includes(page);
+  const showPageHeader = !isCustomPage && !activeWorkspaceDatabase && !['databases', 'settings', EMPTY_WORKSPACE_PAGE].includes(page);
 
   return (
     <div className="app-shell" data-app-ready={engineStatus === 'ready' ? 'true' : undefined}>
@@ -537,14 +526,14 @@ export function MaxApp() {
         collapsed={sidebarCollapsed}
         customPages={customPages}
         databases={workspaceNavigation.databases}
-        homePage={homePage}
         locale={locale}
         onAddCustomPage={() => void handleAddCustomPage()}
         onAddSubpage={(parentId) => void handleAddSubpage(parentId)}
         onCollapse={() => setSidebarCollapsed((collapsed) => !collapsed)}
         onDeletePage={(id) => { void handleDeleteCustomPage(id); }}
         onDuplicatePage={(id) => void handleDuplicateCustomPage(id)}
-        onNavigate={(next) => navigate(page === 'settings' && next === 'home' ? previousPage.current : next)}
+        onExitSettings={() => navigate(previousPage.current || firstWorkspacePageId(customPages, workspaceNavigation.pages, workspaceNavigation.databases))}
+        onNavigate={navigate}
         onNavigateView={navigateDatabaseView}
         onOpenSettings={() => navigateSettingsSection('settings-general')}
         onRenamePage={(id, title) => handleUpdateCustomPage(id, { title })}
@@ -552,27 +541,21 @@ export function MaxApp() {
         onSettingsSectionChange={navigateSettingsSection}
         onToggleFavorite={(id, favorite) => handleUpdateCustomPage(id, { favorite })}
         onReorderNodes={(reorderedIds, movedId, parentNodeId) => {
-          let updatedHome = homePage;
           const updatedCustomPages = [...customPages];
           const updatedDatabases = [...workspaceNavigation.databases];
           reorderedIds.forEach((id, position) => {
             const positionKey = `p${String(position).padStart(8, '0')}`;
-            if (id === 'home') {
-              updatedHome = { ...updatedHome, positionKey };
+            const customIndex = updatedCustomPages.findIndex((p) => p.id === id);
+            if (customIndex !== -1) {
+              updatedCustomPages[customIndex] = { ...updatedCustomPages[customIndex], positionKey, ...(id === movedId ? { parentNodeId } : {}) } as typeof updatedCustomPages[0];
             } else {
-              const customIndex = updatedCustomPages.findIndex((p) => p.id === id);
-              if (customIndex !== -1) {
-                updatedCustomPages[customIndex] = { ...updatedCustomPages[customIndex], positionKey, ...(id === movedId ? { parentNodeId } : {}) } as typeof updatedCustomPages[0];
-              } else {
-                const dbIndex = updatedDatabases.findIndex((d) => d.id === id);
-                if (dbIndex !== -1) {
-                  updatedDatabases[dbIndex] = { ...updatedDatabases[dbIndex], positionKey, ...(id === movedId ? { parentNodeId } : {}) } as typeof updatedDatabases[0];
-                }
+              const dbIndex = updatedDatabases.findIndex((d) => d.id === id);
+              if (dbIndex !== -1) {
+                updatedDatabases[dbIndex] = { ...updatedDatabases[dbIndex], positionKey, ...(id === movedId ? { parentNodeId } : {}) } as typeof updatedDatabases[0];
               }
             }
             window.maxApi.workspace.updateNode(id, { positionKey, ...(id === movedId ? { parentNodeId } : {}) }).catch(() => undefined);
           });
-          setHomePage(updatedHome);
           setCustomPages(updatedCustomPages);
           setWorkspaceNavigation({ ...workspaceNavigation, databases: updatedDatabases });
         }}
@@ -629,7 +612,7 @@ export function MaxApp() {
             <CustomPageView
               key={activeCustomPage.id}
               locale={locale}
-              onUpdatePage={isHomePage ? handleUpdateHomePage : handleUpdateCustomPage}
+              onUpdatePage={handleUpdateCustomPage}
               onWorkspaceChange={refreshWorkspaceNavigation}
               page={activeCustomPage}
             />
@@ -649,7 +632,6 @@ export function MaxApp() {
               onDemoDataSeeded={() => {
                 window.dispatchEvent(new Event('max:workspace-changed'));
                 void loadPersistentCustomPages().then(setCustomPages);
-                setHomePage(loadHomePage(locale));
                 void window.maxApi.shop.getMetadata().then((metadata) => setShopName(metadata.shopName));
               }}
               onResetAppearance={() => setTheme('system')}
@@ -657,7 +639,6 @@ export function MaxApp() {
               onShowOnboarding={() => setOnboardingPreview(true)}
               onWorkspaceDeleted={() => {
                 setCustomPages([]);
-                setHomePage(loadHomePage(locale));
                 setShopName('');
                 setOnboardingCompleted(false);
               }}
@@ -669,9 +650,8 @@ export function MaxApp() {
             <EmptyPage
               locale={locale}
               onCreate={() => { void handleAddCustomPage(); }}
-              onNavigate={navigate}
               onOpenCommand={() => setCommandOpen(true)}
-              page={page as 'accounts' | 'items' | 'people' | 'reconciliation' | 'transactions'}
+              page={page}
             />
           )}
           </Suspense>

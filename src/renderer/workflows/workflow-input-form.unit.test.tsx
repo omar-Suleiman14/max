@@ -18,10 +18,16 @@ describe('Repeated workflow inputs', () => {
   it('adds/removes rows, preserves edits, selects records and prefills the correct row', async () => {
     Object.defineProperty(window, 'maxApi', { configurable: true, value: { workspace: { queryDatabase: vi.fn().mockResolvedValue({ records: [{ id: 'a', title: 'Alpha', properties: { factor: 3 } }, { id: 'b', title: 'Beta', properties: { factor: 5 } }] }) } } });
     const user = userEvent.setup(); render(<Form/>);
+    // Each row hides its optional inputs until asked for them.
+    const revealOptionalFields = async () => {
+      for (const toggle of screen.queryAllByRole('button', { name: /optional field/, expanded: false })) await user.click(toggle);
+    };
+    await revealOptionalFields();
     expect(screen.getByRole('button', { name: 'Remove row 1' })).toBeDisabled();
     await user.click(screen.getByRole('combobox', { name: 'Node' })); await user.click(await screen.findByRole('option', { name: 'Alpha' }));
     await waitFor(() => expect(screen.getByLabelText('Rate')).toHaveValue(3));
     await user.click(screen.getByRole('button', { name: '+ Add row' }));
+    await revealOptionalFields();
     expect(screen.getByRole('button', { name: '+ Add row' })).toBeDisabled();
     await user.click(screen.getAllByRole('combobox', { name: 'Node' })[1]!); await user.click(await screen.findByRole('option', { name: 'Beta' }));
     expect(screen.getAllByLabelText('Rate')[1]).toHaveValue(5);

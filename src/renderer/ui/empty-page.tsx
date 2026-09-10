@@ -1,7 +1,7 @@
 import {
-  ArrowRight,
   CircleDollarSign,
   ContactRound,
+  FileText,
   Package,
   Plus,
   ReceiptText,
@@ -9,23 +9,19 @@ import {
   Search,
 } from 'lucide-react';
 
-import maxLogo from '../assets/max-logo.png';
-
-import type { AppPage } from '../app/app-types';
 import { type Locale, type TranslationKey, translate } from '../app/i18n';
 import { Button } from './button';
 
-export type EmptyPageTarget = 'accounts' | 'home' | 'items' | 'people' | 'reconciliation' | 'transactions';
+export type EmptyPageTarget = 'accounts' | 'items' | 'people' | 'reconciliation' | 'transactions' | (string & {});
 
 type EmptyPageProps = Readonly<{
   locale: Locale;
   onCreate: () => void;
-  onNavigate: (page: AppPage) => void;
   onOpenCommand: () => void;
   page: EmptyPageTarget;
 }>;
 
-const pageContent: Record<Exclude<EmptyPageTarget, 'home'>, Readonly<{
+const pageContent: Record<string, Readonly<{
   body: TranslationKey;
   create: TranslationKey;
   empty: TranslationKey;
@@ -38,72 +34,26 @@ const pageContent: Record<Exclude<EmptyPageTarget, 'home'>, Readonly<{
   transactions: { body: 'transactionEmptyBody', create: 'transactionCreate', empty: 'transactionEmpty', icon: ReceiptText },
 };
 
-function HomePage({ locale, onNavigate, onOpenCommand }: Pick<EmptyPageProps, 'locale' | 'onNavigate' | 'onOpenCommand'>) {
-  return (
-    <div className="home-page">
-      <section className="home-hero">
-        <div className="home-page__icon" aria-hidden="true">
-          <img alt="Max" className="home-page__logo" src={maxLogo} />
-        </div>
-        <h2>{translate(locale, 'homeTitle')}</h2>
-        <p>{translate(locale, 'homeBody')}</p>
-        <div className="home-hero__actions">
-          <Button icon={<Package aria-hidden="true" size={18} />} onClick={() => onNavigate('items')} variant="primary">
-            {translate(locale, 'exploreItems')}
-          </Button>
-          <Button icon={<Search aria-hidden="true" size={18} />} onClick={onOpenCommand}>
-            {translate(locale, 'openCommand')}
-          </Button>
-        </div>
-      </section>
-      <section aria-label={translate(locale, 'workspace')} className="workspace-start">
-        <p className="workspace-start__label">{translate(locale, 'workspace')}</p>
-        <button className="workspace-link" onClick={() => onNavigate('items')} type="button">
-          <span className="workspace-link__icon"><Package aria-hidden="true" size={17} /></span>
-          <span>
-            <strong>{translate(locale, 'item')}</strong>
-            <small>{translate(locale, 'itemEmptyBody')}</small>
-          </span>
-          <ArrowRight aria-hidden="true" className="workspace-link__arrow" size={15} />
-        </button>
-        <button className="workspace-link" onClick={() => onNavigate('transactions')} type="button">
-          <span className="workspace-link__icon"><ReceiptText aria-hidden="true" size={17} /></span>
-          <span>
-            <strong>{translate(locale, 'transaction')}</strong>
-            <small>{translate(locale, 'transactionEmptyBody')}</small>
-          </span>
-          <ArrowRight aria-hidden="true" className="workspace-link__arrow" size={15} />
-        </button>
-        <button className="workspace-link" onClick={onOpenCommand} type="button">
-          <span className="workspace-link__icon"><Search aria-hidden="true" size={17} /></span>
-          <span>
-            <strong>{translate(locale, 'openCommand')}</strong>
-            <small>{translate(locale, 'pressCommand')}</small>
-          </span>
-          <ArrowRight aria-hidden="true" className="workspace-link__arrow" size={15} />
-        </button>
-      </section>
-      <section className="keyboard-note">
-        <kbd>Tab</kbd><kbd>Enter</kbd><kbd>Esc</kbd><kbd>↑ ↓</kbd>
-        <div>
-          <strong>{translate(locale, 'keyboard')}</strong>
-          <p>{translate(locale, 'keyboardBody')}</p>
-        </div>
-      </section>
-    </div>
-  );
-}
+export function EmptyPage({ locale, onCreate, onOpenCommand, page }: EmptyPageProps) {
+  const content = pageContent[page];
 
-export function EmptyPage({ locale, onCreate, onNavigate, onOpenCommand, page }: EmptyPageProps) {
-  if (page === 'home') {
-    return <HomePage locale={locale} onNavigate={onNavigate} onOpenCommand={onOpenCommand} />;
+  // Anything without its own empty state — including a brand new workspace —
+  // gets a bare screen whose only suggestion is to write something down.
+  if (!content) {
+    return (
+      <section className="empty-state">
+        <div className="empty-state__icon"><FileText aria-hidden="true" size={27} strokeWidth={1.65} /></div>
+        <h2>{translate(locale, 'emptyWorkspaceTitle')}</h2>
+        <p>{translate(locale, 'emptyWorkspaceBody')}</p>
+        <div className="empty-state__actions">
+          <Button icon={<Plus aria-hidden="true" size={18} />} onClick={onCreate} variant="primary">
+            {translate(locale, 'createNote')}
+          </Button>
+        </div>
+      </section>
+    );
   }
 
-  const content = pageContent[page] || {
-    body: 'unknownPageError',
-    empty: 'unknownPage',
-    icon: Plus, // or any valid icon
-  };
   const Icon = content.icon;
   return (
     <section className="empty-state">
