@@ -31,3 +31,9 @@ npm run build
 For an exact lockfile install, use `npm run install:clean`. Run the development
 application with `npm start`; create the native installer for the current host
 with `npm run make`.
+
+## License
+
+Max is free software released under the GNU General Public License, version 2 —
+the same licence the Linux kernel uses. See [LICENSE](LICENSE) for the full
+text. Every runtime dependency is MIT or ISC licensed, which GPLv2 permits.
