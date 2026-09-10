@@ -18,7 +18,7 @@ describe('Windows Squirrel lifecycle', () => {
       expect(handleSquirrelCommand({ command, executablePath, quit, runUpdate })).toBe(true);
       expect(runUpdate).toHaveBeenCalledWith(
         resolve(dirname(executablePath), '..', 'Update.exe'),
-        ['--createShortcut', basename(executablePath)],
+        ['--createShortcut', basename(executablePath), '--shortcut-locations', 'Desktop,StartMenu'],
         quit,
       );
       expect(quit).toHaveBeenCalledOnce();
@@ -39,7 +39,7 @@ describe('Windows Squirrel lifecycle', () => {
     ).toBe(true);
     expect(runUpdate).toHaveBeenCalledWith(
       resolve(dirname(executablePath), '..', 'Update.exe'),
-      ['--removeShortcut', basename(executablePath)],
+      ['--removeShortcut', basename(executablePath), '--shortcut-locations', 'Desktop,StartMenu'],
       quit,
     );
   });

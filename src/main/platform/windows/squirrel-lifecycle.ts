@@ -44,7 +44,11 @@ export function handleSquirrelCommand({
   const updateExecutable = resolve(dirname(executablePath), '..', 'Update.exe');
   const shortcutAction =
     command === '--squirrel-uninstall' ? '--removeShortcut' : '--createShortcut';
-  runUpdate(updateExecutable, [shortcutAction, basename(executablePath)], quit);
+  runUpdate(
+    updateExecutable,
+    [shortcutAction, basename(executablePath), '--shortcut-locations', 'Desktop,StartMenu'],
+    quit,
+  );
   return true;
 }
 
@@ -61,11 +65,13 @@ export function handleWindowsSquirrelLifecycle(): boolean {
       });
       let finished = false;
       const finish = () => {
-        if (!finished) {
-          finished = true;
-          done();
-        }
+        if (finished) return;
+        finished = true;
+        clearTimeout(watchdog);
+        child.unref();
+        done();
       };
+      const watchdog = setTimeout(finish, 4_000);
       child.once('error', finish);
       child.once('close', finish);
     },

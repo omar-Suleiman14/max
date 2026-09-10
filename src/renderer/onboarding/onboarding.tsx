@@ -226,7 +226,8 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
                   tabIndex={0}
                   type="button"
                 >
-                  <span className="language-item__identity"><span className="language-item__monogram">EN</span><span><span className="language-item__title" lang="en">English</span><span className="language-item__native">English</span></span></span>
+                  <span className="language-item__monogram">EN</span>
+                  <span className="language-item__identity"><span className="language-item__title" lang="en">English</span><span className="language-item__native">English</span></span>
                   <span className="language-item__selection"><span className="language-item__meta">Left-to-right</span>{locale === 'en' && <Check aria-hidden="true" size={17} />}</span>
                 </button>
 
@@ -250,8 +251,9 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
                   tabIndex={0}
                   type="button"
                 >
-                  <span className="language-item__identity"><span className="language-item__monogram" lang="en">AR</span><span><span className="language-item__title" lang="ar">العربية</span><span className="language-item__native">Arabic</span></span></span>
-                  <span className="language-item__selection"><span className="language-item__meta">من اليمين لليسار</span>{locale === 'ar' && <Check aria-hidden="true" size={17} />}</span>
+                  <span className="language-item__monogram" lang="en">AR</span>
+                  <span className="language-item__identity"><span className="language-item__title" lang="ar">العربية</span><span className="language-item__native">Arabic</span></span>
+                  <span className="language-item__selection"><span className="language-item__meta" lang="ar">من اليمين لليسار</span>{locale === 'ar' && <Check aria-hidden="true" size={17} />}</span>
                 </button>
               </div>
             </div>
