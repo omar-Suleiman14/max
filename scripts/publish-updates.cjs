@@ -2,8 +2,18 @@
 // Publish packages first and the Squirrel index last. No app data or backup access.
 const { createHash } = require('node:crypto');
 const { readFileSync, readdirSync, statSync } = require('node:fs');
-const { join, basename } = require('node:path');
+const { dirname, join, basename } = require('node:path');
 const { spawnSync } = require('node:child_process');
+
+// wrangler declares "exports", so its bin cannot be required by subpath. Resolve
+// the CLI through the manifest, which the package does export.
+function wranglerCli() {
+  const manifestPath = require.resolve('wrangler/package.json');
+  const { bin } = require(manifestPath);
+  const entry = typeof bin === 'string' ? bin : bin && bin.wrangler;
+  if (!entry) throw new Error('Could not locate the wrangler CLI.');
+  return join(dirname(manifestPath), entry);
+}
 
 function collect(dir) {
   return readdirSync(dir).flatMap(name => {
@@ -54,7 +64,7 @@ async function main() {
     const key = `${bucket}/windows/x64/${entry.name}`;
     console.log(`${dryRun ? 'Validated' : 'Publishing'} ${key}`);
     if (dryRun) continue;
-    const result = spawnSync(process.execPath, [require.resolve('wrangler/bin/wrangler.js'), 'r2', 'object', 'put', key, '--file', entry.path, '--remote'], { stdio: 'inherit' });
+    const result = spawnSync(process.execPath, [wranglerCli(), 'r2', 'object', 'put', key, '--file', entry.path, '--remote'], { stdio: 'inherit' });
     if (result.status !== 0) throw new Error('Release upload failed; feed was not advanced.');
   }
 }
