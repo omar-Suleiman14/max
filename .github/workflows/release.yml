@@ -151,6 +151,8 @@ jobs:
       group: max-stable-update-feed
       cancel-in-progress: false
     runs-on: ubuntu-latest
+    env:
+      UPDATE_FEED_CONFIGURED: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
 
     steps:
       - name: Check out tagged source
@@ -161,7 +163,7 @@ jobs:
       # The feed is optional: without Cloudflare credentials the release still
       # ships, it just does not advance in-app auto-update.
       - name: Download the Windows update packages
-        if: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+        if: env.UPDATE_FEED_CONFIGURED == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -170,14 +172,14 @@ jobs:
           gh release download "$GITHUB_REF_NAME" --dir artifacts --pattern 'RELEASES' --pattern '*.nupkg'
 
       - uses: actions/setup-node@v7
-        if: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+        if: env.UPDATE_FEED_CONFIGURED == 'true'
         with:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci --ignore-scripts
-        if: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+        if: env.UPDATE_FEED_CONFIGURED == 'true'
       - name: Advance Cloudflare update feed
-        if: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+        if: env.UPDATE_FEED_CONFIGURED == 'true'
         continue-on-error: true
         env:
           RELEASE_TAG: ${{ github.ref_name }}
@@ -186,5 +188,5 @@ jobs:
         run: node scripts/publish-updates.cjs artifacts
 
       - name: Note the skipped update feed
-        if: ${{ secrets.CLOUDFLARE_API_TOKEN == '' }}
+        if: env.UPDATE_FEED_CONFIGURED != 'true'
         run: echo "::notice::CLOUDFLARE_API_TOKEN is not set, so the in-app update feed was not advanced. Release assets were published normally."
