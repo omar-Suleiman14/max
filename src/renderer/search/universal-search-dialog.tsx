@@ -8,6 +8,7 @@ import {
   Search,
   Users,
   Wallet,
+  Zap,
 } from 'lucide-react';
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 
@@ -25,15 +26,17 @@ type UniversalSearchDialogProps = Readonly<{
 export type UniversalSearchResult = SearchResult | Readonly<{
   databaseId?: string;
   id: string;
-  kind: 'database' | 'record';
+  kind: 'action' | 'database' | 'record';
   matchScore: number;
   metadata?: string;
   subtitle?: string;
   title: string;
 }>;
 
-function resultIcon(kind: SearchResultKind | 'database' | 'record') {
+function resultIcon(kind: SearchResultKind | 'action' | 'database' | 'record') {
   switch (kind) {
+    case 'action':
+      return <Zap aria-hidden="true" size={16} />;
     case 'item':
       return <Package aria-hidden="true" size={16} />;
     case 'person':
@@ -85,9 +88,10 @@ export function UniversalSearchDialog({ locale, onClose, onSelect }: UniversalSe
     const timer = setTimeout(() => {
       void (async () => {
         try {
-          const [legacyResults, workspaceResults] = await Promise.all([
+          const [legacyResults, workspaceResults, workflows] = await Promise.all([
             window.maxApi.search.query(trimmed),
             window.maxApi.workspace.searchWorkspace(trimmed, 40),
+            window.maxApi.workspace.listWorkflows(),
           ]);
           if (active) {
             const genericResults: readonly UniversalSearchResult[] = workspaceResults.map((result) => ({
@@ -99,8 +103,27 @@ export function UniversalSearchDialog({ locale, onClose, onSelect }: UniversalSe
               subtitle: result.displaySubtitle,
               title: result.displayTitle,
             }));
+            // Quick actions are searchable here too, so an action can be reached
+            // by name instead of only by hunting through the Quick Actions tabs.
+            const needle = trimmed.toLocaleLowerCase(locale);
+            const actionResults: readonly UniversalSearchResult[] = workflows
+              .filter((workflow) => workflow.enabled
+                && !workflow.archivedAt
+                && workflow.name.toLocaleLowerCase(locale).includes(needle))
+              .slice(0, 6)
+              .map((workflow) => ({
+                id: workflow.id,
+                kind: 'action' as const,
+                matchScore: 2,
+                metadata: locale === 'ar' ? 'إجراء سريع' : 'Quick action',
+                title: workflow.name,
+              }));
             const genericIds = new Set(genericResults.map((result) => result.id));
-            setResults([...genericResults, ...legacyResults.filter((result) => !genericIds.has(result.id))]);
+            setResults([
+              ...actionResults,
+              ...genericResults,
+              ...legacyResults.filter((result) => !genericIds.has(result.id)),
+            ]);
             setSelectedIndex(0);
           }
         } catch {
@@ -115,7 +138,7 @@ export function UniversalSearchDialog({ locale, onClose, onSelect }: UniversalSe
       active = false;
       clearTimeout(timer);
     };
-  }, [term]);
+  }, [locale, term]);
 
   useEffect(() => {
     resultsRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });

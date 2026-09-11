@@ -408,9 +408,12 @@ export class RecordRepository {
       } else if (overwriteAll && prop.defaultValueJson) {
         const defaultVal = parseStoredJson<unknown>(prop.defaultValueJson, null);
         this.#saveSinglePropertyValue(recordId, prop, defaultVal);
-      } else if (overwriteAll && prop.required && !['formula', 'relation', 'rollup'].includes(prop.type)) {
-        throw new WorkspaceDomainError('constraint-violation', `${prop.name} is required.`, prop.id);
       }
+      // A required property with no value is left unset rather than rejected.
+      // Refusing the insert made a database with required properties impossible
+      // to add to at all: the only way to supply a value is to open the record,
+      // and the record could not be created without one. Required is surfaced to
+      // the person filling the record in instead, as an unmet mark on the row.
     }
   }
 
@@ -428,9 +431,10 @@ export class RecordRepository {
       return;
     }
 
-    if (property.required && (value === undefined || value === null || value === '')) {
-      throw new WorkspaceDomainError('constraint-violation', `${property.name} is required.`);
-    }
+    // Clearing a required property is allowed for the same reason creating a
+    // record without one is: the value is filled in on the record itself, and a
+    // write that refuses halfway leaves the person with no way forward. The
+    // unmet requirement is reported on the record rather than blocking the save.
 
     if (property.type === 'multi_select') {
       this.#database

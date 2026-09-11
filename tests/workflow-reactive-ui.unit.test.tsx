@@ -65,10 +65,12 @@ describe('Live Quick Action form', () => {
     const create = screen.getByRole('group', { name: 'New record' });
     await user.type(within(create).getByLabelText('New record name'), 'Gamma');
     await waitFor(() => expect(within(create).getByLabelText('Rate *')).toBeInTheDocument());
-    await user.click(within(create).getByRole('button', { name: 'Create and select' }));
-    expect(await within(create).findByRole('alert')).toHaveTextContent('required');
-    expect(db.databaseQuery.query({ databaseId: f.a.id }).records).toHaveLength(3);
+    // An unanswered required property is marked, not refused: the record has to
+    // exist before anyone has anywhere to type the value in.
+    expect(within(create).getByLabelText('Rate *').closest('label')).toHaveAttribute('data-required-unmet', 'true');
     await user.type(within(create).getByLabelText('Rate *'), '4'); await user.click(within(create).getByLabelText('Enabled'));
+    expect(within(create).getByLabelText('Rate *').closest('label')).not.toHaveAttribute('data-required-unmet');
+    expect(db.databaseQuery.query({ databaseId: f.a.id }).records).toHaveLength(3);
     await user.click(within(create).getByRole('button', { name: 'Create and select' }));
     await waitFor(() => expect(screen.queryByRole('group', { name: 'New record' })).not.toBeInTheDocument());
     await waitFor(() => expect(screen.getByRole('combobox', { name: 'Source' })).toHaveTextContent('Gamma'));

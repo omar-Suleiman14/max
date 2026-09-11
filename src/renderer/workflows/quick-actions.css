@@ -27,7 +27,9 @@
 .quick-action-runtime__header h2, .quick-action-runtime__action-title h3 { margin: 0; letter-spacing: -.025em; }
 .quick-action-runtime__header h2 { font-size: 20px; }
 .quick-action-runtime__header p, .quick-action-runtime__action-title p { margin: 5px 0 0; color: var(--muted); font-size: 12px; }
-.quick-action-runtime__close { width: 30px; height: 30px; border: 0; border-radius: 50%; color: var(--muted); background: var(--canvas-subtle); font-size: 21px; line-height: 1; }
+/* An icon centred by the grid, not a "×" glyph whose side bearings and baseline
+   left it sitting high and to one side of its round button. */
+.quick-action-runtime__close { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; color: var(--muted); background: var(--canvas-subtle); line-height: 1; }
 .quick-action-runtime__close:hover { color: var(--text); background: var(--line); }
 /* Every action stays visible; a hidden horizontal scroller clipped the last tabs. */
 .quick-action-tabs { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 24px 14px; border-bottom: 1px solid var(--line); }
@@ -104,3 +106,10 @@
 .action-optional-toggle { justify-self: start; display: inline-flex; align-items: center; gap: 6px; margin-top: 2px; padding: 4px 8px; border: 0; border-radius: 7px; color: var(--muted); background: transparent; font-size: 12px; }
 .action-optional-toggle:hover:not(:disabled) { color: var(--text); background: var(--canvas-subtle); }
 .action-collection-fields .action-optional-toggle { grid-column: 1 / -1; }
+
+/* Required values are marked here rather than refusing the record: the record
+   has to exist before anyone can go and fill them in. */
+.action-inline-create label[data-required-unmet] > span { color: var(--danger); }
+.action-inline-create label[data-required-unmet] :is(input, .database-cell-button) {
+  border-color: color-mix(in srgb, var(--danger) 55%, transparent);
+}

@@ -17,7 +17,7 @@ describe('shell preferences', () => {
   it('rejects unknown persisted values', () => {
     const storage = storageWith({ 'max.ui.locale': 'fr', 'max.ui.theme': 'neon' });
     expect(readLocale(storage)).toBe('en');
-    expect(readTheme(storage)).toBe('system');
+    expect(readTheme(storage)).toBe('light');
     expect(readSidebarCollapsed(storage)).toBe(false);
     expect(readSidebarWidth(storage)).toBe(238);
   });

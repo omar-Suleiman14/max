@@ -24,8 +24,14 @@ export function readLocale(storage: Storage): Locale {
   return readAllowedValue(storage, preferenceKeys.locale, ['ar', 'en'], 'en');
 }
 
+/**
+ * A first run opens in light mode rather than following the operating system.
+ * Most shop machines sit under bright fluorescent light, and a workspace that
+ * starts dark reads as broken to someone who has never opened the app before.
+ * The system option stays available; it is simply not the untouched default.
+ */
 export function readTheme(storage: Storage): ThemePreference {
-  return readAllowedValue(storage, preferenceKeys.theme, ['dark', 'light', 'system'], 'system');
+  return readAllowedValue(storage, preferenceKeys.theme, ['dark', 'light', 'system'], 'light');
 }
 
 export function readSidebarCollapsed(storage: Storage): boolean {

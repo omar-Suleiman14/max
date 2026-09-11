@@ -317,3 +317,24 @@ html[lang=en] :is(body,button,input,textarea,h1,h2,h3,h4,h5) { font-family: ui-s
  .database-rule-panel .sort-priority-actions { grid-row:3; }
 }
 .database-cell-option:hover { background: var(--line); } .database-cell-action { opacity: 0; color: var(--muted); padding: 2px; border-radius: 3px; display: grid; place-items: center; cursor: pointer; } .database-cell-option:hover .database-cell-action { opacity: 1; } .database-cell-action:hover { background: color-mix(in srgb, var(--text) 15%, transparent); }
+
+/* Required properties are marked, never enforced: a record has to be creatable
+   before anyone can fill its required values in. The mark turns red only while
+   the value is still missing, so a satisfied requirement fades to a hint. */
+.record-required-mark { color: var(--muted); font-size: 13px; line-height: 1; }
+.record-required-mark[data-unmet] { color: var(--danger); font-weight: 700; }
+.database-page-container .record-drawer__prop-row[data-required-unmet] .record-drawer__prop-label > span:not(.record-required-mark) { color: var(--danger); }
+.database-page-container .record-drawer__prop-row[data-required-unmet] .record-drawer__prop-value :is(input.input-clean, .database-cell-button) {
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 45%, transparent);
+}
+.record-required-summary {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
+  border-radius: 9px;
+  color: var(--danger);
+  background: var(--danger-soft);
+  font-size: 12.5px;
+  line-height: 1.6;
+}

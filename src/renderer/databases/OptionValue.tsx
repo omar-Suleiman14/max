@@ -2,6 +2,7 @@ import '../ui/database-popover.css';
 import { GripVertical, Check, MoreHorizontal, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { anchorPopover, currentViewport } from '../ui/anchor-popover';
 import type { PropertyOptionDraft, WorkspaceProperty } from '../../shared/property-contract';
 import type { Locale } from '../app/i18n';
 
@@ -52,7 +53,7 @@ export function OptionValue({ property, value, onChange, multiple = false, local
   const filtered = options.filter((option) => option.label.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
   const tag = (id: string) => { const option = options.find((o) => o.id === id || o.label === id); return option ? <span className={`database-cell-pill option-tag option-tag--${option.style.color ?? 'default'}`} style={option.style.background ? option.style : undefined}>{option.label}</span> : null; };
   return <>
-    <button ref={trigger} type="button" className="database-cell-button option-value" aria-label={property.name} aria-haspopup="dialog" aria-expanded={open} onClick={() => { const rect = trigger.current!.getBoundingClientRect(); setPosition({ left: Math.max(8, Math.min(rect.left, innerWidth - 320)), top: Math.max(8, Math.min(rect.bottom + 3, innerHeight - 360)) }); setOpen(true); setQuery(''); setEditing(undefined); setActive(0); }}>{selected.length ? selected.map((id) => <span key={id}>{tag(id)}</span>) : <span className="database-cell-empty">—</span>}</button>
+    <button ref={trigger} type="button" className="database-cell-button option-value" aria-label={property.name} aria-haspopup="dialog" aria-expanded={open} onClick={() => { const { left, top } = anchorPopover(trigger.current!.getBoundingClientRect(), { preferredHeight: 360, width: 320 }, currentViewport(), 3); setPosition({ left, top }); setOpen(true); setQuery(''); setEditing(undefined); setActive(0); }}>{selected.length ? selected.map((id) => <span key={id}>{tag(id)}</span>) : <span className="database-cell-empty">—</span>}</button>
     {open && createPortal(<div ref={popup} style={position} className="option-popup" role="dialog" aria-label={property.name} onKeyDown={(event) => { if (event.key === 'Escape') { event.stopPropagation(); setOpen(false); trigger.current?.focus(); } }}>
       {editing ? <>
         <input autoFocus aria-label={ar ? 'اسم الخيار' : 'Option name'} value={label} onChange={(e) => setLabel(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && label.trim()) void saveOptions(options.map((o) => o.id === editing ? { ...o, label: label.trim() } : o)).then((saved) => { if (saved) setEditing(undefined); }); }} />

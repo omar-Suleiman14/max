@@ -24,45 +24,81 @@ function playWelcomeSound(surface: HTMLElement): (() => void) | undefined {
   if (!AudioContextConstructor) return;
   try {
     const context = new AudioContextConstructor();
-    const gain = context.createGain();
+
+    // The five voices overlap, so their sum has to be tamed somewhere. A limiter
+    // does it at the end of the chain, which leaves the cue at a usable level;
+    // scaling the master gain down far enough to never clip made the tail
+    // inaudible instead.
+    const limiter = context.createDynamicsCompressor();
+    limiter.threshold.value = -3;
+    limiter.ratio.value = 12;
+    limiter.attack.value = 0.003;
+    limiter.release.value = 0.25;
+    limiter.connect(context.destination);
+    const master = context.createGain();
+    master.connect(limiter);
+
     let stopped = false;
+    let timeout: number | undefined;
     const stop = () => {
       if (stopped) return;
       stopped = true;
-      void context.close().catch(() => {});
+      if (timeout !== undefined) window.clearTimeout(timeout);
+      try {
+        // Fade out instead of closing the context under a sounding note, so
+        // leaving the welcome screen mid-cue does not end on a click.
+        const at = context.currentTime;
+        master.gain.cancelScheduledValues(at);
+        master.gain.setValueAtTime(Math.max(master.gain.value, 0.0001), at);
+        master.gain.exponentialRampToValueAtTime(0.0001, at + 0.18);
+      } catch { /* The context may already be closing. */ }
+      window.setTimeout(() => { void context.close().catch(() => {}); }, 220);
     };
-    const now = context.currentTime;
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.07, now + 0.18);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 4.1);
-    gain.connect(context.destination);
+
     // An original, slowly resolving five-note arrival cue. It is deliberately
     // longer than an interaction sound, without reproducing a branded chime.
     const notes = [
-      { at: 0, duration: 1.7, frequency: 220 },
-      { at: 0.48, duration: 1.8, frequency: 293.66 },
-      { at: 0.96, duration: 1.95, frequency: 369.99 },
-      { at: 1.52, duration: 2.05, frequency: 440 },
-      { at: 2.1, duration: 1.8, frequency: 587.33 },
+      { at: 0, duration: 2.6, frequency: 196, type: 'triangle' as const },
+      { at: 0.4, duration: 2.3, frequency: 293.66, type: 'sine' as const },
+      { at: 0.8, duration: 2.1, frequency: 392, type: 'sine' as const },
+      { at: 1.2, duration: 1.9, frequency: 493.88, type: 'sine' as const },
+      { at: 1.6, duration: 1.7, frequency: 587.33, type: 'sine' as const },
     ];
-    for (const note of notes) {
-      const oscillator = context.createOscillator();
-      const voiceGain = context.createGain();
-      oscillator.type = note.at === 0 ? 'triangle' : 'sine';
-      oscillator.frequency.setValueAtTime(note.frequency, now + note.at);
-      oscillator.detune.setValueAtTime(-7, now + note.at);
-      voiceGain.gain.setValueAtTime(0.0001, now + note.at);
-      voiceGain.gain.exponentialRampToValueAtTime(0.34, now + note.at + 0.16);
-      voiceGain.gain.exponentialRampToValueAtTime(0.0001, now + note.at + note.duration);
-      oscillator.connect(voiceGain); voiceGain.connect(gain);
-      oscillator.start(now + note.at); oscillator.stop(now + note.at + note.duration + 0.05);
-    }
-    // Restart the authored entrance at playback, rather than measuring volume.
-    void context.resume().then(() => {
-      if (!stopped) surface.getAnimations({ subtree: true }).forEach((animation) => { animation.currentTime = 0; });
-    }).catch(() => {});
-    const timeout = window.setTimeout(stop, 4_400);
-    return () => { window.clearTimeout(timeout); stop(); };
+    const cueLength = Math.max(...notes.map((note) => note.at + note.duration));
+
+    const schedule = () => {
+      if (stopped) return;
+      // Schedule against the clock as it reads once the context is running. A
+      // context that starts suspended would otherwise have the whole cue timed
+      // from a moment that has already passed by the time it resumes.
+      const now = context.currentTime + 0.04;
+      // Hold the master level flat and release only at the very end. Decaying it
+      // across the cue is what silenced everything after the first two notes.
+      master.gain.setValueAtTime(0.8, now);
+      master.gain.setValueAtTime(0.8, now + cueLength - 0.3);
+      master.gain.exponentialRampToValueAtTime(0.0001, now + cueLength);
+      for (const note of notes) {
+        const oscillator = context.createOscillator();
+        const voiceGain = context.createGain();
+        oscillator.type = note.type;
+        oscillator.frequency.setValueAtTime(note.frequency, now + note.at);
+        oscillator.detune.setValueAtTime(-7, now + note.at);
+        // Attack, then a sustained body, then a decay. A single ramp straight
+        // from the peak to silence spends most of the note already inaudible.
+        voiceGain.gain.setValueAtTime(0.0001, now + note.at);
+        voiceGain.gain.exponentialRampToValueAtTime(0.22, now + note.at + 0.09);
+        voiceGain.gain.exponentialRampToValueAtTime(0.12, now + note.at + note.duration * 0.45);
+        voiceGain.gain.exponentialRampToValueAtTime(0.0001, now + note.at + note.duration);
+        oscillator.connect(voiceGain); voiceGain.connect(master);
+        oscillator.start(now + note.at); oscillator.stop(now + note.at + note.duration + 0.05);
+      }
+      // Restart the authored entrance at playback, rather than measuring volume.
+      surface.getAnimations({ subtree: true }).forEach((animation) => { animation.currentTime = 0; });
+      timeout = window.setTimeout(stop, (cueLength + 0.6) * 1000);
+    };
+
+    void context.resume().then(schedule, schedule);
+    return stop;
   } catch { /* Audio is an optional welcome enhancement. */ }
 }
 
@@ -441,9 +477,15 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
                 {locale === 'ar' ? 'قرأت ووافقت على الشروط والأحكام' : 'I have read and agree to the Terms & Conditions'}
               </label>
               <div className="assembly-badge-list">
+                {/* Confirm what the workspace will actually be built from, so an
+                    imported blueprint is not silently summarised as blank. */}
                 <div className="assembly-badge">
                   <CheckCircle2 aria-hidden="true" size={16} />
-                  <span>{onboardingCopy(locale, 'blankTitle')}</span>
+                  <span>
+                    {template === 'custom' && blueprint
+                      ? blueprint.name
+                      : onboardingCopy(locale, 'blankTitle')}
+                  </span>
                 </div>
               </div>
             </div>

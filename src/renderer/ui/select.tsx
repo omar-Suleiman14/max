@@ -1,6 +1,7 @@
 import { createPortal } from 'react-dom';
 import { Children, isValidElement, useEffect, useId, useRef, useState, type ChangeEvent, type ReactNode, type SelectHTMLAttributes } from 'react';
 import { ChevronDown, Check } from 'lucide-react';
+import { anchorPopover, currentViewport } from './anchor-popover';
 
 function textContent(node: ReactNode): string { return Children.toArray(node).map((child): string => typeof child === 'string' || typeof child === 'number' ? String(child) : isValidElement<{ children?: ReactNode }>(child) ? textContent(child.props.children) : '').join(''); }
 
@@ -53,10 +54,10 @@ export function Select({ children, value, defaultValue, onChange, onBlur, onKeyD
   function show() {
     const rect = trigger.current?.getBoundingClientRect();
     if (!rect || props.disabled) return;
-    const below = window.innerHeight - rect.bottom - 12;
-    const height = Math.min(280, Math.max(below, rect.top - 12));
     const width = Math.min(Math.max(rect.width, 160), window.innerWidth - 16);
-    setPosition({ left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)), top: below >= Math.min(280, options.length * 36 + 12) ? rect.bottom + 4 : Math.max(8, rect.top - Math.min(height, options.length * 36 + 12) - 4), width, maxHeight: height });
+    const preferredHeight = Math.min(280, options.length * 36 + 12);
+    const { left, maxHeight, top } = anchorPopover(rect, { preferredHeight, width }, currentViewport(), 4);
+    setPosition({ left, top, width, maxHeight: Math.min(280, maxHeight) });
     setActive(Math.max(0, options.findIndex((option) => option === selected)));
     setOpen(true);
   }

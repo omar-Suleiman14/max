@@ -73,6 +73,10 @@ const config = {
         description: 'Offline-first configurable shop operating system',
         name: 'Max',
         setupIcon: join(__dirname, 'assets', 'max.ico'),
+        // Squirrel downloads this icon and points the Installed apps entry at
+        // it. electron-winstaller otherwise defaults to Electron's own icon,
+        // which is what Windows then shows next to Max in Settings.
+        iconUrl: 'https://raw.githubusercontent.com/omar-Suleiman14/max/main/assets/max.ico',
         // Windows SmartScreen warns about unsigned installers. Supply an
         // Authenticode certificate through the environment to sign the build;
         // without one the installer is produced unsigned, as before.

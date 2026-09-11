@@ -6,6 +6,7 @@ import { PropertyEditor } from './PropertyEditor';
 import { generateOrderKey } from '../../shared/order-key';
 import { GripVertical, Plus } from 'lucide-react';
 import { MultiSelectValue } from './MultiSelectValue';
+import { isRequirementUnmet, unmetRequirements } from './required-properties';
 
 import {
   Calendar,
@@ -142,6 +143,8 @@ export function RecordDrawer({
 
   if (!isOpen || !record || !schema) return null;
 
+  const missingRequired = unmetRequirements(schema.properties, properties, title);
+
   const handleTitleBlur = () => {
     if (title.trim() !== record.title) {
       void save({ title: title.trim() || 'Untitled' });
@@ -225,14 +228,25 @@ export function RecordDrawer({
               placeholder="Untitled record"
             />
 
+            {/* Required properties are reported here rather than blocking the
+                save, so a half-filled record stays editable until it is done. */}
+            {missingRequired.length > 0 && (
+              <p className="record-required-summary" role="status">
+                {locale === 'ar'
+                  ? `ما زالت ${missingRequired.length} خاصية مطلوبة بحاجة إلى قيمة: ${missingRequired.map(({ name }) => name).join('، ')}`
+                  : `${missingRequired.length} required ${missingRequired.length === 1 ? 'property still needs' : 'properties still need'} a value: ${missingRequired.map(({ name }) => name).join(', ')}`}
+              </p>
+            )}
+
             {/* Properties Table */}
             <div className="record-drawer__properties">
               {schema.properties.map((prop) => {
                 if (prop.type === 'title') return null;
                 const value = properties[prop.id];
+                const unmet = isRequirementUnmet(prop, value);
 
                 return (
-                  <div key={prop.id} className="record-drawer__prop-row" data-drag-over={dropProperty === prop.id} onDragOver={(event) => { if (dragProperty) { event.preventDefault(); setDropProperty(prop.id); } }} onDrop={(event) => { event.preventDefault(); if (dragProperty) void moveProperty(dragProperty, prop.id); setDragProperty(null); setDropProperty(null); }}>
+                  <div key={prop.id} className="record-drawer__prop-row" data-required-unmet={unmet || undefined} data-drag-over={dropProperty === prop.id} onDragOver={(event) => { if (dragProperty) { event.preventDefault(); setDropProperty(prop.id); } }} onDrop={(event) => { event.preventDefault(); if (dragProperty) void moveProperty(dragProperty, prop.id); setDragProperty(null); setDropProperty(null); }}>
                     <div className="record-drawer__prop-label">
                       <button type="button" className="record-property-grip" draggable aria-label={`${locale === 'ar' ? 'تحريك' : 'Move'} ${prop.name}`} onDragStart={(event) => { setDragProperty(prop.id); event.dataTransfer.setData('text/max-property', prop.id); event.dataTransfer.effectAllowed = 'move'; }} onDragEnd={() => { setDragProperty(null); setDropProperty(null); }} onKeyDown={(event) => { if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return; event.preventDefault(); const list = schema.properties.filter((property) => property.type !== 'title'); const index = list.findIndex((property) => property.id === prop.id); if (event.key === 'ArrowUp' && list[index - 1]) void moveProperty(prop.id, list[index - 1]!.id); if (event.key === 'ArrowDown' && list[index + 1]) void moveProperty(list[index + 1]!.id, prop.id); }}><GripVertical size={13} /></button>
                       {prop.type === 'text' && <Type size={14} className="text-muted" />}
@@ -245,6 +259,15 @@ export function RecordDrawer({
                       {prop.type === 'formula' && <Sigma size={14} className="text-muted" />}
                       {prop.type === 'rollup' && <Sigma size={14} className="text-muted" />}
                       <span>{prop.name}</span>
+                      {prop.required && (
+                        <span
+                          className="record-required-mark"
+                          data-unmet={unmet || undefined}
+                          title={locale === 'ar' ? 'خاصية مطلوبة' : 'Required property'}
+                        >
+                          *<span className="sr-only">{locale === 'ar' ? ' مطلوب' : ' required'}</span>
+                        </span>
+                      )}
                     </div>
 
                     <div className="record-drawer__prop-value">

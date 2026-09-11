@@ -2,6 +2,7 @@ import { ReactiveActionForm } from './reactive-action-form';
 import { hasReactiveFields } from './reactive-config';
 import { WorkflowInputForm } from './workflow-input-form';
 import { lastUsedInputs, readLastSelectedAction, rememberInputs, rememberSelectedAction } from './last-used-inputs';
+import { X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { WorkspaceWorkflow } from '../../shared/workflow-contract';
 import type { Locale } from '../app/i18n';
@@ -12,7 +13,7 @@ function isEditableTarget(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && Boolean(target.closest('input, textarea, select, [contenteditable="true"]'));
 }
 
-export function WorkflowLauncherDialog({ locale, onClose, onConfigure }: { locale: Locale; onClose: () => void; onConfigure: () => void }) {
+export function WorkflowLauncherDialog({ initialActionId, locale, onClose, onConfigure }: { initialActionId?: string; locale: Locale; onClose: () => void; onConfigure: () => void }) {
   const ar = locale === 'ar';
   const [actions, setActions] = useState<readonly WorkspaceWorkflow[]>([]);
   const [selectedId, setSelectedId] = useState('');
@@ -31,16 +32,17 @@ export function WorkflowLauncherDialog({ locale, onClose, onConfigure }: { local
       .then((rows) => {
         if (!active) return;
         const enabled = rows.filter((row) => row.enabled);
-        const lastSelected = readLastSelectedAction();
         setActions(enabled);
-        setSelectedId((current) => enabled.some((action) => action.id === current)
-          ? current
-          : enabled.some((action) => action.id === lastSelected) ? lastSelected : enabled[0]?.id ?? '');
+        // An action asked for by name wins; otherwise carry on from the last one.
+        const preferred = [initialActionId, readLastSelectedAction()]
+          .find((id) => id && enabled.some((action) => action.id === id));
+        setSelectedId((current) => preferred
+          ?? (enabled.some((action) => action.id === current) ? current : enabled[0]?.id ?? ''));
       })
       .catch(() => setError(ar ? 'تعذر تحميل الإجراءات.' : 'Could not load actions.'))
       .finally(() => setLoading(false));
     return () => { active = false; };
-  }, [ar]);
+  }, [ar, initialActionId]);
 
   useEffect(() => {
     setCompleted(false);
@@ -94,7 +96,7 @@ export function WorkflowLauncherDialog({ locale, onClose, onConfigure }: { local
             <h2 id="quick-action-title">{ar ? 'الإجراءات السريعة' : 'Quick Actions'}</h2>
             {!loading && actions.length > 1 && <p>{ar ? 'اضغط ١–٩ للتبديل بسرعة.' : 'Press 1–9 to switch actions.'}</p>}
           </div>
-          <button className="quick-action-runtime__close" type="button" disabled={running} aria-label={ar ? 'إغلاق' : 'Close'} onClick={onClose}>×</button>
+          <button className="quick-action-runtime__close" type="button" disabled={running} aria-label={ar ? 'إغلاق' : 'Close'} onClick={onClose}><X aria-hidden="true" size={17} /></button>
         </div>
 
         {loading ? <div className="quick-action-runtime__empty"><p>{ar ? 'جار التحميل…' : 'Loading…'}</p></div> : !actions.length ? (

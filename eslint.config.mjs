@@ -13,9 +13,23 @@ export default tseslint.config(
     languageOptions: {
       globals: {
         __dirname: 'readonly',
+        Buffer: 'readonly',
         process: 'readonly',
         require: 'readonly',
         console: 'readonly',
+        setTimeout: 'readonly',
+      },
+    },
+  },
+  {
+    files: ['site/**/*.js'],
+    languageOptions: {
+      globals: {
+        document: 'readonly',
+        fetch: 'readonly',
+        navigator: 'readonly',
+        sessionStorage: 'readonly',
+        window: 'readonly',
       },
     },
   },

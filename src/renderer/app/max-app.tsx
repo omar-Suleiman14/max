@@ -135,7 +135,8 @@ export function MaxApp() {
   useEffect(() => { if (!graphEnabled || page === 'settings') setGraphOpen(false); }, [graphEnabled, page]);
   const [graphOpen, setGraphOpen] = useState(() => readSessionValue('graph-open', 'false') === 'true');
   useEffect(() => { localStorage.setItem('max:session:graph-open', String(graphOpen)); }, [graphOpen]);
-  const [quickActionOpen, setQuickActionOpen] = useState<number | null>(null);
+  // null while closed; otherwise the action to start on, or '' for the last used.
+  const [quickActionOpen, setQuickActionOpen] = useState<string | null>(null);
   const [quickActionsEnabled, setQuickActionsEnabled] = useState(readQuickActionsEnabled);
   const [requestedSavedViewId, setRequestedSavedViewId] = useState<string>();
   const [engineStatus, setEngineStatus] = useState<EngineStatus>('checking');
@@ -272,7 +273,7 @@ export function MaxApp() {
         }
       } else if (quickActionsEnabled && (event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === 's') {
         event.preventDefault();
-        setQuickActionOpen((prev) => prev === null ? 0 : null);
+        setQuickActionOpen((prev) => prev === null ? '' : null);
       } else if (graphEnabled && page !== 'settings' && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'g') {
         event.preventDefault(); setGraphOpen(value => !value);
       } else if ((event.ctrlKey || event.metaKey) && event.key === ',') {
@@ -456,7 +457,7 @@ export function MaxApp() {
         id: 'quick-operation',
         keywords: ['quick', 'sale', 'fast', 'بيع', 'سريع', 'تسجيل'],
         label: locale === 'ar' ? 'عملية سريعة (Ctrl+S)' : 'Quick Operation (Ctrl+S)',
-        run: () => setQuickActionOpen(0),
+        run: () => setQuickActionOpen(''),
       },
       {
         id: 'export-blueprint',
@@ -584,7 +585,7 @@ export function MaxApp() {
               </button>
             )}
 
-            {quickActionsEnabled && <button className="topbar-tool topbar-tool--quick" aria-keyshortcuts={`${runtimePlatform === 'macos' ? 'Meta' : 'Control'}+s`} onClick={() => setQuickActionOpen(0)} type="button">
+            {quickActionsEnabled && <button className="topbar-tool topbar-tool--quick" aria-keyshortcuts={`${runtimePlatform === 'macos' ? 'Meta' : 'Control'}+s`} onClick={() => setQuickActionOpen('')} type="button">
               <PlusCircle aria-hidden="true" size={16} />
               <span>{locale === 'ar' ? 'عملية سريعة' : 'Quick action'}</span>
               <kbd>{quickActionModifier(runtimePlatform)} S</kbd>
@@ -667,7 +668,10 @@ export function MaxApp() {
           locale={locale}
           onClose={() => setSearchOpen(false)}
           onSelect={(res) => {
-            if (res.kind === 'item') navigate('items');
+            // A quick action found by name runs in the Quick Actions dialog, on
+            // its own tab, rather than anywhere inside the search popup.
+            if (res.kind === 'action') setQuickActionOpen(res.id);
+            else if (res.kind === 'item') navigate('items');
             else if (res.kind === 'person') navigate('people');
             else if (res.kind === 'account') navigate('accounts');
             else if (res.kind === 'transaction') navigate('transactions');
@@ -693,7 +697,7 @@ export function MaxApp() {
         />
       )}
       {quickActionOpen !== null && (
-        <WorkflowLauncherDialog locale={locale} onClose={() => setQuickActionOpen(null)} onConfigure={() => { setQuickActionOpen(null); navigateSettingsSection('settings-quick-actions'); }} />
+        <WorkflowLauncherDialog initialActionId={quickActionOpen || undefined} locale={locale} onClose={() => setQuickActionOpen(null)} onConfigure={() => { setQuickActionOpen(null); navigateSettingsSection('settings-quick-actions'); }} />
       )}
       </Suspense>
 

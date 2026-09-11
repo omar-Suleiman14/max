@@ -56,7 +56,7 @@ export function handleWindowsSquirrelLifecycle(): boolean {
   return handleSquirrelCommand({
     command: process.argv[1],
     executablePath: process.execPath,
-    quit: () => app.quit(),
+    quit: () => app.exit(0),
     runUpdate(updateExecutable, args, done) {
       const child = spawn(updateExecutable, args, {
         detached: true,
@@ -71,7 +71,13 @@ export function handleWindowsSquirrelLifecycle(): boolean {
         child.unref();
         done();
       };
+      // Squirrel holds its progress window open until this hook exits, and an
+      // installer that looks stuck invites a second double-click, which makes
+      // two Setup.exe processes fight over the same files and fail outright.
+      // The shortcut work is detached, so hand off as soon as it is running
+      // rather than waiting for it to finish.
       const watchdog = setTimeout(finish, 4_000);
+      child.once('spawn', finish);
       child.once('error', finish);
       child.once('close', finish);
     },
