@@ -28,6 +28,8 @@ function getErrorLineIndex(text: string, errorMessage: string): number | null {
 
 type BlueprintDialogProps = Readonly<{
   initialTab?: 'export' | 'import';
+  /** Blueprint text the dialog opens on, from a dropped or chosen file. */
+  initialJson?: string;
   locale: Locale;
   onClose: () => void;
   onImportSuccess?: () => void;
@@ -35,6 +37,7 @@ type BlueprintDialogProps = Readonly<{
 
 export function BlueprintDialog({
   initialTab = 'export',
+  initialJson,
   locale,
   onClose,
   onImportSuccess,
@@ -42,7 +45,7 @@ export function BlueprintDialog({
   const [tab, setTab] = useState<'export' | 'import'>(initialTab);
   const [exportedBlueprint, setExportedBlueprint] = useState<WorkspaceTemplateV2>();
   const [copied, setCopied] = useState(false);
-  const [importJson, setImportJson] = useState('');
+  const [importJson, setImportJson] = useState(initialJson ?? '');
   const [validationResult, setValidationResult] = useState<BlueprintValidationResult>();
   const [errorLineIndex, setErrorLineIndex] = useState<number | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -63,6 +66,16 @@ export function BlueprintDialog({
       highlightRef.current.scrollTop = targetScroll;
     }
   }, [errorLineIndex]);
+
+  // A file that was dropped or chosen has already been picked out; checking it
+  // is what the person wants next, not another button to press first.
+  const validateOnOpen = useRef(initialJson);
+  useEffect(() => {
+    const text = validateOnOpen.current;
+    if (!text) return;
+    validateOnOpen.current = undefined;
+    void handleValidate(text);
+  }, []);
 
   useEffect(() => {
     if (tab === 'export') {
@@ -125,7 +138,8 @@ export function BlueprintDialog({
     try {
       const text = await file.text();
       if (current !== revision.current) return;
-      setImportJson(text); setParsedBlueprint(undefined); setValidationResult(undefined); setImportSuccess(false); setImportError(undefined);
+      // Check it straight away, the same as a dropped file.
+      await handleValidate(text);
     } catch { setImportError(locale === 'ar' ? 'تعذر قراءة الملف.' : 'Could not read the file.'); }
   }
 

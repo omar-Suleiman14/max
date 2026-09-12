@@ -106,3 +106,37 @@ if (process.platform === 'win32') {
     'node_modules/electron-winstaller',
   );
 }
+
+/**
+ * Compile one native addon that `npm ci --ignore-scripts` left unbuilt.
+ *
+ * Lifecycle scripts stay off, so anything with a binding.gyp arrives as source.
+ * These two are named explicitly, the same way the Electron and esbuild
+ * runtimes are, rather than turning build scripts back on for every dependency.
+ */
+function buildNativeAddon(label, relativePackage, marker) {
+  if (existsSync(join(projectRoot, marker))) return;
+
+  const nodeGyp = join(projectRoot, 'node_modules', '@electron', 'node-gyp', 'bin', 'node-gyp.js');
+  if (!existsSync(nodeGyp)) {
+    throw new Error(`${label} cannot be built: node-gyp is missing. Run npm install first.`);
+  }
+
+  const result = spawnSync(process.execPath, [nodeGyp, 'rebuild'], {
+    cwd: join(projectRoot, relativePackage),
+    env: { ...process.env, npm_config_build_from_source: 'true' },
+    stdio: 'inherit',
+  });
+
+  if (result.status !== 0 || !existsSync(join(projectRoot, marker))) {
+    throw new Error(`${label} native build failed.`);
+  }
+}
+
+if (process.platform === 'darwin') {
+  // appdmg reaches for both of these while it lays out the disk image window.
+  // Without them `electron-forge make` cannot produce a .dmg at all, which is
+  // why macOS releases only ever carried a loose zipped app.
+  buildNativeAddon('macos-alias', 'node_modules/macos-alias', 'node_modules/macos-alias/build/Release/volume.node');
+  buildNativeAddon('fs-xattr', 'node_modules/fs-xattr', 'node_modules/fs-xattr/build/Release/xattr.node');
+}

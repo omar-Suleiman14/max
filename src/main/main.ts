@@ -3,6 +3,8 @@ import { UpdateService } from './platform/windows/update-service';
 import { app, autoUpdater, BrowserWindow, dialog, session } from 'electron';
 import { dirname, join } from 'node:path';
 
+import { AssetStore } from './assets/asset-store';
+import { PhotoLibrary } from './assets/photo-library';
 import { CloudBackupService } from './cloud/cloud-backup-service';
 import { DatabaseService } from './database/database-service';
 import { registerIpcHandlers, removeIpcHandlers } from './ipc/register-ipc-handlers';
@@ -34,6 +36,7 @@ if (handledInstallerLifecycle) {
 } else if (!hasSingleInstanceLock) {
   app.quit();
 } else {
+  const assetDirectory = join(app.getPath('userData'), 'assets');
   let database: DatabaseService | undefined;
   let updates: UpdateService | undefined;
   let backupTimer: ReturnType<typeof setInterval> | undefined;
@@ -49,9 +52,12 @@ if (handledInstallerLifecycle) {
   void app
     .whenReady()
     .then(async () => {
-      if (!MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-        registerAppProtocol(join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}`));
-      }
+      // The asset host serves page covers, so it is registered in development
+      // too; the renderer host only exists in a packaged build.
+      registerAppProtocol(
+        assetDirectory,
+        MAIN_WINDOW_VITE_DEV_SERVER_URL ? undefined : join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}`),
+      );
 
       session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
         callback(false);
@@ -70,9 +76,11 @@ if (handledInstallerLifecycle) {
       if (process.env.MAX_SMOKE_TEST !== '1') updates.start();
       registerIpcHandlers({
         updates,
+        assets: new AssetStore(assetDirectory),
         cloudBackups,
         database,
         developmentServerUrl: MAIN_WINDOW_VITE_DEV_SERVER_URL,
+        photos: new PhotoLibrary(join(app.getPath('userData'), 'integrations.json'), MAX_UNSPLASH_ACCESS_KEY),
         platform,
       });
 

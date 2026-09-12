@@ -57,13 +57,12 @@ jobs:
       - name: Run complete automated suite
         run: npm test
 
-      - name: Build native installer
-        if: runner.os != 'macOS'
+      # macOS is no longer limited to the zip target: the disk image maker needs
+      # two native addons that `--ignore-scripts` leaves unbuilt, and
+      # `npm run setup:runtime` now compiles them, so every platform makes the
+      # full set of installers the same way.
+      - name: Build native installers
         run: npm run make
-
-      - name: Build native macOS app archive
-        if: runner.os == 'macOS'
-        run: npx electron-forge make --targets=@electron-forge/maker-zip
 
       - name: Verify Windows update packages
         if: runner.os == 'Windows'

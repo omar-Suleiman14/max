@@ -46,6 +46,7 @@ import {
 } from './preferences';
 import type { Command } from '../ui/command-menu';
 import type { SearchPopupMode } from '../search/universal-search-dialog';
+import { useBlueprintFileDrop } from '../blueprints/blueprint-drop';
 import { quickActionModifier, readQuickActionsEnabled } from '../workflows/quick-actions-preferences';
 import { EmptyPage } from '../ui/empty-page';
 import { Sidebar } from '../ui/sidebar';
@@ -134,6 +135,8 @@ export function MaxApp() {
   const [popupMode, setPopupMode] = useState<SearchPopupMode | null>(null);
   const [popupActionId, setPopupActionId] = useState<string>();
   const [blueprintModalTab, setBlueprintModalTab] = useState<'export' | 'import'>();
+  // Text from a blueprint file dropped onto the window, handed to the dialog.
+  const [droppedBlueprint, setDroppedBlueprint] = useState<string>();
   const [graphEnabled] = useWorkspaceDisplay('graph');
   useEffect(() => { if (!graphEnabled || page === 'settings') setGraphOpen(false); }, [graphEnabled, page]);
   const [graphOpen, setGraphOpen] = useState(() => readSessionValue('graph-open', 'false') === 'true');
@@ -151,6 +154,19 @@ export function MaxApp() {
   const [shopName, setShopName] = useState('');
   const [onboardingPreview, setOnboardingPreview] = useState(false);
   const [openRecordId, setOpenRecordId] = useState<string>();
+
+  // A blueprint file dropped anywhere on the window opens for review. The
+  // listeners also stop a stray file drop from navigating the window away from
+  // the workspace, which is what a dropped file does otherwise.
+  const openDroppedBlueprint = useCallback((text: string) => {
+    setDroppedBlueprint(text);
+    setBlueprintModalTab('import');
+  }, []);
+  const blueprintDropOverlay = useBlueprintFileDrop({
+    enabled: onboardingCompleted === true && !onboardingPreview,
+    locale,
+    onFile: openDroppedBlueprint,
+  });
 
   const effectiveTheme = resolveTheme(theme, systemUsesDark);
 
@@ -707,14 +723,18 @@ export function MaxApp() {
       {blueprintModalTab && (
         <BlueprintDialog
           initialTab={blueprintModalTab}
+          initialJson={droppedBlueprint}
+          key={droppedBlueprint ? 'dropped' : 'chosen'}
           locale={locale}
-          onClose={() => setBlueprintModalTab(undefined)}
+          onClose={() => { setBlueprintModalTab(undefined); setDroppedBlueprint(undefined); }}
           onImportSuccess={() => {
             void window.maxApi.shop.getMetadata().then((d) => setShopName(d.shopName));
           }}
         />
       )}
       </Suspense>
+
+      {blueprintDropOverlay}
 
       {engineNoticeVisible && (
         <div className="toast" role="alert">

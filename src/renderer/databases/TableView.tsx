@@ -1,4 +1,5 @@
 import { OptionValue } from './OptionValue';
+import { normalizeNumericInput, parseNumericInput } from '../../shared/digits';
 import { PageIconRenderer } from '../ui/page-icon-renderer';
 import { generateOrderKey } from '../../shared/order-key';
 import { RelationValue } from './RelationValue';
@@ -291,12 +292,16 @@ export function TableView({
                       {/* Number */}
                       {prop.type === 'number' && (
                         <input
-                          type="number"
+                          type="text"
+                          inputMode="decimal"
                           className="table-cell-input"
                           placeholder="—"
-                          defaultValue={typeof value === 'number' ? value : ''}
+                          defaultValue={typeof value === 'number' ? String(value) : ''}
+                          // Arabic-Indic digits are rewritten as they are typed;
+                          // see shared/digits.ts for why this is not type=number.
+                          onInput={(e) => { e.currentTarget.value = normalizeNumericInput(e.currentTarget.value); }}
                           onBlur={(e) =>
-                            handleCellChange(record, prop.id, e.target.value === '' ? null : Number(e.target.value))
+                            handleCellChange(record, prop.id, e.target.value === '' ? null : parseNumericInput(e.target.value) ?? null)
                           }
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') (e.target as HTMLInputElement).blur();

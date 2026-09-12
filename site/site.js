@@ -8,11 +8,15 @@
   const API_URL = `https://api.github.com/repos/${REPO}/releases?per_page=12`;
   const CACHE_KEY = 'max:latest-release';
 
+  // Ordered by preference, not just by match: a release carries both a disk
+  // image and a zip for macOS, and only the disk image opens with the
+  // Applications folder beside the app. Whichever of the two GitHub happened to
+  // list first used to win, which is how people ended up with a loose Max.app.
   const PATTERNS = {
-    windows: /\.exe$/i,
-    mac: /(darwin|mac).*\.(zip|dmg)$/i,
-    linux: /\.deb$/i,
-    flatpak: /\.flatpak$/i,
+    windows: [/\.exe$/i],
+    mac: [/\.dmg$/i, /(darwin|mac).*\.zip$/i],
+    linux: [/\.deb$/i],
+    flatpak: [/\.flatpak$/i],
   };
 
   const LABELS = { windows: 'Windows', mac: 'macOS', linux: 'Linux' };
@@ -62,7 +66,14 @@
     }
   };
 
-  const findAsset = (release, kind) => (release.assets ?? []).find((asset) => PATTERNS[kind].test(asset.name));
+  const findAsset = (release, kind) => {
+    const assets = release.assets ?? [];
+    for (const pattern of PATTERNS[kind] ?? []) {
+      const match = assets.find((asset) => pattern.test(asset.name));
+      if (match) return match;
+    }
+    return null;
+  };
 
   const apply = (release) => {
     if (!release) return;

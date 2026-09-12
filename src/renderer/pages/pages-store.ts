@@ -1,12 +1,13 @@
 import type { CustomPage } from '../app/app-types';
 import type { NotionBlock } from '../ui/notion-block-editor';
+import { parseCover } from '../../shared/cover-contract';
 import type { WorkspaceNode } from '../../shared/workspace-contract';
 
 const CUSTOM_PAGES_KEY = 'max:custom_pages';
 const LEGACY_TRASHED_PAGES_KEY = 'max:trashed_pages';
 
 function fromWorkspacePage(page: WorkspaceNode): CustomPage {
-  let layout: { blocks?: readonly NotionBlock[]; favorite?: boolean; wiki?: boolean; properties?: CustomPage['properties'] } = {};
+  let layout: { blocks?: readonly NotionBlock[]; cover?: unknown; favorite?: boolean; wiki?: boolean; properties?: CustomPage['properties'] } = {};
   try {
     const parsed = JSON.parse(page.contentJson) as unknown;
     layout = Array.isArray(parsed) ? { blocks: parsed as readonly NotionBlock[] } : parsed as typeof layout;
@@ -16,6 +17,7 @@ function fromWorkspacePage(page: WorkspaceNode): CustomPage {
   return {
     blocks: Array.isArray(layout.blocks) ? layout.blocks : [],
     properties: Array.isArray(layout.properties) ? layout.properties : [],
+    cover: parseCover(layout.cover),
     createdAt: page.createdAt,
     favorite: layout.favorite,
     icon: page.icon ?? 'lucide:FileText',
@@ -30,7 +32,7 @@ function fromWorkspacePage(page: WorkspaceNode): CustomPage {
 
 function toWorkspacePatch(page: CustomPage) {
   return {
-    contentJson: JSON.stringify({ blocks: page.blocks, properties: page.properties ?? [], favorite: page.favorite ?? false, wiki: page.wiki ?? false }),
+    contentJson: JSON.stringify({ blocks: page.blocks, cover: page.cover, properties: page.properties ?? [], favorite: page.favorite ?? false, wiki: page.wiki ?? false }),
     icon: page.icon,
     parentNodeId: page.parentNodeId,
     positionKey: page.positionKey,

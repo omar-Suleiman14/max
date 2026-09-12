@@ -1,7 +1,7 @@
 import { createPortal } from 'react-dom';
 import { Children, isValidElement, useEffect, useId, useRef, useState, type ChangeEvent, type ReactNode, type SelectHTMLAttributes } from 'react';
 import { ChevronDown, Check } from 'lucide-react';
-import { anchorPopover, currentViewport } from './anchor-popover';
+import { anchorPopover, currentViewport, type AnchoredPosition } from './anchor-popover';
 
 function textContent(node: ReactNode): string { return Children.toArray(node).map((child): string => typeof child === 'string' || typeof child === 'number' ? String(child) : isValidElement<{ children?: ReactNode }>(child) ? textContent(child.props.children) : '').join(''); }
 
@@ -23,7 +23,7 @@ export function Select({ children, value, defaultValue, onChange, onBlur, onKeyD
   const [localValue, setLocalValue] = useState(String(defaultValue ?? ''));
   const [active, setActive] = useState(0);
   const [label, setLabel] = useState<string>();
-  const [position, setPosition] = useState({ left: 0, top: 0, width: 0, maxHeight: 280 });
+  const [position, setPosition] = useState<AnchoredPosition & { width: number }>({ left: 0, maxHeight: 280, top: 0, width: 0 });
   const options = optionsFrom(children);
   const selected = options.find((option) => option.value === String(value ?? localValue)) ?? options[0];
   const typeahead = useRef({ text: '', at: 0 });
@@ -56,8 +56,8 @@ export function Select({ children, value, defaultValue, onChange, onBlur, onKeyD
     if (!rect || props.disabled) return;
     const width = Math.min(Math.max(rect.width, 160), window.innerWidth - 16);
     const preferredHeight = Math.min(280, options.length * 36 + 12);
-    const { left, maxHeight, top } = anchorPopover(rect, { preferredHeight, width }, currentViewport(), 4);
-    setPosition({ left, top, width, maxHeight: Math.min(280, maxHeight) });
+    const placed = anchorPopover(rect, { preferredHeight, width }, currentViewport(), 4);
+    setPosition({ ...placed, maxHeight: Math.min(280, placed.maxHeight), width });
     setActive(Math.max(0, options.findIndex((option) => option === selected)));
     setOpen(true);
   }

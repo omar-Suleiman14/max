@@ -96,7 +96,26 @@ const config = {
     {
       name: '@electron-forge/maker-dmg',
       platforms: ['darwin'],
-      config: {},
+      // Installing is one drag: the app on the left, the Applications folder on
+      // the right, and an arrow between them. Left unconfigured, the disk image
+      // is built with electron-installer-dmg's own placeholder background and
+      // icon positions that do not match it, which is why the window opened
+      // with nothing to drag onto.
+      config: {
+        background: join(__dirname, 'assets', 'dmg-background.png'),
+        // Keep these coordinates in step with scripts/build-dmg-background.cjs,
+        // which draws the arrow between them.
+        contents: (options) => [
+          { path: options.appPath, type: 'file', x: 170, y: 196 },
+          { path: '/Applications', type: 'link', x: 470, y: 196 },
+        ],
+        icon: join(__dirname, 'assets', 'max.icns'),
+        iconSize: 118,
+        overwrite: true,
+        additionalDMGOptions: {
+          window: { size: { height: 400, width: 640 } },
+        },
+      },
     },
     ...linuxMakers,
   ],

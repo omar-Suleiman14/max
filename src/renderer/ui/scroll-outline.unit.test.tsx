@@ -140,6 +140,33 @@ describe('ScrollOutline & findContentSections', () => {
     expect(scrollIntoViewMocks[2]).toHaveBeenCalled();
   });
 
+  it('lights every section that is on screen, not only the one being read', async () => {
+    containerEl.innerHTML = `
+      <div class="notion-editor-canvas">
+        <div class="notion-block-row" data-scroll-kind="h2"><h3>One</h3></div>
+        <div class="notion-block-row" data-scroll-kind="h2"><h3>Two</h3></div>
+        <div class="notion-block-row" data-scroll-kind="h2"><h3>Three</h3></div>
+      </div>
+    `;
+    // jsdom lays nothing out, so the window and the rows say where they are:
+    // a 600px window holding the first two rows, with the third below it.
+    const place = (el: Element, top: number, bottom: number) => {
+      el.getBoundingClientRect = () => ({ bottom, height: bottom - top, left: 0, right: 900, toJSON: () => ({}), top, width: 900, x: 0, y: top });
+    };
+    place(containerEl, 0, 600);
+    const rows = [...containerEl.querySelectorAll('.notion-block-row')];
+    place(rows[0]!, 0, 300);
+    place(rows[1]!, 300, 560);
+    place(rows[2]!, 700, 900);
+
+    render(<ScrollOutline locale="en" pageKey="custom-page-2" />);
+
+    const marks = await screen.findAllByRole('button');
+    expect(marks[0]).toHaveAttribute('data-onscreen', 'true');
+    expect(marks[1]).toHaveAttribute('data-onscreen', 'true');
+    expect(marks[2]).not.toHaveAttribute('data-onscreen');
+  });
+
   it('renders localized labels in Arabic RTL', async () => {
     containerEl.innerHTML = `
       <div class="settings-page">

@@ -1,5 +1,5 @@
 import { useWorkspaceDisplay } from './workspace-display-preferences';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { PageConnections } from './page-connections';
 
 import type { CustomPage } from '../app/app-types';
@@ -7,6 +7,7 @@ import type { Locale } from '../app/i18n';
 import { IconPickerDialog } from '../ui/icon-picker-dialog';
 import { NotionBlockEditor, type NotionBlock } from '../ui/notion-block-editor';
 import { PageIconRenderer } from '../ui/page-icon-renderer';
+import { AddCoverButton, PageCover } from './page-cover';
 import { PageProperties } from './page-properties';
 import '../databases/database.css';
 
@@ -27,6 +28,7 @@ export function CustomPageView({
 }: CustomPageViewProps) {
   const [connectionsEnabled] = useWorkspaceDisplay('connections');
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
+  const iconButtonRef = useRef<HTMLButtonElement>(null);
 
   function handleTitleChange(newTitle: string) {
     onUpdatePage(page.id, { title: newTitle });
@@ -55,10 +57,20 @@ export function CustomPageView({
       if (!target.matches('.custom-page-view,.custom-page-content,.custom-page-header')) return;
       event.currentTarget.querySelector('.notion-editor-canvas')?.dispatchEvent(new Event('max:focus-page-end'));
     }}>
+      {page.cover && (
+        <PageCover
+          cover={page.cover}
+          locale={locale}
+          onChange={(cover) => onUpdatePage(page.id, { cover })}
+        />
+      )}
+
       {/* Page Top Banner / Icon + Title Row */}
-      <div className="custom-page-header">
+      <div className="custom-page-header" data-has-cover={page.cover ? 'true' : undefined}>
+        {!page.cover && <AddCoverButton locale={locale} onChange={(cover) => onUpdatePage(page.id, { cover })} />}
         <div className="custom-page-header__icon-wrap">
           <button
+            ref={iconButtonRef}
             aria-label={locale === 'ar' ? 'تغيير الرمز أو الأيقونة' : 'Change icon or emoji'}
             className="custom-page-icon-btn"
             onClick={() => setIconPickerOpen((open) => !open)}
@@ -73,9 +85,9 @@ export function CustomPageView({
             />
           </button>
 
-          {/* Floating Notion Icon Popover */}
           {iconPickerOpen && (
             <IconPickerDialog
+              anchor={iconButtonRef.current}
               currentIcon={page.icon}
               locale={locale}
               onClose={() => setIconPickerOpen(false)}

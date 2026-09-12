@@ -1,6 +1,7 @@
 import type { UpdateApi } from './update-contract';
 import type { AccountDefinition, AccountDraft } from './account-contract';
 import type { PageGraph } from './page-links';
+import type { PhotoResult, StoredAsset } from './cover-contract';
 import type {
   BackupMetadata,
   BackupTrigger,
@@ -151,6 +152,15 @@ export const IPC_CHANNELS = {
   viewCreate: 'max:views:create',
   viewList: 'max:views:list',
   viewUpdate: 'max:views:update',
+
+  // Local image store and the photo library that fills it
+  assetsImport: 'max:assets:import',
+  assetsDownload: 'max:assets:download',
+  assetsUsage: 'max:assets:usage',
+  photosSearch: 'max:photos:search',
+  photosUse: 'max:photos:use',
+  photosGetAccessKey: 'max:photos:key:get',
+  photosSetAccessKey: 'max:photos:key:set',
 
   // Max v0.2.0 Workspace Channels
   workspaceGetNavigation: 'max:workspace:navigation:get',
@@ -316,6 +326,24 @@ export type MaxApi = Readonly<{
     getExpectedClosing: (sessionId: string) => Promise<SessionExpectedClosing>;
     listSessions: (limit?: number) => Promise<readonly DailySession[]>;
     openSession: (draft: OpenSessionDraft) => Promise<MutationResult<DailySession>>;
+  }>;
+  /**
+   * Images this workspace owns. Everything a cover shows has been through here
+   * first, so a page looks the same with the network unplugged.
+   */
+  assets: Readonly<{
+    /** Store bytes chosen from the machine, answering with a `max://asset` URL. */
+    importImage: (bytes: Uint8Array, fileName?: string) => Promise<MutationResult<StoredAsset>>;
+    /** Fetch a remote image and keep it locally. */
+    downloadImage: (url: string) => Promise<MutationResult<StoredAsset>>;
+    usage: () => Promise<{ byteLength: number; count: number }>;
+  }>;
+  photos: Readonly<{
+    getAccessKey: () => Promise<{ configured: boolean }>;
+    search: (query: string, page?: number) => Promise<MutationResult<readonly PhotoResult[]>>;
+    setAccessKey: (key: string) => Promise<MutationResult<{ configured: boolean }>>;
+    /** Download the chosen photo and report the use back to the library. */
+    use: (photo: Readonly<{ authorName: string; authorUrl: string; downloadUrl: string; fullUrl: string }>) => Promise<MutationResult<StoredAsset>>;
   }>;
   search: Readonly<{
     query: (searchTerm: string) => Promise<readonly SearchResult[]>;

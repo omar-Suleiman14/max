@@ -6,6 +6,9 @@ import { findContentSections, type SectionMarker } from './scroll-sections';
 export function ScrollOutline({ locale, pageKey }: { locale: Locale; pageKey: string }) {
   const [sections, setSections] = useState<SectionMarker[]>([]);
   const [active, setActive] = useState(0);
+  // Every section the reader can currently see, not only the one they are at:
+  // the rail is a map of the screen, so the whole span in view is lit.
+  const [onScreen, setOnScreen] = useState('');
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -16,15 +19,24 @@ export function ScrollOutline({ locale, pageKey }: { locale: Locale; pageKey: st
     let current: SectionMarker[] = [];
 
     const update = () => {
-      const top = root.getBoundingClientRect().top + 80;
+      const viewport = root.getBoundingClientRect();
+      const top = viewport.top + 80;
       let index = 0;
+      const seen: number[] = [];
       current.forEach((section, i) => {
-        if (section.element.getBoundingClientRect().top <= top) index = i;
+        const rect = section.element.getBoundingClientRect();
+        if (rect.top <= top) index = i;
+        // A section counts as on screen when any part of it overlaps the
+        // scroller, and a section taller than the window always does.
+        if (rect.bottom > viewport.top && rect.top < viewport.bottom) seen.push(i);
       });
       if (root.scrollTop + root.clientHeight >= root.scrollHeight - 2) {
         index = current.length - 1;
       }
       setActive(Math.max(0, index));
+      // A string key so an unchanged span does not re-render the rail on
+      // every scroll event.
+      setOnScreen(seen.length ? seen.join(',') : String(Math.max(0, index)));
       // Show rail whenever there are multiple sections to navigate
       const isScrollable = root.scrollHeight > root.clientHeight + 20 || root.scrollHeight === 0;
       setVisible(current.length > 1 && isScrollable);
@@ -63,6 +75,8 @@ export function ScrollOutline({ locale, pageKey }: { locale: Locale; pageKey: st
 
   if (!visible || sections.length < 2) return null;
 
+  const onScreenSet = new Set(onScreen.split(',').map(Number));
+
   return (
     <nav
       aria-label={locale === 'ar' ? 'موضع القراءة وأقسام الصفحة' : 'Reading position and page sections'}
@@ -75,6 +89,7 @@ export function ScrollOutline({ locale, pageKey }: { locale: Locale; pageKey: st
             aria-current={isCurrent ? 'location' : undefined}
             aria-label={section.title}
             className="scroll-outline__mark"
+            data-onscreen={onScreenSet.has(index) ? 'true' : undefined}
             key={index}
             onClick={() => {
               section.element.scrollIntoView({

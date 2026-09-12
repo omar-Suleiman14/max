@@ -16,10 +16,17 @@
 .quick-action-form form { display: grid; gap: 14px; }
 .quick-action-form .btn-primary { justify-self: stretch; min-height: 34px; margin-top: 2px; border: 0; border-radius: 9px; background: var(--accent); color: var(--accent-contrast); font-size: 13px; font-weight: 500; }
 .quick-action-form .btn-primary:disabled { opacity: .6; }
-.quick-action-form__notice { display: grid; gap: 6px; padding: 18px; border: 1px solid var(--line); border-radius: 12px; background: color-mix(in srgb, var(--text) 3%, transparent); }
-.quick-action-form__notice p { margin: 0; color: var(--muted); font-size: 12.5px; }
-.quick-action-form__notice--done { border-color: color-mix(in srgb, var(--accent) 30%, var(--line)); background: color-mix(in srgb, var(--accent) 7%, transparent); }
-.quick-action-form__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.quick-action-form__off { margin: 0; color: var(--muted); font-size: 13px; }
+.quick-action-form__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+/* A finished run says so on one line, then gets out of the way. */
+.quick-action-form__done { margin: 0; height: 15px; color: var(--accent); font-size: 12.5px; opacity: 0; transition: opacity 180ms ease; }
+.quick-action-form__done[data-shown] { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .quick-action-form__done { transition: none; } }
+
+/* What the action is still waiting for, marked where it is missing. */
+.quick-action-form .action-field[data-missing] .form-group > span,
+.quick-action-form .action-collection[data-missing] > legend { color: var(--danger); }
+.quick-action-form .action-field[data-missing] :is(input:not([type=checkbox]), button[role=combobox]) { border-color: color-mix(in srgb, var(--danger) 60%, transparent); }
 .quick-action-form__actions .btn { justify-self: start; width: auto; min-height: 30px; padding: 6px 13px; border-radius: 8px; font-size: 12.5px; }
 .quick-action-form__actions .btn-ghost { color: var(--muted); background: transparent; border: 1px solid var(--line); }
 .quick-action-form__actions .btn-ghost:hover { color: var(--text); background: color-mix(in srgb, var(--text) 6%, transparent); }

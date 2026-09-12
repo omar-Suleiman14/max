@@ -11,10 +11,18 @@ export type AnchorViewport = Readonly<{
   width: number;
 }>;
 
+/**
+ * Where to put the popover, expressed as the style it needs.
+ *
+ * Exactly one of `top` and `bottom` is set: a popover that opens upward is
+ * pinned by its bottom edge so it keeps touching the trigger whatever its
+ * content turns out to measure.
+ */
 export type AnchoredPosition = Readonly<{
+  bottom?: number;
   left: number;
   maxHeight: number;
-  top: number;
+  top?: number;
 }>;
 
 const margin = 8;
@@ -33,7 +41,11 @@ function clamp(value: number, lowest: number, highest: number): number {
  *
  * Vertically the popover prefers the space below the trigger and flips above it
  * when that space is the larger of the two, so a trigger near the bottom of the
- * window does not get a popover stranded at the top.
+ * window does not get a popover stranded at the top. Upward it is pinned by its
+ * bottom edge rather than positioned at the top of the space it may use:
+ * reserving the full preferred height and then filling it with a three-row list
+ * is what left popovers floating hundreds of pixels above the cell they belong
+ * to.
  */
 export function anchorPopover(
   rect: AnchorRect | undefined,
@@ -53,21 +65,14 @@ export function anchorPopover(
   }
 
   const inlineStart = viewport.rtl ? rect.right - width : rect.left;
+  const left = clamp(inlineStart, margin, furthestLeft);
   const below = viewport.height - rect.bottom - gap - margin;
   const above = rect.top - gap - margin;
-  const opensUpward = below < size.preferredHeight && above > below;
-  const top = opensUpward
-    ? Math.max(margin, rect.top - gap - Math.min(size.preferredHeight, above))
-    : rect.bottom + gap;
-  // Upward, the room left is what sits between the popover's top and the
-  // trigger. Reporting the full space above would let it grow over the trigger.
-  const maxHeight = Math.max(120, opensUpward ? rect.top - gap - top : below);
 
-  return {
-    left: clamp(inlineStart, margin, furthestLeft),
-    maxHeight,
-    top: clamp(top, margin, Math.max(margin, viewport.height - margin)),
-  };
+  if (below < size.preferredHeight && above > below) {
+    return { bottom: Math.max(margin, viewport.height - rect.top + gap), left, maxHeight: Math.max(120, above) };
+  }
+  return { left, maxHeight: Math.max(120, below), top: clamp(rect.bottom + gap, margin, Math.max(margin, viewport.height - margin)) };
 }
 
 /** The viewport as the popover helpers see it, read from the live document. */

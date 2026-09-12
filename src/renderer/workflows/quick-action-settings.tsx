@@ -5,7 +5,7 @@ import { IconPickerDialog } from '../ui/icon-picker-dialog';
 import { PageIconRenderer } from '../ui/page-icon-renderer';
 import { scalarText } from '../../shared/scalar-text';
 import { generateOrderKey } from '../../shared/order-key';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { WorkspaceWorkflow, WorkspaceWorkflowDraft, WorkflowStep, WorkflowStepType, WorkflowValue } from '../../shared/workflow-contract';
 import type { WorkspaceProperty } from '../../shared/property-contract';
 import type { PropertyFilterNode, FilterOperator } from '../../shared/query-contract';
@@ -30,6 +30,7 @@ export function QuickActionSettings({ locale }: { locale: Locale }) {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [pickingIcon, setPickingIcon] = useState(false);
+  const iconButtonRef = useRef<HTMLButtonElement>(null);
   const reload = () => window.maxApi.workspace.listWorkflows().then(setActions);
   useEffect(() => {
     let active = true;
@@ -125,7 +126,7 @@ export function QuickActionSettings({ locale }: { locale: Locale }) {
       <button type="button" className="btn btn-secondary" onClick={() => { setDraft(empty()); setError(''); }}>{ar ? '+ إجراء سريع' : '+ Quick action'}</button>
     </> : <>
       <div className="action-row">
-        <label>{ar ? 'الأيقونة' : 'Icon'}<div style={{ position: 'relative' }}><button type="button" aria-label={ar ? 'اختر أيقونة' : 'Choose icon'} onClick={() => setPickingIcon(true)}><PageIconRenderer icon={draft.icon || 'lucide:Zap'} size={20} /></button>{pickingIcon && <IconPickerDialog locale={locale} currentIcon={draft.icon ?? undefined} onClose={() => setPickingIcon(false)} onSelect={(icon) => { setDraft({ ...draft, icon }); setPickingIcon(false); }} />}</div></label>
+        <label>{ar ? 'الأيقونة' : 'Icon'}<div><button ref={iconButtonRef} type="button" aria-label={ar ? 'اختر أيقونة' : 'Choose icon'} onClick={() => setPickingIcon((open) => !open)}><PageIconRenderer icon={draft.icon || 'lucide:Zap'} size={20} /></button>{pickingIcon && <IconPickerDialog anchor={iconButtonRef.current} locale={locale} currentIcon={draft.icon ?? undefined} onClose={() => setPickingIcon(false)} onSelect={(icon) => { setDraft({ ...draft, icon }); setPickingIcon(false); }} />}</div></label>
         <label>{ar ? 'الاسم' : 'Name'}<input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></label>
         <label><input type="checkbox" checked={draft.enabled !== false} onChange={(e) => setDraft({ ...draft, enabled: e.target.checked })} />{ar ? 'مفعل' : 'Enabled'}</label>
       </div>

@@ -6,12 +6,13 @@ import {
   Globe2,
   ArrowRight,
 } from 'lucide-react';
-import { useEffect, useRef, useState, type FormEvent, type ChangeEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ChangeEvent } from 'react';
 
 import type { BackupSchedule } from '../../shared/blueprint-contract';
 import type { WorkspaceTemplateV2 as Blueprint } from '../../shared/template-v2-contract';
 import type { Locale } from '../app/i18n';
 import { Button } from '../ui/button';
+import { useBlueprintFileDrop } from '../blueprints/blueprint-drop';
 import { onboardingCopy } from './onboarding-i18n';
 import maxLogoReference from '../assets/max-logo.png';
 
@@ -55,16 +56,28 @@ function playWelcomeSound(surface: HTMLElement): (() => void) | undefined {
       window.setTimeout(() => { void context.close().catch(() => {}); }, 220);
     };
 
-    // An original, slowly resolving five-note arrival cue. It is deliberately
-    // longer than an interaction sound, without reproducing a branded chime.
+    // The cue is the entrance, heard. Every note is placed on a moment the
+    // welcome screen is already moving through - the washes unfolding, the
+    // logo overshooting at 35% and settling at 65%, the button arriving - and
+    // they all release together as the motion comes to rest. `entrance` is the
+    // 4.4s animation-duration the welcome screen is authored to in styles.css;
+    // the two have to be changed together or the melody stops describing it.
+    const entrance = 4.4;
     const notes = [
-      { at: 0, duration: 2.6, frequency: 196, type: 'triangle' as const },
-      { at: 0.4, duration: 2.3, frequency: 293.66, type: 'sine' as const },
-      { at: 0.8, duration: 2.1, frequency: 392, type: 'sine' as const },
-      { at: 1.2, duration: 1.9, frequency: 493.88, type: 'sine' as const },
-      { at: 1.6, duration: 1.7, frequency: 587.33, type: 'sine' as const },
+      // The ground the whole arrival stands on, held from first frame to last.
+      { at: 0, duration: entrance, frequency: 98, peak: 0.15, type: 'triangle' as const },
+      { at: 0, duration: entrance, frequency: 196, peak: 0.17, type: 'sine' as const },
+      // One step per wash as they unfold across the screen.
+      { at: 0.62, duration: entrance - 0.62, frequency: 246.94, peak: 0.15, type: 'sine' as const },
+      { at: 1.1, duration: entrance - 1.1, frequency: 293.66, peak: 0.15, type: 'sine' as const },
+      // 35%: the logo passes its resting size. The brightest note of the cue.
+      { at: 1.54, duration: entrance - 1.54, frequency: 392, peak: 0.21, type: 'sine' as const },
+      // The get-started button fades in.
+      { at: 2.4, duration: entrance - 2.4, frequency: 493.88, peak: 0.12, type: 'sine' as const },
+      // 65%: the motion settles, and the cue resolves onto the octave with it.
+      { at: 2.86, duration: entrance - 2.86, frequency: 587.33, peak: 0.12, type: 'sine' as const },
     ];
-    const cueLength = Math.max(...notes.map((note) => note.at + note.duration));
+    const cueLength = entrance;
 
     const schedule = () => {
       if (stopped) return;
@@ -75,7 +88,7 @@ function playWelcomeSound(surface: HTMLElement): (() => void) | undefined {
       // Hold the master level flat and release only at the very end. Decaying it
       // across the cue is what silenced everything after the first two notes.
       master.gain.setValueAtTime(0.8, now);
-      master.gain.setValueAtTime(0.8, now + cueLength - 0.3);
+      master.gain.setValueAtTime(0.8, now + cueLength - 0.45);
       master.gain.exponentialRampToValueAtTime(0.0001, now + cueLength);
       for (const note of notes) {
         const oscillator = context.createOscillator();
@@ -83,11 +96,11 @@ function playWelcomeSound(surface: HTMLElement): (() => void) | undefined {
         oscillator.type = note.type;
         oscillator.frequency.setValueAtTime(note.frequency, now + note.at);
         oscillator.detune.setValueAtTime(-7, now + note.at);
-        // Attack, then a sustained body, then a decay. A single ramp straight
-        // from the peak to silence spends most of the note already inaudible.
+        // Each voice swells in the way the thing it stands for does, holds
+        // while the motion continues, and lets go as the motion comes to rest.
         voiceGain.gain.setValueAtTime(0.0001, now + note.at);
-        voiceGain.gain.exponentialRampToValueAtTime(0.22, now + note.at + 0.09);
-        voiceGain.gain.exponentialRampToValueAtTime(0.12, now + note.at + note.duration * 0.45);
+        voiceGain.gain.exponentialRampToValueAtTime(note.peak, now + note.at + 0.24);
+        voiceGain.gain.exponentialRampToValueAtTime(note.peak * 0.62, now + note.at + note.duration * 0.55);
         voiceGain.gain.exponentialRampToValueAtTime(0.0001, now + note.at + note.duration);
         oscillator.connect(voiceGain); voiceGain.connect(master);
         oscillator.start(now + note.at); oscillator.stop(now + note.at + note.duration + 0.05);
@@ -124,12 +137,9 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
   const [blueprint, setBlueprint] = useState<Blueprint>();
   const [blueprintError, setBlueprintError] = useState<string>();
 
-  async function handleFileSelect(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const applyBlueprintText = useCallback(async (text: string) => {
     try {
       setBlueprintError(undefined);
-      const text = await file.text();
       const parsed = JSON.parse(text) as unknown;
       const result = await window.maxApi.workspace.validateTemplate(parsed);
       if (result.ok) {
@@ -141,6 +151,25 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
       }
     } catch (e) {
       setBlueprintError(e instanceof Error ? e.message : 'Invalid JSON file.');
+      setTemplate('blank');
+    }
+  }, []);
+
+  // A blueprint can be dropped straight onto the setup screen, the same as onto
+  // the running workspace, rather than having to be found through the picker.
+  const dropOverlay = useBlueprintFileDrop({
+    enabled: !showWelcome,
+    locale,
+    onFile: useCallback((text: string) => { void applyBlueprintText(text); }, [applyBlueprintText]),
+  });
+
+  async function handleFileSelect(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      await applyBlueprintText(await file.text());
+    } catch {
+      setBlueprintError(locale === 'ar' ? 'تعذر قراءة الملف.' : 'Could not read the file.');
       setTemplate('blank');
     }
   }
@@ -519,6 +548,7 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
           </div>
         </main>
       </div>
+      {dropOverlay}
     </div>
   );
 }

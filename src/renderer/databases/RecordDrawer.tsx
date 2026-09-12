@@ -4,6 +4,8 @@ import { PageIconRenderer } from '../ui/page-icon-renderer';
 import { RelationValue } from './RelationValue';
 import { PropertyEditor } from './PropertyEditor';
 import { generateOrderKey } from '../../shared/order-key';
+import { parseNumericInput } from '../../shared/digits';
+import { NumberInput } from '../ui/number-input';
 import { GripVertical, Plus } from 'lucide-react';
 import { MultiSelectValue } from './MultiSelectValue';
 import { isRequirementUnmet, unmetRequirements } from './required-properties';
@@ -77,6 +79,7 @@ export function RecordDrawer({
   }
   const [icon, setIcon] = useState(record?.icon ?? '');
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
+  const iconButtonRef = useRef<HTMLButtonElement>(null);
   const [title, setTitle] = useState(record?.title || '');
   const [properties, setProperties] = useState<Record<string, unknown>>(() => ({ ...(record?.properties || {}) }));
   const [blocks, setBlocks] = useState<readonly NotionBlock[]>([]);
@@ -214,8 +217,8 @@ export function RecordDrawer({
             }}><input aria-label="Template name" className="input-field" value={templateName} onChange={(event) => setTemplateName(event.target.value)} required /><button className="btn btn-primary" type="submit">{locale === 'ar' ? 'حفظ القالب' : 'Save template'}</button><button type="button" className="btn" onClick={() => setTemplateName(null)}>{locale === 'ar' ? 'إلغاء' : 'Cancel'}</button></form>}
             {templateSaved && <p role="status">{locale === 'ar' ? 'القالب متاح في قائمة جديد.' : 'Template added to the New menu.'}</p>}
             <div className="record-page-icon-wrap">
-              <button type="button" className="record-page-icon" aria-label={locale === 'ar' ? 'تغيير أيقونة الصفحة' : 'Change page icon'} onClick={() => setIconPickerOpen(!iconPickerOpen)}><PageIconRenderer icon={icon || 'lucide:FileText'} size={40} /></button>
-              {iconPickerOpen && <IconPickerDialog currentIcon={icon} locale={locale} onClose={() => setIconPickerOpen(false)} onSelect={(next) => { setIcon(next); setIconPickerOpen(false); void save({ icon: next || null }); }} />}
+              <button ref={iconButtonRef} type="button" className="record-page-icon" aria-label={locale === 'ar' ? 'تغيير أيقونة الصفحة' : 'Change page icon'} onClick={() => setIconPickerOpen(!iconPickerOpen)}><PageIconRenderer icon={icon || 'lucide:FileText'} size={40} /></button>
+              {iconPickerOpen && <IconPickerDialog anchor={iconButtonRef.current} currentIcon={icon} locale={locale} onClose={() => setIconPickerOpen(false)} onSelect={(next) => { setIcon(next); setIconPickerOpen(false); void save({ icon: next || null }); }} />}
             </div>
             {/* Record Title Input */}
             <input
@@ -284,13 +287,12 @@ export function RecordDrawer({
 
                       {/* Number */}
                       {prop.type === 'number' && (
-                        <input
-                          type="number"
+                        <NumberInput
                           className="input-clean"
                           placeholder="Empty"
-                          value={typeof value === 'number' ? value : ''}
-                          onChange={(e) =>
-                            handlePropertyChange(prop.id, e.target.value === '' ? null : Number(e.target.value))
+                          value={typeof value === 'number' ? String(value) : ''}
+                          onValueChange={(next) =>
+                            handlePropertyChange(prop.id, next === '' ? null : parseNumericInput(next) ?? null)
                           }
                         />
                       )}

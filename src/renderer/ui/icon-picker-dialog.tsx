@@ -77,7 +77,6 @@ import {
   ShieldCheck,
   ShoppingBag,
   ShoppingCart,
-  Shuffle,
   Sliders,
   Smartphone,
   Smile,
@@ -105,25 +104,16 @@ import {
   Zap,
   type LucideIcon,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import type { Locale } from '../app/i18n';
+import { anchorPopover, currentViewport, type AnchoredPosition } from './anchor-popover';
 import { PageIconRenderer } from './page-icon-renderer';
 
-export const NOTION_ICON_COLORS = [
-  { hex: 'e0e0e0', id: 'default', label: 'Default', labelAr: 'افتراضي' },
-  { hex: '9b9a97', id: 'gray', label: 'Gray', labelAr: 'رمادي' },
-  { hex: '937264', id: 'brown', label: 'Brown', labelAr: 'بني' },
-  { hex: 'e8a24b', id: 'yellow', label: 'Yellow', labelAr: 'أصفر' },
-  { hex: 'd9730d', id: 'orange', label: 'Orange', labelAr: 'برتقالي' },
-  { hex: '4d9b68', id: 'green', label: 'Green', labelAr: 'أخضر' },
-  { hex: '337ea9', id: 'blue', label: 'Blue', labelAr: 'أزرق' },
-  { hex: '9065b0', id: 'purple', label: 'Purple', labelAr: 'بنفسجي' },
-  { hex: 'c14c8a', id: 'pink', label: 'Pink', labelAr: 'وردي' },
-  { hex: 'd44c47', id: 'red', label: 'Red', labelAr: 'أحمر' },
-] as const;
-
 type IconPickerDialogProps = Readonly<{
+  /** The button that opened the picker. The popover is placed against it. */
+  anchor?: HTMLElement | null;
   currentIcon?: string;
   locale: Locale;
   onClose: () => void;
@@ -322,7 +312,9 @@ const EMOJI_CATALOG: readonly EmojiItem[] = [
 
 const RECENT_ICONS_KEY = 'max:recent_icons';
 
-const LAST_COLOR_KEY = 'max:last_selected_icon_color';
+/** The popover's own size, used to decide whether it opens down or up. */
+const PICKER_WIDTH = 318;
+const PICKER_HEIGHT = 366;
 
 function loadRecentIcons(): readonly string[] {
   try {
@@ -334,7 +326,7 @@ function loadRecentIcons(): readonly string[] {
       }
     }
   } catch {
-    // fallback
+    // A picker that cannot read its history still works, it just starts empty.
   }
   return [];
 }
@@ -342,59 +334,75 @@ function loadRecentIcons(): readonly string[] {
 function saveRecentIcon(iconId: string): void {
   try {
     const current = loadRecentIcons().filter((i) => i !== iconId);
-    const updated = [iconId, ...current].slice(0, 12);
-    window.localStorage.setItem(RECENT_ICONS_KEY, JSON.stringify(updated));
+    window.localStorage.setItem(RECENT_ICONS_KEY, JSON.stringify([iconId, ...current].slice(0, 12)));
   } catch {
     // ignore
   }
 }
 
+/**
+ * Pick an icon or emoji.
+ *
+ * The popover is portalled to the document and placed against `anchor`, because
+ * rendering it in place made it inherit whatever positioned ancestor it landed
+ * in: inside the property editor it drew itself over the property type grid
+ * instead of under its own button.
+ *
+ * Icons have no colour. Colour belonged to the picker, not to the icon, so the
+ * grid was tinted wholesale and every pick carried a `#rrggbb` suffix. Icons
+ * already saved with one still render (see PageIconRenderer); nothing new gets
+ * one.
+ */
 export function IconPickerDialog({
+  anchor,
   currentIcon = '',
   locale,
   onClose,
   onSelect,
 }: IconPickerDialogProps) {
-  // Extract initial color if currentIcon has #hex or load saved preference
-  const initialColor = useMemo(() => {
-    if (currentIcon.includes('#')) {
-      return currentIcon.split('#')[1] ?? 'e0e0e0';
-    }
-    try {
-      return window.localStorage.getItem(LAST_COLOR_KEY) || 'e0e0e0';
-    } catch {
-      return 'e0e0e0';
-    }
-  }, [currentIcon]);
-
+  const ar = locale === 'ar';
   const [activeTab, setActiveTab] = useState<'emojis' | 'icons'>('icons');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedColor, setSelectedColor] = useState<string>(initialColor);
-  const [colorPickerOpen, setColorPickerOpen] = useState(false);
   const [recentIcons, setRecentIcons] = useState<readonly string[]>(() => loadRecentIcons());
+  const [position, setPosition] = useState<AnchoredPosition>(() =>
+    anchorPopover(anchor?.getBoundingClientRect(), { preferredHeight: PICKER_HEIGHT, width: PICKER_WIDTH }, currentViewport()),
+  );
 
   const popoverRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    function handleOutsideClick(e: MouseEvent) {
-      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
-        onClose();
-      }
+    function place() {
+      setPosition(
+        anchorPopover(anchor?.getBoundingClientRect(), { preferredHeight: PICKER_HEIGHT, width: PICKER_WIDTH }, currentViewport()),
+      );
     }
-    document.addEventListener('mousedown', handleOutsideClick);
-    return () => document.removeEventListener('mousedown', handleOutsideClick);
-  }, [onClose]);
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [anchor]);
 
-  // Close on Escape
   useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') {
-        onClose();
-      }
+    function handlePointerDown(event: MouseEvent) {
+      const target = event.target as Node;
+      // The trigger toggles the picker itself, so closing on it would fight the
+      // caller and reopen the popover on the same click.
+      if (popoverRef.current?.contains(target) || anchor?.contains(target)) return;
+      onClose();
     }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') onClose();
+    }
+    document.addEventListener('mousedown', handlePointerDown);
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [anchor, onClose]);
 
   const handleSelectIcon = useCallback((iconString: string) => {
     saveRecentIcon(iconString);
@@ -404,7 +412,6 @@ export function IconPickerDialog({
   }, [onClose, onSelect]);
 
   const [emojiCatalog, setEmojiCatalog] = useState<readonly EmojiItem[]>(EMOJI_CATALOG);
-  const lucideCatalog: readonly LucideItem[] = LUCIDE_CATALOG;
 
   useEffect(() => {
     let mounted = true;
@@ -415,23 +422,6 @@ export function IconPickerDialog({
     }).catch(() => {});
     return () => { mounted = false; };
   }, []);
-
-  const handleShuffle = useCallback(() => {
-    if (activeTab === 'icons') {
-      const randomIdx = Math.floor(Math.random() * lucideCatalog.length);
-      const chosen = lucideCatalog[randomIdx];
-      if (chosen) {
-        const finalId = selectedColor && selectedColor !== 'e0e0e0' ? `${chosen.id}#${selectedColor}` : chosen.id;
-        handleSelectIcon(finalId);
-      }
-    } else {
-      const randomIdx = Math.floor(Math.random() * emojiCatalog.length);
-      const chosen = emojiCatalog[randomIdx];
-      if (chosen) {
-        handleSelectIcon(chosen.char);
-      }
-    }
-  }, [activeTab, handleSelectIcon, selectedColor, lucideCatalog, emojiCatalog]);
 
   const filteredEmojis = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -445,12 +435,12 @@ export function IconPickerDialog({
 
   const filteredLucide = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return lucideCatalog;
-    return lucideCatalog.filter((item) => (
+    if (!q) return LUCIDE_CATALOG;
+    return LUCIDE_CATALOG.filter((item) => (
       item.name.toLowerCase().includes(q) ||
       item.tags.some((t) => t.toLowerCase().includes(q))
     ));
-  }, [searchQuery, lucideCatalog]);
+  }, [searchQuery]);
 
   const [renderLimit, setRenderLimit] = useState(150);
   useEffect(() => { setRenderLimit(150); }, [activeTab, searchQuery]);
@@ -462,219 +452,143 @@ export function IconPickerDialog({
     }
   }, []);
 
-  return (
-    <>
-      <div
-        ref={popoverRef}
-        aria-label={locale === 'ar' ? 'اختيار الرمز' : 'Select Icon'}
-        aria-modal="true"
-        className="icon-picker-popover"
-        role="dialog"
-      >
-        {/* Top Tab Switcher & Remove Link (Notion style) */}
-        <div className="icon-picker-popover__nav">
-          <div className="icon-picker-popover__tabs">
-            <button
-              className="icon-picker-popover__tab"
-              data-active={activeTab === 'emojis'}
-              onClick={() => {
-                setActiveTab('emojis');
-                setColorPickerOpen(false);
-              }}
-              type="button"
-            >
-              <span>{locale === 'ar' ? 'الإيموجي' : 'Emoji'}</span>
-            </button>
-            <button
-              className="icon-picker-popover__tab"
-              data-active={activeTab === 'icons'}
-              onClick={() => setActiveTab('icons')}
-              type="button"
-            >
-              <span>{locale === 'ar' ? 'الأيقونات' : 'Icons'}</span>
-            </button>
-          </div>
+  const empty = ar ? 'لا توجد نتائج' : 'No matches';
 
-          {currentIcon && (
-            <button
-              className="icon-picker-popover__remove-btn"
-              onClick={() => {
-                onSelect('');
-                onClose();
-              }}
-              type="button"
-            >
-              {locale === 'ar' ? 'إزالة' : 'Remove'}
-            </button>
-          )}
-        </div>
-
-        {/* Search & Tool Bar: Filter Input + Shuffle + Color Picker Trigger */}
-        <div className="icon-picker-popover__search-bar">
-          <div className="icon-picker-popover__input-wrap">
-            <Search className="icon-picker-popover__search-icon" size={13} />
-            <input
-              autoFocus
-              className="icon-picker-popover__input"
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={locale === 'ar' ? 'ابحث...' : 'Filter...'}
-              value={searchQuery}
-            />
-            {searchQuery && (
-              <button
-                aria-label="Clear filter"
-                className="icon-picker-popover__clear-btn"
-                onClick={() => setSearchQuery('')}
-                type="button"
-              >
-                <X size={12} />
-              </button>
-            )}
-          </div>
-
+  return createPortal(
+    <div
+      ref={popoverRef}
+      aria-label={ar ? 'اختيار الرمز' : 'Select icon'}
+      className="icon-picker-popover"
+      role="dialog"
+      style={{
+        bottom: position.bottom,
+        left: position.left,
+        maxHeight: Math.min(PICKER_HEIGHT, position.maxHeight),
+        top: position.top,
+        width: PICKER_WIDTH,
+      }}
+    >
+      <div className="icon-picker-popover__nav">
+        <div className="icon-picker-popover__tabs">
           <button
-            aria-label="Random icon"
-            className="icon-picker-popover__tool-btn"
-            onClick={handleShuffle}
-            title={locale === 'ar' ? 'رمز عشوائي' : 'Random icon'}
+            className="icon-picker-popover__tab"
+            data-active={activeTab === 'icons'}
+            onClick={() => setActiveTab('icons')}
             type="button"
           >
-            <Shuffle size={14} />
+            {ar ? 'الأيقونات' : 'Icons'}
           </button>
+          <button
+            className="icon-picker-popover__tab"
+            data-active={activeTab === 'emojis'}
+            onClick={() => setActiveTab('emojis')}
+            type="button"
+          >
+            {ar ? 'الإيموجي' : 'Emoji'}
+          </button>
+        </div>
 
-          {activeTab === 'icons' && (
+        {currentIcon && (
+          <button
+            className="icon-picker-popover__remove-btn"
+            onClick={() => {
+              onSelect('');
+              onClose();
+            }}
+            type="button"
+          >
+            {ar ? 'إزالة' : 'Remove'}
+          </button>
+        )}
+      </div>
+
+      <div className="icon-picker-popover__search-bar">
+        <div className="icon-picker-popover__input-wrap">
+          <Search aria-hidden className="icon-picker-popover__search-icon" size={13} />
+          <input
+            autoFocus
+            aria-label={ar ? 'ابحث عن رمز' : 'Search icons'}
+            className="icon-picker-popover__input"
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={ar ? 'ابحث' : 'Search'}
+            value={searchQuery}
+          />
+          {searchQuery && (
             <button
-              aria-expanded={colorPickerOpen}
-              aria-label="Choose icon color"
-              className="icon-picker-popover__color-trigger"
-              onClick={() => setColorPickerOpen((open) => !open)}
-              title={locale === 'ar' ? 'تغيير اللون' : 'Icon color'}
+              aria-label={ar ? 'مسح البحث' : 'Clear search'}
+              className="icon-picker-popover__clear-btn"
+              onClick={() => setSearchQuery('')}
               type="button"
             >
-              <span
-                className="icon-picker-popover__color-dot"
-                style={{ backgroundColor: `#${selectedColor}` }}
-              />
+              <X size={12} />
             </button>
           )}
         </div>
+      </div>
 
-        {/* Color Swatch Dropdown (10 Notion Colors) */}
-        {colorPickerOpen && activeTab === 'icons' && (
-          <div className="icon-picker-popover__color-grid">
-            {NOTION_ICON_COLORS.map((col) => {
-              const isSelected = selectedColor === col.hex;
-              return (
+      <div className="icon-picker-popover__body" onScroll={handleScroll}>
+        {!searchQuery && recentIcons.length > 0 && (
+          <div className="icon-picker-popover__section">
+            <span className="icon-picker-popover__section-title">{ar ? 'الأخيرة' : 'Recent'}</span>
+            <div className="icon-picker-popover__grid">
+              {recentIcons.map((rec) => (
                 <button
-                  key={col.id}
-                  aria-label={locale === 'ar' ? col.labelAr : col.label}
-                  className="icon-picker-popover__color-btn"
-                  data-selected={isSelected}
-                  onClick={() => {
-                    setSelectedColor(col.hex);
-                    try {
-                      window.localStorage.setItem(LAST_COLOR_KEY, col.hex);
-                    } catch {
-                      // ignore
-                    }
-                    setColorPickerOpen(false);
-                  }}
-                  title={locale === 'ar' ? col.labelAr : col.label}
+                  key={rec}
+                  className="icon-picker-popover__tile"
+                  onClick={() => handleSelectIcon(rec)}
                   type="button"
                 >
-                  <span
-                    className="icon-picker-popover__swatch"
-                    style={{ backgroundColor: `#${col.hex}` }}
-                  />
+                  <PageIconRenderer icon={rec} size={17} />
                 </button>
-              );
-            })}
+              ))}
+            </div>
           </div>
         )}
 
-        {/* Popover Content */}
-        <div className="icon-picker-popover__body" onScroll={handleScroll}>
-          {/* Recent Section (shown when no search query) */}
-          {!searchQuery && recentIcons.length > 0 && (
-            <div className="icon-picker-popover__section">
-              <span className="icon-picker-popover__section-title">
-                {locale === 'ar' ? 'الأخيرة' : 'Recent'}
-              </span>
+        <div className="icon-picker-popover__section">
+          {activeTab === 'icons' ? (
+            filteredLucide.length > 0 ? (
               <div className="icon-picker-popover__grid">
-                {recentIcons.map((rec) => (
-                  <button
-                    key={rec}
-                    className="icon-picker-popover__tile"
-                    onClick={() => handleSelectIcon(rec)}
-                    type="button"
-                  >
-                    <PageIconRenderer icon={rec} size={17} />
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Main Catalog */}
-          <div className="icon-picker-popover__section">
-            {!searchQuery && (
-              <span className="icon-picker-popover__section-title">
-                {activeTab === 'icons' ? (locale === 'ar' ? 'الأيقونات' : 'Icons') : (locale === 'ar' ? 'الإيموجي' : 'Emoji')}
-              </span>
-            )}
-
-            {activeTab === 'icons' ? (
-              filteredLucide.length > 0 ? (
-                <div className="icon-picker-popover__grid">
-                  {filteredLucide.slice(0, renderLimit).map((item) => {
-                    const IconComp = item.icon;
-                    const fullIconId = selectedColor && selectedColor !== 'e0e0e0' ? `${item.id}#${selectedColor}` : item.id;
-                    const isSelected = currentIcon === fullIconId || currentIcon === item.id;
-                    return (
-                      <button
-                        key={item.id}
-                        className="icon-picker-popover__tile"
-                        data-selected={isSelected}
-                        onClick={() => handleSelectIcon(fullIconId)}
-                        title={item.name}
-                        type="button"
-                      >
-                        <IconComp size={17} strokeWidth={1.8} style={{ color: `#${selectedColor}` }} />
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="icon-picker-popover__empty">
-                  {locale === 'ar' ? 'لا توجد نتائج مطابقة' : 'No matching icons'}
-                </div>
-              )
-            ) : filteredEmojis.length > 0 ? (
-              <div className="icon-picker-popover__grid">
-                {filteredEmojis.slice(0, renderLimit).map((item) => {
-                  const isSelected = currentIcon === item.char;
+                {filteredLucide.slice(0, renderLimit).map((item) => {
+                  const IconComp = item.icon;
                   return (
                     <button
-                      key={item.char}
+                      key={item.id}
                       className="icon-picker-popover__tile"
-                      data-selected={isSelected}
-                      onClick={() => handleSelectIcon(item.char)}
+                      data-selected={currentIcon === item.id}
+                      onClick={() => handleSelectIcon(item.id)}
                       title={item.name}
                       type="button"
                     >
-                      <span className="icon-picker-popover__emoji-char">{item.char}</span>
+                      <IconComp size={17} strokeWidth={1.8} />
                     </button>
                   );
                 })}
               </div>
             ) : (
-              <div className="icon-picker-popover__empty">
-                {locale === 'ar' ? 'لا توجد نتائج مطابقة' : 'No matching emojis'}
-              </div>
-            )}
-          </div>
+              <div className="icon-picker-popover__empty">{empty}</div>
+            )
+          ) : filteredEmojis.length > 0 ? (
+            <div className="icon-picker-popover__grid">
+              {filteredEmojis.slice(0, renderLimit).map((item) => (
+                <button
+                  key={item.char}
+                  className="icon-picker-popover__tile"
+                  data-selected={currentIcon === item.char}
+                  onClick={() => handleSelectIcon(item.char)}
+                  title={item.name}
+                  type="button"
+                >
+                  <span className="icon-picker-popover__emoji-char">{item.char}</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="icon-picker-popover__empty">{empty}</div>
+          )}
         </div>
       </div>
-    </>
+    </div>,
+    document.body,
   );
 }

@@ -31,8 +31,11 @@ describe('anchoring a popover to its trigger', () => {
     const trigger = { bottom: 770, left: 100, right: 160, top: 740 };
     const placed = anchorPopover(trigger, size, viewport);
 
-    expect(placed.top).toBe(740 - 6 - Math.min(320, 740 - 6 - 8));
-    expect(placed.top + placed.maxHeight).toBeLessThanOrEqual(740);
+    // Pinned by its bottom edge, so a short list still touches the trigger
+    // instead of being stranded a preferred-height away from it.
+    expect(placed.top).toBeUndefined();
+    expect(placed.bottom).toBe(800 - 740 + 6);
+    expect(placed.maxHeight).toBe(740 - 6 - 8);
   });
 
   it('centres itself when the trigger cannot be measured', () => {

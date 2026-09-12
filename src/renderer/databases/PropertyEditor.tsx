@@ -19,7 +19,7 @@ import {
   Type,
   X,
 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 import type { DatabaseSchema } from '../../shared/database-contract';
 import type {
@@ -75,6 +75,7 @@ export function PropertyEditor({
 
   const [icon, setIcon] = useState(typeof property?.config.icon === 'string' ? property.config.icon : '');
   const [pickingIcon, setPickingIcon] = useState(false);
+  const iconButtonRef = useRef<HTMLButtonElement>(null);
   const [name, setName] = useState(property?.name || '');
   const [type, setType] = useState<PropertyType>(property?.type || 'text');
   const [required, setRequired] = useState(property?.required || false);
@@ -292,7 +293,7 @@ export function PropertyEditor({
         <form onSubmit={(e) => { void handleSubmit(e); }}>
           <div className="modal-header">
             <div className="modal-header__title">
-              <button type="button" className="property-icon-button" aria-label="Choose property icon" onClick={() => setPickingIcon(true)}><PropertyIcon type={type} icon={icon} /></button>
+              <button ref={iconButtonRef} type="button" className="property-icon-button" aria-label="Choose property icon" onClick={() => setPickingIcon((open) => !open)}><PropertyIcon type={type} icon={icon} /></button>
               <h3>{isEditing ? 'Edit Property' : 'New Property'}</h3>
             </div>
             <button className="btn-icon" onClick={onClose} type="button" aria-label="Close">
@@ -490,7 +491,7 @@ export function PropertyEditor({
             </button>
           </div>
         </form>
-        {pickingIcon && <IconPickerDialog locale="en" currentIcon={icon} onClose={() => setPickingIcon(false)} onSelect={(value) => { setIcon(value); setPickingIcon(false); }} />}
+        {pickingIcon && <IconPickerDialog anchor={iconButtonRef.current} locale="en" currentIcon={icon} onClose={() => setPickingIcon(false)} onSelect={(value) => { setIcon(value); setPickingIcon(false); }} />}
       </div>
     </DatabasePopover>
   );

@@ -194,9 +194,38 @@ html[lang=en] :is(body,button,input,textarea,h1,h2,h3,h4,h5) { font-family: ui-s
 .page-add-property { display:inline-flex; align-items:center; gap:8px; padding:7px 8px; margin-top:4px; border:0; border-radius:5px; background:transparent; color:var(--muted); font-size:13px; cursor:pointer; }
 .page-add-property:hover { background:var(--line); color:var(--text); }
 .page-property-form,.page-property-options { background:var(--bg); border:1px solid var(--line); border-radius:12px; padding:12px; box-shadow:0 10px 35px #0002; }
-.page-property-form { display:grid; gap:10px; max-width:340px; margin-top:6px; }
-.page-property-form>input { border:1px solid var(--line)!important; padding:8px!important; }
-.page-property-form>div { display:flex; gap:6px; }
+.page-property-form { display:grid; gap:8px; max-width:340px; margin-top:6px; }
+.page-property-form>input { border:1px solid var(--line)!important; border-radius:7px; padding:8px!important; }
+.page-property-form>div { display:flex; gap:6px; justify-content:flex-end; margin-top:2px; }
+.page-property-form__legend { margin:4px 2px 0; color:var(--muted); font-size:11.5px; font-weight:500; }
+/* This view does not load the database popover stylesheet, so the type picker
+   is laid out here rather than inheriting a grid that is not present. */
+.page-property-form .property-type-menu { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:2px; }
+.page-property-form .property-type-menu button { display:flex; align-items:center; gap:7px; width:100%; min-width:0; padding:7px 8px; border-radius:7px; background:transparent; color:var(--text); font-size:13px; text-align:start; }
+.page-property-form .property-type-menu button:hover { background:var(--line); }
+.page-property-form .property-type-menu button[aria-pressed=true] { background:var(--line); box-shadow:inset 0 0 0 1px var(--line-strong); }
+.page-property-form .property-type-menu svg { flex-shrink:0; color:var(--muted); }
+.page-property-form :is(input,.page-property-choices,.property-type-menu) { box-sizing:border-box; width:100%; min-width:0; }
+.page-property-form button:disabled { opacity:.4; cursor:default; }
+
+/* Select choices are chips, both while adding a property and while editing it. */
+.page-property-choices { display:flex; flex-wrap:wrap; align-items:center; gap:5px; padding:6px 7px; border:1px solid var(--line); border-radius:8px; }
+.page-property-choices > input { flex:1; min-width:80px; border:0!important; padding:2px!important; background:transparent; color:var(--text); font:inherit; font-size:13px; outline:none; }
+.page-property-choice { display:inline-flex; align-items:center; gap:2px; padding:1px 3px 1px 8px; border-radius:5px; background:var(--line); font-size:12px; line-height:19px; }
+.page-property-choice:dir(rtl) { padding:1px 8px 1px 3px; }
+.page-property-choice--static { padding:1px 8px; }
+.page-property-choice button { padding:2px!important; border-radius:4px; color:var(--muted); }
+.page-property-choice button:hover { color:var(--text); }
+
+.page-select { position:relative; min-width:0; }
+.page-select__trigger { display:flex; align-items:center; width:100%; min-height:26px; padding:2px 6px; border:0; border-radius:5px; background:transparent; color:var(--text); font:inherit; text-align:start; cursor:pointer; }
+.page-select__empty { color:var(--muted); font-size:13px; }
+.page-select__popup { position:absolute; z-index:40; inset-inline-start:0; top:calc(100% + 4px); display:grid; gap:2px; min-width:220px; max-height:260px; overflow:auto; padding:6px; border:1px solid var(--line); border-radius:10px; background:var(--bg); box-shadow:0 10px 35px #0002; }
+.page-select__popup > input { padding:6px 8px; border:1px solid var(--line); border-radius:7px; background:transparent; color:var(--text); font:inherit; font-size:13px; outline:none; }
+.page-select__popup button { display:flex; align-items:center; gap:6px; padding:5px 6px; border:0; border-radius:6px; background:transparent; color:var(--text); font:inherit; font-size:13px; text-align:start; cursor:pointer; }
+.page-select__popup button:hover { background:var(--line); }
+.page-select__clear,.page-select__create { color:var(--muted); font-size:12.5px; }
+.page-select__empty-note { margin:6px; color:var(--muted); font-size:12.5px; }
 .page-property-form button,.page-property-options button,.page-property-undo button { border:0; border-radius:5px; padding:6px 9px; background:transparent; color:var(--text); cursor:pointer; font-size:13px; }
 .page-property-form button:hover,.page-property-options button:hover { background:var(--line); }
 .page-property-form button[type=submit] { background:var(--text); color:var(--bg); }

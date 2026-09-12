@@ -38,14 +38,18 @@ describe('Live Quick Action form', () => {
     await revealOptionalFields(user);
     await user.click(screen.getByRole('combobox', { name: 'Source' }));
     await user.click(await screen.findByRole('option', { name: 'Alpha · 20' }));
-    await waitFor(() => expect(screen.getByLabelText('Calculated')).toHaveValue(10));
+    // Numeric fields are text inputs so an Arabic keyboard can reach them, so
+    // their values read back as strings. See shared/digits.ts.
+    await waitFor(() => expect(screen.getByLabelText('Calculated')).toHaveValue('10'));
     expect(screen.queryByRole('combobox', { name: 'Another source' })).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Calculated'), { target: { value: '7' } });
     fireEvent.change(screen.getByLabelText('Amount *'), { target: { value: '8' } });
     await waitFor(() => expect(screen.getByRole('button', { name: 'Run' })).toBeEnabled());
-    expect(screen.getByLabelText('Calculated')).toHaveValue(7);
-    await user.click(screen.getByRole('button', { name: 'Reset calculated value' }));
-    await waitFor(() => expect(screen.getByLabelText('Calculated')).toHaveValue(16));
+    expect(screen.getByLabelText('Calculated')).toHaveValue('7');
+    // The reset appears once the evaluation confirms the value was overridden,
+    // so it is waited for rather than assumed present on the same tick.
+    await user.click(await screen.findByRole('button', { name: 'Reset calculated value' }));
+    await waitFor(() => expect(screen.getByLabelText('Calculated')).toHaveValue('16'));
     fireEvent.change(screen.getByLabelText('Amount *'), { target: { value: '30' } });
     await waitFor(() => expect(screen.getByRole('combobox', { name: 'Another source' })).toBeInTheDocument());
     expect(screen.getByLabelText('Note')).toBeDisabled();
@@ -54,7 +58,9 @@ describe('Live Quick Action form', () => {
     expect(screen.getByLabelText('Preview')).toHaveTextContent('-10');
     await user.click(screen.getByRole('button', { name: 'Run' }));
     expect(api.executeWorkflow).not.toHaveBeenCalled();
-    expect(screen.getByRole('group', { name: 'Confirm warnings' })).toHaveTextContent('Amount exceeds available.');
+    // A press made while the preview is still in flight is held, not dropped,
+    // so the warnings can arrive a tick after the click.
+    expect(await screen.findByRole('group', { name: 'Confirm warnings' })).toHaveTextContent('Amount exceeds available.');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     await waitFor(() => expect(completed).toHaveBeenCalledOnce());
     const submitted = api.executeWorkflow.mock.calls[0]![0]; expect(submitted.inputs.calculated).toBe(60); expect(submitted.confirmedWarnings).toEqual(['warning']);
@@ -77,9 +83,13 @@ describe('Live Quick Action form', () => {
     await revealOptionalFields(user);
     // The calculated value arrives from an evaluate round trip, so it can land a
     // tick after the selection does on a slower machine.
-    await waitFor(() => expect(screen.getByLabelText('Calculated')).toHaveValue(20));
+    await waitFor(() => expect(screen.getByLabelText('Calculated')).toHaveValue('20'));
     fireEvent.change(screen.getByLabelText('Amount *'), { target: { value: '-1' } });
     expect(await screen.findByText('Amount cannot be negative.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Run' })).toBeDisabled(); expect(api.executeWorkflow).not.toHaveBeenCalled();
+    // Run still answers. A dead button and a refused run look the same, and the
+    // refusal is the thing worth saying out loud.
+    await user.click(screen.getByRole('button', { name: 'Run' }));
+    expect(api.executeWorkflow).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent('Amount cannot be negative.');
   });
 });

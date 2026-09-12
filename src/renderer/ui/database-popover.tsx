@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { anchorPopover, currentViewport, type AnchorRect } from './anchor-popover';
+import { anchorPopover, currentViewport, type AnchoredPosition, type AnchorRect } from './anchor-popover';
 import './database-popover.css';
 
 /** Compact editor anchored to its trigger, with no blocking backdrop. */
@@ -17,7 +17,7 @@ export function DatabasePopover({ children, onClose, labelId, className = '' }: 
     const { bottom, height, left, right, top } = active.getBoundingClientRect();
     return height ? { bottom, left, right, top } : undefined;
   });
-  const [position, setPosition] = useState({ left: 16, top: 100, maxHeight: 500 });
+  const [position, setPosition] = useState<AnchoredPosition>({ left: 16, maxHeight: 500, top: 100 });
   useLayoutEffect(() => {
     const measured = anchor?.isConnected ? anchor.getBoundingClientRect() : undefined;
     const rect = measured && measured.height ? measured : openingRect;

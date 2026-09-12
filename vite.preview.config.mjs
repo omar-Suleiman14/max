@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module';
-import { mkdirSync } from 'node:fs';
+import { createReadStream, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { build } from 'esbuild';
@@ -21,6 +21,15 @@ export default defineConfig({
     transformIndexHtml: (html) => html.replace(/<meta\s+http-equiv="Content-Security-Policy"[\s\S]*?\/>/, '').replace('/src/renderer/main.tsx', '/src/renderer/preview/main.js'),
     configureServer(server) {
       server.httpServer?.once('close', () => backend.close());
+      // The renderer rewrites `max://asset/x.png` to this path when it is
+      // running in a browser rather than in Electron.
+      server.middlewares.use('/__max/asset', (req, res) => {
+        const name = (req.url ?? '').replace(/^\/+/, '').split('?')[0];
+        if (!/^[0-9a-f]{64}\.(png|jpg|gif|webp)$/.test(name)) { res.statusCode = 404; res.end(); return; }
+        createReadStream(resolve(backend.assetDirectory, name))
+          .on('error', () => { res.statusCode = 404; res.end(); })
+          .pipe(res);
+      });
       server.middlewares.use('/__max/invoke', async (req, res) => {
         res.setHeader('Content-Type', 'application/json');
         if (req.method !== 'POST' || req.headers.origin !== origin || req.headers['x-max-preview'] !== token) { res.statusCode = 403; res.end('{}'); return; }

@@ -138,6 +138,11 @@ export function Sidebar({
   const [dragOverEdge, setDragOverEdge] = useState<'after' | 'before'>('before');
   const [expandedPageIds, setExpandedPageIds] = useState<ReadonlySet<string>>(new Set());
   const [menuPageId, setMenuPageId] = useState<string>();
+  // Renaming happens in the row itself. It used to call window.prompt, which
+  // Electron does not implement: the dialog never appeared, the call returned
+  // null, and the menu item looked like it simply did nothing.
+  const [renamingPageId, setRenamingPageId] = useState<string>();
+  const [renameDraft, setRenameDraft] = useState('');
   const [legacyViewNames, setLegacyViewNames] = useState<Readonly<Record<string, readonly { id: string; name: string }[]>>>({});
   const [databaseViewNames, setDatabaseViewNames] = useState<Readonly<Record<string, readonly { id: string; name: string }[]>>>({});
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -578,7 +583,22 @@ export function Sidebar({
                           </span>
                         )}
                       </span>
-                      {!collapsed && <span className="nav-item__title">{pageTitle}</span>}
+                      {!collapsed && (p && renamingPageId === p.id
+                        ? <input
+                            aria-label={locale === 'ar' ? 'اسم الصفحة' : 'Page name'}
+                            autoFocus
+                            className="nav-item__rename"
+                            onBlur={() => { onRenamePage(p.id, renameDraft.trim() || p.title); setRenamingPageId(undefined); }}
+                            onChange={(event) => setRenameDraft(event.target.value)}
+                            onClick={(event) => { event.stopPropagation(); event.preventDefault(); }}
+                            onKeyDown={(event) => {
+                              event.stopPropagation();
+                              if (event.key === 'Enter') { event.preventDefault(); onRenamePage(p.id, renameDraft.trim() || p.title); setRenamingPageId(undefined); }
+                              if (event.key === 'Escape') { event.preventDefault(); setRenamingPageId(undefined); }
+                            }}
+                            value={renameDraft}
+                          />
+                        : <span className="nav-item__title">{pageTitle}</span>)}
                     </button>
                     {!collapsed && p && (
                       <button aria-label={locale === 'ar' ? 'إعدادات الصفحة' : 'Page settings'} className="nav-item__menu-trigger" onClick={() => setMenuPageId(menuPageId === p.id ? undefined : p.id)} type="button">
@@ -589,7 +609,7 @@ export function Sidebar({
                       <div className="sidebar-page-menu" role="menu">
                         <button onClick={() => { setMenuPageId(undefined); setExpandedPageIds((current) => new Set(current).add(p.id)); onAddSubpage(p.id); }} role="menuitem" type="button"><Plus size={14} />{locale === 'ar' ? 'إضافة صفحة فرعية' : 'Add sub-page'}</button>
                         <button onClick={() => { setMenuPageId(undefined); onToggleFavorite(p.id, !p.favorite); }} role="menuitem" type="button"><Star fill={p.favorite ? 'currentColor' : 'none'} size={14} />{p.favorite ? (locale === 'ar' ? 'إزالة من المفضلة' : 'Remove from favorites') : (locale === 'ar' ? 'إضافة للمفضلة' : 'Add to favorites')}</button>
-                        <button onClick={() => { setMenuPageId(undefined); onRenamePage(p.id, window.prompt(locale === 'ar' ? 'اسم الصفحة' : 'Page name', p.title) ?? p.title); }} role="menuitem" type="button"><Pencil size={15} />{locale === 'ar' ? 'إعادة تسمية' : 'Rename'}</button>
+                        <button onClick={() => { setMenuPageId(undefined); setRenameDraft(p.title); setRenamingPageId(p.id); }} role="menuitem" type="button"><Pencil size={15} />{locale === 'ar' ? 'إعادة تسمية' : 'Rename'}</button>
                         <button onClick={() => { setMenuPageId(undefined); onDuplicatePage(p.id); }} role="menuitem" type="button"><Copy size={15} />{locale === 'ar' ? 'إنشاء نسخة' : 'Duplicate'}</button>
                         <div className="sidebar-page-menu__separator" />
                         <button className="danger" onClick={() => { setMenuPageId(undefined); onDeletePage(p.id); }} role="menuitem" type="button"><Trash2 size={15} />{locale === 'ar' ? 'نقل إلى المهملات' : 'Move to trash'}</button>

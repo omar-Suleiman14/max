@@ -125,6 +125,22 @@ const maxApi: MaxApi = Object.freeze({
         MaxApi['reconciliation']['openSession']
       >,
   }),
+  assets: Object.freeze({
+    downloadImage: (url: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.assetsDownload, url) as ReturnType<MaxApi['assets']['downloadImage']>,
+    importImage: (bytes: Uint8Array, fileName?: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.assetsImport, bytes, fileName) as ReturnType<MaxApi['assets']['importImage']>,
+    usage: () => ipcRenderer.invoke(IPC_CHANNELS.assetsUsage) as ReturnType<MaxApi['assets']['usage']>,
+  }),
+  photos: Object.freeze({
+    getAccessKey: () => ipcRenderer.invoke(IPC_CHANNELS.photosGetAccessKey) as ReturnType<MaxApi['photos']['getAccessKey']>,
+    search: (query: string, page?: number) =>
+      ipcRenderer.invoke(IPC_CHANNELS.photosSearch, query, page) as ReturnType<MaxApi['photos']['search']>,
+    setAccessKey: (key: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.photosSetAccessKey, key) as ReturnType<MaxApi['photos']['setAccessKey']>,
+    use: (photo: Readonly<{ authorName: string; authorUrl: string; downloadUrl: string; fullUrl: string }>) =>
+      ipcRenderer.invoke(IPC_CHANNELS.photosUse, photo) as ReturnType<MaxApi['photos']['use']>,
+  }),
   shop: Object.freeze({
     completeOnboarding: (draft: CompleteOnboardingDraft) =>
       ipcRenderer.invoke(IPC_CHANNELS.shopCompleteOnboarding, draft) as ReturnType<MaxApi['shop']['completeOnboarding']>,

@@ -5,6 +5,7 @@ import type { Locale } from '../app/i18n';
 import { lastUsedInputs, rememberInputs } from './last-used-inputs';
 import { ReactiveActionForm } from './reactive-action-form';
 import { hasReactiveFields } from './reactive-config';
+import { listMissing, missingRequiredInputs } from './required-inputs';
 import { WorkflowInputForm } from './workflow-input-form';
 import './quick-actions.css';
 
@@ -24,14 +25,19 @@ export type QuickActionFormProps = Readonly<{
  * This is the whole surface for running an action: the search popup shows it in
  * place of the result list, so choosing an action by name never means being
  * handed off to a second window with a row of tabs to re-orient in.
+ *
+ * A finished run clears back to an empty form with a short confirmation rather
+ * than replacing the form with a results card. Serving the next customer is the
+ * common case, and a card in the way of it is one click of ceremony each time.
  */
 export function QuickActionForm({ action, locale, onBusyChange, onEnabled, onOpenSettings }: QuickActionFormProps) {
   const ar = locale === 'ar';
   const [values, setValues] = useState<Record<string, unknown>>(() => lastUsedInputs(action.id, action.inputSchema.fields));
   const [error, setError] = useState('');
+  const [missing, setMissing] = useState<readonly string[]>([]);
+  const [done, setDone] = useState(false);
   const [running, setRunning] = useState(false);
   const [enabling, setEnabling] = useState(false);
-  const [completed, setCompleted] = useState(false);
   const [formInstance, setFormInstance] = useState(0);
   const lock = useRef(false);
   const blocked = !action.enabled;
@@ -43,22 +49,44 @@ export function QuickActionForm({ action, locale, onBusyChange, onEnabled, onOpe
   }, [onBusyChange]);
 
   useEffect(() => {
-    setCompleted(false);
     setError('');
+    setMissing([]);
     setValues(lastUsedInputs(action.id, action.inputSchema.fields));
   }, [action, formInstance]);
 
+  // The confirmation is a passing note, not a screen to dismiss.
+  useEffect(() => {
+    if (!done) return;
+    const timer = window.setTimeout(() => setDone(false), 3600);
+    return () => window.clearTimeout(timer);
+  }, [done]);
+
+  const completed = useCallback(() => {
+    setError('');
+    setMissing([]);
+    setDone(true);
+    setFormInstance((current) => current + 1);
+  }, []);
+
   const execute = async () => {
-    if (blocked || lock.current || completed) return;
+    if (blocked || lock.current) return;
+    const gaps = missingRequiredInputs(action.inputSchema.fields, values);
+    if (gaps.length) {
+      setMissing(gaps.map((gap) => gap.address));
+      setError(`${ar ? 'أكمل أولاً: ' : 'Fill in first: '}${listMissing(gaps, ar ? 'ar' : 'en')}`);
+      return;
+    }
+    setMissing([]);
     setBusy(true);
     setError('');
+    setDone(false);
     try {
       const result = await window.maxApi.workspace.executeWorkflow({ workflowId: action.id, inputs: values });
       if (!result.ok) setError(result.error.message);
       else {
         rememberInputs(action.id, values);
-        setCompleted(true);
         window.dispatchEvent(new Event('max:workspace-changed'));
+        completed();
       }
     } catch {
       setError(ar ? 'تعذر تنفيذ الإجراء.' : 'Could not run this action.');
@@ -88,35 +116,14 @@ export function QuickActionForm({ action, locale, onBusyChange, onEnabled, onOpe
   if (blocked) {
     return (
       <div className="quick-action-form">
-        <div className="quick-action-form__notice">
-          <strong>{ar ? 'هذا الإجراء موقوف' : 'This action is turned off'}</strong>
-          <p>{ar
-            ? 'تم إيقافه في الإعدادات، لذا لا يمكن تشغيله الآن.'
-            : 'It was switched off in settings, so it cannot run right now.'}</p>
-          <div className="quick-action-form__actions">
-            <button className="btn btn-primary" disabled={enabling} onClick={() => void turnOn()} type="button">
-              {enabling ? (ar ? 'جارٍ التفعيل…' : 'Turning on…') : (ar ? 'تفعيل الإجراء' : 'Turn it on')}
-            </button>
-            <button className="btn btn-ghost" onClick={onOpenSettings} type="button">{ar ? 'فتح الإعدادات' : 'Open settings'}</button>
-          </div>
+        <p className="quick-action-form__off">{ar ? 'هذا الإجراء موقوف في الإعدادات.' : 'This action is switched off in settings.'}</p>
+        <div className="quick-action-form__actions">
+          <button className="btn btn-primary" disabled={enabling} onClick={() => void turnOn()} type="button">
+            {enabling ? (ar ? 'جارٍ التفعيل…' : 'Turning on…') : (ar ? 'تفعيل الإجراء' : 'Turn it on')}
+          </button>
+          <button className="btn btn-ghost" onClick={onOpenSettings} type="button">{ar ? 'الإعدادات' : 'Settings'}</button>
         </div>
         {error && <p className="quick-action-form__error" role="alert">{error}</p>}
-      </div>
-    );
-  }
-
-  if (completed) {
-    return (
-      <div className="quick-action-form">
-        <div className="quick-action-form__notice quick-action-form__notice--done" role="status">
-          <strong>{ar ? 'تم تنفيذ الإجراء' : 'Action completed'}</strong>
-          <p>{ar ? 'تم حفظ التغييرات في مساحة العمل.' : 'Your changes have been saved to the workspace.'}</p>
-          <div className="quick-action-form__actions">
-            <button className="btn btn-primary" onClick={() => setFormInstance((current) => current + 1)} type="button">
-              {ar ? 'تشغيل مرة أخرى' : 'Run again'}
-            </button>
-          </div>
-        </div>
       </div>
     );
   }
@@ -128,18 +135,19 @@ export function QuickActionForm({ action, locale, onBusyChange, onEnabled, onOpe
           key={`${action.id}:${formInstance}`}
           workflow={action}
           locale={locale}
-          onCompleted={() => setCompleted(true)}
+          onCompleted={completed}
           onBusy={setBusy}
         />
       ) : (
-        <form key={`${action.id}:${formInstance}`} onSubmit={(event) => { event.preventDefault(); void execute(); }}>
-          <WorkflowInputForm fields={action.inputSchema.fields} values={values} onChange={setValues} disabled={running} locale={locale} />
+        <form key={`${action.id}:${formInstance}`} noValidate onSubmit={(event) => { event.preventDefault(); void execute(); }}>
+          <WorkflowInputForm fields={action.inputSchema.fields} values={values} onChange={(next) => { setValues(next); setMissing([]); setError(''); }} disabled={running} locale={locale} missing={missing} />
+          {error && <p className="quick-action-form__error" role="alert">{error}</p>}
           <button className="btn btn-primary" type="submit" disabled={running}>
             {running ? (ar ? 'جار التنفيذ…' : 'Running…') : (ar ? 'تشغيل' : 'Run')}
           </button>
         </form>
       )}
-      {error && <p className="quick-action-form__error" role="alert">{error}</p>}
+      <p aria-live="polite" className="quick-action-form__done" data-shown={done || undefined}>{done ? (ar ? 'تم · جاهز للتالي' : 'Done · ready for the next one') : ''}</p>
     </div>
   );
 }

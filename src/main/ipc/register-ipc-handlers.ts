@@ -55,6 +55,8 @@ import {
   type TransferDraft,
 } from '../../shared/transaction-contract';
 import type { DatabaseService } from '../database/database-service';
+import { AssetError, type AssetStore } from '../assets/asset-store';
+import { PhotoLibraryError, type PhotoLibrary } from '../assets/photo-library';
 import type { CloudBackupService } from '../cloud/cloud-backup-service';
 import { ObjectDomainError } from '../database/object-repository';
 import { WorkspaceDomainError, type MutationResult as WorkspaceMutationResult } from '../../shared/workspace-contract';
@@ -85,9 +87,12 @@ import {
 
 type RegisterIpcHandlersOptions = Readonly<{
   updates?: UpdateService;
+  /** Absent in test harnesses that do not exercise image storage. */
+  assets?: AssetStore;
   cloudBackups: CloudBackupService;
   database: DatabaseService;
   developmentServerUrl?: string;
+  photos?: PhotoLibrary;
   platform: PlatformAdapter;
 }>;
 
@@ -476,9 +481,11 @@ async function asyncMutation<T>(work: () => Promise<T>): Promise<MutationResult<
 
 export function registerIpcHandlers({
   updates,
+  assets,
   cloudBackups,
   database,
   developmentServerUrl,
+  photos,
   platform,
 }: RegisterIpcHandlersOptions): void {
   function trust(event: Electron.IpcMainInvokeEvent): void {
@@ -759,6 +766,77 @@ export function registerIpcHandlers({
   ipcMain.handle(IPC_CHANNELS.searchQuery, (event, searchTerm: unknown) => {
     trust(event);
     return database.search.query(typeof searchTerm === 'string' ? searchTerm : '');
+  });
+
+  // Local image store and photo library
+  async function storing<T>(work: () => Promise<T>): Promise<MutationResult<T>> {
+    try {
+      return { ok: true, value: await work() };
+    } catch (error) {
+      if (error instanceof AssetError || error instanceof PhotoLibraryError) {
+        return { ok: false, error: { code: 'invalid-input', message: error.message } };
+      }
+      return { ok: false, error: { code: 'invalid-input', message: 'Could not save the image.' } };
+    }
+  }
+  function requireAssets(): AssetStore {
+    if (!assets) throw new AssetError('Image storage is unavailable in this session.');
+    return assets;
+  }
+  function requirePhotos(): PhotoLibrary {
+    if (!photos) throw new PhotoLibraryError('unconfigured');
+    return photos;
+  }
+
+  ipcMain.handle(IPC_CHANNELS.assetsImport, (event, bytes: unknown) => {
+    trust(event);
+    return storing(async () => {
+      // Structured clone delivers the renderer's ArrayBuffer as one of these.
+      const data = bytes instanceof Uint8Array ? bytes
+        : bytes instanceof ArrayBuffer ? new Uint8Array(bytes)
+          : undefined;
+      if (!data) throw new AssetError('No image was supplied.');
+      return requireAssets().store(data);
+    });
+  });
+  ipcMain.handle(IPC_CHANNELS.assetsDownload, (event, url: unknown) => {
+    trust(event);
+    return storing(() => requireAssets().download(typeof url === 'string' ? url : ''));
+  });
+  ipcMain.handle(IPC_CHANNELS.assetsUsage, (event) => {
+    trust(event);
+    return assets?.usage() ?? { byteLength: 0, count: 0 };
+  });
+  ipcMain.handle(IPC_CHANNELS.photosGetAccessKey, async (event) => {
+    trust(event);
+    return { configured: Boolean(await photos?.accessKey()) };
+  });
+  ipcMain.handle(IPC_CHANNELS.photosSetAccessKey, (event, key: unknown) => {
+    trust(event);
+    return storing(async () => {
+      if (typeof key !== 'string') throw new PhotoLibraryError('That is not an access key.');
+      const library = requirePhotos();
+      await library.saveAccessKey(key);
+      return { configured: Boolean(await library.accessKey()) };
+    });
+  });
+  ipcMain.handle(IPC_CHANNELS.photosSearch, (event, query: unknown, page: unknown) => {
+    trust(event);
+    return storing(() => requirePhotos().search(
+      typeof query === 'string' ? query : '',
+      typeof page === 'number' ? page : 1,
+    ));
+  });
+  ipcMain.handle(IPC_CHANNELS.photosUse, (event, photo: unknown) => {
+    trust(event);
+    return storing(async () => {
+      if (!isObject(photo) || typeof photo.fullUrl !== 'string') throw new AssetError('No photo was chosen.');
+      const stored = await requireAssets().download(photo.fullUrl);
+      // Reported after the file is safely stored, and never allowed to fail the
+      // choice: the credit matters to the photographer, not to this workspace.
+      if (typeof photo.downloadUrl === 'string') await photos?.reportDownload(photo.downloadUrl);
+      return stored;
+    });
   });
 
   // Daily Reconciliation
@@ -1068,8 +1146,13 @@ export function registerIpcHandlers({
   // Views & Queries
   ipcMain.handle(IPC_CHANNELS.workspaceListViews, (event, ownerId: unknown, ownerType: unknown) => {
     trust(event);
-    if (ownerType !== undefined && ownerType !== 'database' && ownerType !== 'block') throw new Error('Invalid view owner type.');
-    return database.views.listViews(parseId(ownerId), ownerType);
+    // `null` means the same as an omitted owner type. The browser preview
+    // bridge serialises its arguments as JSON, which turns a trailing
+    // `undefined` into `null`, and rejecting that broke every database view in
+    // the preview while the packaged app was unaffected.
+    const owner = ownerType ?? undefined;
+    if (owner !== undefined && owner !== 'database' && owner !== 'block') throw new Error('Invalid view owner type.');
+    return database.views.listViews(parseId(ownerId), owner);
   });
   ipcMain.handle(IPC_CHANNELS.workspaceGetView, (event, id: unknown) => {
     trust(event);

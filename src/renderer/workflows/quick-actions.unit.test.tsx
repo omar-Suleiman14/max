@@ -7,7 +7,7 @@ import type { WorkspaceWorkflow, WorkspaceWorkflowDraft } from '../../shared/wor
 import { QuickActionForm } from './quick-action-form';
 import { QuickActionSettings } from './quick-action-settings';
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); window.localStorage.clear(); });
 const action: WorkspaceWorkflow = { id: 'configured', name: 'Record attendance', enabled: true, createdAt: '', updatedAt: '', version: 1, kind: 'custom', positionKey: 'a0', steps: [], inputSchema: { fields: [{ key: 'count', label: 'Count', type: 'number', required: true }] } };
 function api(actions: readonly WorkspaceWorkflow[] = []) {
   let rows: WorkspaceWorkflow[] = [...actions];
@@ -38,7 +38,22 @@ describe('running one quick action', () => {
 
     expect(workspace.executeWorkflow).toHaveBeenCalledExactlyOnceWith({ workflowId: 'configured', inputs: { count: 12 } });
     await act(async () => { finish({ ok: true, value: { status: 'completed' } }); await Promise.resolve(); });
-    expect(screen.getByText('Action completed')).toBeInTheDocument();
+    // The confirmation is a line, and the emptied form is still there to take
+    // the next entry rather than a card standing between the two.
+    expect(screen.getByText('Done · ready for the next one')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Run' })).toBeInTheDocument();
+    // Reloaded from what was just run, which is what the next entry starts from.
+    expect(screen.getByLabelText('Count *')).toHaveValue('12');
+  });
+
+  it('names the answers it is still waiting for instead of doing nothing', () => {
+    const workspace = api([action]);
+    render(<QuickActionForm action={action} locale="en" onOpenSettings={vi.fn()} />);
+
+    fireEvent.submit(screen.getByRole('button', { name: 'Run' }).closest('form')!);
+
+    expect(workspace.executeWorkflow).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent('Fill in first: Count');
   });
 
   it('will not run a switched-off action, and turns it on in place', async () => {
@@ -48,7 +63,7 @@ describe('running one quick action', () => {
     const user = userEvent.setup();
     render(<QuickActionForm action={blocked} locale="en" onEnabled={onEnabled} onOpenSettings={vi.fn()} />);
 
-    expect(screen.getByText('This action is turned off')).toBeInTheDocument();
+    expect(screen.getByText('This action is switched off in settings.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Run' })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Turn it on' }));
