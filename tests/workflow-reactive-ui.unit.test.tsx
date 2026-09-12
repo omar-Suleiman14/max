@@ -75,7 +75,9 @@ describe('Live Quick Action form', () => {
     await waitFor(() => expect(screen.queryByRole('group', { name: 'New record' })).not.toBeInTheDocument());
     await waitFor(() => expect(screen.getByRole('combobox', { name: 'Source' })).toHaveTextContent('Gamma'));
     await revealOptionalFields(user);
-    expect(screen.getByLabelText('Calculated')).toHaveValue(20);
+    // The calculated value arrives from an evaluate round trip, so it can land a
+    // tick after the selection does on a slower machine.
+    await waitFor(() => expect(screen.getByLabelText('Calculated')).toHaveValue(20));
     fireEvent.change(screen.getByLabelText('Amount *'), { target: { value: '-1' } });
     expect(await screen.findByText('Amount cannot be negative.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Run' })).toBeDisabled(); expect(api.executeWorkflow).not.toHaveBeenCalled();

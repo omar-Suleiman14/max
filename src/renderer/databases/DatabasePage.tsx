@@ -19,6 +19,7 @@ import { PropertyEditor } from './PropertyEditor';
 import { RecordDrawer } from './RecordDrawer';
 import { SortBuilder } from './SortBuilder';
 import { useDatabaseQuery } from './useDatabaseQuery';
+import { unmetRequirements } from './required-properties';
 import { recordDefaultsForFilter } from './view-defaults';
 
 type DatabasePageProps = Readonly<{
@@ -65,18 +66,60 @@ export function DatabasePage({ databaseId, embedded = false, initialViewId, loca
     views,
   } = useDatabaseQuery(databaseId, initialViewId);
 
+  // The record this page made most recently, still on probation until it is
+  // either given its required values or closed without them.
+  const draftRecordId = useRef<string | null>(null);
+
   /**
    * Create through the active view, not around it. A record added from a
    * filtered view is seeded with the values that filter asks for, so the new row
    * appears where it was asked for instead of being written and then hidden.
    */
   const createRecordInView = useCallback(
-    (draft: Parameters<typeof createRecord>[0]) => createRecord({
-      ...draft,
-      properties: { ...recordDefaultsForFilter(filterAst, schema?.properties ?? []), ...draft.properties },
-    }),
+    async (draft: Parameters<typeof createRecord>[0]) => {
+      const record = await createRecord({
+        ...draft,
+        properties: { ...recordDefaultsForFilter(filterAst, schema?.properties ?? []), ...draft.properties },
+      });
+      // A row has to exist before there is anywhere to type a required value in,
+      // so the check happens when it is closed rather than when it is made.
+      if (record) draftRecordId.current = record.id;
+      return record;
+    },
     [createRecord, filterAst, schema?.properties],
   );
+
+  /**
+   * A record made from this page and then left without its required values was
+   * never really created: closing it takes it away again rather than leaving a
+   * row nobody meant to keep. Records that already existed are never touched.
+   */
+  const discardUnfinishedRecord = useCallback(async (recordId: string): Promise<boolean> => {
+    if (draftRecordId.current !== recordId) return false;
+    draftRecordId.current = null;
+    const properties = schema?.properties;
+    if (!properties?.some((property) => property.required)) return false;
+
+    // Read the saved row rather than the drawer's copy: the drawer writes each
+    // value as it is typed, so this is what would actually have been kept.
+    const saved = await window.maxApi.workspace.getRecord(recordId);
+    if (!saved || saved.archivedAt) return false;
+    if (unmetRequirements(properties, saved.properties, saved.title).length === 0) return false;
+
+    const archived = await window.maxApi.workspace.archiveRecord(recordId);
+    if (!archived.ok) return false;
+    await window.maxApi.workspace.permanentlyDeleteNode(recordId);
+    window.dispatchEvent(new Event('max:workspace-changed'));
+    return true;
+  }, [schema?.properties]);
+
+  // Leaving the page with a half-made record open counts as closing it.
+  const discardRef = useRef(discardUnfinishedRecord);
+  discardRef.current = discardUnfinishedRecord;
+  useEffect(() => () => {
+    const pending = draftRecordId.current;
+    if (pending) void discardRef.current(pending);
+  }, []);
 
   const [exporting, setExporting] = useState(false);
   const [unavailable, setUnavailable] = useState(false);
@@ -339,8 +382,10 @@ export function DatabasePage({ databaseId, embedded = false, initialViewId, loca
         pageMode={activeView?.layoutConfig.pageMode === 'full' || activeView?.layoutConfig.pageMode === 'center' || activeView?.layoutConfig.pageMode === 'side' ? activeView.layoutConfig.pageMode : 'center'}
         onArchive={archiveRecord}
         onClose={() => {
+          const closing = selectedRecord?.id;
           setRecordDrawerOpen(false);
           setSelectedRecord(null);
+          if (closing) void discardUnfinishedRecord(closing).then((discarded) => { if (discarded) void refresh(); });
         }}
         record={selectedRecord}
         schema={relatedSchema ?? schema}

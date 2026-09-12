@@ -137,10 +137,34 @@ describe('the command popup', () => {
 it('provides only search when Quick Actions are disabled', async () => {
   const user = userEvent.setup();
   open({ quickActionsEnabled: false });
-  expect(screen.getByPlaceholderText('Search pages and records?')).toBeInTheDocument();
+  expect(screen.getByPlaceholderText('Search pages and records…')).toBeInTheDocument();
   expect(window.maxApi.workspace.listWorkflows).not.toHaveBeenCalled();
   expect(screen.queryByText('Actions')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Manage Quick Actions' })).not.toBeInTheDocument();
   await user.type(screen.getByRole('combobox'), 'charger');
   expect(await screen.findByText('Sale of a charger')).toBeInTheDocument();
   expect(screen.queryByText('Record a sale')).not.toBeInTheDocument();
+});
+
+it('writes its Arabic copy in Arabic, with Quick Actions on or off', () => {
+  for (const quickActionsEnabled of [true, false]) {
+    cleanup();
+    render(
+      <UniversalSearchDialog
+        locale="ar"
+        mode="search"
+        onClose={vi.fn()}
+        onModeChange={vi.fn()}
+        onOpenQuickActionSettings={vi.fn()}
+        onSelect={vi.fn()}
+        quickActionsEnabled={quickActionsEnabled}
+      />,
+    );
+
+    // Arabic that lost its encoding renders as a row of question marks.
+    const placeholder = screen.getByRole('combobox').getAttribute('placeholder') ?? '';
+    expect(placeholder).toMatch(/[؀-ۿ]/u);
+    expect(placeholder).not.toMatch(/\?\s*\?/u);
+    expect(document.querySelector('.search-dialog__empty')?.textContent ?? '').not.toMatch(/\?\s*\?/u);
+  }
 });

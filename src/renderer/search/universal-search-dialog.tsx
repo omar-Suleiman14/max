@@ -282,9 +282,11 @@ export function UniversalSearchDialog({
                 className="search-dialog__input"
                 onChange={(event) => setTerm(event.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder={!quickActionsEnabled ? (ar ? '???? ?? ???? ?? ????' : 'Search pages and records?') : actionsOnly
-                  ? (ar ? 'ابحث في الإجراءات السريعة…' : 'Search quick actions…')
-                  : (ar ? 'ابحث عن إجراء أو صفحة أو سجل…' : 'Search actions, pages, and records…')}
+                placeholder={!quickActionsEnabled
+                  ? (ar ? 'ابحث عن صفحة أو سجل…' : 'Search pages and records…')
+                  : actionsOnly
+                    ? (ar ? 'ابحث في الإجراءات السريعة…' : 'Search quick actions…')
+                    : (ar ? 'ابحث عن إجراء أو صفحة أو سجل…' : 'Search actions, pages, and records…')}
                 type="text"
                 value={term}
               />
@@ -362,7 +364,9 @@ export function UniversalSearchDialog({
                   ? <p>{searchCopy(locale, 'noResults')} <strong>&quot;{term}&quot;</strong></p>
                   : actionsOnly
                     ? <p>{ar ? 'لا توجد إجراءات سريعة بعد.' : 'No quick actions yet.'}</p>
-                    : <p>{!quickActionsEnabled ? (ar ? '???? ?? ???? ?? ????? ?????? ?? ???' : 'Search pages, databases, and records') : ar ? 'ابحث عن إجراء أو صفحة أو قاعدة بيانات أو سجل' : 'Search actions, pages, databases, and records'}</p>}
+                    : <p>{!quickActionsEnabled
+                      ? (ar ? 'ابحث عن صفحة أو قاعدة بيانات أو سجل' : 'Search pages, databases, and records')
+                      : (ar ? 'ابحث عن إجراء أو صفحة أو قاعدة بيانات أو سجل' : 'Search actions, pages, databases, and records')}</p>}
                 {quickActionsEnabled && (actionsOnly || (!trimmed && actions.length === 0)) && (
                   <button className="btn btn-secondary" onClick={onOpenQuickActionSettings} type="button">
                     {ar ? 'إدارة الإجراءات السريعة' : 'Manage Quick Actions'}

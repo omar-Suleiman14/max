@@ -290,8 +290,15 @@ export function MaxApp() {
       } else if (graphEnabled && page !== 'settings' && command && matchesShortcut(event, 'g')) {
         event.preventDefault(); setGraphOpen(value => !value);
       } else if (command && matchesShortcut(event, ',')) {
+        // The same key that opened Settings puts the workspace back, so the
+        // shortcut is a way in and out rather than a one-way door.
         event.preventDefault();
-        navigateSettingsSection('settings-general');
+        if (page === 'settings') {
+          setGraphOpen(false);
+          setPage(previousPage.current || firstWorkspacePageId(customPages, workspaceNavigation.pages, workspaceNavigation.databases));
+        } else {
+          navigateSettingsSection('settings-general');
+        }
       } else if (!command && !event.altKey && !event.shiftKey && matchesShortcut(event, '/') && !isEditingTarget(event.target)) {
         event.preventDefault();
         openPopup('search');
@@ -299,7 +306,7 @@ export function MaxApp() {
     }
     document.addEventListener('keydown', handleGlobalKeyDown);
     return () => document.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [graphEnabled, navigateSettingsSection, openPopup, page]);
+  }, [customPages, graphEnabled, navigateSettingsSection, openPopup, page, workspaceNavigation]);
 
   function navigate(nextPage: AppPage) {
     setGraphOpen(false);

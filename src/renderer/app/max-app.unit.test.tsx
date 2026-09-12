@@ -520,6 +520,18 @@ describe('Max shell', () => {
     expect(await screen.findByRole('combobox', { name: 'Universal Search' })).toBeInTheDocument();
   });
 
+  it('uses Ctrl+comma as a way in and out of Settings', async () => {
+    render(<MaxApp />);
+    await screen.findByRole('button', { name: 'Settings' });
+
+    fireEvent.keyDown(document, { code: 'Comma', ctrlKey: true, key: ',' });
+    expect(await screen.findByRole('navigation', { name: 'Settings sections' })).toBeInTheDocument();
+
+    // The comma keycap carries a different character on an Arabic layout.
+    fireEvent.keyDown(document, { code: 'Comma', ctrlKey: true, key: 'و' });
+    await waitFor(() => expect(screen.queryByRole('navigation', { name: 'Settings sections' })).not.toBeInTheDocument());
+  });
+
   it('persists theme choice and navigates back to app when settings closes', async () => {
     const user = userEvent.setup();
     render(<MaxApp />);
