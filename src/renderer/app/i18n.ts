@@ -188,7 +188,7 @@ const arabic: Record<TranslationKey, string> = {
   personEmpty: 'لا توجد جهات تعامل بعد',
   personEmptyBody: 'سجل بيانات العملاء والموردين وفريق العمل.',
   preferencesReset: 'إعادة ضبط المظهر',
-  pressCommand: 'اضغط Ctrl+F للبحث',
+  pressCommand: 'اضغط Ctrl K',
   readyToConfigure: 'جاهز للإعداد',
   readyToConfigureBody: 'اضبط الحقول المطلوبة للبدء في تسجيل البيانات.',
   reconciliation: 'مطابقة الخزينة',

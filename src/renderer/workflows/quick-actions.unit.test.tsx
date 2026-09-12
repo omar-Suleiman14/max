@@ -4,42 +4,60 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { WorkspaceWorkflow, WorkspaceWorkflowDraft } from '../../shared/workflow-contract';
-import { WorkflowLauncherDialog } from './workflow-launcher-dialog';
+import { QuickActionForm } from './quick-action-form';
 import { QuickActionSettings } from './quick-action-settings';
 
 afterEach(cleanup);
 const action: WorkspaceWorkflow = { id: 'configured', name: 'Record attendance', enabled: true, createdAt: '', updatedAt: '', version: 1, kind: 'custom', positionKey: 'a0', steps: [], inputSchema: { fields: [{ key: 'count', label: 'Count', type: 'number', required: true }] } };
 function api(actions: readonly WorkspaceWorkflow[] = []) {
+  let rows: WorkspaceWorkflow[] = [...actions];
   const executeWorkflow = vi.fn(() => Promise.resolve({ ok: true, value: { status: 'completed' } }));
-  const workspace = { listWorkflows: vi.fn(() => Promise.resolve(actions)), executeWorkflow, getNavigation: vi.fn(() => Promise.resolve({ databases: [], pages: [] })), createWorkflow: vi.fn((draft: WorkspaceWorkflowDraft) => Promise.resolve({ ok: true, value: { ...action, ...draft } })) };
+  const workspace = {
+    listWorkflows: vi.fn(() => Promise.resolve(rows)),
+    executeWorkflow,
+    getNavigation: vi.fn(() => Promise.resolve({ databases: [], pages: [] })),
+    createWorkflow: vi.fn((draft: WorkspaceWorkflowDraft) => Promise.resolve({ ok: true, value: { ...action, ...draft } })),
+    updateWorkflow: vi.fn((id: string, patch: Partial<WorkspaceWorkflowDraft>) => {
+      rows = rows.map((row) => (row.id === id ? { ...row, ...patch } as WorkspaceWorkflow : row));
+      return Promise.resolve({ ok: true, value: rows.find((row) => row.id === id)! });
+    }),
+  };
   Object.defineProperty(window, 'maxApi', { configurable: true, value: { workspace } });
   return workspace;
 }
-describe('Workspace Quick Actions UI', () => {
-  it('offers a direct configuration path in an empty workspace', async () => {
-    api(); const configure = vi.fn(); const user = userEvent.setup();
-    render(<WorkflowLauncherDialog locale="en" onClose={vi.fn()} onConfigure={configure} />);
-    expect(await screen.findByText(/No quick actions yet/)).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Manage Quick Actions' }));
-    expect(configure).toHaveBeenCalledOnce();
-  });
-  it('renders only configured enabled actions and guards duplicate submission', async () => {
-    const workspace = api([action, { ...action, id: 'disabled', name: 'Hidden', enabled: false }]);
+describe('running one quick action', () => {
+  it('runs the action once per submission and confirms when it lands', async () => {
+    const workspace = api([action]);
     let finish!: (value: { ok: boolean; value: { status: string } }) => void;
     workspace.executeWorkflow.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
-    const user = userEvent.setup();
-    render(<WorkflowLauncherDialog locale="en" onClose={vi.fn()} onConfigure={vi.fn()} />);
-    expect(await screen.findByRole('tab', { name: /Record attendance/ })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.queryByRole('tab', { name: 'Hidden' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('tab', { name: 'Sale' })).not.toBeInTheDocument();
-    await user.type(await screen.findByLabelText('Count *'), '12');
-    const button = screen.getByRole('button', { name: 'Run' });
-    const form = button.closest('form')!;
+    render(<QuickActionForm action={action} locale="en" onOpenSettings={vi.fn()} />);
+
+    await userEvent.setup().type(await screen.findByLabelText('Count *'), '12');
+    const form = screen.getByRole('button', { name: 'Run' }).closest('form')!;
     fireEvent.submit(form); fireEvent.submit(form);
+
     expect(workspace.executeWorkflow).toHaveBeenCalledExactlyOnceWith({ workflowId: 'configured', inputs: { count: 12 } });
     await act(async () => { finish({ ok: true, value: { status: 'completed' } }); await Promise.resolve(); });
     expect(screen.getByText('Action completed')).toBeInTheDocument();
   });
+
+  it('will not run a switched-off action, and turns it on in place', async () => {
+    const workspace = api();
+    const blocked = { ...action, enabled: false };
+    const onEnabled = vi.fn();
+    const user = userEvent.setup();
+    render(<QuickActionForm action={blocked} locale="en" onEnabled={onEnabled} onOpenSettings={vi.fn()} />);
+
+    expect(screen.getByText('This action is turned off')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Run' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Turn it on' }));
+    expect(workspace.updateWorkflow).toHaveBeenCalledWith('configured', { enabled: true });
+    expect(onEnabled).toHaveBeenCalledOnce();
+  });
+});
+
+describe('Workspace Quick Actions settings', () => {
   it('configures calculations, conditions, messages and summaries without JSON', async () => {
     const workspace = api(); const user = userEvent.setup();
     render(<QuickActionSettings locale="en"/>);

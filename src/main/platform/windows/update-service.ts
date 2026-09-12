@@ -23,7 +23,17 @@ export class UpdateService {
       'checking-for-update': 'checking', 'update-available': 'downloading',
       'update-not-available': 'current', 'update-downloaded': 'ready', error: 'error',
     } as const)) {
-      const listener = () => { this.#status = { ...this.#status, state }; };
+      const listener = (...args: unknown[]) => {
+        // Squirrel reports `update-downloaded` as
+        // (event, releaseNotes, releaseName, releaseDate, updateURL), so the
+        // version people are being offered is the third argument.
+        const releaseName = state === 'ready' && typeof args[2] === 'string' ? args[2] : undefined;
+        this.#status = {
+          ...this.#status,
+          availableVersion: state === 'current' ? undefined : releaseName ?? this.#status.availableVersion,
+          state,
+        };
+      };
       updater.on(event, listener); this.#listeners.push([event, listener]);
     }
   }

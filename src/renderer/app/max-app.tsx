@@ -18,7 +18,6 @@ import {
   Search,
   Settings,
   X,
-  PlusCircle,
 
   type LucideIcon,
 } from 'lucide-react';
@@ -35,6 +34,7 @@ import {
 } from '../pages/pages-store';
 import { EMPTY_WORKSPACE_PAGE, type AppPage, type CustomPage, type EngineStatus, type SettingsSectionId } from './app-types';
 import { localeDirection, type Locale, type TranslationKey, translate } from './i18n';
+import { matchesShortcut } from './keyboard';
 import {
   preferenceKeys,
   readLocale,
@@ -45,6 +45,7 @@ import {
   type ThemePreference,
 } from './preferences';
 import type { Command } from '../ui/command-menu';
+import type { SearchPopupMode } from '../search/universal-search-dialog';
 import { quickActionModifier, readQuickActionsEnabled } from '../workflows/quick-actions-preferences';
 import { EmptyPage } from '../ui/empty-page';
 import { Sidebar } from '../ui/sidebar';
@@ -56,7 +57,6 @@ const CommandMenu = lazy(() => import('../ui/command-menu').then((module) => ({ 
 const DatabasePage = lazy(() => import('../databases/DatabasePage').then((module) => ({ default: module.DatabasePage })));
 const DatabasesWorkspace = lazy(() => import('../databases/databases-workspace').then((module) => ({ default: module.DatabasesWorkspace })));
 const Onboarding = lazy(() => import('../onboarding/onboarding').then((module) => ({ default: module.Onboarding })));
-const WorkflowLauncherDialog = lazy(() => import('../workflows/workflow-launcher-dialog').then((module) => ({ default: module.WorkflowLauncherDialog })));
 const UniversalSearchDialog = lazy(() => import('../search/universal-search-dialog').then((module) => ({ default: module.UniversalSearchDialog })));
 
 const pageLabels: Record<string, TranslationKey> = {
@@ -129,15 +129,20 @@ export function MaxApp() {
   const [customPages, setCustomPages] = useState<readonly CustomPage[]>([]);
   const [workspaceNavigation, setWorkspaceNavigation] = useState<WorkspaceNavigation>({ databases: [], pages: [] });
   const [commandOpen, setCommandOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
+  // One popup carries both search and Quick Actions, so an action found by name
+  // opens on its own tab in place. `null` means the popup is closed.
+  const [popupMode, setPopupMode] = useState<SearchPopupMode | null>(null);
+  const [popupActionId, setPopupActionId] = useState<string>();
   const [blueprintModalTab, setBlueprintModalTab] = useState<'export' | 'import'>();
   const [graphEnabled] = useWorkspaceDisplay('graph');
   useEffect(() => { if (!graphEnabled || page === 'settings') setGraphOpen(false); }, [graphEnabled, page]);
   const [graphOpen, setGraphOpen] = useState(() => readSessionValue('graph-open', 'false') === 'true');
   useEffect(() => { localStorage.setItem('max:session:graph-open', String(graphOpen)); }, [graphOpen]);
-  // null while closed; otherwise the action to start on, or '' for the last used.
-  const [quickActionOpen, setQuickActionOpen] = useState<string | null>(null);
   const [quickActionsEnabled, setQuickActionsEnabled] = useState(readQuickActionsEnabled);
+  const openPopup = useCallback((mode: SearchPopupMode, actionId?: string) => {
+    setPopupActionId(actionId);
+    setPopupMode(mode);
+  }, []);
   const [requestedSavedViewId, setRequestedSavedViewId] = useState<string>();
   const [engineStatus, setEngineStatus] = useState<EngineStatus>('checking');
   const [runtimePlatform, setRuntimePlatform] = useState<'linux' | 'macos' | 'windows'>();
@@ -148,6 +153,15 @@ export function MaxApp() {
   const [openRecordId, setOpenRecordId] = useState<string>();
 
   const effectiveTheme = resolveTheme(theme, systemUsesDark);
+
+  // The language belongs to the workspace, not to this window. Startup reads it
+  // back from the workspace, so a switch that only moved React state came back
+  // in the old language the next time the app opened.
+  const changeLocale = useCallback((next: Locale) => {
+    setLocale(next);
+    window.localStorage.setItem(preferenceKeys.locale, next);
+    void window.maxApi.shop.updateMetadata({ locale: next }).catch(() => undefined);
+  }, []);
 
   const navigateSettingsSection = useCallback((section: SettingsSectionId) => {
     if (page !== 'settings') previousPage.current = page;
@@ -264,29 +278,28 @@ export function MaxApp() {
 
   useEffect(() => {
     function handleGlobalKeyDown(event: globalThis.KeyboardEvent) {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === 'f') {
+      // Shortcuts are matched on the physical key, so the keycaps people read
+      // keep working when the layout is Arabic and `event.key` reports "ب".
+      const command = event.ctrlKey || event.metaKey;
+      // One key opens one popup. It searches the whole workspace and lists the
+      // quick actions in the same place, so there is nothing else to remember.
+      if (command && matchesShortcut(event, 'k')) {
         event.preventDefault();
-        if (document.querySelector('[data-page="settings"]')) {
-          document.getElementById('settings-search-input')?.focus();
-        } else {
-          setSearchOpen(true);
-        }
-      } else if (quickActionsEnabled && (event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === 's') {
-        event.preventDefault();
-        setQuickActionOpen((prev) => prev === null ? '' : null);
-      } else if (graphEnabled && page !== 'settings' && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'g') {
+        setPopupActionId(undefined);
+        setPopupMode((previous) => (previous === null ? 'search' : null));
+      } else if (graphEnabled && page !== 'settings' && command && matchesShortcut(event, 'g')) {
         event.preventDefault(); setGraphOpen(value => !value);
-      } else if ((event.ctrlKey || event.metaKey) && event.key === ',') {
+      } else if (command && matchesShortcut(event, ',')) {
         event.preventDefault();
         navigateSettingsSection('settings-general');
-      } else if (event.key === '/' && !isEditingTarget(event.target)) {
+      } else if (!command && !event.altKey && !event.shiftKey && matchesShortcut(event, '/') && !isEditingTarget(event.target)) {
         event.preventDefault();
-        setSearchOpen(true);
+        openPopup('search');
       }
     }
     document.addEventListener('keydown', handleGlobalKeyDown);
     return () => document.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [quickActionsEnabled, graphEnabled, navigateSettingsSection, page]);
+  }, [graphEnabled, navigateSettingsSection, openPopup, page]);
 
   function navigate(nextPage: AppPage) {
     setGraphOpen(false);
@@ -456,8 +469,8 @@ export function MaxApp() {
       {
         id: 'quick-operation',
         keywords: ['quick', 'sale', 'fast', 'بيع', 'سريع', 'تسجيل'],
-        label: locale === 'ar' ? 'عملية سريعة (Ctrl+S)' : 'Quick Operation (Ctrl+S)',
-        run: () => setQuickActionOpen(''),
+        label: locale === 'ar' ? 'الإجراءات السريعة' : 'Quick actions',
+        run: () => openPopup('actions'),
       },
       {
         id: 'export-blueprint',
@@ -475,7 +488,7 @@ export function MaxApp() {
         id: 'switch-language',
         keywords: ['arabic', 'english', 'العربية', 'الإنجليزية'],
         label: locale === 'en' ? 'التبديل إلى العربية' : 'Switch to English',
-        run: () => setLocale(locale === 'en' ? 'ar' : 'en'),
+        run: () => changeLocale(locale === 'en' ? 'ar' : 'en'),
       },
       ...(['system', 'light', 'dark'] as ThemePreference[]).map((nextTheme) => ({
         id: `theme-${nextTheme}`,
@@ -484,7 +497,7 @@ export function MaxApp() {
         run: () => setTheme(nextTheme),
       })),
     ];
-  }, [customPages, handleAddCustomPage, locale, navigateSettingsSection]);
+  }, [changeLocale, customPages, handleAddCustomPage, locale, navigateSettingsSection, openPopup]);
 
   if (onboardingCompleted === null) {
     return null;
@@ -578,18 +591,14 @@ export function MaxApp() {
             <UpdateNotice locale={locale} onOpen={() => navigateSettingsSection('settings-danger')} />
             {graphEnabled && page !== 'settings' && <button type="button" className="topbar-tool" aria-pressed={graphOpen} aria-keyshortcuts={`${runtimePlatform === 'macos' ? 'Meta' : 'Control'}+g`} onClick={() => setGraphOpen(value => !value)}><Waypoints size={17}/><span>{locale === 'ar' ? 'خريطة' : 'Graph'}</span><kbd>{quickActionModifier(runtimePlatform)} G</kbd></button>}
             {page !== 'settings' && (
-              <button className="topbar-tool" aria-keyshortcuts={`${runtimePlatform === 'macos' ? 'Meta' : 'Control'}+f`} onClick={() => setSearchOpen(true)} type="button">
+              <button className="topbar-tool" aria-keyshortcuts={`${runtimePlatform === 'macos' ? 'Meta' : 'Control'}+k`} onClick={() => openPopup('search')} type="button">
                 <Search aria-hidden="true" size={17} />
                 <span>{locale === 'ar' ? 'بحث' : 'Search'}</span>
-                <kbd>{quickActionModifier(runtimePlatform)} F</kbd>
+                <kbd>{quickActionModifier(runtimePlatform)} K</kbd>
               </button>
             )}
 
-            {quickActionsEnabled && <button className="topbar-tool topbar-tool--quick" aria-keyshortcuts={`${runtimePlatform === 'macos' ? 'Meta' : 'Control'}+s`} onClick={() => setQuickActionOpen('')} type="button">
-              <PlusCircle aria-hidden="true" size={16} />
-              <span>{locale === 'ar' ? 'عملية سريعة' : 'Quick action'}</span>
-              <kbd>{quickActionModifier(runtimePlatform)} S</kbd>
-            </button>}
+
           </div>
         </header>
 
@@ -628,7 +637,7 @@ export function MaxApp() {
               onVisibleSectionChange={setSettingsSection}
               locale={locale}
               onBackToApp={() => navigate(previousPage.current)}
-              onChangeLocale={setLocale}
+              onChangeLocale={changeLocale}
               onChangeTheme={setTheme}
               onDemoDataSeeded={() => {
                 window.dispatchEvent(new Event('max:workspace-changed'));
@@ -663,15 +672,17 @@ export function MaxApp() {
 
       <Suspense fallback={null}>
       {commandOpen && <CommandMenu commands={commands} locale={locale} onClose={() => setCommandOpen(false)} />}
-      {searchOpen && (
+      {popupMode && (
         <UniversalSearchDialog
           locale={locale}
-          onClose={() => setSearchOpen(false)}
+          mode={popupMode}
+          onClose={() => setPopupMode(null)}
+          onModeChange={openPopup}
+          onOpenQuickActionSettings={() => { setPopupMode(null); navigateSettingsSection('settings-quick-actions'); }}
+          quickActionId={popupActionId}
+          quickActionsEnabled={quickActionsEnabled}
           onSelect={(res) => {
-            // A quick action found by name runs in the Quick Actions dialog, on
-            // its own tab, rather than anywhere inside the search popup.
-            if (res.kind === 'action') setQuickActionOpen(res.id);
-            else if (res.kind === 'item') navigate('items');
+            if (res.kind === 'item') navigate('items');
             else if (res.kind === 'person') navigate('people');
             else if (res.kind === 'account') navigate('accounts');
             else if (res.kind === 'transaction') navigate('transactions');
@@ -695,9 +706,6 @@ export function MaxApp() {
             void window.maxApi.shop.getMetadata().then((d) => setShopName(d.shopName));
           }}
         />
-      )}
-      {quickActionOpen !== null && (
-        <WorkflowLauncherDialog initialActionId={quickActionOpen || undefined} locale={locale} onClose={() => setQuickActionOpen(null)} onConfigure={() => { setQuickActionOpen(null); navigateSettingsSection('settings-quick-actions'); }} />
       )}
       </Suspense>
 

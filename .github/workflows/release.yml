@@ -65,6 +65,11 @@ jobs:
         if: runner.os == 'macOS'
         run: npx electron-forge make --targets=@electron-forge/maker-zip
 
+      - name: Verify Windows update packages
+        if: runner.os == 'Windows'
+        shell: bash
+        run: node scripts/verify-update-feed.cjs out/make "$(node -p 'require("./package.json").version')"
+
       # Release assets do not count against the Actions artifact storage quota,
       # so installers go straight to the release instead of through an artifact.
       - name: Attach installers to the release
@@ -144,51 +149,3 @@ jobs:
           path: out/make/**/*.flatpak
           if-no-files-found: error
           retention-days: 1
-
-  publish:
-    name: Publish GitHub release
-    if: github.event_name == 'release' && !github.event.release.prerelease
-    needs: [native, flatpak]
-    concurrency:
-      group: max-stable-update-feed
-      cancel-in-progress: false
-    runs-on: ubuntu-latest
-    env:
-      UPDATE_FEED_CONFIGURED: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
-
-    steps:
-      - name: Check out tagged source
-        uses: actions/checkout@v7
-
-      # The build jobs already attached every installer to the release, so only the
-      # Windows Squirrel index and packages are needed to advance the update feed.
-      # The feed is optional: without Cloudflare credentials the release still
-      # ships, it just does not advance in-app auto-update.
-      - name: Download the Windows update packages
-        if: env.UPDATE_FEED_CONFIGURED == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          mkdir -p artifacts
-          gh release download "$GITHUB_REF_NAME" --dir artifacts --pattern 'RELEASES' --pattern '*.nupkg'
-
-      - uses: actions/setup-node@v7
-        if: env.UPDATE_FEED_CONFIGURED == 'true'
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - run: npm ci --ignore-scripts
-        if: env.UPDATE_FEED_CONFIGURED == 'true'
-      - name: Advance Cloudflare update feed
-        if: env.UPDATE_FEED_CONFIGURED == 'true'
-        continue-on-error: true
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: node scripts/publish-updates.cjs artifacts
-
-      - name: Note the skipped update feed
-        if: env.UPDATE_FEED_CONFIGURED != 'true'
-        run: echo "::notice::CLOUDFLARE_API_TOKEN is not set, so the in-app update feed was not advanced. Release assets were published normally."

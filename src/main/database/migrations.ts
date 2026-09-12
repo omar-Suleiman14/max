@@ -1091,4 +1091,29 @@ export const migrations: readonly Migration[] = [
     ALTER TABLE workspace_workflows ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0, 1));
     UPDATE workspace_workflows SET enabled = 0, archived_at = COALESCE(archived_at, datetime('now')) WHERE kind = 'built_in' OR EXISTS (SELECT 1 FROM json_each(steps_json) WHERE json_extract(value, '$.type') NOT IN ('VALIDATE','COMPUTE','CREATE_RECORD','FIND_RECORD','UPDATE_RECORD','RETURN_RESULT'));
   `); } },
+  {
+    id: 18,
+    name: 'workspace_full_text_search',
+    up(database) {
+      // The index is derived data, so the cheapest way to add a ranked title
+      // column and normalized text is to drop it and let the workspace rebuild
+      // it on the next start.
+      database.exec(`
+        DROP TABLE IF EXISTS workspace_search_index;
+
+        CREATE VIRTUAL TABLE workspace_search_index USING fts5(
+          entity_id UNINDEXED,
+          entity_kind UNINDEXED,
+          database_id UNINDEXED,
+          display_title UNINDEXED,
+          display_subtitle UNINDEXED,
+          display_metadata UNINDEXED,
+          title_text,
+          search_text,
+          tokenize = 'unicode61 remove_diacritics 2',
+          prefix = '2 3 4'
+        );
+      `);
+    },
+  },
 ];

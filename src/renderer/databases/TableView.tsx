@@ -30,6 +30,8 @@ type TableViewProps = Readonly<{
   onRemoveSorting?: () => Promise<void>;
   onColumnResize?: (propertyId: string, width: number) => void;
   databaseId: string;
+  /** Records are still being queried; the columns are already known. */
+  loading?: boolean;
   locale?: Locale;
   onArchiveRecord?: (recordId: string) => Promise<void>;
   onCreateRecord: (draft: WorkspaceRecordDraft) => Promise<WorkspaceRecord | null>;
@@ -59,6 +61,7 @@ export function TableView({
   hasSorting = false,
   onRemoveSorting,
   databaseId,
+  loading = false,
   locale = 'en',
   onCreateRecord,
   onOpenRecord,
@@ -122,6 +125,19 @@ export function TableView({
 
   const [adding, setAdding] = useState(false);
   const [createdRecordId, setCreatedRecordId] = useState<string | null>(null);
+  const [awaitingRow, setAwaitingRow] = useState<WorkspaceRecord | null>(null);
+
+  /**
+   * A record the current view cannot show — because a filter, a sort, or the
+   * page boundary puts it elsewhere — is opened in the record drawer instead.
+   * Adding a row must never look like nothing happened.
+   */
+  useEffect(() => {
+    if (!awaitingRow) return;
+    if (!records.some((record) => record.id === awaitingRow.id)) onOpenRecord(awaitingRow);
+    setAwaitingRow(null);
+  }, [awaitingRow, onOpenRecord, records]);
+
   if (!schema) return null;
 
   const properties = schema.properties;
@@ -135,6 +151,7 @@ export function TableView({
       const created = await onCreateRecord({ databaseId, properties: {}, title: locale === 'ar' ? 'بدون عنوان' : 'Untitled' });
       if (created) {
         setCreatedRecordId(created.id);
+        setAwaitingRow(created);
       }
     } finally { setAdding(false); }
   };
@@ -345,6 +362,14 @@ export function TableView({
                     </td>
                   );
                 })}
+              </tr>
+            ))}
+
+            {/* The columns are already drawn; only the rows are still arriving. */}
+            {loading && records.length === 0 && Array.from({ length: 5 }, (_, row) => (
+              <tr aria-hidden="true" className="table-row table-row--pending" key={`pending-${row}`}>
+                <td className="table-cell-action" />
+                {Array.from({ length: properties.length }, (_, cell) => <td key={cell}><span /></td>)}
               </tr>
             ))}
 

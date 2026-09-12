@@ -31,7 +31,6 @@ export interface R2Bucket {
 }
 
 export interface Env {
-  RELEASES_BUCKET?: R2Bucket;
   BACKUPS_BUCKET: R2Bucket;
   CLERK_PUBLISHABLE_KEY: string;
   CLERK_SECRET_KEY: string;
@@ -70,22 +69,6 @@ export function createWorker(authenticate: WorkerAuthenticator = authenticateReq
     const url = new URL(request.url);
     const pathname = url.pathname;
     const method = request.method;
-
-    // Public, read-only release feed. Backups remain in their private bucket.
-    if (pathname.startsWith('/v1/releases/')) {
-      if (method !== 'GET' && method !== 'HEAD') return new Response(null, { status: 405, headers: { Allow: 'GET, HEAD' } });
-      const match = /^\/v1\/releases\/windows\/(x64|arm64)\/(RELEASES|Max-[0-9]+\.[0-9]+\.[0-9]+-(?:full|delta)\.nupkg)$/.exec(pathname);
-      if (!match) return new Response(null, { status: 404 });
-      if (!env.RELEASES_BUCKET) return new Response('Release feed is not configured.', { status: 503 });
-      const object = await env.RELEASES_BUCKET.get(`windows/${match[1]}/${match[2]}`);
-      if (!object) return new Response(null, { status: 404 });
-      return new Response(method === 'HEAD' ? null : object.body, { headers: {
-        'Content-Type': match[2] === 'RELEASES' ? 'text/plain' : 'application/octet-stream',
-        'Content-Length': String(object.size),
-        'Cache-Control': match[2] === 'RELEASES' ? 'no-store' : 'public, max-age=31536000, immutable',
-        'X-Content-Type-Options': 'nosniff',
-      } });
-    }
 
     // CORS preflight handling
     if (method === 'OPTIONS') {

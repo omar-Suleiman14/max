@@ -7,17 +7,19 @@ import { Select } from '../ui/select';
 import { Plus, RefreshCw, X } from 'lucide-react';
 import { PropertyIcon } from './PropertyIcon';
 import { PageIconRenderer } from '../ui/page-icon-renderer';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { Locale } from '../app/i18n';
 import type { DatabaseSchema } from '../../shared/database-contract';
 import type { WorkspaceProperty, WorkspaceRecord, WorkspaceRecordTemplate } from '../../shared/property-contract';
+import { DatabaseSkeleton } from './DatabaseSkeleton';
 import { DatabaseViewHost } from './DatabaseViewHost';
 import { FilterBuilder } from './FilterBuilder';
 import { PropertyEditor } from './PropertyEditor';
 import { RecordDrawer } from './RecordDrawer';
 import { SortBuilder } from './SortBuilder';
 import { useDatabaseQuery } from './useDatabaseQuery';
+import { recordDefaultsForFilter } from './view-defaults';
 
 type DatabasePageProps = Readonly<{
   databaseId: string;
@@ -62,6 +64,19 @@ export function DatabasePage({ databaseId, embedded = false, initialViewId, loca
     updateView,
     views,
   } = useDatabaseQuery(databaseId, initialViewId);
+
+  /**
+   * Create through the active view, not around it. A record added from a
+   * filtered view is seeded with the values that filter asks for, so the new row
+   * appears where it was asked for instead of being written and then hidden.
+   */
+  const createRecordInView = useCallback(
+    (draft: Parameters<typeof createRecord>[0]) => createRecord({
+      ...draft,
+      properties: { ...recordDefaultsForFilter(filterAst, schema?.properties ?? []), ...draft.properties },
+    }),
+    [createRecord, filterAst, schema?.properties],
+  );
 
   const [exporting, setExporting] = useState(false);
   const [unavailable, setUnavailable] = useState(false);
@@ -162,7 +177,7 @@ export function DatabasePage({ databaseId, embedded = false, initialViewId, loca
 
   async function handleCreateBlankRecord(templateId?: string) {
     const template = recordTemplates.find(({ id }) => id === templateId);
-    const record = await createRecord({
+    const record = await createRecordInView({
       databaseId,
       properties: {},
       templateId: template?.id,
@@ -272,9 +287,10 @@ export function DatabasePage({ databaseId, embedded = false, initialViewId, loca
           totalCount={totalCount}
           databaseId={databaseId}
           groups={groups}
+          loading={loading}
           locale={locale}
           onArchiveRecord={archiveRecord}
-          onCreateRecord={createRecord}
+          onCreateRecord={createRecordInView}
           onOpenRecord={handleOpenRecord}
           onUpdateRecord={updateRecord}
           onManageProperties={() => setPropertyManagerOpen((open) => !open)}
@@ -306,6 +322,8 @@ export function DatabasePage({ databaseId, embedded = false, initialViewId, loca
           records={records}
           schema={schema}
         />
+        {/* The frame above is already on screen; only the rows are still coming. */}
+        {!schema && <DatabaseSkeleton columns={4} embedded={embedded} locale={locale} rows={embedded ? 3 : 6} withFrame={false} />}
       </div>
 
       {totalCount > pageSize && <div className="database-pagination">

@@ -23,8 +23,8 @@ describe('DatabaseService', () => {
     service.initialize();
 
     expect(service.getHealth()).toEqual({
-      migrationCount: 17,
-      schemaVersion: 17,
+      migrationCount: 18,
+      schemaVersion: 18,
       status: 'ready',
     });
     service.close();
@@ -40,7 +40,7 @@ describe('DatabaseService', () => {
 
     expect(service.objects.listRecords('item')).toEqual([]);
     expect(service.shopMetadata.getMetadata().onboardingCompleted).toBe(false);
-    expect(service.getHealth().schemaVersion).toBe(17);
+    expect(service.getHealth().schemaVersion).toBe(18);
     service.close();
   });
 
@@ -56,7 +56,7 @@ describe('DatabaseService', () => {
 
     const second = new DatabaseService(filename);
     second.initialize();
-    expect(second.getHealth().migrationCount).toBe(17);
+    expect(second.getHealth().migrationCount).toBe(18);
     second.close();
 
     const inspection = new DatabaseSync(filename, { readOnly: true });
@@ -97,11 +97,11 @@ describe('DatabaseService', () => {
     const future = new DatabaseSync(filename);
     future
       .prepare('INSERT INTO system_migrations (id, name, applied_at) VALUES (?, ?, ?)')
-      .run(18, 'future_schema', new Date().toISOString());
+      .run(19, 'future_schema', new Date().toISOString());
     future.close();
 
     const reopened = new DatabaseService(filename);
-    expect(() => reopened.initialize()).toThrow('Database schema 18 is newer than this Max build.');
+    expect(() => reopened.initialize()).toThrow('Database schema 19 is newer than this Max build.');
     reopened.close();
   });
 
@@ -128,7 +128,7 @@ describe('DatabaseService', () => {
 
     const upgraded = new DatabaseService(filename);
     upgraded.initialize();
-    expect(upgraded.getHealth().schemaVersion).toBe(17);
+    expect(upgraded.getHealth().schemaVersion).toBe(18);
     upgraded.close();
 
     const inspection = new DatabaseSync(filename, { readOnly: true });

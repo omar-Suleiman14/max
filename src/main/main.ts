@@ -66,7 +66,7 @@ if (handledInstallerLifecycle) {
       );
 
       const installedWindows = platform.platform === 'windows' && app.isPackaged && existsSync(join(dirname(process.execPath), '..', 'Update.exe'));
-      updates = new UpdateService(installedWindows ? autoUpdater : undefined, app.getVersion(), MAX_UPDATE_WORKER_URL + '/v1/releases/windows/' + process.arch);
+      updates = new UpdateService(installedWindows ? autoUpdater : undefined, app.getVersion(), MAX_UPDATE_FEED_URL);
       if (process.env.MAX_SMOKE_TEST !== '1') updates.start();
       registerIpcHandlers({
         updates,

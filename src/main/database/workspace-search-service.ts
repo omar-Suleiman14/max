@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 
 import type { WorkspaceProperty, WorkspaceRecord } from '../../shared/property-contract';
+import { normalizeSearchText } from './search-service';
 import { valueToText } from './value-utils';
 import type { WorkspaceNode, WorkspaceSearchResult } from '../../shared/workspace-contract';
 import type { WorkspaceView } from '../../shared/view-contract';
@@ -14,6 +15,90 @@ type FtsRow = Readonly<{
   entity_kind: WorkspaceSearchResult['entityKind'];
 }>;
 
+const SELECT_COLUMNS = `
+  SELECT entity_id, entity_kind, database_id, display_title, display_subtitle, display_metadata
+  FROM workspace_search_index
+`;
+
+// A title match should outrank the same word buried in a page, so the title is
+// its own indexed column and carries most of the weight. The zeros are the
+// UNINDEXED display columns, which bm25 still expects a weight for.
+const RANKING = 'bm25(workspace_search_index, 0, 0, 0, 0, 0, 0, 12.0, 1.0)';
+
+const INSERT_SQL = `
+  INSERT INTO workspace_search_index (
+    entity_id, entity_kind, database_id,
+    display_title, display_subtitle, display_metadata,
+    title_text, search_text
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+`;
+
+/** One page can hold a book. Index the opening of it, not all of it. */
+const MAX_BODY_CHARS = 20_000;
+
+const TEXT_KEYS = ['content', 'caption', 'url'] as const;
+
+/**
+ * Every readable word a page block carries. Block ids, types and colors are
+ * skipped: they are machine values, and indexing them would put UUID noise in
+ * front of real matches.
+ */
+export function blockText(contentJson: string): string {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(contentJson);
+  } catch {
+    return '';
+  }
+
+  const pieces: string[] = [];
+  let budget = MAX_BODY_CHARS;
+
+  const take = (value: unknown): void => {
+    if (typeof value !== 'string' || !value.trim() || budget <= 0) return;
+    const text = value.slice(0, budget);
+    budget -= text.length;
+    pieces.push(text);
+  };
+
+  const walk = (value: unknown): void => {
+    if (budget <= 0) return;
+    if (Array.isArray(value)) {
+      for (const entry of value) walk(entry);
+      return;
+    }
+    if (!value || typeof value !== 'object') return;
+
+    const block = value as Record<string, unknown>;
+    for (const key of TEXT_KEYS) take(block[key]);
+    // A simple table keeps its text in rows of cells.
+    if (Array.isArray(block.cells)) {
+      for (const row of block.cells) {
+        if (Array.isArray(row)) for (const cell of row) take(cell);
+      }
+    }
+    walk(block.col1Blocks);
+    walk(block.col2Blocks);
+  };
+
+  walk(parsed);
+  return pieces.join(' ');
+}
+
+// Arabic glues its article and prepositions onto the front of a word, so
+// "الحسابات" is one token that a prefix search for "حساب" can never reach.
+const arabicArticle = /^(?:وال|بال|كال|فال|لل|ال)([؀-ۿ]{3,})$/u;
+
+/** The same words again without their leading article, as extra index tokens. */
+export function withoutArabicArticles(text: string): string {
+  const stems = new Set<string>();
+  for (const token of text.split(/[^\p{L}\p{N}]+/u)) {
+    const match = arabicArticle.exec(token);
+    if (match) stems.add(match[1]!);
+  }
+  return stems.size === 0 ? text : `${text} ${[...stems].join(' ')}`;
+}
+
 export class WorkspaceSearchService {
   readonly #database: DatabaseSync;
 
@@ -21,21 +106,40 @@ export class WorkspaceSearchService {
     this.#database = database;
   }
 
-  indexNode(node: WorkspaceNode, subtitle?: string, metadata?: Record<string, unknown>): void {
-    this.removeIndex(node.id);
-
-    const title = node.title;
-    const sub = subtitle ?? '';
-    const meta = metadata ? JSON.stringify(metadata) : '';
-    const searchText = `${title} ${sub} ${meta}`.trim();
-
+  /**
+   * Rows are matched on a normalized copy of their text, so an Arabic search
+   * finds a word however it was typed: with or without tashkeel, with أ or ا,
+   * ة or ه. The display columns keep the original spelling.
+   */
+  #write(
+    entityId: string,
+    kind: WorkspaceSearchResult['entityKind'],
+    databaseId: string | null,
+    title: string,
+    subtitle: string,
+    metadata: string,
+    body: string,
+  ): void {
+    this.removeIndex(entityId);
     this.#database
-      .prepare(`
-        INSERT INTO workspace_search_index (
-          entity_id, entity_kind, database_id, display_title, display_subtitle, display_metadata, search_text
-        ) VALUES (?, ?, NULL, ?, ?, ?, ?)
-      `)
-      .run(node.id, node.kind, title, sub, meta, searchText);
+      .prepare(INSERT_SQL)
+      .run(
+        entityId,
+        kind,
+        databaseId,
+        title,
+        subtitle,
+        metadata,
+        withoutArabicArticles(normalizeSearchText(title)),
+        withoutArabicArticles(normalizeSearchText(`${title} ${subtitle} ${body}`)),
+      );
+  }
+
+  indexNode(node: WorkspaceNode, subtitle?: string, metadata?: Record<string, unknown>): void {
+    const meta = metadata ? JSON.stringify(metadata) : '';
+    // A page is searchable by everything written on it, not only by its title.
+    const body = node.kind === 'record' ? '' : blockText(node.contentJson);
+    this.#write(node.id, node.kind, null, node.title, subtitle ?? '', meta, `${meta} ${body}`);
   }
 
   indexRecord(
@@ -43,48 +147,36 @@ export class WorkspaceSearchService {
     propertyDefs: readonly WorkspaceProperty[],
     databaseTitle: string,
   ): void {
-    this.removeIndex(record.id);
-
-    const title = record.title;
     const subtitle = `${databaseTitle} #${record.sequence}`;
+    const textPieces: string[] = [String(record.sequence), databaseTitle];
 
-    const textPieces: string[] = [title, String(record.sequence), databaseTitle];
-    for (const p of propertyDefs) {
-      const v = record.properties[p.id];
-      if (v !== undefined && v !== null && v !== '') {
-        if (typeof v === 'object') {
-          textPieces.push(JSON.stringify(v));
-        } else {
-          textPieces.push(valueToText(v));
-        }
-      }
+    for (const property of propertyDefs) {
+      const value = record.properties[property.id];
+      if (value === undefined || value === null || value === '') continue;
+      textPieces.push(property.name);
+      textPieces.push(typeof value === 'object' ? JSON.stringify(value) : valueToText(value));
     }
 
-    const searchText = textPieces.join(' ');
-    const meta = JSON.stringify({ sequence: record.sequence });
-
-    this.#database
-      .prepare(`
-        INSERT INTO workspace_search_index (
-          entity_id, entity_kind, database_id, display_title, display_subtitle, display_metadata, search_text
-        ) VALUES (?, 'record', ?, ?, ?, ?, ?)
-      `)
-      .run(record.id, record.databaseId, title, subtitle, meta, searchText);
+    this.#write(
+      record.id,
+      'record',
+      record.databaseId,
+      record.title,
+      subtitle,
+      JSON.stringify({ sequence: record.sequence }),
+      textPieces.join(' '),
+    );
   }
 
   indexView(view: WorkspaceView, databaseTitle: string): void {
-    this.removeIndex(view.id);
-    this.#database.prepare(`
-      INSERT INTO workspace_search_index (
-        entity_id, entity_kind, database_id, display_title, display_subtitle, display_metadata, search_text
-      ) VALUES (?, 'view', ?, ?, ?, ?, ?)
-    `).run(
+    this.#write(
       view.id,
+      'view',
       view.databaseId,
       view.name,
       databaseTitle,
       JSON.stringify({ layout: view.layout }),
-      `${view.name} ${databaseTitle} ${view.layout}`,
+      view.layout,
     );
   }
 
@@ -94,54 +186,48 @@ export class WorkspaceSearchService {
       .run(entityId);
   }
 
+  /** True when the index holds nothing, so a rebuild is worth the walk. */
+  isEmpty(): boolean {
+    return this.#database.prepare('SELECT 1 FROM workspace_search_index LIMIT 1').get() === undefined;
+  }
+
   search(rawQuery: string, limit = 20): readonly WorkspaceSearchResult[] {
-    const trimmed = rawQuery.trim();
-    if (!trimmed) return [];
+    const normalized = normalizeSearchText(rawQuery);
+    if (!normalized) return [];
 
-    // Format query for FTS5 (support prefix search)
-    const sanitized = trimmed.replace(/["*^]/g, '').trim();
-    if (!sanitized) return [];
+    // Split exactly where the index splits: on everything that is not a letter
+    // or a digit. A serial such as "SN-4471" is two tokens in the index, so it
+    // has to be two tokens in the query as well. Each one is a prefix term, so
+    // results narrow with every letter typed rather than waiting for a word to
+    // be finished.
+    const tokens = normalized.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+    if (tokens.length === 0) return [];
 
-    const ftsQuery = sanitized.split(/\s+/).map((word) => `"${word}"*`).join(' AND ');
+    const ftsQuery = tokens.map((token) => `"${token}"*`).join(' AND ');
 
     try {
       const rows = this.#database
-        .prepare(`
-          SELECT entity_id, entity_kind, database_id, display_title, display_subtitle, display_metadata
-          FROM workspace_search_index
-          WHERE workspace_search_index MATCH ?
-          LIMIT ?
-        `)
+        .prepare(`${SELECT_COLUMNS} WHERE workspace_search_index MATCH ? ORDER BY ${RANKING} LIMIT ?`)
         .all(ftsQuery, limit) as FtsRow[];
-
-      return rows.map((r) => ({
-        databaseId: r.database_id ?? undefined,
-        displayMetadata: r.display_metadata ?? undefined,
-        displaySubtitle: r.display_subtitle ?? undefined,
-        displayTitle: r.display_title,
-        entityId: r.entity_id,
-        entityKind: r.entity_kind,
-      }));
+      return rows.map(toResult);
     } catch {
-      // Fallback to LIKE if FTS expression syntax fails
-      const pattern = `%${sanitized}%`;
+      // A query FTS5 will not parse still has to return something useful.
+      const pattern = `%${normalized}%`;
       const rows = this.#database
-        .prepare(`
-          SELECT entity_id, entity_kind, database_id, display_title, display_subtitle, display_metadata
-          FROM workspace_search_index
-          WHERE display_title LIKE ? OR search_text LIKE ?
-          LIMIT ?
-        `)
+        .prepare(`${SELECT_COLUMNS} WHERE title_text LIKE ? OR search_text LIKE ? LIMIT ?`)
         .all(pattern, pattern, limit) as FtsRow[];
-
-      return rows.map((r) => ({
-        databaseId: r.database_id ?? undefined,
-        displayMetadata: r.display_metadata ?? undefined,
-        displaySubtitle: r.display_subtitle ?? undefined,
-        displayTitle: r.display_title,
-        entityId: r.entity_id,
-        entityKind: r.entity_kind,
-      }));
+      return rows.map(toResult);
     }
   }
+}
+
+function toResult(row: FtsRow): WorkspaceSearchResult {
+  return {
+    databaseId: row.database_id ?? undefined,
+    displayMetadata: row.display_metadata ?? undefined,
+    displaySubtitle: row.display_subtitle ?? undefined,
+    displayTitle: row.display_title,
+    entityId: row.entity_id,
+    entityKind: row.entity_kind,
+  };
 }

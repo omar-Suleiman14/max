@@ -1,5 +1,6 @@
 import { lazy, useEffect, useState } from 'react';
 import type { Locale } from '../app/i18n';
+import { DatabaseSkeleton } from './DatabaseSkeleton';
 const DatabasePage = lazy(() => import('./DatabasePage').then(module => ({ default: module.DatabasePage })));
 
 /** Read old links through their migration identity, never through display names. */
@@ -16,7 +17,8 @@ export function LegacyDatabaseLink({ alias, locale }: { alias: string; locale: L
     return () => { active = false; };
   }, [alias]);
   if (databaseId) return <DatabasePage key={databaseId} databaseId={databaseId} embedded locale={locale} />;
-  return <p className="text-muted">{loaded
-    ? (locale === 'ar' ? 'اختر قاعدة بيانات باستخدام الأمر / لربط هذا العرض.' : 'Use / to link a database to this page.')
-    : (locale === 'ar' ? 'جارٍ التحميل…' : 'Loading…')}</p>;
+  if (!loaded) return <DatabaseSkeleton embedded locale={locale} rows={3} />;
+  return <p className="text-muted">{locale === 'ar'
+    ? 'اختر قاعدة بيانات باستخدام الأمر / لربط هذا العرض.'
+    : 'Use / to link a database to this page.'}</p>;
 }

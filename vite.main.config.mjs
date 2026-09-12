@@ -10,7 +10,10 @@ export default defineConfig(({ mode }) => {
       },
     },
     define: {
-      MAX_UPDATE_WORKER_URL: JSON.stringify(env.MAX_UPDATE_WORKER_URL || 'https://max-backup-worker.omaarsuliiman.workers.dev'),
+      // Updates are served by GitHub Releases, so a self-hosted release feed is
+      // not part of running Max. Set MAX_UPDATE_FEED_URL to point a build at a
+      // different Squirrel feed.
+      MAX_UPDATE_FEED_URL: JSON.stringify(env.MAX_UPDATE_FEED_URL || 'https://github.com/omar-Suleiman14/max/releases/latest/download'),
       MAX_BACKUP_WORKER_URL: JSON.stringify(env.MAX_BACKUP_WORKER_URL || 'https://max-backup-worker.omaarsuliiman.workers.dev'),
     },
   };

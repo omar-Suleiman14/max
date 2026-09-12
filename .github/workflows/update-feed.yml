@@ -1,0 +1,64 @@
+name: Update feed
+
+# Max updates itself from its own GitHub release. Squirrel reads RELEASES from
+# /releases/latest/download and fetches the packages that index names from the
+# same place, so shipping an update needs no release server and no third-party
+# account. This job is the gate: it refuses to let a stable release stand if the
+# assets an installed copy would need are missing.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to verify
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify the Windows update feed
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Confirm the release carries a complete feed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          version="${TAG#v}"
+
+          assets="$(gh release view "$TAG" --json assets --jq '.assets[].name')"
+          has_asset() { printf '%s\n' "$assets" | grep -qxF "$1"; }
+
+          for required in RELEASES "Max-$version-full.nupkg"; do
+            if ! has_asset "$required"; then
+              echo "::error::The release is missing $required, so installed copies cannot update." >&2
+              exit 1
+            fi
+          done
+
+          # Every package the index names has to be downloadable from this same
+          # release, or Squirrel stalls part-way through an update.
+          gh release download "$TAG" --dir feed --pattern RELEASES --clobber
+          while read -r _ package _; do
+            [ -n "${package:-}" ] || continue
+            if ! has_asset "$package"; then
+              echo "::error::RELEASES names $package, which is not attached to this release." >&2
+              exit 1
+            fi
+          done < feed/RELEASES
+
+          gh release download "$TAG" --dir feed --pattern '*.nupkg' --clobber
+          node scripts/verify-update-feed.cjs feed "$version"
+
+          echo "The update feed for $version is complete."

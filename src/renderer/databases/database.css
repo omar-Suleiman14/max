@@ -274,7 +274,8 @@ html[lang=en] :is(body,button,input,textarea,h1,h2,h3,h4,h5) { font-family: ui-s
 
 /* Page decorations never escape over record peeks or dialogs. */
 .custom-page-header__icon-wrap { z-index:1; }
-.database-page-container .drawer-backdrop { z-index:1100; isolation:isolate; }
+.database-page-container .drawer-backdrop { z-index:1100; isolation:isolate; inset-block-start:var(--window-titlebar-height, 0px); }
+.database-page-container .drawer-backdrop .record-drawer { max-height:100%; }
 .database-page-container .record-drawer { position:relative; }
 .record-page-icon-wrap { position:relative; display:table; margin:0 0 18px; z-index:2; }
 .record-page-icon { display:grid; place-items:center; width:52px; height:52px; margin-inline-start:-6px; padding:6px; background:transparent; color:var(--text-soft); border:0; border-radius:7px; cursor:pointer; }
@@ -338,3 +339,35 @@ html[lang=en] :is(body,button,input,textarea,h1,h2,h3,h4,h5) { font-family: ui-s
   font-size: 12.5px;
   line-height: 1.6;
 }
+
+/* A database draws its own frame while the records are still being read, so
+   opening the app never shows a bare "Loading" where a table belongs. */
+.database-skeleton { display: grid; gap: 14px; padding: 4px 0 8px; }
+.database-skeleton[data-embedded] { padding: 0; gap: 10px; }
+.database-skeleton__heading { width: min(240px, 45%); height: 26px; border-radius: 8px; }
+.database-skeleton__toolbar { display: flex; gap: 8px; }
+.database-skeleton__toolbar span { width: 74px; height: 26px; border-radius: 7px; }
+.database-skeleton__grid { display: grid; gap: 1px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--line); }
+.database-skeleton__row { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 1px; padding: 0; background: var(--line); }
+.database-skeleton__row > span { display: block; height: 38px; padding: 0; background: var(--canvas); position: relative; }
+.database-skeleton__row--head > span { height: 34px; background: var(--canvas-subtle); }
+.database-skeleton__heading,
+.database-skeleton__toolbar span,
+.database-skeleton__row > span::after {
+  background-image: linear-gradient(90deg, transparent, color-mix(in srgb, var(--text) 7%, transparent), transparent);
+  background-size: 220% 100%;
+  animation: database-skeleton-sweep 1.4s ease-in-out infinite;
+}
+.database-skeleton__heading, .database-skeleton__toolbar span { background-color: var(--canvas-subtle); }
+.database-skeleton__row > span::after { content: ''; position: absolute; inset: 11px 14px; border-radius: 5px; background-color: color-mix(in srgb, var(--text) 6%, transparent); }
+@keyframes database-skeleton-sweep { from { background-position: 120% 0; } to { background-position: -120% 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .database-skeleton__heading,
+  .database-skeleton__toolbar span,
+  .database-skeleton__row > span::after { animation: none; }
+}
+.table-row--pending > td > span { display: block; height: 11px; margin: 12px 14px; border-radius: 5px; background: color-mix(in srgb, var(--text) 7%, transparent); animation: database-skeleton-pulse 1.4s ease-in-out infinite; }
+.table-row--pending > td:nth-child(3n) > span { width: 60%; }
+.table-row--pending > td:nth-child(3n+2) > span { width: 80%; }
+@keyframes database-skeleton-pulse { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .table-row--pending > td > span { animation: none; } }

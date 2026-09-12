@@ -15,6 +15,8 @@ type DatabaseViewHostProps = Readonly<{
   totalCount?: number;
   databaseId: string;
   groups?: readonly RecordGroup[];
+  /** Records are still being queried; the frame is already on screen. */
+  loading?: boolean;
   locale?: Locale;
   onArchiveRecord: (recordId: string) => Promise<void>;
   onCreateRecord: (draft: WorkspaceRecordDraft) => Promise<WorkspaceRecord | null>;
@@ -36,6 +38,7 @@ export function DatabaseViewHost({
   totalCount,
   databaseId,
   groups,
+  loading = false,
   locale = 'en',
   onArchiveRecord,
   onCreateRecord,
@@ -72,6 +75,7 @@ export function DatabaseViewHost({
           calculations={group.calculations ?? []}
           totalCount={group.totalCount}
           databaseId={databaseId}
+          loading={loading}
           locale={locale}
           onArchiveRecord={onArchiveRecord}
           onCreateRecord={onCreateRecord}
@@ -147,6 +151,7 @@ export function DatabaseViewHost({
           calculations={calculations}
           totalCount={totalCount}
           databaseId={databaseId}
+          loading={loading}
           locale={locale}
           onArchiveRecord={onArchiveRecord}
           onCreateRecord={onCreateRecord}

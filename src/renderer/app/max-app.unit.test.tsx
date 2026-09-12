@@ -496,18 +496,28 @@ describe('Max shell', () => {
     expect(container.querySelector('.app-frame')).toBeInTheDocument();
   });
 
-  it('leaves Ctrl+K unbound and opens universal data search with Ctrl+F', async () => {
+  it('opens the command popup with Ctrl+K and leaves Ctrl+F and Ctrl+S unbound', async () => {
     const user = userEvent.setup();
     render(<MaxApp />);
     await screen.findByRole('button', { name: 'Settings' });
 
-    fireEvent.keyDown(document, { ctrlKey: true, key: 'k' });
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     fireEvent.keyDown(document, { ctrlKey: true, key: 'f' });
+    fireEvent.keyDown(document, { ctrlKey: true, key: 's' });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    fireEvent.keyDown(document, { code: 'KeyK', ctrlKey: true, key: 'k' });
     const search = await screen.findByRole('combobox', { name: 'Universal Search' });
     expect(search).toHaveFocus();
     await user.keyboard('{Escape}');
     expect(search).not.toBeInTheDocument();
+  });
+
+  it('opens the same popup from an Arabic layout, where Ctrl+K arrives as a different letter', async () => {
+    render(<MaxApp />);
+    await screen.findByRole('button', { name: 'Settings' });
+
+    fireEvent.keyDown(document, { code: 'KeyK', ctrlKey: true, key: 'ل' });
+    expect(await screen.findByRole('combobox', { name: 'Universal Search' })).toBeInTheDocument();
   });
 
   it('persists theme choice and navigates back to app when settings closes', async () => {
@@ -648,7 +658,7 @@ describe('Max shell', () => {
   it('dismisses search outside and keeps its keyboard footer without redundant buttons', async () => {
     const user = userEvent.setup(); render(<MaxApp />);
     await screen.findByRole('button', { name: 'Settings' });
-    fireEvent.keyDown(document, { ctrlKey: true, key: 'f' });
+    fireEvent.keyDown(document, { code: 'KeyK', ctrlKey: true, key: 'k' });
     const search = await screen.findByRole('combobox', { name: 'Universal Search' });
     await user.type(search, 'notes');
     expect(screen.queryByRole('button', { name: /clear|close/i })).not.toBeInTheDocument();
@@ -657,15 +667,19 @@ describe('Max shell', () => {
     expect(search).not.toBeInTheDocument();
   });
 
-  it('opens workspace Quick Actions with Ctrl+S without built-in operations', async () => {
-    const user = userEvent.setup(); render(<MaxApp />);
+  it('removes the separate quick-action button and leaves Ctrl+S unbound', async () => {
+    render(<MaxApp />);
     await screen.findByRole('button', { name: 'Settings' });
-    await user.keyboard('{Control>}s{/Control}');
-    expect(await screen.findByRole('heading', { name: 'Quick Actions' })).toBeInTheDocument();
-    expect(await screen.findByText(/No quick actions yet/)).toBeInTheDocument();
-    expect(screen.queryByRole('tab', { name: 'Sell' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Quick action/ })).not.toBeInTheDocument();
+    for (const modifier of ['ctrlKey', 'metaKey']) {
+      const event = new KeyboardEvent('keydown', { [modifier]: true, key: 's', code: 'KeyS', bubbles: true, cancelable: true });
+      fireEvent(document, event);
+      expect(event.defaultPrevented).toBe(false);
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    }
+    fireEvent.keyDown(document, { ctrlKey: true, key: 'k', code: 'KeyK' });
+    expect(await screen.findByRole('combobox', { name: 'Universal Search' })).toBeInTheDocument();
   });
-
 
   it('persists appearance sliders and restores their defaults', async () => {
     const user = userEvent.setup(); render(<MaxApp />);
@@ -694,10 +708,10 @@ describe('Max shell', () => {
     expect(await screen.findByRole('button', { name: 'Get started' })).toBeInTheDocument();
   });
 
-  it('opens action configuration directly from the empty runtime popup', async () => {
+  it('opens action configuration directly from the empty actions popup', async () => {
     const user = userEvent.setup(); render(<MaxApp />);
     await screen.findByRole('button', { name: 'Settings' });
-    await user.keyboard('{Control>}s{/Control}');
+    fireEvent.keyDown(document, { ctrlKey: true, key: 'k', code: 'KeyK' });
     await user.click(await screen.findByRole('button', { name: 'Manage Quick Actions' }));
     expect(await screen.findByRole('button', { name: '+ Quick action' })).toBeInTheDocument();
     expect(screen.queryByRole('dialog', { name: 'Quick Actions' })).not.toBeInTheDocument();

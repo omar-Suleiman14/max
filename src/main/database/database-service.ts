@@ -20,6 +20,9 @@ const MIGRATIONS_TABLE_SQL = `
   ) STRICT;
 `;
 
+/** Raise this whenever indexing rules change, to reindex existing workspaces. */
+const SEARCH_INDEX_GENERATION = 2;
+
 import { BackupService } from './backup-service';
 import { PersonDebtService } from './person-debt-service';
 import { ReconciliationRepository } from './reconciliation-repository';
@@ -209,6 +212,56 @@ export class DatabaseService {
     }
 
     this.#initialized = true;
+    this.#refreshSearchIndex();
+  }
+
+  /**
+   * Indexing rules change: a new tokenizer, another field worth searching. The
+   * stored generation says which rules the rows on disk were written under, so
+   * a workspace indexed by an older Max reindexes once and then starts clean.
+   */
+  #refreshSearchIndex(): void {
+    const stored = this.#database
+      .prepare("SELECT value FROM app_metadata WHERE key = 'search.index-generation'")
+      .get() as { value: string } | undefined;
+    if (stored?.value === String(SEARCH_INDEX_GENERATION) && !this.workspaceSearch.isEmpty()) return;
+
+    this.rebuildSearchIndex();
+    this.#database
+      .prepare(`
+        INSERT INTO app_metadata (key, value, updated_at) VALUES ('search.index-generation', ?, ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+      `)
+      .run(String(SEARCH_INDEX_GENERATION), new Date().toISOString());
+  }
+
+  /**
+   * The search index is derived from the workspace, so a migration that changes
+   * its shape simply empties it and the next start fills it in again. Indexing
+   * runs through the same repositories that write it during normal use, so a
+   * rebuilt index cannot drift from a live one.
+   */
+  rebuildSearchIndex(): void {
+    const navigation = this.workspace.getNavigation();
+    if (navigation.pages.length === 0 && navigation.databases.length === 0) return;
+
+    this.#database.exec('DELETE FROM workspace_search_index');
+    this.unitOfWork.run(() => {
+      for (const page of this.workspace.listPages()) {
+        this.workspaceSearch.indexNode(page);
+      }
+      for (const entry of navigation.databases) {
+        const node = this.workspace.getNode(entry.id);
+        if (node) this.workspaceSearch.indexNode(node);
+        const properties = this.properties.listProperties(entry.id);
+        for (const record of this.records.listRecords(entry.id)) {
+          this.workspaceSearch.indexRecord(record, properties, entry.title);
+        }
+        for (const view of this.views.listViews(entry.id)) {
+          this.workspaceSearch.indexView(view, entry.title);
+        }
+      }
+    });
   }
 
   getHealth(): DatabaseHealth {

@@ -1,3 +1,4 @@
+import { DatabaseSkeleton } from '../databases/DatabaseSkeleton';
 import { LegacyDatabaseLink } from '../databases/LegacyDatabaseLink';
 import { ExtraBlock } from '../pages/extra-blocks';
 import { renderInline, escapeText } from '../pages/rich-text';
@@ -1265,7 +1266,7 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
               {block.type === 'database-view' && (
                 <div className="notion-embedded-db-card">
                   <div className="notion-embedded-db-content">
-                    <Suspense fallback={<div aria-live="polite" className="notion-embedded-db-loading" role="status">{locale === 'ar' ? 'جارٍ تحميل قاعدة البيانات…' : 'Loading database…'}</div>}>
+                    <Suspense fallback={<DatabaseSkeleton embedded locale={locale} rows={3} />}>
                     {block.databaseId ? (
                       <DatabasePage databaseId={block.databaseId} embedded initialViewId={block.viewId} locale={locale} onRemoveEmbeddedView={() => removeBlock(block.id)} />
                     ) : (

@@ -17,3 +17,5 @@
 .option-popup .option-row > button:last-child { opacity:0; }
 .option-popup .option-row:hover > button:last-child,.option-popup .option-row:focus-within > button:last-child { opacity:1; }
 .option-popup .option-list-hint { display:block; padding:8px 5px; color:var(--muted); font-size:12px; }
+/* Keep portalled property editors above the record drawer (1100). */
+.database-anchored-popover { z-index:1210; }
