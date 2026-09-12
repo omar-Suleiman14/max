@@ -2,7 +2,10 @@
 (() => {
   const REPO = 'omar-Suleiman14/max';
   const RELEASES_URL = `https://github.com/${REPO}/releases/latest`;
-  const API_URL = `https://api.github.com/repos/${REPO}/releases/latest`;
+  // The whole list, not `/releases/latest`: a release becomes "latest" the
+  // moment it is published, minutes before its build finishes attaching the
+  // installers. Offering that one replaces a working download with a dead link.
+  const API_URL = `https://api.github.com/repos/${REPO}/releases?per_page=12`;
   const CACHE_KEY = 'max:latest-release';
 
   const PATTERNS = {
@@ -94,9 +97,21 @@
   const cached = readCache();
   if (cached) apply(cached);
 
+  /**
+   * The newest release a visitor can actually download: one that carries a
+   * build for their platform, or failing that any finished release. A release
+   * still uploading its installers is skipped rather than shown empty.
+   */
+  const newestDownloadable = (releases) => {
+    const published = releases.filter((release) => !release.draft && !release.prerelease && (release.assets ?? []).length > 0);
+    return (platform && published.find((release) => findAsset(release, platform))) ?? published[0] ?? null;
+  };
+
   fetch(API_URL, { headers: { Accept: 'application/vnd.github+json' } })
     .then((response) => (response.ok ? response.json() : Promise.reject(new Error(String(response.status)))))
-    .then((release) => {
+    .then((body) => {
+      const release = newestDownloadable(Array.isArray(body) ? body : [body]);
+      if (!release) return;
       const trimmed = {
         tag_name: release.tag_name,
         assets: (release.assets ?? []).map(({ name, size, browser_download_url }) => ({ name, size, browser_download_url })),

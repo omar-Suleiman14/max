@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { WorkflowFormEvaluation, WorkspaceWorkflow } from '../../shared/workflow-contract';
 import type { Locale } from '../app/i18n';
 import { lastUsedInputs, rememberInputs } from './last-used-inputs';
@@ -13,18 +13,25 @@ export function ReactiveActionForm({ workflow, locale, onCompleted, onBusy }: { 
   const previewToken = useRef<string | undefined>(undefined);
   const lock = useRef(false); const requestKey = JSON.stringify([values, overrides, revision]);
   const pending = snapshot !== requestKey;
+  // What the form holds right now, readable from a response that was sent
+  // earlier. An evaluation answers the inputs it was given, so when those
+  // inputs have moved on since - picking a record that was just created, say -
+  // its echo has to be dropped instead of writing the older values back.
+  const currentValues = useRef(values);
+  const applyValues = useCallback((next: typeof values) => { currentValues.current = next; setValues(next); }, []);
   useEffect(() => { const refresh = () => { setConfirming(false); setRevision(v => v + 1); }; window.addEventListener('max:workspace-changed', refresh); return () => window.removeEventListener('max:workspace-changed', refresh); }, []);
   useEffect(() => {
     let active = true;
+    const sent = JSON.stringify(values);
     const timer = setTimeout(() => { void window.maxApi.workspace.evaluateWorkflow({ workflowId: workflow.id, inputs: values, overrides, evaluationToken: previewToken.current }).then(result => {
-      if (!active) return;
+      if (!active || JSON.stringify(currentValues.current) !== sent) return;
       if (!result.ok) { setError(result.error.message); setEvaluation(undefined); return; }
       previewToken.current = result.value.token;
       setError(''); setEvaluation(result.value); setSnapshot(JSON.stringify([result.value.values, overrides, revision]));
-      if (JSON.stringify(values) !== JSON.stringify(result.value.values)) setValues({ ...result.value.values });
+      if (sent !== JSON.stringify(result.value.values)) applyValues({ ...result.value.values });
     }).catch(() => { if (active) setError(ar ? 'تعذر تحديث المعاينة.' : 'Could not update preview.'); }); }, 120);
     return () => { active = false; clearTimeout(timer); };
-  }, [workflow.id, values, overrides, revision, ar]);
+  }, [applyValues, workflow.id, values, overrides, revision, ar]);
   const warnings = evaluation?.messages.filter(m => m.severity === 'WARNING') ?? [];
   const blocked = evaluation?.messages.some(m => m.severity === 'BLOCK');
   const submit = async (confirmed = false) => {
@@ -39,7 +46,7 @@ export function ReactiveActionForm({ workflow, locale, onCompleted, onBusy }: { 
     finally { lock.current = false; setRunning(false); onBusy(false); }
   };
   return <form onSubmit={e => { e.preventDefault(); void submit(); }} aria-busy={pending || running}>
-    <WorkflowInputForm fields={workflow.inputSchema.fields} values={values} onChange={next => { setConfirming(false); setValues(next); }} disabled={running || confirming} locale={locale} evaluation={evaluation} onEdit={(path, reset, removedRow) => {
+    <WorkflowInputForm fields={workflow.inputSchema.fields} values={values} onChange={next => { setConfirming(false); applyValues(next); }} disabled={running || confirming} locale={locale} evaluation={evaluation} onEdit={(path, reset, removedRow) => {
       setConfirming(false);
       setOverrides(old => {
         if (removedRow === undefined) return reset ? old.filter(p => p !== path) : [...new Set([...old, path])];
