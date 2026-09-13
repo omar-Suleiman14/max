@@ -20,6 +20,9 @@
  */
 
 import { execFileSync } from 'node:child_process';
+import console from 'node:console';
+import process from 'node:process';
+import { pathToFileURL } from 'node:url';
 
 const OWNER = 'omar-Suleiman14';
 const REPO = 'max';
@@ -114,12 +117,26 @@ function ensureFields(projectId) {
   return projectFields(projectId);
 }
 
-function projectItems(projectId) {
-  const nodes = gql(
-    `query($id:ID!){node(id:$id){... on ProjectV2{items(first:100){nodes{id content{... on Issue{number}}}}}}}`,
-    { id: projectId },
-  ).node.items.nodes;
-  return new Map(nodes.filter((n) => n.content?.number).map((n) => [n.content.number, n.id]));
+export function projectItems(projectId, query = gql) {
+  const items = new Map();
+  let cursor;
+  do {
+    const page = query(
+      `query($id:ID!,$cursor:String){node(id:$id){... on ProjectV2{items(first:100,after:$cursor){
+        nodes{id content{... on Issue{number repository{nameWithOwner}}}}
+        pageInfo{hasNextPage endCursor}
+      }}}}`,
+      { id: projectId, ...(cursor ? { cursor } : {}) },
+    ).node.items;
+    for (const item of page.nodes) {
+      if (item?.content?.repository?.nameWithOwner === `${OWNER}/${REPO}`) {
+        items.set(item.content.number, item.id);
+      }
+    }
+    cursor = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : undefined;
+    if (page.pageInfo.hasNextPage && !cursor) throw new Error('Project pagination returned no cursor.');
+  } while (cursor);
+  return items;
 }
 
 function main() {
@@ -182,4 +199,4 @@ function main() {
   for (const [name, description] of VIEWS) console.log(`  ${name.padEnd(16)} ${description}`);
 }
 
-main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
