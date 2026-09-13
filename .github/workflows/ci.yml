@@ -52,6 +52,9 @@ jobs:
       - name: Unit tests
         run: npm run test:unit
 
+      - name: Project bootstrap regression tests
+        run: node --test scripts/bootstrap-max-2.0-project.test.mjs
+
       - name: Integration tests
         run: npm run test:integration
 
