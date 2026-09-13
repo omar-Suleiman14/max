@@ -1,6 +1,7 @@
 import { Select } from '../ui/select';
 import { Plus } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { generateOrderKey } from '../../shared/order-key';
 
 import type { DatabaseSchema } from '../../shared/database-contract';
 import type { WorkspaceRecord, WorkspaceRecordDraft, WorkspaceRecordPatch } from '../../shared/property-contract';
@@ -31,6 +32,10 @@ export function BoardView({
 
   const [newCardTitles, setNewCardTitles] = useState<Record<string, string>>({});
   const [addingColumnId, setAddingColumnId] = useState<string | null>(null);
+  const [dragging, setDragging] = useState<string>();
+  const [dropColumn, setDropColumn] = useState<string>();
+  const [error, setError] = useState('');
+  const moving = useRef(false);
 
   if (!schema) return null;
 
@@ -69,17 +74,23 @@ export function BoardView({
     setAddingColumnId(null);
   };
 
-  const handleMoveRecord = (record: WorkspaceRecord, targetColumnId: string) => {
+  const handleMoveRecord = async (record: WorkspaceRecord, targetColumnId: string, beforeId?: string) => {
+    if (moving.current) return;
+    moving.current = true; setError('');
     const nextVal = targetColumnId === '__no_group__' ? null : targetColumnId;
-    void onUpdateRecord(record.id, {
+    const peers = records.filter(candidate => candidate.id !== record.id && (candidate.properties[groupProp.id] || null) === nextVal);
+    const target = beforeId ? peers.findIndex(candidate => candidate.id === beforeId) : peers.length;
+    try { await onUpdateRecord(record.id, {
+      positionKey: generateOrderKey(peers[target - 1]?.positionKey ?? null, peers[target]?.positionKey ?? null),
       properties: {
         [groupProp.id]: nextVal,
       },
-    });
+    }); } catch (error) { setError(String(error)); } finally { moving.current = false; setDragging(undefined); setDropColumn(undefined); }
   };
 
   return (
     <div className="board-view-container">
+      {error && <p role="alert">{error}</p>}
       <div className="board-view">
         {columns.map((col) => {
           const colRecords = records.filter((r) => {
@@ -91,10 +102,12 @@ export function BoardView({
           });
 
           return (
-            <div key={col.id} className="board-column" onDragOver={(event) => event.preventDefault()} onDrop={(event) => {
+            <div key={col.id} className="board-column" data-drop-target={dropColumn === col.id || undefined} onDragOver={(event) => { if (!dragging) return; event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setDropColumn(col.id); const container = event.currentTarget.closest('.board-view'); if (container) { const rect = container.getBoundingClientRect(); if (event.clientX > rect.right - 60) container.scrollLeft += 18; if (event.clientX < rect.left + 60) container.scrollLeft -= 18; } }} onDrop={(event) => {
               event.preventDefault();
+              event.stopPropagation();
               const record = records.find((candidate) => candidate.id === event.dataTransfer.getData('text/max-record'));
-              if (record) handleMoveRecord(record, col.id);
+              const before = (event.target as Element).closest<HTMLElement>('[data-record-id]')?.dataset.recordId;
+              if (record && before !== record.id) void handleMoveRecord(record, col.id, before);
             }}>
               {/* Column Header */}
               <div className="board-column__header">
@@ -119,10 +132,13 @@ export function BoardView({
                   <div
                     key={record.id}
                     className="board-card"
+                    data-record-id={record.id}
+                    data-dragging={dragging === record.id || undefined}
                     draggable
                     role="button"
                     tabIndex={0}
-                    onDragStart={(event) => { event.dataTransfer.setData('text/max-record', record.id); event.dataTransfer.effectAllowed = 'move'; }}
+                    onDragStart={(event) => { setDragging(record.id); event.dataTransfer.setData('text/max-record', record.id); event.dataTransfer.effectAllowed = 'move'; }}
+                    onDragEnd={() => { setDragging(undefined); setDropColumn(undefined); }}
                     onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onOpenRecord(record); } }}
                     onClick={() => onOpenRecord(record)}
                   >
@@ -143,7 +159,7 @@ export function BoardView({
                         }}
                         value={col.id}
                         onClick={(e) => e.stopPropagation()}
-                        onChange={(e) => handleMoveRecord(record, e.target.value)}
+                        onChange={(e) => { void handleMoveRecord(record, e.target.value); }}
                       >
                         {columns.map((c) => (
                           <option key={c.id} value={c.id}>

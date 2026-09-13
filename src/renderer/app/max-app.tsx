@@ -1,7 +1,6 @@
 import { UpdateNotice } from '../ui/update-notice';
 import { useWorkspaceDisplay } from '../pages/workspace-display-preferences';
 import { useAppearance } from './appearance';
-import { NavigationHistory } from '../pages/navigation-history';
 import { readSessionValue, usePagePosition } from './page-session';
 import { LegacyDatabaseLink } from '../databases/LegacyDatabaseLink';
 import { ScrollOutline } from '../ui/scroll-outline';
@@ -151,7 +150,7 @@ export function MaxApp() {
   const [runtimePlatform, setRuntimePlatform] = useState<'linux' | 'macos' | 'windows'>();
   const [engineNoticeVisible, setEngineNoticeVisible] = useState(false);
   const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(null);
-  const [shopName, setShopName] = useState('');
+  const [, setShopName] = useState('');
   const [onboardingPreview, setOnboardingPreview] = useState(false);
   const [openRecordId, setOpenRecordId] = useState<string>();
 
@@ -178,6 +177,17 @@ export function MaxApp() {
     window.localStorage.setItem(preferenceKeys.locale, next);
     void window.maxApi.shop.updateMetadata({ locale: next }).catch(() => undefined);
   }, []);
+
+  const handleAddCustomPage = useCallback(async () => {
+    const newPage = await createPersistentCustomPage(locale === 'ar' ? 'بدون عنوان' : 'Untitled', 'lucide:FileText', customPages.length);
+    if (!newPage) return;
+    setCustomPages((pages) => [...pages, newPage]);
+    setGraphOpen(false);
+    setPage(newPage.id);
+    setOpenRecordId(undefined);
+    setRequestedSavedViewId(undefined);
+    setCommandOpen(false);
+  }, [customPages.length, locale]);
 
   const navigateSettingsSection = useCallback((section: SettingsSectionId) => {
     if (page !== 'settings') previousPage.current = page;
@@ -223,7 +233,7 @@ export function MaxApp() {
     root.style.colorScheme = effectiveTheme;
     window.localStorage.setItem(preferenceKeys.locale, locale);
     window.localStorage.setItem(preferenceKeys.theme, theme);
-  }, [effectiveTheme, locale, theme]);
+  }, [effectiveTheme, locale, theme, onboardingCompleted]);
 
   useEffect(() => {
     window.localStorage.setItem(preferenceKeys.sidebarCollapsed, String(sidebarCollapsed));
@@ -315,6 +325,11 @@ export function MaxApp() {
         } else {
           navigateSettingsSection('settings-general');
         }
+      } else if (command && matchesShortcut(event, 'n')) {
+        // Match the physical N key so this stays reliable with an Arabic
+        // keyboard layout, just like the other application shortcuts.
+        event.preventDefault();
+        void handleAddCustomPage();
       } else if (!command && !event.altKey && !event.shiftKey && matchesShortcut(event, '/') && !isEditingTarget(event.target)) {
         event.preventDefault();
         openPopup('search');
@@ -322,7 +337,7 @@ export function MaxApp() {
     }
     document.addEventListener('keydown', handleGlobalKeyDown);
     return () => document.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [customPages, graphEnabled, navigateSettingsSection, openPopup, page, workspaceNavigation]);
+  }, [customPages, graphEnabled, handleAddCustomPage, navigateSettingsSection, openPopup, page, workspaceNavigation]);
 
   function navigate(nextPage: AppPage) {
     setGraphOpen(false);
@@ -355,13 +370,6 @@ export function MaxApp() {
     window.addEventListener('max:workspace-imported', restorePages);
     return () => { window.removeEventListener('max:workspace-changed', refreshWorkspaceNavigation); window.removeEventListener('max:pages-restored', restorePages); window.removeEventListener('max:workspace-imported', restorePages); };
   }, [refreshWorkspaceNavigation]);
-
-  const handleAddCustomPage = useCallback(async () => {
-    const newPage = await createPersistentCustomPage(locale === 'ar' ? 'بدون عنوان' : 'Untitled', 'lucide:FileText', customPages.length);
-    if (!newPage) return;
-    setCustomPages((pages) => [...pages, newPage]);
-    navigate(newPage.id);
-  }, [customPages.length, locale]);
 
   async function handleAddSubpage(parentId: string) {
     const siblingCount = customPages.filter((candidate) => candidate.parentNodeId === parentId).length;
@@ -603,13 +611,9 @@ export function MaxApp() {
       />
 
       <div className="app-frame">
-        <header className="topbar">
-          <div className="topbar__title">
-            <NavigationHistory page={page} onNavigate={navigate} locale={locale} />
-            <bdi>{shopName || translate(locale, 'workspace')}</bdi>
-            <span aria-hidden="true">/</span>
-            <bdi><strong>{pageLabel}</strong></bdi>
-          </div>
+        {/* The page map is a full window with its own floating controls in the
+            same corner, so the workspace pill stands down while it is open. */}
+        {!graphOpen && <header className="topbar" aria-label={locale === 'ar' ? 'إجراءات مساحة العمل' : 'Workspace actions'}>
           <div className="topbar__actions">
             <UpdateNotice locale={locale} onOpen={() => navigateSettingsSection('settings-danger')} />
             {graphEnabled && page !== 'settings' && <button type="button" className="topbar-tool" aria-pressed={graphOpen} aria-keyshortcuts={`${runtimePlatform === 'macos' ? 'Meta' : 'Control'}+g`} onClick={() => setGraphOpen(value => !value)}><Waypoints size={17}/><span>{locale === 'ar' ? 'خريطة' : 'Graph'}</span><kbd>{quickActionModifier(runtimePlatform)} G</kbd></button>}
@@ -623,7 +627,7 @@ export function MaxApp() {
 
 
           </div>
-        </header>
+        </header>}
 
         <main style={{ position: 'relative' }} onClick={(event) => { if (event.target === event.currentTarget) event.currentTarget.querySelector('.notion-editor-canvas')?.dispatchEvent(new Event('max:focus-page-end')); }} aria-label={showPageHeader ? undefined : pageLabel} aria-labelledby={showPageHeader ? 'page-title' : undefined} className="content" data-custom-page={isCustomPage} data-page={page} id="main-content" tabIndex={-1}>
           {graphOpen && <Suspense fallback={<div className="page-loading" />}><WorkspaceGraph locale={locale} onClose={() => setGraphOpen(false)} /></Suspense>}

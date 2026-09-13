@@ -2,13 +2,13 @@ import { generateOrderKey } from '../../shared/order-key';
 import { createPortal } from 'react-dom';
 import { RecordTemplateEditor } from './RecordTemplateEditor';
 import { PageIconRenderer } from '../ui/page-icon-renderer';
-import { GripVertical, ArrowDownAZ, ChevronDown, Columns3, Copy, Download, Filter, GalleryHorizontal, LayoutGrid, List, MoreHorizontal, Plus, Search, Table2, Trash2, X, Calendar } from 'lucide-react';
+import { GripVertical, ArrowDownAZ, BarChart3, Calendar, ChartNoAxesCombined, ChevronDown, Columns3, Copy, Download, FilePenLine, Filter, GalleryHorizontal, LayoutDashboard, LayoutGrid, List, Map, MoreHorizontal, Plus, Radio, Search, Table2, Trash2, X } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Locale } from '../app/i18n';
 import type { WorkspaceView, WorkspaceViewDraft, WorkspaceViewPatch } from '../../shared/view-contract';
 import type { WorkspaceRecordTemplate } from '../../shared/property-contract';
 
-const layouts = [{ id: 'table', name: 'Table', ar: 'جدول', Icon: Table2 }, { id: 'board', name: 'Board', ar: 'لوحة', Icon: Columns3 }, { id: 'list', name: 'List', ar: 'قائمة', Icon: List }, { id: 'calendar', name: 'Calendar', ar: 'تقويم', Icon: Calendar }, { id: 'gallery', name: 'Gallery', ar: 'معرض', Icon: GalleryHorizontal }] as const;
+const layouts = [{ id: 'table', name: 'Table', ar: 'جدول', Icon: Table2 }, { id: 'board', name: 'Board', ar: 'لوحة', Icon: Columns3 }, { id: 'gallery', name: 'Gallery', ar: 'معرض', Icon: GalleryHorizontal }, { id: 'list', name: 'List', ar: 'قائمة', Icon: List }, { id: 'chart', name: 'Chart', ar: 'مخطط', Icon: ChartNoAxesCombined }, { id: 'dashboard', name: 'Dashboard', ar: 'لوحة معلومات', Icon: LayoutDashboard }, { id: 'timeline', name: 'Timeline', ar: 'خط زمني', Icon: BarChart3 }, { id: 'feed', name: 'Feed', ar: 'موجز', Icon: Radio }, { id: 'map', name: 'Map', ar: 'خريطة', Icon: Map }, { id: 'calendar', name: 'Calendar', ar: 'تقويم', Icon: Calendar }, { id: 'form', name: 'Form', ar: 'نموذج', Icon: FilePenLine }] as const;
 type Props = {
   locale: Locale; databaseId: string; activeView: WorkspaceView | null; views: readonly WorkspaceView[];
   templates: readonly WorkspaceRecordTemplate[]; search: string; filterCount: number; sortCount: number;
@@ -106,7 +106,7 @@ export function DatabaseToolbar(props: Props) {
 
       {(panel === 'layout' || panel === 'new-view') && <>
         {panel === 'new-view' && <input autoFocus className="notion-db-menu-input" placeholder={ar ? 'اسم العرض' : 'View name'} value={viewName} onChange={(event) => setViewName(event.target.value)} />}
-        <div className="notion-db-layouts">{layouts.map(({id,name,ar: arabic,Icon}) => <button type="button" key={id} aria-pressed={(panel === 'new-view' ? newLayout : activeView?.layout) === id} onClick={() => { if (panel === 'new-view') setNewLayout(id); else if (activeView) void props.onUpdateView(activeView.id, { layout: id }); }}><Icon size={23} /><span>{ar ? arabic : name}</span></button>)}</div>
+        <div className="notion-db-layouts">{layouts.filter(layout => layout.id !== 'map').map(({id,name,ar: arabic,Icon}) => <button type="button" key={id} aria-pressed={(panel === 'new-view' ? newLayout : activeView?.layout) === id} onClick={() => { if (panel === 'new-view') setNewLayout(id); else if (activeView) void props.onUpdateView(activeView.id, { layout: id }); }}><Icon size={23} /><span>{ar ? arabic : name}</span></button>)}</div>
         {panel === 'layout' && activeView && <label className="notion-db-menu-row">{ar ? 'فتح الصفحات' : 'Open pages in'}<div className="notion-db-segments">{(['center','full','side'] as const).map((mode) => <button type="button" key={mode} aria-pressed={(['side','full'].includes(String(activeView.layoutConfig.pageMode)) ? activeView.layoutConfig.pageMode : 'center') === mode} onClick={() => void props.onUpdateView(activeView.id, { layoutConfig: { ...activeView.layoutConfig, pageMode: mode } })}>{ar ? ({default:'Default',side:'جانبي',center:'وسط',full:'كامل'})[mode] : ({default: 'Default', center: 'Popup', full: 'Full page', side: 'Side peek'})[mode]}</button>)}</div></label>}
         {panel === 'new-view' && <button className="notion-db-menu-primary" type="button" disabled={busy} onClick={() => { setBusy(true); void props.onCreateView({ databaseId: props.databaseId, name: viewName.trim() || layouts.find((layout) => layout.id === newLayout)!.name, layout: newLayout }).then((view) => { if (view) setPanel(null); }).finally(() => setBusy(false)); }}>{ar ? 'إنشاء' : 'Create'}</button>}
       </>}

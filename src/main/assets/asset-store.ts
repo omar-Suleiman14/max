@@ -44,6 +44,23 @@ export class AssetError extends Error {}
 export class AssetStore {
   constructor(private readonly directory: string, private readonly baseUrl = 'max://asset/') {}
 
+  attachmentPath(url: string): string {
+    const name = url.startsWith('max://attachment/') ? url.slice(17) : '';
+    if (!/^[0-9a-f]{64}\.[a-z0-9]{1,10}$/.test(name)) throw new AssetError('Invalid attachment.');
+    return join(this.directory, name);
+  }
+
+  async storeAttachment(bytes: Uint8Array, fileName: string): Promise<{ byteLength: number; url: string }> {
+    if (!bytes.byteLength || bytes.byteLength > 25 * 1024 * 1024) throw new AssetError('Files must be between 1 byte and 25 MB.');
+    const extension = fileName.split('.').at(-1)?.toLowerCase();
+    const allowed = new Set(['pdf','txt','csv','json','md','doc','docx','xls','xlsx','ppt','pptx','zip','mp3','mp4','wav','ogg','webm']);
+    if (!extension || !allowed.has(extension)) throw new AssetError('Use a document, archive, audio or video file.');
+    const name = `${createHash('sha256').update(bytes).digest('hex')}.${extension}`;
+    await mkdir(this.directory, { recursive: true });
+    await writeFile(join(this.directory, name), bytes, { flag: 'wx' }).catch((error: NodeJS.ErrnoException) => { if (error.code !== 'EEXIST') throw error; });
+    return { byteLength: bytes.byteLength, url: `max://attachment/${name}` };
+  }
+
   /** The URL a stored file is served at, or undefined for anything else. */
   fileNameFor(url: string): string | undefined {
     if (!url.startsWith(this.baseUrl)) return undefined;

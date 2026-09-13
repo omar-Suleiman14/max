@@ -1,7 +1,7 @@
 {
   "name": "max-shop-os",
   "productName": "Max",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Offline-first configurable shop operating system",
   "license": "GPL-2.0-only",
   "private": true,

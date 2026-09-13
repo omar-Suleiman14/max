@@ -130,6 +130,7 @@ export function QuickActionForm({ action, locale, onBusyChange, onEnabled, onOpe
 
   return (
     <div className="quick-action-form">
+      <p aria-live="polite" className="quick-action-form__done" data-shown={done || undefined}>{done ? (ar ? 'تم · جاهز للتالي' : 'Done · ready for the next one') : ''}</p>
       {hasReactiveFields(action.inputSchema) ? (
         <ReactiveActionForm
           key={`${action.id}:${formInstance}`}
@@ -147,7 +148,6 @@ export function QuickActionForm({ action, locale, onBusyChange, onEnabled, onOpe
           </button>
         </form>
       )}
-      <p aria-live="polite" className="quick-action-form__done" data-shown={done || undefined}>{done ? (ar ? 'تم · جاهز للتالي' : 'Done · ready for the next one') : ''}</p>
     </div>
   );
 }

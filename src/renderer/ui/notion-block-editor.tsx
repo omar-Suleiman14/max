@@ -25,6 +25,9 @@ import React, { lazy, Suspense, useCallback, useEffect, useRef, useState, type F
 
 import type { Locale } from '../app/i18n';
 import type { NavigationItem } from '../../shared/workspace-contract';
+import { IconPickerDialog } from './icon-picker-dialog';
+import { PageIconRenderer } from './page-icon-renderer';
+import { matchesShortcut } from '../app/keyboard';
 
 const DatabasePage = lazy(() => import('../databases/DatabasePage').then((module) => ({ default: module.DatabasePage })));
 
@@ -299,7 +302,19 @@ function RichTextBlock({ blockId, content, index, locale, onBlur, onContentChang
     </div>
   );
 }
-export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange, parentPageId }: NotionBlockEditorProps) {
+export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspaceChange, parentPageId }: NotionBlockEditorProps) {
+  const currentBlocks = useRef(blocks);
+  currentBlocks.current = blocks;
+  const undoStack = useRef<(readonly NotionBlock[])[]>([]);
+  const redoStack = useRef<(readonly NotionBlock[])[]>([]);
+  function onChange(next: readonly NotionBlock[]) {
+    if (JSON.stringify(next) === JSON.stringify(currentBlocks.current)) return;
+    undoStack.current.push(currentBlocks.current);
+    if (undoStack.current.length > 150) undoStack.current.shift();
+    redoStack.current = [];
+    currentBlocks.current = next;
+    publish(next);
+  }
   const deletedSelection = useRef<readonly NotionBlock[] | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const selectionAnchor = useRef<number | null>(null);
@@ -323,7 +338,10 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
   const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
   const [activeSlashBlockId, setActiveSlashBlockId] = useState<string | null>(null);
   const [slashQuery, setSlashQuery] = useState('');
+  const [fileError, setFileError] = useState('');
   const [slashIndex, setSlashIndex] = useState(0);
+  const [calloutPickerId, setCalloutPickerId] = useState<string>();
+  const calloutIconRefs = useRef(new Map<string, HTMLButtonElement>());
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [dragOverEdge, setDragOverEdge] = useState<'after' | 'before'>('before');
@@ -414,8 +432,13 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
   }
 
   function updateBlock(id: string, update: Partial<NotionBlock>) {
+    if (update.type && activeSlashBlockId === id && update.content === '') {
+      const source = currentBlocks.current.find(block => block.id === id)?.content ?? '';
+      const slash = source.lastIndexOf('/');
+      if (slash > 0) update = { ...update, content: source.slice(0, slash).trimEnd() };
+    }
     onChange(
-      blocks.map((b) => (b.id === id ? { ...b, ...update } : b)),
+      currentBlocks.current.map((b) => (b.id === id ? { ...b, ...update } : b)),
     );
   }
 
@@ -436,13 +459,13 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
   }
 
   function insertBlockAfter(afterId: string, type: BlockType = 'text', content = ''): string {
-    const idx = blocks.findIndex((b) => b.id === afterId);
+    const idx = currentBlocks.current.findIndex((b) => b.id === afterId);
     const newBlock: NotionBlock = {
       content,
       id: 'block_' + Math.random().toString(36).substring(2, 9),
       type,
     };
-    const next = [...blocks];
+    const next = [...currentBlocks.current];
     if (idx === -1) {
       next.push(newBlock);
     } else {
@@ -573,12 +596,12 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
       return;
     }
     if (text === '> ') {
-      updateBlock(id, { calloutIcon: '💡', content: '', type: 'callout' });
+      updateBlock(id, { calloutIcon: 'lucide:Lightbulb', content: '', type: 'callout' });
       setActiveSlashBlockId(null);
       setTimeout(() => { const element = inputRefs.current.get(id); if (element instanceof HTMLDivElement) element.innerHTML = ''; focusBlock(id, false); }, 0);
       return;
     }
-    if (text === '---') {
+    if (text.replace(/[\u200B-\u200D\uFEFF]/g, '').trim() === '---') {
       updateBlock(id, { content: '', type: 'divider' });
       insertBlockAfter(id, 'text', '');
       setActiveSlashBlockId(null);
@@ -586,9 +609,13 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
     }
 
     // Slash command trigger
-    if (text.startsWith('/')) {
+    // A command can follow existing text. Choosing it turns the command into
+    // its own block, preserving the preceding sentence instead of requiring
+    // people to start a fresh line just to use `/`.
+    const commandStart = text.lastIndexOf('/');
+    if (commandStart >= 0) {
       setActiveSlashBlockId(id);
-      setSlashQuery(text.substring(1).replace(/[\u200B-\u200D\uFEFF]/g, '').trim());
+      setSlashQuery(text.substring(commandStart + 1).replace(/[\u200B-\u200D\uFEFF]/g, '').trim());
       setSlashIndex(0);
     } else if (activeSlashBlockId === id) {
       setActiveSlashBlockId(null);
@@ -694,6 +721,9 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
       }
 
       if (event.key === 'Backspace' && cursorAtStart) {
+        if (!block.content && block.type !== 'text') {
+          event.preventDefault(); removeBlock(block.id); return;
+        }
         if (block.type !== 'text') {
           event.preventDefault();
           updateBlock(block.id, { type: 'text' });
@@ -864,7 +894,7 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
       label: 'Callout',
       labelAr: 'ملاحظة مميزة',
       run: (bId) => {
-        updateBlock(bId, { calloutIcon: '💡', content: '', type: 'callout' });
+        updateBlock(bId, { calloutIcon: 'lucide:Lightbulb', content: '', type: 'callout' });
         setActiveSlashBlockId(null);
         focusBlock(bId);
       },
@@ -1011,11 +1041,38 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
     requestAnimationFrame(() => focusBlock(moved.id));
   }
 
+  async function addDroppedFiles(files: FileList) {
+    setFileError('');
+    try {
+    const additions: NotionBlock[] = [];
+    for (const file of Array.from(files)) {
+      if (file.type.startsWith('image/')) {
+        const result = await window.maxApi.assets.importImage(new Uint8Array(await file.arrayBuffer()), file.name);
+        if (!result.ok) throw new Error(result.error.message);
+        additions.push({ caption: file.name, content: '', id: crypto.randomUUID(), type: 'image', url: result.value.url });
+        continue;
+      }
+      const result = await window.maxApi.assets.importAttachment(new Uint8Array(await file.arrayBuffer()), file.name);
+      if (!result.ok) throw new Error(result.error.message);
+      additions.push({ caption: file.name, content: '', id: crypto.randomUUID(), type: 'file', url: result.value.url });
+    }
+    if (additions.length) onChange([...currentBlocks.current, ...additions]);
+    } catch (error) { setFileError(String(error)); }
+  }
+
   return (
     <div
       ref={canvasRef}
       tabIndex={-1}
       className="notion-editor-canvas"
+      onDragOver={(event) => {
+        if (event.dataTransfer.types.includes('Files')) event.preventDefault();
+      }}
+      onDrop={(event) => {
+        if (!event.dataTransfer.files.length) return;
+        event.preventDefault(); event.stopPropagation();
+        void addDroppedFiles(event.dataTransfer.files);
+      }}
       onContextMenu={(event) => {
         const target = event.target as Element;
         if (target.closest('.notion-editor-canvas') !== event.currentTarget || target.closest('.database-page-container,button,a')) return;
@@ -1034,6 +1091,13 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
       }}
       onKeyDownCapture={(event) => {
         if ((event.target as Element).closest('.notion-editor-canvas') !== event.currentTarget) return;
+        if ((event.ctrlKey || event.metaKey) && matchesShortcut(event, 'z') && !(event.target as Element).closest('.database-page-container')) {
+          const from = event.shiftKey ? redoStack.current : undoStack.current;
+          const to = event.shiftKey ? undoStack.current : redoStack.current;
+          const previous = from.pop();
+          if (previous) { event.preventDefault(); event.stopPropagation(); to.push(currentBlocks.current); currentBlocks.current = previous; publish(previous); setSelectedLines([]); }
+          return;
+        }
         if (event.nativeEvent.isComposing || (event.target as Element).closest('input,textarea,.inline-format-toolbar')) return;
         if ((event.target as Element).closest('.database-page-container,.notion-slash-menu,.notion-block-action-menu')) return;
         if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
@@ -1081,7 +1145,15 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
         else focusBlock(last.id);
       }}
     >
+      {selectedLines.length > 0 && <div className="block-selection-toolbar" role="toolbar" aria-label={locale === 'ar' ? 'الكتل المحددة' : 'Selected blocks'}>
+        <span>{selectedLines.length} {locale === 'ar' ? 'محدد' : 'selected'}</span>
+        <select aria-label={locale === 'ar' ? 'تحويل إلى' : 'Turn selected blocks into'} value="" onChange={event => {
+          const type = event.target.value as BlockType;
+          onChange(blocks.map((block, index) => selectedLines.includes(index) ? { ...block, type, calloutIcon: block.calloutIcon || 'lucide:Lightbulb' } : block));
+        }}><option value="" disabled>{locale === 'ar' ? 'تحويل إلى…' : 'Turn into…'}</option>{(['text','h1','h2','h3','bullet','number','todo','quote','callout','code'] as const).map(type => <option key={type} value={type}>{({text:'Text',h1:'Heading 1',h2:'Heading 2',h3:'Heading 3',bullet:'Bulleted list',number:'Numbered list',todo:'To-do',quote:'Quote',callout:'Callout',code:'Code'})[type]}</option>)}</select>
+      </div>}
       <p className="sr-only" role="status">{failedMoveBlockId ? (locale === 'ar' ? 'لا يمكن نقل الكتلة أبعد من ذلك.' : 'This block cannot move any farther.') : ''}</p>
+      {fileError && <p role="alert">{fileError}</p>}
       {blocks.map((block, index) => {
         const isDragging = draggedIndex === index;
         const isDragOver = dragOverIndex === index;
@@ -1153,7 +1225,7 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
                 aria-haspopup="menu"
                 aria-expanded={blockMenuId === block.id}
                 onMouseDown={(event) => event.preventDefault()}
-                onClick={(event) => { event.stopPropagation(); setBlockMenuId(current => current === block.id ? null : block.id); }}
+                onClick={(event) => { event.stopPropagation(); if (event.shiftKey) { const anchor = selectionAnchor.current ?? index; selectionAnchor.current = anchor; selectLines(anchor, index); } else { selectionAnchor.current = index; setSelectedLines([index]); setBlockMenuId(current => current === block.id ? null : block.id); } }}
                 onDragStart={(event) => handleDragStart(event, index)}
                 onKeyDown={(event) => {
                   if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
@@ -1219,7 +1291,24 @@ export function NotionBlockEditor({ blocks, locale, onChange, onWorkspaceChange,
 
               {block.type === 'callout' && (
                 <div className="notion-callout-card">
-                  <span className="notion-callout-icon">{block.calloutIcon || '💡'}</span>
+                  <button
+                    aria-label={locale === 'ar' ? 'تغيير أيقونة الملاحظة' : 'Change callout icon'}
+                    className="notion-callout-icon"
+                    onClick={() => setCalloutPickerId((current) => current === block.id ? undefined : block.id)}
+                    ref={(element) => { if (element) calloutIconRefs.current.set(block.id, element); else calloutIconRefs.current.delete(block.id); }}
+                    type="button"
+                  >
+                    <PageIconRenderer fallback="lucide:Lightbulb" icon={block.calloutIcon || 'lucide:Lightbulb'} size={20} />
+                  </button>
+                  {calloutPickerId === block.id && (
+                    <IconPickerDialog
+                      anchor={calloutIconRefs.current.get(block.id)}
+                      currentIcon={block.calloutIcon}
+                      locale={locale}
+                      onClose={() => setCalloutPickerId(undefined)}
+                      onSelect={(calloutIcon) => { updateBlock(block.id, { calloutIcon }); setCalloutPickerId(undefined); }}
+                    />
+                  )}
                   {richText}
                 </div>
               )}

@@ -512,6 +512,23 @@ describe('Max shell', () => {
     expect(search).not.toBeInTheDocument();
   });
 
+  it('stands the workspace pill down while the page map is open, and puts it back', async () => {
+    const user = userEvent.setup();
+    render(<MaxApp />);
+    await screen.findByRole('button', { name: 'Settings' });
+    expect(screen.getByRole('banner', { name: 'Workspace actions' })).toBeInTheDocument();
+
+    // The map fills the window with its own controls in the same corner, so
+    // two glass pills used to sit on top of one another there.
+    fireEvent.keyDown(document, { code: 'KeyG', ctrlKey: true, key: 'g' });
+    expect(await screen.findByRole('region', { name: 'Page graph' })).toBeInTheDocument();
+    expect(screen.queryByRole('banner', { name: 'Workspace actions' })).not.toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Page graph' })).not.toBeInTheDocument());
+    expect(screen.getByRole('banner', { name: 'Workspace actions' })).toBeInTheDocument();
+  });
+
   it('opens the same popup from an Arabic layout, where Ctrl+K arrives as a different letter', async () => {
     render(<MaxApp />);
     await screen.findByRole('button', { name: 'Settings' });

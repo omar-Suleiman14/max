@@ -118,6 +118,7 @@ type IconPickerDialogProps = Readonly<{
   locale: Locale;
   onClose: () => void;
   onSelect: (icon: string) => void;
+  showColors?: boolean;
 }>;
 
 type LucideItem = {
@@ -348,10 +349,8 @@ function saveRecentIcon(iconId: string): void {
  * in: inside the property editor it drew itself over the property type grid
  * instead of under its own button.
  *
- * Icons have no colour. Colour belonged to the picker, not to the icon, so the
- * grid was tinted wholesale and every pick carried a `#rrggbb` suffix. Icons
- * already saved with one still render (see PageIconRenderer); nothing new gets
- * one.
+ * Page icons may carry their own colour. Property icons deliberately keep the
+ * neutral registry treatment; this picker is used for page-level identity.
  */
 export function IconPickerDialog({
   anchor,
@@ -359,10 +358,12 @@ export function IconPickerDialog({
   locale,
   onClose,
   onSelect,
+  showColors = true,
 }: IconPickerDialogProps) {
   const ar = locale === 'ar';
   const [activeTab, setActiveTab] = useState<'emojis' | 'icons'>('icons');
   const [searchQuery, setSearchQuery] = useState('');
+  const [color, setColor] = useState(() => currentIcon.match(/#([0-9a-f]{6})$/i)?.[1] ?? '5b8cff');
   const [recentIcons, setRecentIcons] = useState<readonly string[]>(() => loadRecentIcons());
   const [position, setPosition] = useState<AnchoredPosition>(() =>
     anchorPopover(anchor?.getBoundingClientRect(), { preferredHeight: PICKER_HEIGHT, width: PICKER_WIDTH }, currentViewport()),
@@ -405,11 +406,12 @@ export function IconPickerDialog({
   }, [anchor, onClose]);
 
   const handleSelectIcon = useCallback((iconString: string) => {
-    saveRecentIcon(iconString);
+    const selected = iconString.startsWith('lucide:') ? `${iconString.split('#')[0]}${showColors ? '#' + color : ''}` : iconString;
+    saveRecentIcon(selected);
     setRecentIcons(loadRecentIcons());
-    onSelect(iconString);
+    onSelect(selected);
     onClose();
-  }, [onClose, onSelect]);
+  }, [color, onClose, onSelect, showColors]);
 
   const [emojiCatalog, setEmojiCatalog] = useState<readonly EmojiItem[]>(EMOJI_CATALOG);
 
@@ -525,6 +527,11 @@ export function IconPickerDialog({
           )}
         </div>
       </div>
+
+      {showColors && activeTab === 'icons' && <div className="icon-picker-popover__colors" aria-label={ar ? 'لون الأيقونة' : 'Icon colour'}>
+        {['5b8cff', 'e16d8d', 'd79a35', '45a773', '8a65d6', '667085'].map((hex) => <button aria-label={hex} className="icon-picker-popover__color" data-selected={color === hex || undefined} key={hex} onClick={() => setColor(hex)} style={{ background: `#${hex}` }} type="button" />)}
+        <button className="icon-picker-popover__shuffle" onClick={() => { const candidates = filteredLucide.length ? filteredLucide : LUCIDE_CATALOG; handleSelectIcon(candidates[Math.floor(Math.random() * candidates.length)]!.id); }} type="button">{ar ? 'خلط' : 'Shuffle'}</button>
+      </div>}
 
       <div className="icon-picker-popover__body" onScroll={handleScroll}>
         {!searchQuery && recentIcons.length > 0 && (

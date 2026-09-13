@@ -8,16 +8,15 @@ import { IconPickerDialog } from './icon-picker-dialog';
 afterEach(() => { cleanup(); window.localStorage.clear(); });
 
 describe('picking a page or property icon', () => {
-  it('saves the icon without a colour', async () => {
+  it('saves a page icon with its selected colour and offers shuffle', async () => {
     const onSelect = vi.fn();
     render(<IconPickerDialog locale="en" onClose={vi.fn()} onSelect={onSelect} />);
 
     await userEvent.setup().click(screen.getByTitle('Store'));
 
-    // A colour belonged to the picker, not to the icon: choices are plain names.
-    expect(onSelect).toHaveBeenCalledExactlyOnceWith('lucide:Store');
-    expect(screen.queryByLabelText('Choose icon color')).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('Random icon')).not.toBeInTheDocument();
+    expect(onSelect).toHaveBeenCalledExactlyOnceWith('lucide:Store#5b8cff');
+    expect(screen.getByLabelText('5b8cff')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Shuffle' })).toBeInTheDocument();
   });
 
   it('places itself against the button that opened it', () => {

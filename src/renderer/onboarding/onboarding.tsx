@@ -181,9 +181,9 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
   }
 
   useEffect(() => {
-    document.documentElement.lang = 'en';
-    document.documentElement.dir = 'ltr';
-  }, []);
+    document.documentElement.lang = locale;
+    document.documentElement.dir = locale === 'ar' ? 'rtl' : 'ltr';
+  }, [locale]);
 
   useEffect(() => {
     if (!showWelcome) return;

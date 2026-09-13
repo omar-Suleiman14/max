@@ -1,3 +1,4 @@
+import { ImagePlus } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { clampCoverPosition, coverBackground, type PageCover } from '../../shared/cover-contract';
@@ -67,6 +68,12 @@ export function PageCover({ cover, locale, onChange }: {
           if (!repositioning || !isImage) return;
           drag.current = { startPosition: draft, startY: event.clientY };
         }}
+        onDoubleClick={() => {
+          if (!repositioning || !isImage) return;
+          // The neutral crop is always the middle. A quick double click is a
+          // discoverable way to return there without dragging a tiny slider.
+          setDraft(50);
+        }}
         ref={strip}
         role="img"
         style={isImage
@@ -82,6 +89,8 @@ export function PageCover({ cover, locale, onChange }: {
             max={100}
             min={0}
             onChange={(event) => setDraft(Number(event.target.value))}
+            onDoubleClick={() => setDraft(50)}
+            title={locale === 'ar' ? 'انقر مرتين لإعادة التوسيط' : 'Double-click to reset to center'}
             type="range"
             value={draft}
           />
@@ -122,7 +131,8 @@ export function AddCoverButton({ locale, onChange }: { locale: Locale; onChange:
   return (
     <div className="page-cover-add">
       <button onClick={() => setPicking((open) => !open)} type="button">
-        {locale === 'ar' ? '🖼 إضافة غلاف' : '🖼 Add cover'}
+        <ImagePlus aria-hidden="true" size={16} />
+        {locale === 'ar' ? 'إضافة غلاف' : 'Add cover'}
       </button>
       {picking && (
         <div className="page-cover__picker page-cover__picker--inline">

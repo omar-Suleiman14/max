@@ -44,6 +44,7 @@ export function useBlueprintFileDrop({ enabled = true, locale, onFile }: { enabl
     // boolean flickers the overlay off in the middle of the window.
     let depth = 0;
     const enter = (event: DragEvent) => {
+      if (event.target instanceof Element && event.target.closest('.notion-editor-canvas')) { setOver(false); return; }
       if (!draggingFiles(event)) return;
       depth += 1;
       if (enabled) setOver(true);
@@ -59,6 +60,7 @@ export function useBlueprintFileDrop({ enabled = true, locale, onFile }: { enabl
       if (depth === 0) setOver(false);
     };
     const drop = (event: DragEvent) => {
+      if (event.defaultPrevented) { setOver(false); return; }
       if (!draggingFiles(event)) return;
       event.preventDefault();
       depth = 0;

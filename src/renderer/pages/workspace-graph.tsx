@@ -116,6 +116,18 @@ export function WorkspaceGraph({ locale, onClose }: { locale: Locale; onClose: (
     return () => { sim.stop(); };
   }, [visibleGraph]);
 
+  // Escape closes the map wherever the focus sits, including the canvas, which
+  // takes no focus of its own after a drag.
+  useEffect(() => {
+    const close = (event: KeyboardEvent) => {
+      // A dialog opened over the map, such as search, answers Escape first.
+      if (event.key !== 'Escape' || document.querySelector('[role=dialog]')) return;
+      onClose();
+    };
+    document.addEventListener('keydown', close);
+    return () => document.removeEventListener('keydown', close);
+  }, [onClose]);
+
   useEffect(() => {
     const element = canvas.current;
     if (!element) return;
@@ -156,6 +168,7 @@ export function WorkspaceGraph({ locale, onClose }: { locale: Locale; onClose: (
       <div className="graph-heading"><Waypoints size={21} aria-hidden="true" /><div><h2>{ar ? 'خريطة الصفحات' : 'Page graph'}</h2><span>{nodes.length} {ar ? 'صفحة' : 'pages'} · {edges.length} {ar ? 'رابط' : 'links'}</span></div></div>
       <label className="graph-search"><Search size={16} aria-hidden="true" /><input autoFocus aria-label={ar ? 'بحث في الصفحات' : 'Find a page'} placeholder={ar ? 'بحث في الصفحات…' : 'Find a page…'} value={query} onFocus={() => setControlsOpen(false)} onChange={(event) => { setControlsOpen(false); setQuery(event.target.value); }} /></label>
       <button className="graph-options-button" type="button" aria-expanded={controlsOpen} aria-label={ar ? 'خيارات الخريطة' : 'Graph options'} onClick={() => setControlsOpen(!controlsOpen)}><SlidersHorizontal size={17} /></button>
+      <button className="graph-back" type="button" onClick={onClose}><X size={16} aria-hidden="true" />{ar ? 'إغلاق' : 'Close'}<kbd>Esc</kbd></button>
     </header>
 
     {controlsOpen && <aside className="graph-options" aria-label={ar ? 'خيارات الخريطة' : 'Graph options'}>

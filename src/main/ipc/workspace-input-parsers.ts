@@ -40,7 +40,7 @@ import {
 type JsonRecord = Record<string, unknown>;
 
 const VIEW_LAYOUTS: readonly ViewLayout[] = [
-  'table', 'list', 'board', 'calendar', 'gallery', 'timeline', 'chart', 'map', 'form',
+  'table', 'list', 'board', 'calendar', 'gallery', 'timeline', 'chart', 'dashboard', 'feed', 'map', 'form',
 ];
 const FILTER_OPERATORS = [
   'equals', 'not_equals', 'contains', 'not_contains', 'starts_with', 'ends_with',

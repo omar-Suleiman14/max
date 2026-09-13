@@ -63,12 +63,17 @@ export function SettingsPage({
 }: SettingsPageProps) {
   useEffect(() => {
     const root = document.getElementById('main-content');
-    const observer = new IntersectionObserver((entries) => {
-      const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
-      if (visible[0]) onVisibleSectionChange?.(visible[0].target.id as SettingsSectionId);
-    }, { root, rootMargin: '-10% 0px -65% 0px' });
-    document.querySelectorAll('.settings-scroll-section').forEach((section) => observer.observe(section));
-    return () => observer.disconnect();
+    if (!root) return;
+    const update = () => {
+      const sections = [...root.querySelectorAll<HTMLElement>('.settings-scroll-section')];
+      const top = root.getBoundingClientRect().top + 100;
+      let current = sections[0];
+      for (const section of sections) if (section.getBoundingClientRect().top <= top) current = section;
+      if (root.scrollTop + root.clientHeight >= root.scrollHeight - 4) current = sections.at(-1);
+      if (current) onVisibleSectionChange?.(current.id as SettingsSectionId);
+    };
+    root.addEventListener('scroll', update, { passive: true });
+    return () => root.removeEventListener('scroll', update);
   }, [onVisibleSectionChange]);
   const [graphEnabled, setGraphEnabled] = useWorkspaceDisplay('graph');
   const [connectionsEnabled, setConnectionsEnabled] = useWorkspaceDisplay('connections');

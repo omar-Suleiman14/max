@@ -491,7 +491,7 @@ export function PropertyEditor({
             </button>
           </div>
         </form>
-        {pickingIcon && <IconPickerDialog anchor={iconButtonRef.current} locale="en" currentIcon={icon} onClose={() => setPickingIcon(false)} onSelect={(value) => { setIcon(value); setPickingIcon(false); }} />}
+        {pickingIcon && <IconPickerDialog anchor={iconButtonRef.current} locale="en" currentIcon={icon} onClose={() => setPickingIcon(false)} onSelect={(value) => { setIcon(value); setPickingIcon(false); }} showColors={false} />}
       </div>
     </DatabasePopover>
   );

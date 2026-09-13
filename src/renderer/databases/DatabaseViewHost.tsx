@@ -8,6 +8,7 @@ import { CalendarView } from './CalendarView';
 import { ListView } from './ListView';
 import { TableView } from './TableView';
 import { GalleryView } from './GalleryView';
+import { AdditionalViews } from './AdditionalViews';
 
 type DatabaseViewHostProps = Readonly<{
   activeView: WorkspaceView | null;
@@ -93,6 +94,8 @@ export function DatabaseViewHost({
     ))}</div>;
   }
 
+  if (layout === 'chart' || layout === 'dashboard' || layout === 'timeline' || layout === 'feed' || layout === 'form') return <AdditionalViews key={activeView?.id} layout={layout} schema={sourceSchema} records={records} locale={locale} onOpenRecord={onOpenRecord} onCreateRecord={onCreateRecord}/>;
+
   switch (layout) {
     case 'gallery':
       return <GalleryView records={records} onOpenRecord={onOpenRecord} locale={locale} onCreate={() => { void onCreateRecord({ databaseId, title: locale === 'ar' ? 'بدون عنوان' : 'Untitled' }).then((record) => { if (record) onOpenRecord(record); }); }} />;
@@ -111,6 +114,7 @@ export function DatabaseViewHost({
       );
 
     case 'list':
+    case 'map':
       return (
         <ListView
           databaseId={databaseId}

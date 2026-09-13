@@ -66,7 +66,7 @@
 .graph-heading { flex:0 1 auto; padding:8px 12px; border-radius:9px; }
 .graph-search { margin-inline-start:auto; }
 .graph-options-button { padding:10px; }
-.workspace-graph :is(.graph-heading,.graph-search,.graph-options-button,.graph-options,.graph-search-results,.graph-zoom-controls) {
+.workspace-graph :is(.graph-heading,.graph-search,.graph-options-button,.graph-options,.graph-search-results,.graph-zoom-controls,.graph-back) {
  background:color-mix(in srgb,var(--card) var(--popup-opacity,85%),transparent);
  backdrop-filter:blur(22px) saturate(1.12); border:1px solid var(--line-strong); box-shadow:var(--shadow-sm);
 }
@@ -95,3 +95,9 @@
   .graph-options .graph-color-group[data-property=true] { grid-template-columns: 1fr 1fr 24px; }
   .graph-options .graph-color-group[data-property=true] > input { grid-column: span 1; }
 }
+
+/* The map replaces the workspace pill in this corner, so its own Close sits
+   where that pill was and carries the same keyboard hint. */
+.graph-back { border-radius:8px; padding:8px 10px; color:var(--text-soft); }
+.graph-back:hover { background:color-mix(in srgb,var(--text) 8%,transparent); color:var(--text); }
+.graph-back kbd { margin-inline-start:2px; }

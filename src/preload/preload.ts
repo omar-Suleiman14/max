@@ -126,6 +126,8 @@ const maxApi: MaxApi = Object.freeze({
       >,
   }),
   assets: Object.freeze({
+    importAttachment: (bytes: Uint8Array, fileName: string) => ipcRenderer.invoke(IPC_CHANNELS.assetsImportAttachment, bytes, fileName) as ReturnType<MaxApi['assets']['importAttachment']>,
+    openAttachment: (url: string) => ipcRenderer.invoke(IPC_CHANNELS.assetsOpenAttachment, url) as ReturnType<MaxApi['assets']['openAttachment']>,
     downloadImage: (url: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.assetsDownload, url) as ReturnType<MaxApi['assets']['downloadImage']>,
     importImage: (bytes: Uint8Array, fileName?: string) =>

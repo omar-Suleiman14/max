@@ -799,6 +799,22 @@ export function registerIpcHandlers({
       return requireAssets().store(data);
     });
   });
+  ipcMain.handle(IPC_CHANNELS.assetsImportAttachment, (event, bytes: unknown, name: unknown) => {
+    trust(event);
+    return storing(() => {
+      if (!(bytes instanceof Uint8Array) || typeof name !== 'string') throw new AssetError('No file supplied.');
+      return requireAssets().storeAttachment(bytes, name);
+    });
+  });
+  ipcMain.handle(IPC_CHANNELS.assetsOpenAttachment, async (event, url: unknown) => {
+    trust(event);
+    try {
+      if (typeof url !== 'string') throw new AssetError('Invalid attachment.');
+      const error = await shell.openPath(requireAssets().attachmentPath(url));
+      if (error) throw new AssetError(error);
+      return { ok: true, value: null };
+    } catch (error) { return { ok: false, error: { code: 'invalid-input', message: String(error) } }; }
+  });
   ipcMain.handle(IPC_CHANNELS.assetsDownload, (event, url: unknown) => {
     trust(event);
     return storing(() => requireAssets().download(typeof url === 'string' ? url : ''));

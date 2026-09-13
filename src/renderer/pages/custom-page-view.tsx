@@ -81,7 +81,7 @@ export function CustomPageView({
               className="custom-page-icon-display"
               fallback={isHome ? 'lucide:Home' : 'lucide:FileText'}
               icon={page.icon}
-              size={28}
+              size={page.cover ? 64 : 40}
             />
           </button>
 
@@ -97,7 +97,10 @@ export function CustomPageView({
         </div>
 
         <div className="custom-page-header__title-row">
-          <input
+          <textarea
+            rows={1}
+            aria-label={locale === 'ar' ? 'عنوان الصفحة' : 'Page title'}
+            ref={(element) => { if (element) { element.style.height = '0px'; element.style.height = `${element.scrollHeight}px`; } }}
             className="custom-page-title-input"
             onChange={(e) => handleTitleChange(e.target.value)}
             onKeyDown={(e) => {

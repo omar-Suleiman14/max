@@ -28,6 +28,10 @@ export type CoverGradient = Readonly<{ background: string; id: string; label: st
  * copied to another machine, and cannot go missing.
  */
 export const COVER_GRADIENTS: readonly CoverGradient[] = [
+  { background: 'radial-gradient(ellipse at 20% 100%,#406c58 0 35%,transparent 36%),radial-gradient(ellipse at 80% 100%,#749b74 0 45%,transparent 46%),linear-gradient(#b9dfeb,#f6ebce)', id: 'hills', label: 'Quiet hills' },
+  { background: 'repeating-linear-gradient(0deg,#ffffff18 0 1px,transparent 1px 28px),repeating-linear-gradient(90deg,#ffffff18 0 1px,transparent 1px 28px),linear-gradient(125deg,#163d43,#388c88)', id: 'grid', label: 'Ocean grid' },
+  { background: 'radial-gradient(circle at 70% 35%,#f6c576 0 12%,transparent 12.5%),linear-gradient(160deg,#7e657e,#e1a08e 70%,#f4d5ad)', id: 'sunset', label: 'Desert sunset' },
+  { background: 'repeating-linear-gradient(135deg,#d5bdda 0 35px,#8c8fb6 35px 70px,#f0d6c0 70px 105px)', id: 'ribbons', label: 'Pastel ribbons' },
   { background: '#c8524b', id: 'clay', label: 'Clay' },
   { background: '#d8a13a', id: 'amber', label: 'Amber' },
   { background: '#3f7fae', id: 'harbour', label: 'Harbour' },
