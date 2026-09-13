@@ -37,6 +37,15 @@ export function UpdateNotice({ locale, onOpen }: { locale: string; onOpen: () =>
   const ready = status.state === 'ready';
   const announced = ready && dismissed !== (version || 'ready');
 
+  if (status.state === 'available') {
+    return (
+      <button className="update-chip update-chip--ready" onClick={onOpen} type="button">
+        <ArrowUpCircle aria-hidden="true" size={15} />
+        {ar ? `الإصدار ${version} متاح` : `${version} available`}
+      </button>
+    );
+  }
+
   if (status.state === 'downloading') {
     return (
       <span className="update-chip" role="status">

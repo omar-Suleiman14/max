@@ -44,6 +44,66 @@ describe('NotionBlockEditor', () => {
     expect(archiveNode).not.toHaveBeenCalled();
   });
 
+  it('removes a block of any kind with one Backspace at its head', async () => {
+    const user = userEvent.setup();
+    render(<EditorHarness initial={[
+      { id: 'intro', type: 'text', content: 'Intro' },
+      { id: 'heading', type: 'h2', content: '' },
+      { id: 'tail', type: 'text', content: 'Tail' },
+    ]} />);
+
+    // A heading used to become a paragraph on the first press and only go on
+    // the second, which left an empty line behind whenever someone stopped.
+    const heading = screen.getAllByRole('textbox')[1]!;
+    await user.click(heading);
+    await user.keyboard('{Backspace}');
+
+    await waitFor(() => expect(screen.getAllByRole('textbox')).toHaveLength(2));
+    expect(screen.getAllByRole('textbox').map((box) => box.textContent?.replaceAll('\u200B', ''))).toEqual(['Intro', 'Tail']);
+  });
+
+  it('hands the caret to the page title when Backspace runs out of blocks', async () => {
+    const user = userEvent.setup();
+    render(<div className="custom-page-view">
+      <textarea className="custom-page-title-input" defaultValue="Shop notes" aria-label="Page title" />
+      <EditorHarness initial={[{ id: 'first', type: 'text', content: '' }, { id: 'second', type: 'text', content: 'Body' }]} />
+    </div>);
+
+    await user.click(screen.getAllByRole('textbox')[1]!);
+    await user.keyboard('{Backspace}');
+
+    const title = screen.getByLabelText('Page title');
+    await waitFor(() => expect(title).toHaveFocus());
+    expect((title as HTMLTextAreaElement).selectionStart).toBe('Shop notes'.length);
+  });
+
+  it('lays a page that still holds two columns out one block after another', async () => {
+    render(<EditorHarness initial={[
+      { id: 'columns', type: 'columns', content: '', col1Blocks: [{ id: 'left', type: 'text', content: 'Left side' }], col2Blocks: [{ id: 'right', type: 'h3', content: 'Right side' }] },
+    ]} />);
+
+    // The block was withdrawn; the writing inside one is kept.
+    await waitFor(() => expect(screen.getAllByRole('textbox')).toHaveLength(2));
+    expect(screen.getAllByRole('textbox').map((box) => box.textContent)).toEqual(['Left side', 'Right side']);
+  });
+
+  it('picks single lines out of a page with a held modifier, the way Finder does', async () => {
+    const user = userEvent.setup();
+    const { container } = render(<EditorHarness initial={[
+      { id: 'a', type: 'text', content: 'One' },
+      { id: 'b', type: 'text', content: 'Two' },
+      { id: 'c', type: 'text', content: 'Three' },
+    ]} />);
+
+    const handles = screen.getAllByRole('button', { name: /Block actions|Drag/ });
+    await user.keyboard('{Meta>}');
+    await user.click(handles[0]!);
+    await user.click(handles[2]!);
+    await user.keyboard('{/Meta}');
+
+    expect([...container.querySelectorAll('[data-line-selected="true"]')].map((row) => row.getAttribute('data-block-id'))).toEqual(['a', 'c']);
+  });
+
   it('keeps select-all inside a page-picker search input', async () => {
     Object.defineProperty(window, 'maxApi', { configurable: true, value: { workspace: {
       getPageGraph: () => Promise.resolve({ pages: [], links: [] }),

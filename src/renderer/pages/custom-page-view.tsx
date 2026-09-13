@@ -120,7 +120,7 @@ export function CustomPageView({
       </div>
 
       {/* Notion Block Document Canvas */}
-      <PageProperties properties={page.properties} locale={locale} onChange={(properties) => onUpdatePage(page.id, { properties })} />
+      <PageProperties createdAt={page.createdAt} properties={page.properties} locale={locale} onChange={(properties) => onUpdatePage(page.id, { properties })} updatedAt={page.updatedAt} />
       <div
         className="custom-page-content"
         onClick={(e) => {

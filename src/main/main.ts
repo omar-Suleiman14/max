@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
-import { UpdateService } from './platform/windows/update-service';
-import { app, autoUpdater, BrowserWindow, dialog, session } from 'electron';
+import { UpdateService, type LatestRelease } from './platform/windows/update-service';
+import { app, autoUpdater, BrowserWindow, dialog, net, session } from 'electron';
 import { dirname, join } from 'node:path';
 
 import { AssetStore } from './assets/asset-store';
@@ -39,6 +39,27 @@ if (handledInstallerLifecycle) {
   const assetDirectory = join(app.getPath('userData'), 'assets');
   let database: DatabaseService | undefined;
   let updates: UpdateService | undefined;
+
+/**
+ * What the release page says is newest, for the builds that cannot replace
+ * themselves. Nothing is downloaded and nothing is sent: it is one request the
+ * person asked for, and a refusal leaves Max working offline as before.
+ */
+async function latestPublishedRelease(): Promise<LatestRelease | null> {
+  const repository = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\//.exec(`${MAX_UPDATE_FEED_URL}/`);
+  if (!repository) return null;
+  const [, owner, name] = repository;
+  const response = await net.fetch(`https://api.github.com/repos/${owner}/${name}/releases/latest`, {
+    headers: { accept: 'application/vnd.github+json' },
+  });
+  if (!response.ok) throw new Error(`The release feed answered ${response.status}.`);
+  const release = await response.json() as { html_url?: unknown; tag_name?: unknown };
+  if (typeof release.tag_name !== 'string') return null;
+  return {
+    downloadUrl: typeof release.html_url === 'string' && release.html_url.startsWith('https://github.com/') ? release.html_url : `https://github.com/${owner}/${name}/releases/latest`,
+    version: release.tag_name,
+  };
+}
   let backupTimer: ReturnType<typeof setInterval> | undefined;
 
   app.on('second-instance', () => {
@@ -72,7 +93,12 @@ if (handledInstallerLifecycle) {
       );
 
       const installedWindows = platform.platform === 'windows' && app.isPackaged && existsSync(join(dirname(process.execPath), '..', 'Update.exe'));
-      updates = new UpdateService(installedWindows ? autoUpdater : undefined, app.getVersion(), MAX_UPDATE_FEED_URL);
+      updates = new UpdateService(
+        installedWindows ? autoUpdater : undefined,
+        app.getVersion(),
+        MAX_UPDATE_FEED_URL,
+        installedWindows ? undefined : latestPublishedRelease,
+      );
       if (process.env.MAX_SMOKE_TEST !== '1') updates.start();
       registerIpcHandlers({
         updates,

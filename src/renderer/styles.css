@@ -2904,7 +2904,7 @@ kbd { display: inline-flex; min-width: 23px; min-height: 20px; align-items: cent
   line-height: 1.55;
 }
 .notion-text-input {
-  font-size: 15px;
+  font-size: 18px;
   min-height: 26px;
 }
 .notion-text-input::placeholder,
@@ -3036,26 +3036,6 @@ kbd { display: inline-flex; min-width: 23px; min-height: 20px; align-items: cent
   height: 1px;
   background: var(--line);
   margin: 0;
-}
-
-/* 2-Column Side-by-Side Container */
-.notion-columns-container {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 18px;
-  width: 100%;
-  margin: 6px 0;
-}
-.notion-column {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  border-inline-start: 1px dashed transparent;
-  padding-inline-start: 4px;
-  transition: border-color 0.15s ease;
-}
-.notion-column:hover {
-  border-inline-start-color: var(--line);
 }
 
 /* Bottom Click Target */
@@ -5943,5 +5923,8 @@ body>.overlay { z-index:2000; isolation:isolate; }
 .search-dialog__empty .btn:hover { background:color-mix(in srgb,var(--text) 6%,transparent); }
 
 .update-spinner { animation: update-spin 1s linear infinite; }
+.update-progress { width:190px; max-width:100%; height:4px; margin-block-start:7px; border:0; border-radius:99px; background:var(--line); accent-color:var(--accent); }
+.update-progress::-webkit-progress-bar { border-radius:99px; background:var(--line); }
+.update-progress::-webkit-progress-value { border-radius:99px; background:var(--accent); }
 @keyframes update-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .update-spinner { animation: none; } }

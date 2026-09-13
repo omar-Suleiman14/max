@@ -10,6 +10,19 @@ export type CompiledFilter = Readonly<{
   whereSql: string;
 }>;
 
+/** The record columns behind the property types that have no stored value. */
+const TIMESTAMP_COLUMNS: Record<string, string | undefined> = {
+  created_time: 'r.created_at',
+  last_edited_time: 'r.updated_at',
+};
+
+/** The instant a plain calendar day begins and ends on this machine's clock. */
+function localDayBounds(day: string): { end: string; start: string } {
+  const [year, month, date] = day.split('-').map(Number);
+  const start = new Date(year ?? 1970, (month ?? 1) - 1, date ?? 1);
+  return { end: new Date(start.getFullYear(), start.getMonth(), start.getDate() + 1).toISOString(), start: start.toISOString() };
+}
+
 export class FilterCompiler {
   readonly #propertiesMap: ReadonlyMap<string, WorkspaceProperty>;
 
@@ -58,6 +71,14 @@ export class FilterCompiler {
     if (prop?.type === 'title' || propId === 'title' || propId === 'Name') {
       return this.#compileTitleFilter(node);
     }
+
+    // Created time and Last edited time are read off the record itself and were
+    // never written to the property value table, so every filter on one used to
+    // match nothing at all.
+    const timestamp = TIMESTAMP_COLUMNS[prop?.type ?? ''];
+    if (timestamp) return this.#compileTimestampFilter(node, timestamp);
+
+    if (prop?.type === 'auto_id') return this.#compileSequenceFilter(node);
 
     const type = prop?.type ?? 'text';
     if (type === 'checkbox' && typeof node.value === 'boolean' && ['equals', 'not_equals'].includes(node.operator)) {
@@ -113,11 +134,13 @@ export class FilterCompiler {
       case 'relative_date': {
         const period = node.relativePeriod || 'THIS_MONTH';
         const range = resolveRelativeDate(period, node.relativeValue);
+        // A date that carries a time still belongs to its own day, so the day
+        // is compared rather than the whole stored string.
         return {
           params: [propId, range.startDate, range.endDate],
           whereSql: `EXISTS (
             SELECT 1 FROM workspace_property_values pv
-            WHERE pv.record_id = r.id AND pv.property_id = ? AND pv.date_start >= ? AND pv.date_start <= ?
+            WHERE pv.record_id = r.id AND pv.property_id = ? AND substr(pv.date_start, 1, 10) >= ? AND substr(pv.date_start, 1, 10) <= ?
           )`,
         };
       }
@@ -128,7 +151,7 @@ export class FilterCompiler {
           params: [propId, dStr],
           whereSql: `EXISTS (
             SELECT 1 FROM workspace_property_values pv
-            WHERE pv.record_id = r.id AND pv.property_id = ? AND pv.date_start < ?
+            WHERE pv.record_id = r.id AND pv.property_id = ? AND substr(pv.date_start, 1, 10) < ?
           )`,
         };
       }
@@ -139,7 +162,7 @@ export class FilterCompiler {
           params: [propId, dStr],
           whereSql: `EXISTS (
             SELECT 1 FROM workspace_property_values pv
-            WHERE pv.record_id = r.id AND pv.property_id = ? AND pv.date_start > ?
+            WHERE pv.record_id = r.id AND pv.property_id = ? AND substr(pv.date_start, 1, 10) > ?
           )`,
         };
       }
@@ -151,7 +174,7 @@ export class FilterCompiler {
           params: [propId, start, end],
           whereSql: `EXISTS (
             SELECT 1 FROM workspace_property_values pv
-            WHERE pv.record_id = r.id AND pv.property_id = ? AND pv.date_start >= ? AND pv.date_start <= ?
+            WHERE pv.record_id = r.id AND pv.property_id = ? AND substr(pv.date_start, 1, 10) >= ? AND substr(pv.date_start, 1, 10) <= ?
           )`,
         };
       }
@@ -262,6 +285,70 @@ export class FilterCompiler {
         WHERE pv.record_id = r.id AND pv.property_id = ? AND (pv.text_value = ? OR pv.option_id = ?)
       )`,
     };
+  }
+
+  /**
+   * Created time and Last edited time are UTC instants on the record row. A
+   * filter names a calendar day, so the day is turned into the pair of instants
+   * that bound it on this machine's clock and compared as a half-open range:
+   * anything from local midnight up to, but not including, the next one.
+   */
+  #compileTimestampFilter(node: PropertyFilterNode, column: string): CompiledFilter {
+    switch (node.operator) {
+      case 'is_empty':
+        return { params: [], whereSql: '1 = 0' };
+      case 'is_not_empty':
+        return { params: [], whereSql: '1 = 1' };
+      case 'relative_date': {
+        const range = resolveRelativeDate(node.relativePeriod || 'THIS_MONTH', node.relativeValue);
+        return { params: [range.startInstant, range.endInstant], whereSql: `${column} >= ? AND ${column} < ?` };
+      }
+      case 'before_date':
+        return { params: [localDayBounds(valueToText(node.value).slice(0, 10)).start], whereSql: `${column} < ?` };
+      case 'after_date':
+        return { params: [localDayBounds(valueToText(node.value).slice(0, 10)).end], whereSql: `${column} >= ?` };
+      case 'between_dates': {
+        const from = localDayBounds(valueToText(node.value).slice(0, 10));
+        const to = localDayBounds(valueToText(node.valueTo).slice(0, 10));
+        return { params: [from.start, to.end], whereSql: `${column} >= ? AND ${column} < ?` };
+      }
+      case 'not_equals': {
+        const day = localDayBounds(valueToText(node.value).slice(0, 10));
+        return { params: [day.start, day.end], whereSql: `NOT (${column} >= ? AND ${column} < ?)` };
+      }
+      case 'contains':
+      case 'starts_with':
+        return { params: [`${valueToText(node.value)}%`], whereSql: `${column} LIKE ?` };
+      case 'not_contains':
+        return { params: [`%${valueToText(node.value)}%`], whereSql: `${column} NOT LIKE ?` };
+      case 'ends_with':
+        return { params: [`%${valueToText(node.value)}`], whereSql: `${column} LIKE ?` };
+      default: {
+        const day = localDayBounds(valueToText(node.value).slice(0, 10));
+        return { params: [day.start, day.end], whereSql: `${column} >= ? AND ${column} < ?` };
+      }
+    }
+  }
+
+  /** Auto ID is the record's own sequence number, not a stored value either. */
+  #compileSequenceFilter(node: PropertyFilterNode): CompiledFilter {
+    switch (node.operator) {
+      case 'is_empty':
+        return { params: [], whereSql: '1 = 0' };
+      case 'is_not_empty':
+        return { params: [], whereSql: '1 = 1' };
+      case 'contains':
+      case 'not_contains':
+      case 'starts_with':
+      case 'ends_with': {
+        const term = node.operator === 'starts_with' ? `${valueToText(node.value)}%`
+          : node.operator === 'ends_with' ? `%${valueToText(node.value)}`
+            : `%${valueToText(node.value)}%`;
+        return { params: [term], whereSql: `CAST(r.sequence AS TEXT) ${node.operator === 'not_contains' ? 'NOT LIKE' : 'LIKE'} ?` };
+      }
+      default:
+        return { params: [Number(node.value) || 0], whereSql: `r.sequence ${sqlComparisonOperator(node.operator)} ?` };
+    }
   }
 
   #compileTitleFilter(node: PropertyFilterNode): CompiledFilter {

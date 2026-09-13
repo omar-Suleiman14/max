@@ -13,7 +13,6 @@ export type ViewLayout =
   | 'timeline'
   | 'chart'
   | 'dashboard'
-  | 'feed'
   | 'map'
   | 'form';
 

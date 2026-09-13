@@ -1,18 +1,16 @@
 import { useState } from 'react';
 import type { DatabaseSchema } from '../../shared/database-contract';
-import type { WorkspaceProperty, WorkspaceRecord, WorkspaceRecordDraft } from '../../shared/property-contract';
-import { PageIconRenderer } from '../ui/page-icon-renderer';
+import type { WorkspaceRecord, WorkspaceRecordDraft } from '../../shared/property-contract';
 
 /** Property values are stored as unknown; only the scalar shapes are readable. */
-function formatValue(value: unknown, property?: WorkspaceProperty): string {
-  if (Array.isArray(value)) return value.map((entry) => formatValue(entry, property)).join(', ');
-  if (typeof value === 'string' && property?.options) return property.options.find((option) => (option.id || option.label) === value)?.label ?? value;
+function formatValue(value: unknown): string {
+  if (Array.isArray(value)) return value.map(formatValue).join(', ');
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value);
   return '';
 }
 
 type Props = {
-  layout: 'chart' | 'dashboard' | 'timeline' | 'feed' | 'form';
+  layout: 'chart' | 'dashboard' | 'timeline' | 'form';
   records: readonly WorkspaceRecord[];
   schema: DatabaseSchema | null;
   locale: string;
@@ -39,7 +37,6 @@ export function AdditionalViews({ layout, records, schema, locale, onOpenRecord,
     {schema.properties.filter(p => ['text','number','date','checkbox','select','status','email','url','phone'].includes(p.type)).map(p => <label key={p.id}>{p.name}{p.required ? ' *' : ''}{['select','status'].includes(p.type) ? <select required={p.required} value={formatValue(values[p.id])} onChange={event => setValues(old => ({...old,[p.id]:event.target.value}))}><option value="">—</option>{p.options?.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}</select> : <input required={p.required} type={p.type === 'number' ? 'number' : p.type === 'date' ? 'date' : p.type === 'checkbox' ? 'checkbox' : 'text'} step="any" checked={p.type === 'checkbox' ? !!values[p.id] : undefined} value={p.type === 'checkbox' ? undefined : formatValue(values[p.id])} onChange={event => setValues(old => ({...old,[p.id]:p.type === 'checkbox' ? event.target.checked : p.type === 'number' ? event.target.value === '' ? null : Number(event.target.value) : event.target.value}))}/>}</label>)}
     {message && <p role="status">{message}</p>}<button className="btn btn-primary" disabled={busy} type="submit">{ar ? 'حفظ' : 'Submit'}</button>
   </form>;
-  if (layout === 'feed') return <section className="database-feed">{[...records].sort((a,b) => b.updatedAt.localeCompare(a.updatedAt)).map(record => <button className="database-feed-card" type="button" key={record.id} onClick={() => onOpenRecord(record)}><PageIconRenderer icon={record.icon ?? undefined}/><strong>{record.title}</strong><time>{new Date(record.updatedAt).toLocaleString(ar ? 'ar' : 'en')}</time><span>{schema.properties.filter(p => !['title','relation','button'].includes(p.type)).slice(0,4).map(p => `${p.name}: ${formatValue(record.properties[p.id], p) || '—'}`).join(' · ')}</span></button>)}<button type="button" onClick={create}>{ar ? 'سجل جديد' : 'New record'}</button></section>;
   if (layout === 'timeline') {
     const dated = records.map(record => ({record, date: selected ? formatValue(record.properties[selected.id]) : ''}));
     return <section className="database-timeline"><label>{ar ? 'خاصية التاريخ' : 'Date property'}<select value={selected?.id ?? ''} onChange={event => setPropertyId(event.target.value)}><option value="">—</option>{dates.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>

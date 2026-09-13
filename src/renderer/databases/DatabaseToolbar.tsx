@@ -2,13 +2,13 @@ import { generateOrderKey } from '../../shared/order-key';
 import { createPortal } from 'react-dom';
 import { RecordTemplateEditor } from './RecordTemplateEditor';
 import { PageIconRenderer } from '../ui/page-icon-renderer';
-import { GripVertical, ArrowDownAZ, BarChart3, Calendar, ChartNoAxesCombined, ChevronDown, Columns3, Copy, Download, FilePenLine, Filter, GalleryHorizontal, LayoutDashboard, LayoutGrid, List, Map, MoreHorizontal, Plus, Radio, Search, Table2, Trash2, X } from 'lucide-react';
+import { GripVertical, ArrowDownAZ, BarChart3, Calendar, ChartNoAxesCombined, ChevronDown, Columns3, Copy, Download, FilePenLine, Filter, GalleryHorizontal, LayoutDashboard, LayoutGrid, List, Map, MoreHorizontal, Plus, Search, Table2, Trash2, X } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Locale } from '../app/i18n';
 import type { WorkspaceView, WorkspaceViewDraft, WorkspaceViewPatch } from '../../shared/view-contract';
 import type { WorkspaceRecordTemplate } from '../../shared/property-contract';
 
-const layouts = [{ id: 'table', name: 'Table', ar: 'جدول', Icon: Table2 }, { id: 'board', name: 'Board', ar: 'لوحة', Icon: Columns3 }, { id: 'gallery', name: 'Gallery', ar: 'معرض', Icon: GalleryHorizontal }, { id: 'list', name: 'List', ar: 'قائمة', Icon: List }, { id: 'chart', name: 'Chart', ar: 'مخطط', Icon: ChartNoAxesCombined }, { id: 'dashboard', name: 'Dashboard', ar: 'لوحة معلومات', Icon: LayoutDashboard }, { id: 'timeline', name: 'Timeline', ar: 'خط زمني', Icon: BarChart3 }, { id: 'feed', name: 'Feed', ar: 'موجز', Icon: Radio }, { id: 'map', name: 'Map', ar: 'خريطة', Icon: Map }, { id: 'calendar', name: 'Calendar', ar: 'تقويم', Icon: Calendar }, { id: 'form', name: 'Form', ar: 'نموذج', Icon: FilePenLine }] as const;
+const layouts = [{ id: 'table', name: 'Table', ar: 'جدول', Icon: Table2 }, { id: 'board', name: 'Board', ar: 'لوحة', Icon: Columns3 }, { id: 'gallery', name: 'Gallery', ar: 'معرض', Icon: GalleryHorizontal }, { id: 'list', name: 'List', ar: 'قائمة', Icon: List }, { id: 'chart', name: 'Chart', ar: 'مخطط', Icon: ChartNoAxesCombined }, { id: 'dashboard', name: 'Dashboard', ar: 'لوحة معلومات', Icon: LayoutDashboard }, { id: 'timeline', name: 'Timeline', ar: 'خط زمني', Icon: BarChart3 }, { id: 'map', name: 'Map', ar: 'خريطة', Icon: Map }, { id: 'calendar', name: 'Calendar', ar: 'تقويم', Icon: Calendar }, { id: 'form', name: 'Form', ar: 'نموذج', Icon: FilePenLine }] as const;
 type Props = {
   locale: Locale; databaseId: string; activeView: WorkspaceView | null; views: readonly WorkspaceView[];
   templates: readonly WorkspaceRecordTemplate[]; search: string; filterCount: number; sortCount: number;

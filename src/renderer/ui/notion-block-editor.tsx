@@ -6,7 +6,6 @@ import { openPage } from '../pages/page-graph-store';
 import { safeWebUrl } from '../../shared/page-links';
 import {
   Check,
-  Columns,
   Database,
   FileText,
   GripVertical,
@@ -118,7 +117,7 @@ export type BlockType =
   | 'toggle'
   | 'bullet'
   | 'callout'
-  | 'columns'
+  | 'columns' // legacy: flattened into its children on load
   | 'database-view'
   | 'divider'
   | 'h1'
@@ -315,14 +314,38 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
     currentBlocks.current = next;
     publish(next);
   }
+  // Two side-by-side columns were withdrawn: they were unusable on a narrow
+  // window and every block inside them sat outside the page's own selection and
+  // undo. A page that still holds one keeps its writing, laid out one block
+  // after another.
+  useEffect(() => {
+    if (!blocks.some((block) => block.type === 'columns')) return;
+    publish(blocks.flatMap((block) => block.type === 'columns'
+      ? [...(block.col1Blocks ?? []), ...(block.col2Blocks ?? [])].filter((child) => child.content || child.type !== 'text')
+      : [block]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blocks]);
+
   const deletedSelection = useRef<readonly NotionBlock[] | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const selectionAnchor = useRef<number | null>(null);
   const selecting = useRef(false);
   const [selectedLines, setSelectedLines] = useState<readonly number[]>([]);
+  /** Adds or removes a single line, leaving every other selected line alone. */
+  function toggleLine(index: number) {
+    setSelectedLines((current) => current.includes(index) ? current.filter((line) => line !== index) : [...current, index].sort((a, b) => a - b));
+    window.getSelection()?.removeAllRanges();
+  }
   function selectLines(anchor: number, end: number) {
     setSelectedLines(Array.from({ length: Math.abs(end - anchor) + 1 }, (_, index) => Math.min(anchor, end) + index));
     window.getSelection()?.removeAllRanges();
+  }
+  /** The page title sits above the first block, so Backspace lands there. */
+  function focusPageTitle() {
+    const title = canvasRef.current?.closest('.custom-page-view')?.querySelector('.custom-page-title-input');
+    if (!(title instanceof HTMLTextAreaElement || title instanceof HTMLInputElement)) return;
+    title.focus();
+    title.setSelectionRange(title.value.length, title.value.length);
   }
   function pageText(items: readonly NotionBlock[]): string {
     return items.map((block) => block.type === 'columns'
@@ -721,15 +744,21 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
       }
 
       if (event.key === 'Backspace' && cursorAtStart) {
-        if (!block.content && block.type !== 'text') {
-          event.preventDefault(); removeBlock(block.id); return;
-        }
-        if (block.type !== 'text') {
+        // Backspace at the head of a block removes that block, whatever it is.
+        // It used to turn a heading into a paragraph first, so clearing one
+        // took two presses and left an empty line behind.
+        const previous = blocks[index - 1];
+        if (!previous) {
+          // There is nothing above the first block except the page title, so
+          // that is where the caret goes.
           event.preventDefault();
-          updateBlock(block.id, { type: 'text' });
+          if (!block.content && blocks.length > 1) removeBlock(block.id);
+          focusPageTitle();
           return;
         }
-        const previous = blocks[index - 1];
+        if (!block.content) {
+          event.preventDefault(); removeBlock(block.id); focusBlock(previous.id, true); return;
+        }
         if (previous) {
           event.preventDefault();
           const boundary = previous.content.length;
@@ -911,27 +940,6 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
       run: (bId) => {
         updateBlock(bId, { content: '', type: 'divider' });
         insertBlockAfter(bId, 'text', '');
-        setActiveSlashBlockId(null);
-      },
-    },
-
-    // Layout (2 Columns)
-    {
-      category: 'layout',
-      description: 'Split into 2 side-by-side columns on the same line',
-      descriptionAr: 'تقسيم الصفحة إلى عمودين متجاورين في نفس السطر',
-      icon: Columns,
-      id: 'columns',
-      keywords: ['columns', '2 columns', 'split', 'side by side', 'عمودين', 'تقسيم', 'أعمدة'],
-      label: '2 Columns',
-      labelAr: 'عمودين متجاورين',
-      run: (bId) => {
-        updateBlock(bId, {
-          col1Blocks: [{ content: '', id: 'col1_' + Math.random().toString(36).substring(2, 9), type: 'text' }],
-          col2Blocks: [{ content: '', id: 'col2_' + Math.random().toString(36).substring(2, 9), type: 'text' }],
-          content: '',
-          type: 'columns',
-        });
         setActiveSlashBlockId(null);
       },
     },
@@ -1177,8 +1185,16 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
             onPointerDown={(event) => {
               const target = event.target as Element;
               if (target.closest('.notion-editor-canvas') !== canvasRef.current || target.closest('button,.database-page-container,.notion-slash-menu')) return;
-              if (target.closest('input,textarea,[contenteditable="true"],a')) { selecting.current = false; return; }
-              if (event.shiftKey && selectionAnchor.current !== null) {
+              // A drag that starts inside a line still anchors there, so pulling
+              // across a boundary picks up whole blocks the way dragging across
+              // files in Finder picks up whole files.
+              if (target.closest('input,textarea,[contenteditable="true"],a')) {
+                if (event.shiftKey || event.metaKey || event.ctrlKey) return;
+                selectionAnchor.current = index; selecting.current = true; return;
+              }
+              if (event.metaKey || event.ctrlKey) {
+                event.preventDefault(); selectionAnchor.current = index; toggleLine(index); canvasRef.current?.focus();
+              } else if (event.shiftKey && selectionAnchor.current !== null) {
                 event.preventDefault(); selectLines(selectionAnchor.current, index); canvasRef.current?.focus();
               } else { selectionAnchor.current = index; setSelectedLines([]); selecting.current = true; }
             }}
@@ -1225,7 +1241,7 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
                 aria-haspopup="menu"
                 aria-expanded={blockMenuId === block.id}
                 onMouseDown={(event) => event.preventDefault()}
-                onClick={(event) => { event.stopPropagation(); if (event.shiftKey) { const anchor = selectionAnchor.current ?? index; selectionAnchor.current = anchor; selectLines(anchor, index); } else { selectionAnchor.current = index; setSelectedLines([index]); setBlockMenuId(current => current === block.id ? null : block.id); } }}
+                onClick={(event) => { event.stopPropagation(); if (event.metaKey || event.ctrlKey) { selectionAnchor.current = index; toggleLine(index); } else if (event.shiftKey) { const anchor = selectionAnchor.current ?? index; selectionAnchor.current = anchor; selectLines(anchor, index); } else { selectionAnchor.current = index; setSelectedLines([index]); setBlockMenuId(current => current === block.id ? null : block.id); } }}
                 onDragStart={(event) => handleDragStart(event, index)}
                 onKeyDown={(event) => {
                   if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
@@ -1319,39 +1335,6 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
                 </div>
               )}
 
-              {/* 2-Column Side-by-Side Block */}
-              {block.type === 'columns' && (
-                <div className="notion-columns-container">
-                  <div className="notion-column notion-column--1">
-                    <NotionBlockEditor
-                      blocks={
-                        block.col1Blocks && block.col1Blocks.length > 0
-                          ? block.col1Blocks
-                          : [{ content: '', id: 'c1_' + Math.random().toString(36).substring(2, 7), type: 'text' }]
-                      }
-                      locale={locale}
-                      onChange={(nextCol1) => updateBlock(block.id, { col1Blocks: nextCol1 })}
-                      onWorkspaceChange={onWorkspaceChange}
-                      parentPageId={parentPageId}
-                    />
-                  </div>
-                  <div className="notion-column notion-column--2">
-                    <NotionBlockEditor
-                      blocks={
-                        block.col2Blocks && block.col2Blocks.length > 0
-                          ? block.col2Blocks
-                          : [{ content: '', id: 'c2_' + Math.random().toString(36).substring(2, 7), type: 'text' }]
-                      }
-                      locale={locale}
-                      onChange={(nextCol2) => updateBlock(block.id, { col2Blocks: nextCol2 })}
-                      onWorkspaceChange={onWorkspaceChange}
-                      parentPageId={parentPageId}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Embedded Live Database View */}
               {block.type === 'database-view' && (
                 <div className="notion-embedded-db-card">
                   <div className="notion-embedded-db-content">

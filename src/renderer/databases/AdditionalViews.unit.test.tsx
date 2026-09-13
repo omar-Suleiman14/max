@@ -28,13 +28,13 @@ const records: readonly WorkspaceRecord[] = [
   { archivedAt: null, contentJson: null, createdAt: '2026-09-01T00:00:00.000Z', databaseId: 'db-1', id: 'rec-2', positionKey: 'a1', properties: { 'prop-due': '2026-09-02', 'prop-price': 350, 'prop-status': null }, revision: 1, sequence: 2, title: 'Galaxy S24', updatedAt: '2026-09-03T00:00:00.000Z' },
 ];
 
-function renderView(layout: 'chart' | 'dashboard' | 'timeline' | 'feed' | 'form', onCreateRecord = vi.fn()) {
+function renderView(layout: 'chart' | 'dashboard' | 'timeline' | 'form', onCreateRecord = vi.fn()) {
   const onOpenRecord = vi.fn();
   render(<AdditionalViews layout={layout} locale="en" onCreateRecord={onCreateRecord} onOpenRecord={onOpenRecord} records={records} schema={schema} />);
   return { onCreateRecord, onOpenRecord };
 }
 
-describe('the chart, dashboard, timeline, feed and form layouts', () => {
+describe('the chart, dashboard, timeline and form layouts', () => {
   afterEach(cleanup);
 
   it('totals every number property on the dashboard', () => {
@@ -61,13 +61,6 @@ describe('the chart, dashboard, timeline, feed and form layouts', () => {
     expect(dates).toEqual(['2026-09-02', '2026-09-04']);
   });
 
-  it('leads the feed with the most recently changed record and names option labels', () => {
-    renderView('feed');
-
-    expect(screen.getAllByRole('button').at(0)).toHaveTextContent('Galaxy S24');
-    expect(screen.getByText(/Status: Brand New/)).toBeInTheDocument();
-  });
-
   it('saves a record from the form and says so', async () => {
     const onCreateRecord = vi.fn().mockResolvedValue(records[0]);
     renderView('form', onCreateRecord);
@@ -81,7 +74,7 @@ describe('the chart, dashboard, timeline, feed and form layouts', () => {
   });
 
   it('renders nothing until the schema has loaded', () => {
-    const { container } = render(<AdditionalViews layout="feed" locale="en" onCreateRecord={vi.fn()} onOpenRecord={vi.fn()} records={records} schema={null} />);
+    const { container } = render(<AdditionalViews layout="chart" locale="en" onCreateRecord={vi.fn()} onOpenRecord={vi.fn()} records={records} schema={null} />);
 
     expect(container).toBeEmptyDOMElement();
   });

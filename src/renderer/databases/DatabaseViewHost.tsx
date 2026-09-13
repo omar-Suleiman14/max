@@ -94,7 +94,7 @@ export function DatabaseViewHost({
     ))}</div>;
   }
 
-  if (layout === 'chart' || layout === 'dashboard' || layout === 'timeline' || layout === 'feed' || layout === 'form') return <AdditionalViews key={activeView?.id} layout={layout} schema={sourceSchema} records={records} locale={locale} onOpenRecord={onOpenRecord} onCreateRecord={onCreateRecord}/>;
+  if (layout === 'chart' || layout === 'dashboard' || layout === 'timeline' || layout === 'form') return <AdditionalViews key={activeView?.id} layout={layout} schema={sourceSchema} records={records} locale={locale} onOpenRecord={onOpenRecord} onCreateRecord={onCreateRecord}/>;
 
   switch (layout) {
     case 'gallery':

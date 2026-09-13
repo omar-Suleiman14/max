@@ -28,6 +28,12 @@ export class SortCompiler {
         continue;
       }
 
+      // These three live on the record itself. Sorting by one used to read an
+      // empty property value and leave the rows in their stored order.
+      if (prop?.type === 'created_time') { clauses.push(`r.created_at ${dir}`); continue; }
+      if (prop?.type === 'last_edited_time') { clauses.push(`r.updated_at ${dir}`); continue; }
+      if (prop?.type === 'auto_id') { clauses.push(`r.sequence ${dir}`); continue; }
+
       if (prop?.type === 'number') {
         clauses.push(`(
           SELECT pv.number_value FROM workspace_property_values pv
