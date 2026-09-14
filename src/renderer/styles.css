@@ -236,6 +236,7 @@ a:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 68%, trans
 .skip-link:focus { transform: translateY(0); }
 
 .app-shell { display: grid; grid-template-columns: auto minmax(0, 1fr); height: 100vh; background: var(--canvas); }
+.app-shell[data-sidebar-hidden="true"] { grid-template-columns: minmax(0, 1fr); }
 [dir="rtl"] body { font-family: "Segoe UI", Tahoma, Arial, sans-serif; }
 
 .sidebar { position: relative; z-index: 5; display: flex; width: 238px; min-width: 0; height: 100vh; max-height: 100vh; flex-direction: column; padding: 9px 7px 8px; border-inline-end: 1px solid var(--line); background: var(--sidebar); overflow-x: hidden; user-select: none; transition: width 0.25s cubic-bezier(0.2, 0, 0, 1); }
@@ -5189,8 +5190,8 @@ kbd { display: inline-flex; min-width: 23px; min-height: 20px; align-items: cent
   width: 100%;
   max-width: 480px;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--card);
+  border: 1px solid var(--line);
   text-align: start;
   display: flex;
   flex-direction: column;
@@ -5200,9 +5201,9 @@ kbd { display: inline-flex; min-width: 23px; min-height: 20px; align-items: cent
   padding: 12px 16px;
   font-weight: 600;
   font-size: 13px;
-  color: #f5f5f7;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.02);
+  color: var(--text);
+  border-bottom: 1px solid var(--line);
+  background: var(--canvas-subtle);
 }
 .terms-panel__content {
   max-height: 220px;
@@ -5214,14 +5215,14 @@ kbd { display: inline-flex; min-width: 23px; min-height: 20px; align-items: cent
   font-size: 13px;
   margin-top: 16px;
   margin-bottom: 4px;
-  color: #f5f5f7;
+  color: var(--text);
 }
 .terms-panel__content section:first-child h3 {
   margin-top: 0;
 }
 .terms-panel__content p {
   font-size: 12px;
-  color: #86868b;
+  color: var(--text-soft);
   margin: 0;
 }
 .terms-acceptance {
@@ -5229,7 +5230,7 @@ kbd { display: inline-flex; min-width: 23px; min-height: 20px; align-items: cent
   align-items: center;
   gap: 10px;
   font-size: 13px;
-  color: #f5f5f7;
+  color: var(--text);
   cursor: pointer;
   user-select: none;
   margin-bottom: 8px;
@@ -5246,7 +5247,7 @@ kbd { display: inline-flex; min-width: 23px; min-height: 20px; align-items: cent
   width: 16px;
   height: 16px;
   margin: 0;
-  accent-color: #0071e3;
+  accent-color: var(--accent);
   cursor: pointer;
 }
 
