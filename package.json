@@ -2,7 +2,7 @@
   "name": "max-shop-os",
   "productName": "Max",
   "version": "1.0.2",
-  "description": "Offline-first configurable shop operating system",
+  "description": "Local-first workspace and operations application",
   "license": "GPL-2.0-only",
   "private": true,
   "main": ".vite/build/main.js",

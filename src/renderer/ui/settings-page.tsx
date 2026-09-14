@@ -295,7 +295,7 @@ export function SettingsPage({
             <div className="apple-settings-row-left">
               <div className="apple-settings-content">
                 <span className="apple-settings-title">{translate(locale, 'blueprint')}</span>
-                <span className="apple-settings-description">{locale === 'ar' ? 'استيراد أو تصدير مخطط المتجر' : 'Import or export workspace structure and records'}</span>
+                <span className="apple-settings-description">{locale === 'ar' ? 'استيراد أو تصدير بنية مساحة العمل وسجلاتها' : 'Import or export workspace structure and records'}</span>
               </div>
             </div>
             <div className="apple-settings-row-right">

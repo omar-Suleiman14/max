@@ -13,7 +13,10 @@ module.exports = function createPreview(databasePath, origin) {
   const database = new DatabaseService(databasePath);
   database.initialize();
   // Disposable development workspace; never opens the desktop application's data.
-  if (!database.shopMetadata.getMetadata().onboardingCompleted) {
+  // MAX_PREVIEW_ONBOARDING=1 leaves the workspace un-onboarded so the setup
+  // wizard itself can be opened and screenshotted in the browser preview.
+  const seedWorkspace = process.env.MAX_PREVIEW_ONBOARDING !== '1';
+  if (seedWorkspace && !database.shopMetadata.getMetadata().onboardingCompleted) {
     database.shopMetadata.setKey('workspace.template.id', 'blank');
     database.shopMetadata.updateMetadata({ shopName: 'Design workspace', locale: 'en', onboardingCompleted: true, backupSchedule: 'manual' });
     const projects = database.databases.createDatabase({ title: 'Projects', icon: 'lucide:Layers' });

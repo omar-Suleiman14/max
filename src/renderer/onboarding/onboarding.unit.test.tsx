@@ -30,19 +30,48 @@ describe('Onboarding component', () => {
     // Pressing Enter on English advances to step 2
     fireEvent.keyDown(englishBtn, { key: 'Enter' });
 
-    // Step 2 should now be visible (Shop name input)
-    const shopInput = screen.getByPlaceholderText(/my workspace/i);
-    expect(shopInput).toBeInTheDocument();
+    // Step 2 asks for a workspace name, never a shop or a store name.
+    expect(screen.getByRole('heading', { name: 'Workspace name' })).toBeInTheDocument();
+    expect(screen.getByText('Give this workspace a name. You can change it later.')).toBeInTheDocument();
+    const nameInput = screen.getByPlaceholderText('My workspace');
+    expect(nameInput).toBeInTheDocument();
 
-    // Typing shop name and pressing Enter advances to Step 3
-    fireEvent.change(shopInput, { target: { value: 'My Mac Shop' } });
-    fireEvent.keyDown(shopInput, { key: 'Enter' });
+    // Typing a workspace name and pressing Enter advances to Step 3
+    fireEvent.change(nameInput, { target: { value: 'Reading notes' } });
+    fireEvent.keyDown(nameInput, { key: 'Enter' });
 
-    // Step 3 (Workspace template) should now be visible with only Blank setup
-    expect(screen.getByText(/Shop structure/i)).toBeInTheDocument();
+    // Step 3 (Workspace structure) should now be visible with only Blank setup
+    expect(screen.getByText(/Workspace structure/i)).toBeInTheDocument();
     expect(screen.getByText(/Blank setup/i)).toBeInTheDocument();
     expect(screen.queryByText(/Phone Shop/i)).toBeNull();
     expect(screen.getByText(/Import blueprint/i)).toBeInTheDocument();
+  });
+
+  it('shows the workspace name validation message and blocks the step until a name is entered', () => {
+    const onComplete = vi.fn().mockResolvedValue(undefined);
+    render(<Onboarding initialLocale="en" onComplete={onComplete} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Get started' }));
+    fireEvent.keyDown(screen.getByRole('radio', { name: /English/i }), { key: 'Enter' });
+
+    const nameInput = screen.getByPlaceholderText('My workspace');
+    expect(screen.queryByRole('alert')).toBeNull();
+
+    // Typing and clearing the field surfaces the validation message verbatim.
+    fireEvent.change(nameInput, { target: { value: 'Notes' } });
+    fireEvent.change(nameInput, { target: { value: '   ' } });
+
+    const error = screen.getByRole('alert');
+    expect(error).toHaveTextContent('Enter a workspace name between 1 and 120 characters.');
+    expect(nameInput).toHaveAttribute('aria-invalid', 'true');
+
+    // A blank name cannot advance the wizard.
+    fireEvent.keyDown(nameInput, { key: 'Enter' });
+    expect(screen.queryByText(/Workspace structure/i)).toBeNull();
+
+    fireEvent.change(nameInput, { target: { value: 'Notes' } });
+    expect(screen.queryByRole('alert')).toBeNull();
+    fireEvent.keyDown(nameInput, { key: 'Enter' });
+    expect(screen.getByText(/Workspace structure/i)).toBeInTheDocument();
   });
 
   it('selects Arabic when navigated with keyboard and Enter', () => {
@@ -55,9 +84,10 @@ describe('Onboarding component', () => {
     // Press Enter on Arabic button
     fireEvent.keyDown(arabicBtn, { key: 'Enter' });
 
-    // Should now be on step 2 in Arabic
+    // Should now be on step 2 in Arabic, asking for a workspace rather than a shop.
     expect(document.documentElement.lang).toBe('ar');
     expect(document.documentElement.dir).toBe('rtl');
-    expect(screen.getByText(/اسم المتجر/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'اسم مساحة العمل' })).toBeInTheDocument();
+    expect(screen.queryByText(/متجر/)).toBeNull();
   });
 });

@@ -45,8 +45,8 @@ export function CustomPageView({
 
   const defaultTitlePlaceholder = isHome
     ? locale === 'ar'
-      ? 'نظرة عامة على المتجر'
-      : 'Shop Overview & Home'
+      ? 'نظرة عامة على مساحة العمل'
+      : 'Workspace overview'
     : locale === 'ar'
       ? 'صفحة بدون عنوان'
       : 'Untitled';

@@ -2,10 +2,10 @@ import {
   Database,
   Download,
   Languages,
+  LayoutGrid,
   Monitor,
   Moon,
   RotateCcw,
-  Store,
   Sun,
   Upload,
   X,
@@ -103,16 +103,16 @@ export function SettingsDialog({
           </button>
         </header>
 
-        {/* SHOP SECTION */}
-        <section className="settings-section" aria-labelledby="shop-settings-title">
+        {/* WORKSPACE SECTION */}
+        <section className="settings-section" aria-labelledby="workspace-settings-title">
           <div className="settings-section__heading">
-            <h3 id="shop-settings-title">{translate(locale, 'shop')}</h3>
-            <Store aria-hidden="true" size={17} />
+            <h3 id="workspace-settings-title">{translate(locale, 'workspace')}</h3>
+            <LayoutGrid aria-hidden="true" size={17} />
           </div>
 
           <div className="field-pair">
             <label className="field" style={{ flex: 1 }}>
-              <span>{translate(locale, 'shopName')}</span>
+              <span>{translate(locale, 'workspaceName')}</span>
               <input
                 maxLength={120}
                 onBlur={() => void handleUpdateShopName()}

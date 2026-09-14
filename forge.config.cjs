@@ -33,8 +33,8 @@ const linuxMakers = [
       options: {
         categories: ['Office'],
         icon: join(__dirname, 'assets', 'max.png'),
-        description: 'Offline-first configurable shop operating system',
-        genericName: 'Shop operating system',
+        description: 'Local-first workspace and operations application',
+        genericName: 'Workspace application',
       },
     },
   },
@@ -70,7 +70,7 @@ const config = {
       name: '@electron-forge/maker-squirrel',
       config: {
         authors: 'Max',
-        description: 'Offline-first configurable shop operating system',
+        description: 'Local-first workspace and operations application',
         name: 'Max',
         setupIcon: join(__dirname, 'assets', 'max.ico'),
         // Squirrel downloads this icon and points the Installed apps entry at

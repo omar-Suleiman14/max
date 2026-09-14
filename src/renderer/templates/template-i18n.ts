@@ -14,7 +14,7 @@ const copy = {
     defaultsHint: 'Pre-filled values when creating records with this template.',
     editTemplate: 'Edit Template',
     emptyTemplates: 'No templates yet',
-    emptyTemplatesBody: 'Templates define field order, default values, and progressive disclosure for fast shop entry.',
+    emptyTemplatesBody: 'Templates define field order, default values, and progressive disclosure for fast entry.',
     fieldOrder: 'Field order',
     fieldOrderHint: 'Order properties from most important to least important for fast keyboard navigation.',
     moveDown: 'Move down',

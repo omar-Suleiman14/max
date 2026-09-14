@@ -5928,3 +5928,13 @@ body>.overlay { z-index:2000; isolation:isolate; }
 .update-progress::-webkit-progress-value { border-radius:99px; background:var(--accent); }
 @keyframes update-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .update-spinner { animation: none; } }
+
+/* An inline validation message that sits under an onboarding field. */
+.field-error {
+  color: var(--danger);
+  font-size: 13px;
+  margin: 8px auto 0;
+  max-width: 360px;
+  text-align: center;
+  width: 100%;
+}

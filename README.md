@@ -1,10 +1,11 @@
 # Max
 
-Max is an offline-first, configurable shop operating system.
+Max is a local-first workspace and operations application.
 
 The local SQLite database is authoritative. Max is designed for complete offline
-operation, bilingual Arabic and English use, fast shop-floor entry, reliable
-recovery, and an explicit audit trail.
+operation, bilingual Arabic and English use, fast data entry, reliable recovery,
+and an explicit audit trail. A shop is one workspace somebody can build with
+Max, not what Max is.
 
 Development is governed by the [v0.1.0 build blueprint](docs/product/max-v0.1.0-blueprint.md).
 The current release is built through bounded feature branches into

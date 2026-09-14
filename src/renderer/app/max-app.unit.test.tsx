@@ -440,14 +440,14 @@ describe('Max shell', () => {
     expect(await screen.findByText('Select language')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
-    // Step 2: Shop Name
-    expect(screen.getByText('Shop name')).toBeInTheDocument();
-    const shopInput = screen.getByPlaceholderText('e.g., my workspace');
-    await user.type(shopInput, 'Downtown Phones');
+    // Step 2: Workspace name
+    expect(screen.getByRole('heading', { name: 'Workspace name' })).toBeInTheDocument();
+    const nameInput = screen.getByPlaceholderText('My workspace');
+    await user.type(nameInput, 'Downtown Phones');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
     // Step 3: Blueprint
-    expect(screen.getByText('Shop structure')).toBeInTheDocument();
+    expect(screen.getByText('Workspace structure')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
     // Step 4: Backup Schedule
