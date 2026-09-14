@@ -1,3 +1,15 @@
+/**
+ * Retained deliberately. Classified as migration-only in issue #30.
+ *
+ * This converts a Max v0.1 retail workspace into the generic v0.2 workspace
+ * model, taking a safety backup first. It is reachable over IPC so an old
+ * workspace can be upgraded on demand, and it is the only consumer of
+ * `legacy-retail-migration.ts`.
+ *
+ * It cannot be deleted while any database created by Max v0.1 might still be
+ * opened. Delete this only once it is proven that no reachable database needs
+ * it, and delete `legacy-retail-migration.ts` at the same time.
+ */
 import { legacyRetailMigrationTemplate } from './legacy-retail-migration';
 import type { DatabaseSync } from 'node:sqlite';
 
