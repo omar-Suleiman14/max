@@ -5,6 +5,7 @@ import { generateOrderKey } from '../../shared/order-key';
 import { WorkspaceDomainError } from '../../shared/workspace-contract';
 import type {
   PropertyViewState,
+  ViewLayout,
   WorkspaceView,
   WorkspaceViewDraft,
 } from '../../shared/view-contract';
@@ -20,7 +21,8 @@ type ViewRow = Readonly<{
   filter_ast_json: string | null;
   group_json: string | null;
   id: string;
-  layout: WorkspaceView['layout'];
+  // Whatever SQLite holds, including a layout retired by a later build.
+  layout: string;
   layout_config_json: string;
   name: string;
   owner_id: string;
@@ -31,6 +33,20 @@ type ViewRow = Readonly<{
   updated_at: string;
 }>;
 
+const SUPPORTED_LAYOUTS: ReadonlySet<string> = new Set<ViewLayout>([
+  'table', 'list', 'board', 'calendar', 'gallery', 'timeline', 'chart', 'map', 'form',
+]);
+
+/**
+ * A layout this build no longer draws — `dashboard`, retired because it only
+ * ever stacked a record count on top of the chart view — opens as a table
+ * rather than as a blank pane. The stored value is left alone: nothing is
+ * rewritten until somebody deliberately picks a new layout for that view.
+ */
+function layoutFromRow(layout: string): ViewLayout {
+  return SUPPORTED_LAYOUTS.has(layout) ? layout as ViewLayout : 'table';
+}
+
 function viewFromRow(row: ViewRow): WorkspaceView {
   return {
     archivedAt: row.archived_at,
@@ -39,7 +55,7 @@ function viewFromRow(row: ViewRow): WorkspaceView {
     filterAst: parseStoredJson<FilterNode | null>(row.filter_ast_json, null),
     group: parseStoredJson<GroupRule | null>(row.group_json, null),
     id: row.id,
-    layout: row.layout,
+    layout: layoutFromRow(row.layout),
     layoutConfig: parseStoredJson<Readonly<Record<string, unknown>>>(row.layout_config_json, {}),
     name: row.name,
     ownerId: row.owner_id,

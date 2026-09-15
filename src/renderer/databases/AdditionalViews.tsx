@@ -10,7 +10,7 @@ function formatValue(value: unknown): string {
 }
 
 type Props = {
-  layout: 'chart' | 'dashboard' | 'timeline' | 'form';
+  layout: 'chart' | 'timeline' | 'form';
   records: readonly WorkspaceRecord[];
   schema: DatabaseSchema | null;
   locale: string;
@@ -46,7 +46,6 @@ export function AdditionalViews({ layout, records, schema, locale, onOpenRecord,
   const data = records.map(record => ({record, value:selected ? Number(record.properties[selected.id]) || 0 : 1}));
   const maximum = Math.max(1,...data.map(row => Math.abs(row.value)));
   return <section className="database-chart">
-    {layout === 'dashboard' && <div className="database-special-view"><div className="database-special-view__metric"><strong>{records.length}</strong><span>{ar ? 'سجل' : 'Records'}</span></div>{numeric.slice(0,4).map(p => <div key={p.id} className="database-special-view__metric"><strong>{records.reduce((sum,r) => sum + (Number(r.properties[p.id]) || 0),0).toLocaleString(locale)}</strong><span>{p.name}</span></div>)}</div>}
     <label>{ar ? 'القيمة' : 'Value'}<select value={selected?.id ?? ''} onChange={event => setPropertyId(event.target.value)}><option value="">{ar ? 'عدد السجلات' : 'Record count'}</option>{numeric.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
     {data.map(({record,value}) => <button className="database-chart-row" type="button" key={record.id} onClick={() => onOpenRecord(record)}><span>{record.title}</span><span className="database-chart-track"><i style={{width:`${Math.abs(value)/maximum*100}%`}}/></span><output>{value.toLocaleString(locale)}</output></button>)}<button type="button" onClick={create}>{ar ? 'سجل جديد' : 'New record'}</button>
   </section>;

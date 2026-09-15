@@ -127,9 +127,46 @@ export type BlockType =
   | 'text'
   | 'todo';
 
+/**
+ * Blocks that hold no text of their own. A caret can never sit inside one, so
+ * Backspace had nothing to act on and a divider, an image or an embed could
+ * only be removed through the gutter menu — or by deleting the whole page.
+ * Clicking one of these selects it, and Backspace then removes it.
+ */
+const VOID_BLOCK_TYPES: readonly BlockType[] = [
+  'bookmark', 'columns', 'database-view', 'divider', 'embed', 'file', 'image',
+  'page-link', 'simple-table', 'table-of-contents', 'video', 'audio',
+];
+
+function isVoidBlock(type: BlockType): boolean {
+  return VOID_BLOCK_TYPES.includes(type);
+}
+
+/** Text the person is editing inside a void block, such as an image caption. */
+function isTextEntry(target: EventTarget | null): boolean {
+  return Boolean((target as Element | null)?.closest?.('input,textarea,[contenteditable="true"]'));
+}
+
+/**
+ * True when the target sits inside a database view embedded in *this* editor,
+ * which keeps its own selection and key handling.
+ *
+ * The test has to be "inside this canvas", not merely "has such an ancestor".
+ * A record drawer renders its notes editor within the database page it was
+ * opened from, so an ancestor test marked every block in a record's notes as
+ * part of a database: selecting a line, and so deleting a divider or an image
+ * with Backspace, quietly did nothing there.
+ */
+function inEmbeddedDatabase(target: EventTarget | null, canvas: HTMLElement | null): boolean {
+  const container = (target as Element | null)?.closest?.('.database-page-container');
+  return Boolean(container && canvas?.contains(container));
+}
+
 export type NotionBlock = {
   pageId?: string;
   url?: string;
+  /** Rendered width in pixels for an image the person resized by its corner. */
+  width?: number;
   caption?: string;
   cells?: readonly (readonly string[])[];
   calloutIcon?: string;
@@ -619,7 +656,7 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
       return;
     }
     if (text === '> ') {
-      updateBlock(id, { calloutIcon: 'lucide:Lightbulb', content: '', type: 'callout' });
+      updateBlock(id, { calloutIcon: 'lucide:Info', content: '', type: 'callout' });
       setActiveSlashBlockId(null);
       setTimeout(() => { const element = inputRefs.current.get(id); if (element instanceof HTMLDivElement) element.innerHTML = ''; focusBlock(id, false); }, 0);
       return;
@@ -923,7 +960,7 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
       label: 'Callout',
       labelAr: 'ملاحظة مميزة',
       run: (bId) => {
-        updateBlock(bId, { calloutIcon: 'lucide:Lightbulb', content: '', type: 'callout' });
+        updateBlock(bId, { calloutIcon: 'lucide:Info', content: '', type: 'callout' });
         setActiveSlashBlockId(null);
         focusBlock(bId);
       },
@@ -1010,8 +1047,13 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
   }
 
   function handleDragOver(e: React.DragEvent, index: number) {
+    const files = e.dataTransfer.types.includes('Files');
+    // A file dragged in from outside is not a reorder. The insertion line still
+    // shows where it will land, but the cursor says copy and the drop below
+    // imports the file instead of moving a block that was never picked up.
+    if (!files && draggedIndex === null) return;
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
+    e.dataTransfer.dropEffect = files ? 'copy' : 'move';
     const rect = e.currentTarget.getBoundingClientRect();
     setDragOverEdge(e.clientY >= rect.top + rect.height / 2 ? 'after' : 'before');
     if (dragOverIndex !== index) {
@@ -1049,7 +1091,7 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
     requestAnimationFrame(() => focusBlock(moved.id));
   }
 
-  async function addDroppedFiles(files: FileList) {
+  async function addDroppedFiles(files: FileList, insertAt?: number) {
     setFileError('');
     try {
     const additions: NotionBlock[] = [];
@@ -1064,7 +1106,16 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
       if (!result.ok) throw new Error(result.error.message);
       additions.push({ caption: file.name, content: '', id: crypto.randomUUID(), type: 'file', url: result.value.url });
     }
-    if (additions.length) onChange([...currentBlocks.current, ...additions]);
+    if (!additions.length) return;
+    // Land the file where the insertion line was drawn, not at the end of the
+    // page. Dropping onto the canvas below the last block still appends.
+    const existing = currentBlocks.current;
+    const at = Math.max(0, Math.min(existing.length, insertAt ?? existing.length));
+    const next = [...existing.slice(0, at), ...additions, ...existing.slice(at)];
+    // A file dropped last leaves a paragraph under it, so there is somewhere to
+    // keep typing without having to reach for the gutter.
+    if (at === existing.length) next.push({ content: '', id: crypto.randomUUID(), type: 'text' });
+    onChange(next);
     } catch (error) { setFileError(String(error)); }
   }
 
@@ -1074,16 +1125,23 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
       tabIndex={-1}
       className="notion-editor-canvas"
       onDragOver={(event) => {
-        if (event.dataTransfer.types.includes('Files')) event.preventDefault();
+        if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; }
+      }}
+      onDragLeave={(event) => {
+        // An external drag never fires dragend here, so the insertion line has
+        // to be cleared when the pointer leaves the canvas.
+        if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+        setDragOverIndex(null);
       }}
       onDrop={(event) => {
         if (!event.dataTransfer.files.length) return;
         event.preventDefault(); event.stopPropagation();
+        setDragOverIndex(null); setDraggedIndex(null);
         void addDroppedFiles(event.dataTransfer.files);
       }}
       onContextMenu={(event) => {
         const target = event.target as Element;
-        if (target.closest('.notion-editor-canvas') !== event.currentTarget || target.closest('.database-page-container,button,a')) return;
+        if (target.closest('.notion-editor-canvas') !== event.currentTarget || target.closest('button,a') || inEmbeddedDatabase(target, canvasRef.current)) return;
         event.preventDefault(); event.stopPropagation();
         const row = target.closest('.notion-block-row');
         const index = row ? Array.from(event.currentTarget.children).indexOf(row) : blocks.length - 1;
@@ -1099,7 +1157,7 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
       }}
       onKeyDownCapture={(event) => {
         if ((event.target as Element).closest('.notion-editor-canvas') !== event.currentTarget) return;
-        if ((event.ctrlKey || event.metaKey) && matchesShortcut(event, 'z') && !(event.target as Element).closest('.database-page-container')) {
+        if ((event.ctrlKey || event.metaKey) && matchesShortcut(event, 'z') && !inEmbeddedDatabase(event.target, canvasRef.current)) {
           const from = event.shiftKey ? redoStack.current : undoStack.current;
           const to = event.shiftKey ? undoStack.current : redoStack.current;
           const previous = from.pop();
@@ -1107,7 +1165,7 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
           return;
         }
         if (event.nativeEvent.isComposing || (event.target as Element).closest('input,textarea,.inline-format-toolbar')) return;
-        if ((event.target as Element).closest('.database-page-container,.notion-slash-menu,.notion-block-action-menu')) return;
+        if ((event.target as Element).closest('.notion-slash-menu,.notion-block-action-menu') || inEmbeddedDatabase(event.target, canvasRef.current)) return;
         if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
           event.preventDefault(); event.stopPropagation();
           selectionAnchor.current = 0;
@@ -1157,7 +1215,7 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
         <span>{selectedLines.length} {locale === 'ar' ? 'محدد' : 'selected'}</span>
         <select aria-label={locale === 'ar' ? 'تحويل إلى' : 'Turn selected blocks into'} value="" onChange={event => {
           const type = event.target.value as BlockType;
-          onChange(blocks.map((block, index) => selectedLines.includes(index) ? { ...block, type, calloutIcon: block.calloutIcon || 'lucide:Lightbulb' } : block));
+          onChange(blocks.map((block, index) => selectedLines.includes(index) ? { ...block, type, calloutIcon: block.calloutIcon || 'lucide:Info' } : block));
         }}><option value="" disabled>{locale === 'ar' ? 'تحويل إلى…' : 'Turn into…'}</option>{(['text','h1','h2','h3','bullet','number','todo','quote','callout','code'] as const).map(type => <option key={type} value={type}>{({text:'Text',h1:'Heading 1',h2:'Heading 2',h3:'Heading 3',bullet:'Bulleted list',number:'Numbered list',todo:'To-do',quote:'Quote',callout:'Callout',code:'Code'})[type]}</option>)}</select>
       </div>}
       <p className="sr-only" role="status">{failedMoveBlockId ? (locale === 'ar' ? 'لا يمكن نقل الكتلة أبعد من ذلك.' : 'This block cannot move any farther.') : ''}</p>
@@ -1176,15 +1234,18 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
             className="notion-block-row"
             data-block-id={block.id}
             onKeyDown={(event) => {
-              if (block.type !== 'page-link' || event.key !== 'Backspace' || event.ctrlKey || event.metaKey || event.altKey) return;
-              const target = event.target as Element;
-              if (!target.closest('.page-link-row')) return;
+              // Backspace (or Delete) removes a block that has no caret of its
+              // own, wherever focus happens to sit inside it — unless that is a
+              // caption or a table cell, where the key still edits text.
+              if (!isVoidBlock(block.type)) return;
+              if (!['Backspace', 'Delete'].includes(event.key) || event.ctrlKey || event.metaKey || event.altKey) return;
+              if (isTextEntry(event.target) || inEmbeddedDatabase(event.target, canvasRef.current)) return;
               event.preventDefault(); event.stopPropagation(); removeBlock(block.id);
             }}
             data-line-selected={selectedLines.includes(index)}
             onPointerDown={(event) => {
               const target = event.target as Element;
-              if (target.closest('.notion-editor-canvas') !== canvasRef.current || target.closest('button,.database-page-container,.notion-slash-menu')) return;
+              if (target.closest('.notion-editor-canvas') !== canvasRef.current || target.closest('button,.notion-slash-menu') || inEmbeddedDatabase(target, canvasRef.current)) return;
               // A drag that starts inside a line still anchors there, so pulling
               // across a boundary picks up whole blocks the way dragging across
               // files in Finder picks up whole files.
@@ -1196,6 +1257,10 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
                 event.preventDefault(); selectionAnchor.current = index; toggleLine(index); canvasRef.current?.focus();
               } else if (event.shiftKey && selectionAnchor.current !== null) {
                 event.preventDefault(); selectLines(selectionAnchor.current, index); canvasRef.current?.focus();
+              } else if (isVoidBlock(block.type)) {
+                // Clicking a caret-less block selects it, so Backspace can act.
+                event.preventDefault(); selectionAnchor.current = index;
+                setSelectedLines([index]); canvasRef.current?.focus();
               } else { selectionAnchor.current = index; setSelectedLines([]); selecting.current = true; }
             }}
             onPointerEnter={(event) => {
@@ -1221,7 +1286,14 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
               setDragOverIndex(null);
             }}
             onDragOver={(e) => handleDragOver(e, index)}
-            onDrop={() => handleDrop(index)}
+            onDrop={(event) => {
+              if (!event.dataTransfer.files.length) { handleDrop(index); return; }
+              // An image or a file dropped between two blocks belongs there.
+              event.preventDefault(); event.stopPropagation();
+              const at = index + (dragOverEdge === 'after' ? 1 : 0);
+              setDragOverIndex(null); setDraggedIndex(null);
+              void addDroppedFiles(event.dataTransfer.files, at);
+            }}
           >
             {/* Gutter Handles (+ and Drag grip) - Hover Only */}
             <div className="notion-block-gutter">
@@ -1271,7 +1343,12 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
             <div className="notion-block-body">
               {['page-link', 'embed', 'bookmark', 'image', 'video', 'audio', 'file', 'simple-table', 'table-of-contents'].includes(block.type) && <ExtraBlock block={block} blocks={blocks} locale={locale} onChange={(patch) => updateBlock(block.id, patch)} />}
               {block.type === 'text' && richText}
-              {(block.type === 'quote' || block.type === 'code') && <textarea ref={(element) => { if (element) inputRefs.current.set(block.id, element); else inputRefs.current.delete(block.id); }} className={'notion-extra-block notion-extra-block--' + block.type} aria-label={block.type} rows={Math.max(2, block.content.split('\n').length)} value={block.content} onChange={(event) => updateBlock(block.id, { content: event.target.value })} onKeyDown={(event) => { if (block.type !== 'code') handleKeyDown(event, block, index); }} />}
+              {(block.type === 'quote' || block.type === 'code') && <textarea ref={(element) => { if (element) inputRefs.current.set(block.id, element); else inputRefs.current.delete(block.id); }} className={'notion-extra-block notion-extra-block--' + block.type} aria-label={block.type} rows={Math.max(2, block.content.split('\n').length)} value={block.content} onChange={(event) => updateBlock(block.id, { content: event.target.value })} onKeyDown={(event) => {
+                // A code block keeps Enter for itself, but backspacing out of an
+                // empty one still removes it the way every other block does.
+                if (block.type !== 'code') handleKeyDown(event, block, index);
+                else if (event.key === 'Backspace' && !block.content) handleKeyDown(event, block, index);
+              }} />}
               {block.type === 'toggle' && <details className="notion-toggle-block" open><summary><input ref={(element) => { if (element) inputRefs.current.set(block.id, element); else inputRefs.current.delete(block.id); }} placeholder={locale === 'ar' ? 'عنوان' : 'Toggle heading'} value={block.content} onChange={(event) => updateBlock(block.id, { content: event.target.value })} /></summary><NotionBlockEditor blocks={block.col1Blocks ?? []} locale={locale} onChange={(next) => updateBlock(block.id, { col1Blocks: next })} parentPageId={parentPageId} onWorkspaceChange={onWorkspaceChange} /></details>}
               {['h1', 'h2', 'h3'].includes(block.type) && richText}
 
@@ -1314,7 +1391,7 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
                     ref={(element) => { if (element) calloutIconRefs.current.set(block.id, element); else calloutIconRefs.current.delete(block.id); }}
                     type="button"
                   >
-                    <PageIconRenderer fallback="lucide:Lightbulb" icon={block.calloutIcon || 'lucide:Lightbulb'} size={20} />
+                    <PageIconRenderer fallback="lucide:Info" icon={block.calloutIcon || 'lucide:Info'} size={20} />
                   </button>
                   {calloutPickerId === block.id && (
                     <IconPickerDialog

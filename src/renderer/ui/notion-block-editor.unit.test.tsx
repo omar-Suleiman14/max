@@ -2,7 +2,7 @@
 
 import '@testing-library/jest-dom/vitest';
 
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -236,5 +236,84 @@ describe('NotionBlockEditor', () => {
     await user.click(await screen.findByRole('button', { name: 'Products' }));
 
     await waitFor(() => expect(createView).toHaveBeenCalledWith(expect.objectContaining({ databaseId: 'db-products', ownerId: 'one', ownerType: 'block' })));
+  });
+
+  it.each(['divider', 'image', 'bookmark'] as const)('removes a %s block by clicking it and pressing Backspace', async (type) => {
+    const user = userEvent.setup();
+    const { container } = render(<EditorHarness initial={[
+      { content: 'Intro', id: 'intro', type: 'text' },
+      { caption: 'A picture', content: '', id: 'void', type, url: 'https://example.com/a.png' },
+      { content: 'Tail', id: 'tail', type: 'text' },
+    ]} />);
+
+    // These blocks hold no text, so no caret can ever sit in them. Clicking one
+    // selects it; Backspace then removes it, the way it does for a paragraph.
+    const row = container.querySelector('[data-block-id="void"]')!;
+    // Click what the person actually sees — the rule, the picture — not the row.
+    await user.click(row.querySelector('.notion-block-body')!.firstElementChild ?? row);
+    expect(row.getAttribute('data-line-selected')).toBe('true');
+    await user.keyboard('{Backspace}');
+
+    expect(container.querySelector('[data-block-id="void"]')).toBeNull();
+    expect(container.querySelectorAll('[data-block-id]')).toHaveLength(2);
+  });
+
+  it('keeps Backspace editing text when the caret is in an image caption', async () => {
+    const user = userEvent.setup();
+    const { container } = render(<EditorHarness initial={[
+      { caption: 'Shelf', content: '', id: 'picture', type: 'image', url: 'https://example.com/a.png' },
+    ]} />);
+
+    await user.click(await screen.findByRole('button', { name: /Load image/ }));
+    const caption = screen.getByLabelText('Caption');
+    await user.click(caption);
+    await user.keyboard('{Backspace}');
+
+    expect(container.querySelector('[data-block-id="picture"]')).not.toBeNull();
+    expect(caption).toHaveValue('Shel');
+  });
+
+  it('imports a file dropped between two blocks at that position', async () => {
+    const importImage = vi.fn(() => Promise.resolve({ ok: true, value: { url: 'max://asset/' + 'a'.repeat(64) + '.png' } }));
+    Object.defineProperty(window, 'maxApi', { configurable: true, value: { assets: { importImage } } });
+    const { container } = render(<EditorHarness initial={[
+      { content: 'First', id: 'first', type: 'text' },
+      { content: 'Second', id: 'second', type: 'text' },
+    ]} />);
+
+    const file = new File([new Uint8Array([1, 2, 3])], 'shelf.png', { type: 'image/png' });
+    // jsdom has no drag machinery, so the transfer is built by hand.
+    const dataTransfer = { dropEffect: '', files: [file], types: ['Files'] } as unknown as DataTransfer;
+    const row = container.querySelector('[data-block-id="second"]')!;
+    fireEvent.dragOver(row, { clientY: 0, dataTransfer });
+    fireEvent.drop(row, { dataTransfer });
+
+    await waitFor(() => expect(importImage).toHaveBeenCalled());
+    await waitFor(() => {
+      const ids = [...container.querySelectorAll('[data-block-id]')].map((element) => element.getAttribute('data-block-id'));
+      expect(ids[0]).toBe('first');
+      expect(ids[2]).toBe('second');
+      expect(ids).toHaveLength(3);
+    });
+    // The insertion line must not survive the drop.
+    expect(container.querySelector('[data-drop-edge]')).toBeNull();
+  });
+
+  it('still selects blocks when the editor itself sits inside a database page', async () => {
+    const user = userEvent.setup();
+    // A record drawer renders its notes editor within the database page the
+    // record was opened from. The guard that ignores an embedded database view
+    // used to match that ancestor, so Backspace did nothing in record notes.
+    const { container } = render(<div className="database-page-container"><EditorHarness initial={[
+      { content: 'Intro', id: 'intro', type: 'text' },
+      { content: '', id: 'rule', type: 'divider' },
+    ]} /></div>);
+
+    const row = container.querySelector('[data-block-id="rule"]')!;
+    await user.click(row.querySelector('.notion-divider-wrap')!);
+    expect(row.getAttribute('data-line-selected')).toBe('true');
+    await user.keyboard('{Backspace}');
+
+    expect(container.querySelector('[data-block-id="rule"]')).toBeNull();
   });
 });

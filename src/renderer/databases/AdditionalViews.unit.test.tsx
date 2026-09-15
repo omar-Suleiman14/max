@@ -28,22 +28,14 @@ const records: readonly WorkspaceRecord[] = [
   { archivedAt: null, contentJson: null, createdAt: '2026-09-01T00:00:00.000Z', databaseId: 'db-1', id: 'rec-2', positionKey: 'a1', properties: { 'prop-due': '2026-09-02', 'prop-price': 350, 'prop-status': null }, revision: 1, sequence: 2, title: 'Galaxy S24', updatedAt: '2026-09-03T00:00:00.000Z' },
 ];
 
-function renderView(layout: 'chart' | 'dashboard' | 'timeline' | 'form', onCreateRecord = vi.fn()) {
+function renderView(layout: 'chart' | 'timeline' | 'form', onCreateRecord = vi.fn()) {
   const onOpenRecord = vi.fn();
   render(<AdditionalViews layout={layout} locale="en" onCreateRecord={onCreateRecord} onOpenRecord={onOpenRecord} records={records} schema={schema} />);
   return { onCreateRecord, onOpenRecord };
 }
 
-describe('the chart, dashboard, timeline and form layouts', () => {
+describe('the chart, timeline and form layouts', () => {
   afterEach(cleanup);
-
-  it('totals every number property on the dashboard', () => {
-    renderView('dashboard');
-
-    expect(screen.getByText('Records')).toBeInTheDocument();
-    expect(screen.getByText('2')).toBeInTheDocument();
-    expect(screen.getByText('2,000')).toBeInTheDocument();
-  });
 
   it('draws one bar per record and opens the record behind it', async () => {
     const { onOpenRecord } = renderView('chart');
