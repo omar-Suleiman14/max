@@ -62,6 +62,8 @@ const maxApi: MaxApi = Object.freeze({
   cloudBackups: Object.freeze({
     create: (sessionToken: string, trigger?: BackupTrigger) =>
       ipcRenderer.invoke(IPC_CHANNELS.cloudBackupCreate, sessionToken, trigger) as ReturnType<MaxApi['cloudBackups']['create']>,
+    download: (sessionToken: string, backupId: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.cloudBackupDownload, sessionToken, backupId) as ReturnType<MaxApi['cloudBackups']['download']>,
     getStatus: () =>
       ipcRenderer.invoke(IPC_CHANNELS.cloudBackupStatus) as ReturnType<MaxApi['cloudBackups']['getStatus']>,
     list: (sessionToken: string) =>

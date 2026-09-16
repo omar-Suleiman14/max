@@ -96,6 +96,7 @@ export const IPC_CHANNELS = {
   backupRestore: 'max:backup:restore',
   backupVerify: 'max:backup:verify',
   cloudBackupCreate: 'max:cloud-backup:create',
+  cloudBackupDownload: 'max:cloud-backup:download',
   cloudBackupList: 'max:cloud-backup:list',
   cloudBackupRestore: 'max:cloud-backup:restore',
   cloudBackupRunScheduled: 'max:cloud-backup:run-scheduled',
@@ -290,6 +291,7 @@ export type MaxApi = Readonly<{
   }>;
   cloudBackups: Readonly<{
     create: (sessionToken: string, trigger?: BackupTrigger) => Promise<MutationResult<CloudBackupCreateResult>>;
+    download: (sessionToken: string, backupId: string) => Promise<MutationResult<BackupMetadata>>;
     getStatus: () => Promise<CloudBackupStatus>;
     list: (sessionToken: string) => Promise<MutationResult<readonly CloudBackupMetadata[]>>;
     restore: (sessionToken: string, backupId: string) => Promise<MutationResult<RestoreResult>>;

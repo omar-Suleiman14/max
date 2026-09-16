@@ -2,6 +2,8 @@ import { Component, StrictMode, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { MaxApp } from './app/max-app';
+import { AppAuthProvider } from './auth/auth-provider';
+import { CloudBackupScheduler } from './backup/cloud-backup-scheduler';
 import './styles.css';
 
 const root = document.getElementById('root');
@@ -18,8 +20,20 @@ class StartupBoundary extends Component<{ children: ReactNode }, { error: string
     return this.props.children;
   }
 }
+/**
+ * The authentication provider wraps the whole application because Max Cloud
+ * Backup needs a session token in the renderer to hand to the main process.
+ * It costs nothing when cloud backup is off: it renders an offline context
+ * that returns no token, loads no Clerk code and makes no network request, so
+ * Max behaves exactly as before until somebody opts in.
+ */
 createRoot(root).render(
   <StrictMode>
-    <StartupBoundary><MaxApp /></StartupBoundary>
+    <StartupBoundary>
+      <AppAuthProvider>
+        <CloudBackupScheduler />
+        <MaxApp />
+      </AppAuthProvider>
+    </StartupBoundary>
   </StrictMode>,
 );

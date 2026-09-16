@@ -910,6 +910,10 @@ export function registerIpcHandlers({
       ? trigger as BackupTrigger : 'manual';
     return asyncMutation(() => cloudBackups.create(parseSessionToken(sessionToken), parsedTrigger));
   });
+  ipcMain.handle(IPC_CHANNELS.cloudBackupDownload, (event, sessionToken: unknown, backupId: unknown) => {
+    trust(event);
+    return asyncMutation(() => cloudBackups.download(parseSessionToken(sessionToken), parseId(backupId)));
+  });
   ipcMain.handle(IPC_CHANNELS.cloudBackupList, (event, sessionToken: unknown) => {
     trust(event);
     return asyncMutation(() => cloudBackups.list(parseSessionToken(sessionToken)));
