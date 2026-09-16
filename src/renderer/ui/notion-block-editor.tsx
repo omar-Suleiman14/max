@@ -142,6 +142,14 @@ function isVoidBlock(type: BlockType): boolean {
   return VOID_BLOCK_TYPES.includes(type);
 }
 
+/**
+ * Blocks that draw a box around their line rather than only styling its text.
+ * Backspace in an empty one takes the box off and leaves the line, so the caret
+ * never jumps somewhere else just because somebody changed their mind about a
+ * callout. Headings and list items are styling, and still clear in one press.
+ */
+const CONTAINER_BLOCK_TYPES: readonly BlockType[] = ['callout', 'code', 'quote', 'toggle'];
+
 /** Text the person is editing inside a void block, such as an image caption. */
 function isTextEntry(target: EventTarget | null): boolean {
   return Boolean((target as Element | null)?.closest?.('input,textarea,[contenteditable="true"]'));
@@ -785,6 +793,19 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
         // It used to turn a heading into a paragraph first, so clearing one
         // took two presses and left an empty line behind.
         const previous = blocks[index - 1];
+
+        // Emptying a container first takes the container off, leaving the line
+        // itself in place under the caret. A heading or a list item is only
+        // styling on the line, so those still go in one press; a callout, a
+        // quote, a code block or a toggle is a box drawn around the line, and
+        // "get rid of this box" is not the same request as "get rid of my line".
+        if (!block.content && CONTAINER_BLOCK_TYPES.includes(block.type)) {
+          event.preventDefault();
+          updateBlock(block.id, { type: 'text' });
+          focusBlock(block.id, true);
+          return;
+        }
+
         if (!previous) {
           // There is nothing above the first block except the page title, so
           // that is where the caret goes.
@@ -793,6 +814,18 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
           focusPageTitle();
           return;
         }
+
+        // A block with no text of its own cannot receive this line's text. It
+        // used to be handed the text anyway, which swallowed the line: pressing
+        // Backspace under a divider silently destroyed the paragraph. Take the
+        // divider, the image or the embed away instead and stay where we are.
+        if (isVoidBlock(previous.type)) {
+          event.preventDefault();
+          removeBlock(previous.id);
+          focusBlock(block.id, false);
+          return;
+        }
+
         if (!block.content) {
           event.preventDefault(); removeBlock(block.id); focusBlock(previous.id, true); return;
         }

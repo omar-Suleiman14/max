@@ -14,6 +14,16 @@ function EditorHarness({ initial, parentPageId }: Readonly<{ initial: readonly N
   return <NotionBlockEditor blocks={blocks} locale="en" onChange={setBlocks} parentPageId={parentPageId} />;
 }
 
+function placeCaretAtStart(element: HTMLElement) {
+  element.focus();
+  const selection = window.getSelection()!;
+  const range = document.createRange();
+  range.selectNodeContents(element);
+  range.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
 afterEach(() => cleanup());
 
 describe('NotionBlockEditor', () => {
@@ -315,5 +325,49 @@ describe('NotionBlockEditor', () => {
     await user.keyboard('{Backspace}');
 
     expect(container.querySelector('[data-block-id="rule"]')).toBeNull();
+  });
+
+  it('takes the box off an empty callout and leaves the caret on that line', async () => {
+    const user = userEvent.setup();
+    const { container } = render(<EditorHarness initial={[
+      { content: 'Intro', id: 'intro', type: 'text' },
+      { calloutIcon: 'lucide:Info', content: '', id: 'note', type: 'callout' },
+    ]} />);
+
+    // A callout is a box drawn around a line, so emptying it and pressing
+    // Backspace means "drop the box", not "drop my line and send me upwards".
+    const note = screen.getAllByRole('textbox')[1]!;
+    placeCaretAtStart(note);
+    await user.keyboard('{Backspace}');
+
+    await waitFor(() => expect(container.querySelector('.notion-callout-card')).toBeNull());
+    expect(container.querySelectorAll('[data-block-id]')).toHaveLength(2);
+    await waitFor(() => expect(screen.getAllByRole('textbox')[1]!).toHaveFocus());
+  });
+
+  it.each([
+    ['a page', (children: React.ReactNode) => <div>{children}</div>],
+    ['a record drawer inside a database page', (children: React.ReactNode) => <div className="database-page-container">{children}</div>],
+  ])('deletes a divider above with Backspace and keeps the line in %s', async (_where, wrap) => {
+    const user = userEvent.setup();
+    const { container } = render(wrap(<EditorHarness initial={[
+      { content: 'First line', id: 'first', type: 'text' },
+      { content: '', id: 'rule', type: 'divider' },
+      { content: 'Third line', id: 'third', type: 'text' },
+    ]} />));
+
+    // A divider holds no text, so it cannot take this line's text the way a
+    // paragraph above would. Backspacing into one used to hand it the text
+    // anyway, which quietly destroyed the line the person was standing on.
+    const third = screen.getAllByRole('textbox')[1]!;
+    placeCaretAtStart(third);
+    await user.keyboard('{Backspace}');
+
+    await waitFor(() => expect(container.querySelector('[data-block-id="rule"]')).toBeNull());
+    expect([...container.querySelectorAll('[data-block-id]')].map((row) => row.getAttribute('data-block-id')))
+      .toEqual(['first', 'third']);
+    expect(screen.getAllByRole('textbox').map((box) => box.textContent?.replaceAll('​', '')))
+      .toEqual(['First line', 'Third line']);
+    await waitFor(() => expect(screen.getAllByRole('textbox')[1]!).toHaveFocus());
   });
 });
