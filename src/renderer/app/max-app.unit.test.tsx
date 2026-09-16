@@ -476,6 +476,51 @@ describe('Max shell', () => {
     expect(container.querySelector('.app-frame')).toBeInTheDocument();
   });
 
+  it.each(['ctrlKey', 'metaKey'] as const)('fully hides and restores the sidebar with %s+B, including Arabic key layouts', async (modifier) => {
+    const { container } = render(<MaxApp />);
+    const settings = await screen.findByRole('button', { name: 'Settings' });
+    settings.focus();
+    fireEvent.keyDown(settings, { code: 'KeyB', key: 'لا', [modifier]: true });
+    expect(container.querySelector('.sidebar')).not.toBeInTheDocument();
+    expect(container.querySelector('.app-shell')).toHaveAttribute('data-sidebar-hidden', 'true');
+    expect(document.getElementById('main-content')).toHaveFocus();
+    expect(window.localStorage.getItem('max.ui.sidebar-collapsed')).toBe('true');
+    fireEvent.keyDown(document, { code: 'KeyB', key: 'b', [modifier]: true, repeat: true });
+    expect(container.querySelector('.sidebar')).not.toBeInTheDocument();
+    fireEvent.keyDown(document, { code: 'KeyB', key: 'b', [modifier]: true });
+    expect(container.querySelector('.sidebar')).toBeInTheDocument();
+    expect(window.localStorage.getItem('max.ui.sidebar-collapsed')).toBe('false');
+  });
+
+  it('restores a persistently hidden sidebar with its pointer control', async () => {
+    window.localStorage.setItem('max.ui.sidebar-collapsed', 'true');
+    const user = userEvent.setup();
+    const { container } = render(<MaxApp />);
+    const reopen = await screen.findByRole('button', { name: 'Expand sidebar' });
+    expect(container.querySelector('.sidebar')).not.toBeInTheDocument();
+    await user.click(reopen);
+    expect(await screen.findByRole('button', { name: 'Settings' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Collapse sidebar' }));
+    expect(container.querySelector('.sidebar')).not.toBeInTheDocument();
+    expect(document.getElementById('main-content')).toHaveFocus();
+  });
+
+  it('leaves editor bold, text inputs and modified B shortcuts alone', async () => {
+    const { container } = render(<MaxApp />);
+    await screen.findByRole('button', { name: 'Settings' });
+    const { unmount } = render(<><div contentEditable suppressContentEditableWarning>Editor</div><input aria-label="Shortcut test input" /></>);
+    for (const target of [screen.getByText('Editor'), screen.getByRole('textbox', { name: 'Shortcut test input' })]) {
+      for (const modifier of ['ctrlKey', 'metaKey']) {
+        expect(fireEvent.keyDown(target, { key: 'b', code: 'KeyB', [modifier]: true })).toBe(true);
+        expect(container.querySelector('.sidebar')).toBeInTheDocument();
+      }
+    }
+    fireEvent.keyDown(document, { code: 'KeyB', key: 'b', ctrlKey: true, shiftKey: true });
+    fireEvent.keyDown(document, { code: 'KeyB', key: 'b', ctrlKey: true, altKey: true });
+    expect(container.querySelector('.sidebar')).toBeInTheDocument();
+    unmount();
+  });
+
   it('switches the complete shell to Arabic and RTL', async () => {
     const user = userEvent.setup();
     const { container } = render(<MaxApp />);

@@ -404,7 +404,7 @@ export function Sidebar({
         <div aria-label="Max" className="brand" role="img">
           <img alt="" className="brand__mark" src={maxLogo} />
         </div>
-        <button aria-label={collapseLabel} className="icon-button sidebar__collapse" onClick={onCollapse} type="button">
+        <button aria-label={collapseLabel} aria-keyshortcuts={`${runtimePlatform === 'macos' ? 'Meta' : 'Control'}+b`} title={`${collapseLabel} (${runtimePlatform === 'macos' ? '⌘' : 'Ctrl'} B)`} className="icon-button sidebar__collapse" onClick={onCollapse} type="button">
           <CollapseIcon aria-hidden="true" size={17} />
         </button>
       </div>

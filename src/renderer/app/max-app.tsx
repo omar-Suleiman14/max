@@ -12,6 +12,8 @@ import {
   Database,
   FileText,
   Package,
+  PanelLeftOpen,
+  PanelRightOpen,
   ReceiptText,
   Scale,
   Search,
@@ -117,6 +119,13 @@ export function MaxApp() {
   const [systemUsesDark, setSystemUsesDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => readSidebarCollapsed(window.localStorage));
   const [sidebarWidth, setSidebarWidth] = useState(() => readSidebarWidth(window.localStorage));
+  const toggleSidebar = useCallback(() => {
+    // Keep keyboard focus in the workspace when its current control disappears.
+    if (document.activeElement?.closest('.sidebar, .sidebar-reopen')) {
+      document.getElementById('main-content')?.focus();
+    }
+    setSidebarCollapsed((collapsed) => !collapsed);
+  }, []);
   const [settingsSection, setSettingsSection] = useState<SettingsSectionId>('settings-general');
   const [page, setPage] = useState<AppPage>(() => {
     // Sessions stored before the home page was removed still point at it.
@@ -309,7 +318,11 @@ export function MaxApp() {
       const command = event.ctrlKey || event.metaKey;
       // One key opens one popup. It searches the whole workspace and lists the
       // quick actions in the same place, so there is nothing else to remember.
-      if (command && matchesShortcut(event, 'k')) {
+      if (command && !event.altKey && !event.shiftKey && matchesShortcut(event, 'b') && !isEditingTarget(event.target)) {
+        if (event.defaultPrevented) return;
+        event.preventDefault();
+        if (!event.repeat) toggleSidebar();
+      } else if (command && matchesShortcut(event, 'k')) {
         event.preventDefault();
         setPopupActionId(undefined);
         setPopupMode((previous) => (previous === null ? 'search' : null));
@@ -337,7 +350,7 @@ export function MaxApp() {
     }
     document.addEventListener('keydown', handleGlobalKeyDown);
     return () => document.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [customPages, graphEnabled, handleAddCustomPage, navigateSettingsSection, openPopup, page, workspaceNavigation]);
+  }, [customPages, graphEnabled, handleAddCustomPage, navigateSettingsSection, openPopup, page, toggleSidebar, workspaceNavigation]);
 
   function navigate(nextPage: AppPage) {
     setGraphOpen(false);
@@ -563,18 +576,18 @@ export function MaxApp() {
   const showPageHeader = !isCustomPage && !activeWorkspaceDatabase && !['databases', 'settings', EMPTY_WORKSPACE_PAGE].includes(page);
 
   return (
-    <div className="app-shell" data-app-ready={engineStatus === 'ready' ? 'true' : undefined}>
+    <div className="app-shell" data-sidebar-hidden={sidebarCollapsed} data-app-ready={engineStatus === 'ready' ? 'true' : undefined}>
       <a className="skip-link" href="#main-content">
         {locale === 'ar' ? 'انتقل إلى المحتوى' : 'Skip to content'}
       </a>
-      <Sidebar
+      {!sidebarCollapsed && <Sidebar
         collapsed={sidebarCollapsed}
         customPages={customPages}
         databases={workspaceNavigation.databases}
         locale={locale}
         onAddCustomPage={() => void handleAddCustomPage()}
         onAddSubpage={(parentId) => void handleAddSubpage(parentId)}
-        onCollapse={() => setSidebarCollapsed((collapsed) => !collapsed)}
+        onCollapse={toggleSidebar}
         onDeletePage={(id) => { void handleDeleteCustomPage(id); }}
         onDuplicatePage={(id) => void handleDuplicateCustomPage(id)}
         onExitSettings={() => navigate(previousPage.current || firstWorkspacePageId(customPages, workspaceNavigation.pages, workspaceNavigation.databases))}
@@ -608,13 +621,16 @@ export function MaxApp() {
         settingsSection={settingsSection}
         runtimePlatform={runtimePlatform}
         width={sidebarWidth}
-      />
+      />}
 
       <div className="app-frame">
         {/* The page map is a full window with its own floating controls in the
             same corner, so the workspace pill stands down while it is open. */}
-        {!graphOpen && <header className="topbar" aria-label={locale === 'ar' ? 'إجراءات مساحة العمل' : 'Workspace actions'}>
+        {(!graphOpen || sidebarCollapsed) && <header className="topbar" aria-label={locale === 'ar' ? 'إجراءات مساحة العمل' : 'Workspace actions'}>
           <div className="topbar__actions">
+            {sidebarCollapsed && <button className="topbar-tool sidebar-reopen" type="button" aria-label={translate(locale, 'expandSidebar')} aria-expanded={false} aria-keyshortcuts={`${runtimePlatform === 'macos' ? 'Meta' : 'Control'}+b`} title={`${translate(locale, 'expandSidebar')} (${quickActionModifier(runtimePlatform)} B)`} onClick={toggleSidebar}>
+              {locale === 'ar' ? <PanelRightOpen aria-hidden="true" size={17} /> : <PanelLeftOpen aria-hidden="true" size={17} />}
+            </button>}
             <UpdateNotice locale={locale} onOpen={() => navigateSettingsSection('settings-danger')} />
             {graphEnabled && page !== 'settings' && <button type="button" className="topbar-tool" aria-pressed={graphOpen} aria-keyshortcuts={`${runtimePlatform === 'macos' ? 'Meta' : 'Control'}+g`} onClick={() => setGraphOpen(value => !value)}><Waypoints size={17}/><span>{locale === 'ar' ? 'خريطة' : 'Graph'}</span><kbd>{quickActionModifier(runtimePlatform)} G</kbd></button>}
             {page !== 'settings' && (
