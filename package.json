@@ -15,6 +15,7 @@
     "test": "npm run test:unit && npm run test:integration",
     "test:unit": "vitest run --config vitest.unit.config.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:baseline": "vitest run --config vitest.integration.config.ts src/main/database/regression-baseline.integration.test.ts",
     "test:smoke": "npm run setup:runtime && cross-env MAX_SMOKE_TEST=1 electron-forge start",
     "build": "npm run setup:runtime && electron-forge package",
     "verify:size": "node scripts/verify-size-budget.cjs",
