@@ -15,8 +15,9 @@ dividers, images and embedded databases. Pages nest, and every page can carry a
 cover and an icon.
 
 **Databases.** Generic collections of pages with typed properties: text, number,
-select, status, checkbox, date, relation, rollup, formula, url, email, phone,
-file, person, created and edited stamps, auto identifiers and buttons. Records
+select, multi select, status, checkbox, date, relation, rollup, formula, url,
+email, phone, file, person, created and edited stamps, auto identifiers and
+buttons. Records
 are pages, so anything in a database opens as a page with a body.
 
 **Views.** Table, list, board, calendar and gallery, each with its own saved
@@ -30,8 +31,8 @@ aggregates across a relation.
 **Workflows and quick actions.** Small automations over the workspace, with
 forms that collapse the fields you rarely fill in.
 
-**Blueprints.** A whole workspace — its databases, properties, views, pages and
-workflows — exported to a file and imported somewhere else. The blueprint format
+**Blueprints.** A whole workspace, its databases, properties, views, pages and
+workflows, exported to a file and imported somewhere else. The blueprint format
 is described in
 [the blueprint authoring contract](docs/product/blueprint-authoring-contract.md).
 
@@ -116,6 +117,6 @@ release.
 
 ## Licence
 
-Max is free software released under the GNU General Public License, version 2 —
+Max is free software released under the GNU General Public License, version 2,
 the same licence the Linux kernel uses. See [LICENSE](LICENSE) for the full
 text. Every runtime dependency is MIT or ISC licensed, which GPLv2 permits.
