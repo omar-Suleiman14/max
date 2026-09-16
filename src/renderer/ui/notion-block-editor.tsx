@@ -374,6 +374,12 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
   const deletedSelection = useRef<readonly NotionBlock[] | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const selectionAnchor = useRef<number | null>(null);
+  /**
+   * Where the caret was last asked to land: a block id, or the page title.
+   * Focus moves are deferred so React can finish rendering first, which means
+   * two of them can be in flight at once and the earlier one can land last.
+   */
+  const focusIntent = useRef<string | null>(null);
   const selecting = useRef(false);
   const [selectedLines, setSelectedLines] = useState<readonly number[]>([]);
   /** Adds or removes a single line, leaving every other selected line alone. */
@@ -389,6 +395,7 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
   function focusPageTitle() {
     const title = canvasRef.current?.closest('.custom-page-view')?.querySelector('.custom-page-title-input');
     if (!(title instanceof HTMLTextAreaElement || title instanceof HTMLInputElement)) return;
+    focusIntent.current = 'page-title';
     title.focus();
     title.setSelectionRange(title.value.length, title.value.length);
   }
@@ -471,7 +478,14 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
   // Focus management helper
   function focusBlock(id: string, cursorAtEnd = true) {
     setFocusedBlockId(id);
+    focusIntent.current = id;
     setTimeout(() => {
+      // Somebody may have asked for a different landing place in the twenty
+      // milliseconds this waited on. Removing a block schedules a focus of the
+      // block above it, so backspacing off the top of a page used to put the
+      // caret in the page title and then snatch it back into the body a frame
+      // later. The last request made is the one that wins.
+      if (focusIntent.current !== id) return;
       const el = inputRefs.current.get(id);
       if (el && !holdsCaret(el)) {
         el.focus();

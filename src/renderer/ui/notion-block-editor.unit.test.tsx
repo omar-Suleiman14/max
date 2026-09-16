@@ -84,6 +84,11 @@ describe('NotionBlockEditor', () => {
 
     const title = screen.getByLabelText('Page title');
     await waitFor(() => expect(title).toHaveFocus());
+    // Removing the block also schedules a focus of the block above it. Waiting
+    // past that catches the caret being snatched back out of the title, which
+    // only showed up as a flaky failure on the slowest CI machines.
+    await new Promise((resolve) => { setTimeout(resolve, 80); });
+    expect(title).toHaveFocus();
     expect((title as HTMLTextAreaElement).selectionStart).toBe('Shop notes'.length);
   });
 
