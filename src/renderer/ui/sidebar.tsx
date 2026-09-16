@@ -1,14 +1,16 @@
 import maxLogo from '../assets/max-logo.png';
+import type { UpdateStatus } from '../../shared/update-contract';
+import { revealSetting, searchSettings, settingsEntryLabel } from './settings-index';
 import {
   AlertTriangle,
+  ArrowUpCircle,
+  LoaderCircle,
   BadgeDollarSign,
   Archive,
   ArrowLeft,
   ArrowRight,
-  PanelLeftClose,
-  PanelLeftOpen,
-  PanelRightClose,
-  PanelRightOpen,
+  PanelLeft,
+  PanelRight,
   ChevronDown,
   ChevronRight,
   Copy,
@@ -17,6 +19,7 @@ import {
   Pencil,
   Palette,
   Plus,
+  Search,
   Settings,
   Star,
   LayoutGrid,
@@ -49,8 +52,10 @@ type SidebarProps = Readonly<{
   onSettingsSectionChange: (section: SettingsSectionId) => void;
   onToggleFavorite: (id: string, favorite: boolean) => void;
   onReorderNodes: (orderedIds: string[], movedId?: string, parentNodeId?: string | null) => void;
+  onUpdateClick?: () => void;
   page: AppPage;
   settingsSection: SettingsSectionId;
+  updateState?: UpdateStatus;
   width: number;
   runtimePlatform?: 'linux' | 'macos' | 'windows';
 }>;
@@ -128,8 +133,10 @@ export function Sidebar({
   onSettingsSectionChange,
   onToggleFavorite,
   onReorderNodes,
+  onUpdateClick,
   page,
   settingsSection,
+  updateState,
   width,
   runtimePlatform,
 }: SidebarProps) {
@@ -339,21 +346,16 @@ export function Sidebar({
     return rows;
   }, [customPages, databaseViewNames, databases, expandedPageIds, legacyViewNames]);
 
-  const [settingsSearch, setSettingsSearch] = useState(() => {
-    try { return window.localStorage.getItem('max:settings-search') || ''; } catch { return ''; }
-  });
-  useEffect(() => {
-    try { window.localStorage.setItem('max:settings-search', settingsSearch); } catch { /* Storage may be unavailable. */ }
-  }, [settingsSearch]);
+  // The box starts empty every time settings open. A query kept from a previous
+  // session would hide most of the settings behind a filter nobody typed.
+  const [settingsSearch, setSettingsSearch] = useState('');
 
   const rootRows = useMemo(() => workspaceRows.filter((r): r is WorkspaceNodeRow => r.kind !== 'view'), [workspaceRows]);
 
   const isRtl = locale === 'ar';
   const isSettings = page === 'settings';
   const collapseLabel = translate(locale, collapsed ? 'expandSidebar' : 'collapseSidebar');
-  const CollapseIcon = collapsed
-    ? (isRtl ? PanelRightOpen : PanelLeftOpen)
-    : (isRtl ? PanelRightClose : PanelLeftClose);
+  const CollapseIcon = isRtl ? PanelRight : PanelLeft;
   const settingsSections: readonly Readonly<{ icon: LucideIcon; id: SettingsSectionId; label: string }>[] = [
     { icon: LayoutGrid, id: 'settings-general', label: locale === 'ar' ? 'عام' : 'General' },
     { icon: BadgeDollarSign, id: 'settings-quick-actions', label: locale === 'ar' ? 'الإجراءات السريعة' : 'Quick Actions' },
@@ -362,11 +364,10 @@ export function Sidebar({
     { icon: Archive, id: 'settings-archive', label: locale === 'ar' ? 'الأرشيف والمهملات' : 'Archive & trash' },
     { icon: AlertTriangle, id: 'settings-danger', label: locale === 'ar' ? 'خطر' : 'Danger' },
   ];
-  const filteredSettingsSections = (() => {
-    const q = settingsSearch.trim().toLowerCase();
-    if (!q) return settingsSections;
-    return settingsSections.filter(s => s.label.toLowerCase().includes(q));
-  })();
+  // Searching looks through the settings themselves, not the six section
+  // names: typing "language" or "trash" should land on that row.
+  const settingsResults = searchSettings(settingsSearch, locale);
+  const searchingSettings = settingsSearch.trim().length > 0;
 
   function handleResizePointerDown(event: React.PointerEvent<HTMLDivElement>) {
     resizeStartRef.current = { pointerId: event.pointerId, startWidth: width, startX: event.clientX };
@@ -413,10 +414,12 @@ export function Sidebar({
         {isSettings ? (
           <>
             {!collapsed && (
-              <div style={{ padding: '8px 14px' }}>
+              <div className="sidebar__settings-search">
+                <Search aria-hidden="true" size={14} />
                 <input
                   id="settings-search-input"
                   type="text"
+                  aria-label={locale === 'ar' ? 'البحث في الإعدادات' : 'Search settings'}
                   autoFocus
                   placeholder={locale === 'ar' ? 'البحث في الإعدادات...' : 'Search settings...'}
                   value={settingsSearch}
@@ -431,32 +434,42 @@ export function Sidebar({
                       }
                     }
                   }}
-                  style={{
-                    width: '100%',
-                    background: 'var(--canvas-subtle)',
-                    border: '1px solid var(--line)',
-                    borderRadius: '6px',
-                    padding: '4px 8px',
-                    fontSize: '13px',
-                    color: 'var(--text)',
-                    marginBottom: '8px'
-                  }}
                 />
               </div>
             )}
-            {!collapsed && <p className="sidebar__section-label">{locale === 'ar' ? 'الإعدادات' : 'Settings'}</p>}
-            <nav aria-label={locale === 'ar' ? 'أقسام الإعدادات' : 'Settings sections'} className="sidebar__nav">
-              {filteredSettingsSections.map(({ icon, id, label }) => (
-                <SidebarAction
-                  collapsed={collapsed}
-                  icon={icon}
-                  isActive={settingsSection === id}
-                  key={id}
-                  label={label}
-                  onClick={() => onSettingsSectionChange(id)}
-                />
-              ))}
-            </nav>
+            {!collapsed && <p className="sidebar__section-label">{searchingSettings ? (locale === 'ar' ? 'النتائج' : 'Results') : (locale === 'ar' ? 'الإعدادات' : 'Settings')}</p>}
+            {searchingSettings && !collapsed ? (
+              <nav aria-label={locale === 'ar' ? 'نتائج البحث في الإعدادات' : 'Settings search results'} className="sidebar__nav sidebar__nav--settings-results">
+                {settingsResults.length === 0 && <p className="sidebar__empty-search">{locale === 'ar' ? 'لا توجد نتائج.' : 'No settings found.'}</p>}
+                {settingsResults.map((entry) => {
+                  const section = settingsSections.find(({ id }) => id === entry.section);
+                  return (
+                    <button
+                      className="nav-item settings-result"
+                      key={entry.id}
+                      onClick={() => { onSettingsSectionChange(entry.section); revealSetting(entry.id); }}
+                      type="button"
+                    >
+                      <span className="settings-result__label">{settingsEntryLabel(entry, locale)}</span>
+                      <span className="settings-result__section">{section?.label}</span>
+                    </button>
+                  );
+                })}
+              </nav>
+            ) : (
+              <nav aria-label={locale === 'ar' ? 'أقسام الإعدادات' : 'Settings sections'} className="sidebar__nav">
+                {settingsSections.map(({ icon, id, label }) => (
+                  <SidebarAction
+                    collapsed={collapsed}
+                    icon={icon}
+                    isActive={settingsSection === id}
+                    key={id}
+                    label={label}
+                    onClick={() => onSettingsSectionChange(id)}
+                  />
+                ))}
+              </nav>
+            )}
           </>
         ) : (
           <>
@@ -636,6 +649,20 @@ export function Sidebar({
       </div>
 
       <div className="sidebar__footer">
+        {updateState && ['available', 'downloading', 'ready'].includes(updateState.state) && onUpdateClick && (
+          <button type="button" className={`sidebar-action sidebar-update${updateState.state === 'ready' ? ' sidebar-update--ready' : ''}`} onClick={onUpdateClick}>
+            {updateState.state === 'downloading'
+              ? <LoaderCircle className="update-spinner" aria-hidden="true" size={17} />
+              : <ArrowUpCircle aria-hidden="true" size={17} />}
+            {!collapsed && <span className="sidebar-action__label">
+              {updateState.state === 'downloading'
+                ? (locale === 'ar' ? 'جارٍ التنزيل…' : 'Downloading…')
+                : updateState.state === 'ready'
+                  ? (locale === 'ar' ? 'تحديث جاهز' : 'Update ready')
+                  : (locale === 'ar' ? `${updateState.availableVersion ?? ''} متاح` : `${updateState.availableVersion ?? ''} available`)}
+            </span>}
+          </button>
+        )}
         <SidebarAction
           collapsed={collapsed}
           icon={SettingsActionIcon}

@@ -150,7 +150,7 @@ export function CloudBackupPanel({ locale }: CloudBackupPanelProps) {
 
   return (
     <div className="cloud-backup-panel">
-      <div className="apple-settings-row">
+      <div className="apple-settings-row" data-setting="cloud-backup">
         <div className="apple-settings-row-left">
           <div className="apple-settings-content">
             <span className="apple-settings-title">{cloudBackupCopy(locale, 'cloudBackupTitle')}</span>
@@ -158,14 +158,17 @@ export function CloudBackupPanel({ locale }: CloudBackupPanelProps) {
           </div>
         </div>
         <div className="apple-settings-row-right">
-          <label className="cloud-backup-toggle">
-            <input
-              checked={enabled}
-              onChange={(event) => handleToggle(event.target.checked)}
-              type="checkbox"
-            />
-            <span>{cloudBackupCopy(locale, 'cloudEnable')}</span>
-          </label>
+          <button
+            aria-checked={enabled}
+            aria-label={cloudBackupCopy(locale, 'cloudEnable')}
+            className="settings-switch"
+            data-checked={enabled}
+            onClick={() => handleToggle(!enabled)}
+            role="switch"
+            type="button"
+          >
+            <span aria-hidden="true" />
+          </button>
         </div>
       </div>
 

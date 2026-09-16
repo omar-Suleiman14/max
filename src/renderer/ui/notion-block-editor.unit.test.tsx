@@ -350,6 +350,23 @@ describe('NotionBlockEditor', () => {
     await waitFor(() => expect(screen.getAllByRole('textbox')[1]!).toHaveFocus());
   });
 
+  it('starts the first line inside a toggle when Enter is pressed on its heading', async () => {
+    const user = userEvent.setup();
+    const { container } = render(<EditorHarness initial={[
+      { col1Blocks: [], content: 'Details', id: 'toggle', type: 'toggle' },
+    ]} />);
+
+    // Enter on a toggle's own line belongs inside the toggle. It used to do
+    // nothing at all, which left no way to fill one from the keyboard.
+    const heading = screen.getByPlaceholderText('Toggle heading');
+    heading.focus();
+    await user.keyboard('{Enter}');
+
+    await waitFor(() => expect(container.querySelector('.notion-toggle-block [data-block-id] [contenteditable="true"]')).toHaveFocus());
+    await user.keyboard('Inside');
+    await waitFor(() => expect(container.querySelector('.notion-toggle-block [data-block-id]')).toHaveTextContent('Inside'));
+  });
+
   it.each([
     ['a page', (children: React.ReactNode) => <div>{children}</div>],
     ['a record drawer inside a database page', (children: React.ReactNode) => <div className="database-page-container">{children}</div>],

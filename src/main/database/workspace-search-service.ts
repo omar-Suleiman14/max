@@ -77,6 +77,10 @@ export function blockText(contentJson: string): string {
         if (Array.isArray(row)) for (const cell of row) take(cell);
       }
     }
+    // contentJson wraps its blocks inside { blocks: [...] }.
+    walk(block.blocks);
+    // Callouts, toggles and columns nest child blocks.
+    walk(block.children);
     walk(block.col1Blocks);
     walk(block.col2Blocks);
   };

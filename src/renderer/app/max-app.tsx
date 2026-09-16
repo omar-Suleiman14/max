@@ -12,8 +12,8 @@ import {
   Database,
   FileText,
   Package,
-  PanelLeftOpen,
-  PanelRightOpen,
+  PanelLeft,
+  PanelRight,
   ReceiptText,
   Scale,
   Search,
@@ -25,6 +25,7 @@ import {
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { BackupSchedule } from '../../shared/blueprint-contract';
+import type { UpdateStatus } from '../../shared/update-contract';
 import type { WorkspaceTemplateV2 as Blueprint } from '../../shared/template-v2-contract';
 import type { WorkspaceNavigation } from '../../shared/workspace-contract';
 import { CustomPageView } from '../pages/custom-page-view';
@@ -251,6 +252,20 @@ export function MaxApp() {
   useEffect(() => {
     window.localStorage.setItem(preferenceKeys.sidebarWidth, String(Math.round(sidebarWidth)));
   }, [sidebarWidth]);
+
+  // Track update status for sidebar indicator
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus>();
+  useEffect(() => {
+    let active = true;
+    const refresh = () => {
+      void window.maxApi.updates?.getStatus()
+        .then((value) => { if (active) setUpdateStatus(value); })
+        .catch(() => {});
+    };
+    refresh();
+    const timer = setInterval(refresh, 30_000);
+    return () => { active = false; clearInterval(timer); };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -618,6 +633,8 @@ export function MaxApp() {
         page={page}
         settingsSection={settingsSection}
         runtimePlatform={runtimePlatform}
+        updateState={updateStatus}
+        onUpdateClick={() => navigateSettingsSection('settings-danger')}
         width={sidebarWidth}
       />}
 
@@ -627,7 +644,7 @@ export function MaxApp() {
         {(!graphOpen || sidebarCollapsed) && <header className="topbar" aria-label={locale === 'ar' ? 'إجراءات مساحة العمل' : 'Workspace actions'}>
           <div className="topbar__actions">
             {sidebarCollapsed && <button className="topbar-tool sidebar-reopen" type="button" aria-label={translate(locale, 'expandSidebar')} aria-expanded={false} aria-keyshortcuts={`${runtimePlatform === 'macos' ? 'Meta' : 'Control'}+b`} title={`${translate(locale, 'expandSidebar')} (${quickActionModifier(runtimePlatform)} B)`} onClick={toggleSidebar}>
-              {locale === 'ar' ? <PanelRightOpen aria-hidden="true" size={17} /> : <PanelLeftOpen aria-hidden="true" size={17} />}
+              {locale === 'ar' ? <PanelRight aria-hidden="true" size={17} /> : <PanelLeft aria-hidden="true" size={17} />}
             </button>}
             <UpdateNotice locale={locale} onOpen={() => navigateSettingsSection('settings-danger')} />
             {graphEnabled && page !== 'settings' && <button type="button" className="topbar-tool" aria-pressed={graphOpen} aria-keyshortcuts={`${runtimePlatform === 'macos' ? 'Meta' : 'Control'}+g`} onClick={() => setGraphOpen(value => !value)}><Waypoints size={17}/><span>{locale === 'ar' ? 'خريطة' : 'Graph'}</span><kbd>{quickActionModifier(runtimePlatform)} G</kbd></button>}

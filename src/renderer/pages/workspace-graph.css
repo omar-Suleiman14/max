@@ -77,8 +77,7 @@
 .graph-options,.graph-search-results { top:64px; }
 /* Reuse Settings switches without the graph's generic button resets. */
 .graph-options .graph-option-toggle { display:flex; align-items:center; justify-content:space-between; gap:16px; margin:14px 0; }
-.graph-options .settings-switch { display:block; width:2.375rem; height:1.375rem; padding:.125rem; border:0; border-radius:999px; background:var(--line-strong); }
-.graph-options .settings-switch[data-checked=true] { background:var(--accent); }
+.graph-options .settings-switch { display:block; }
 .graph-options .graph-color-group { display:grid; grid-template-columns:102px minmax(0,1fr) 96px 24px; align-items:center; gap:8px; margin:8px 0; }
 .graph-options .graph-color-group[data-property=true] { grid-template-columns:86px minmax(0,1fr) minmax(0,1fr) 96px 24px; }
 .graph-options .graph-color-select { display:flex; align-items:center; justify-content:space-between; gap:6px; width:100%; height:34px; padding:6px 8px; border:1px solid var(--line-strong); border-radius:6px; background:transparent; font-size:12px; }

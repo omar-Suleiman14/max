@@ -27,7 +27,7 @@
 .custom-page-header[data-has-cover] { margin-block-start:-38px; }
 .custom-page-header[data-has-cover] .custom-page-icon-btn { width:80px; height:80px; filter:drop-shadow(0 2px 3px #0003); }
 .custom-page-title-input { resize:none; white-space:pre-wrap; overflow:hidden; min-width:0; width:100%; line-height:1.3; }
-.notion-text-editable, .notion-extra-block, .notion-toggle-block summary input { font-size:18px; line-height:1.7; }
+.notion-text-editable, .notion-extra-block, .notion-toggle-block summary input { font-size:15px; line-height:1.6; }
 .notion-block-gutter { inset-inline-start:-58px; }
 .notion-gutter-btn { width:27px; height:28px; }
 .notion-gutter-btn svg { width:18px; height:18px; }

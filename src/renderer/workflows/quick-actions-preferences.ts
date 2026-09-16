@@ -1,7 +1,8 @@
 const key = 'max.quick-actions.enabled';
 
+/** Off until it is asked for: quick actions are a workflow to opt into. */
 export function readQuickActionsEnabled(): boolean {
-  return window.localStorage.getItem(key) !== 'false';
+  return window.localStorage.getItem(key) === 'true';
 }
 
 export function saveQuickActionsEnabled(enabled: boolean): void {

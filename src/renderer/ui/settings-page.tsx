@@ -161,7 +161,7 @@ export function SettingsPage({
         {/* General */}
         <h2 className="apple-settings-group-title">{locale === 'ar' ? 'عام' : 'Workspace'}</h2>
         <div className="apple-settings-group settings-scroll-section" id="settings-general">
-          <div className="apple-settings-row">
+          <div className="apple-settings-row" data-setting="workspace-name">
             <div className="apple-settings-row-left">
               <div className="apple-settings-content">
                 <span className="apple-settings-title">{locale === 'ar' ? 'اسم مساحة العمل' : 'Workspace name'}</span>
@@ -181,7 +181,7 @@ export function SettingsPage({
             </div>
           </div>
 
-          <div className="apple-settings-row">
+          <div className="apple-settings-row" data-setting="language">
             <div className="apple-settings-row-left">
               <div className="apple-settings-content">
                 <span className="apple-settings-title">{translate(locale, 'language')}</span>
@@ -201,9 +201,9 @@ export function SettingsPage({
             </div>
           </div>
 
-          <div className="apple-settings-row"><div className="apple-settings-row-left"><div className="apple-settings-content"><span className="apple-settings-title">{locale === 'ar' ? 'خريطة الصفحات' : 'Graph view'}</span><span className="apple-settings-description">{locale === 'ar' ? 'إظهار زر الخريطة وتفعيل اختصار لوحة المفاتيح.' : 'Show the graph button and enable its keyboard shortcut.'}</span></div></div><div className="apple-settings-row-right"><button type="button" className="settings-switch" role="switch" aria-label={locale === 'ar' ? 'خريطة الصفحات' : 'Graph view'} aria-checked={graphEnabled} data-checked={graphEnabled} onClick={() => setGraphEnabled(!graphEnabled)}><span aria-hidden="true" /></button></div></div>
+          <div className="apple-settings-row" data-setting="graph"><div className="apple-settings-row-left"><div className="apple-settings-content"><span className="apple-settings-title">{locale === 'ar' ? 'خريطة الصفحات' : 'Graph view'}</span><span className="apple-settings-description">{locale === 'ar' ? 'إظهار زر الخريطة وتفعيل اختصار لوحة المفاتيح.' : 'Show the graph button and enable its keyboard shortcut.'}</span></div></div><div className="apple-settings-row-right"><button type="button" className="settings-switch" role="switch" aria-label={locale === 'ar' ? 'خريطة الصفحات' : 'Graph view'} aria-checked={graphEnabled} data-checked={graphEnabled} onClick={() => setGraphEnabled(!graphEnabled)}><span aria-hidden="true" /></button></div></div>
 
-          <div className="apple-settings-row"><div className="apple-settings-row-left"><div className="apple-settings-content"><span className="apple-settings-title">{locale === 'ar' ? 'روابط الصفحات' : 'Page connections'}</span><span className="apple-settings-description">{locale === 'ar' ? 'إظهار الروابط الواردة والصادرة أسفل الصفحات.' : 'Show backlinks and outgoing links below your pages.'}</span></div></div><div className="apple-settings-row-right"><button type="button" className="settings-switch" role="switch" aria-label={locale === 'ar' ? 'روابط الصفحات' : 'Page connections'} aria-checked={connectionsEnabled} data-checked={connectionsEnabled} onClick={() => setConnectionsEnabled(!connectionsEnabled)}><span aria-hidden="true" /></button></div></div>
+          <div className="apple-settings-row" data-setting="connections"><div className="apple-settings-row-left"><div className="apple-settings-content"><span className="apple-settings-title">{locale === 'ar' ? 'روابط الصفحات' : 'Page connections'}</span><span className="apple-settings-description">{locale === 'ar' ? 'إظهار الروابط الواردة والصادرة أسفل الصفحات.' : 'Show backlinks and outgoing links below your pages.'}</span></div></div><div className="apple-settings-row-right"><button type="button" className="settings-switch" role="switch" aria-label={locale === 'ar' ? 'روابط الصفحات' : 'Page connections'} aria-checked={connectionsEnabled} data-checked={connectionsEnabled} onClick={() => setConnectionsEnabled(!connectionsEnabled)}><span aria-hidden="true" /></button></div></div>
 
 
         </div>
@@ -211,11 +211,11 @@ export function SettingsPage({
         {/* Workspace actions */}
         <h2 className="apple-settings-group-title">{locale === 'ar' ? 'الإجراءات السريعة' : 'Quick Actions'}</h2>
         <div className="apple-settings-group settings-scroll-section" id="settings-quick-actions">
-          <div className="apple-settings-row quick-actions-toggle-row">
+          <div className="apple-settings-row quick-actions-toggle-row" data-setting="quick-actions">
             <div className="apple-settings-row-left"><div className="apple-settings-content"><span className="apple-settings-title">{locale === 'ar' ? 'اختصار الإجراءات السريعة' : 'Quick action shortcut'}</span><span className="apple-settings-description">{locale === 'ar' ? 'أوقف الاختصار مع إبقاء الإجراءات محفوظة.' : 'Turn off the shortcut while keeping your actions saved.'}</span></div></div>
             <div className="apple-settings-row-right"><button type="button" className="settings-switch" role="switch" aria-label={locale === 'ar' ? 'الإجراءات السريعة' : 'Quick Actions'} aria-checked={quickActionsEnabled} data-checked={quickActionsEnabled} onClick={() => { setQuickActionsEnabled(!quickActionsEnabled); saveQuickActionsEnabled(!quickActionsEnabled); }}><span aria-hidden="true" /></button></div>
           </div>
-          <fieldset className="quick-actions-editor-group" disabled={!quickActionsEnabled} inert={!quickActionsEnabled} aria-label={locale === 'ar' ? 'الإجراءات المحفوظة' : 'Saved actions'}>
+          <fieldset className="quick-actions-editor-group" data-setting="quick-action-list" disabled={!quickActionsEnabled} inert={!quickActionsEnabled} aria-label={locale === 'ar' ? 'الإجراءات المحفوظة' : 'Saved actions'}>
             <QuickActionSettings locale={locale} />
           </fieldset>
         </div>
@@ -223,7 +223,7 @@ export function SettingsPage({
         {/* Appearance */}
         <h2 className="apple-settings-group-title">{translate(locale, 'appearance')}</h2>
         <div className="apple-settings-group settings-scroll-section" id="settings-appearance">
-          <div className="apple-settings-row">
+          <div className="apple-settings-row" data-setting="theme">
             <div className="apple-settings-row-left">
               <div className="apple-settings-content">
                 <span className="apple-settings-title">{translate(locale, 'theme')}</span>
@@ -250,7 +250,7 @@ export function SettingsPage({
         <h2 className="apple-settings-group-title">{locale === 'ar' ? 'النسخ الاحتياطي' : 'Backup'}</h2>
         <div className="apple-settings-group settings-scroll-section" id="settings-backup">
 
-          <div className="apple-settings-row">
+          <div className="apple-settings-row" data-setting="backup-schedule">
             <div className="apple-settings-row-left">
               <div className="apple-settings-content">
                 <span className="apple-settings-title">{translate(locale, 'backupSchedule')}</span>
@@ -270,13 +270,13 @@ export function SettingsPage({
             </div>
           </div>
 
-          <div className="settings-backup-content">
+          <div className="settings-backup-content" data-setting="local-backups">
             <BackupManager locale={locale} />
           </div>
         </div>
 
         <h2 className="apple-settings-group-title" id="archive-settings-title">{locale === 'ar' ? 'الأرشيف والمهملات' : 'Archive & trash'}</h2>
-        <section className="settings-scroll-section archive-settings-card" id="settings-archive" tabIndex={-1} aria-labelledby="archive-settings-title">
+        <section className="settings-scroll-section archive-settings-card" data-setting="archive" id="settings-archive" tabIndex={-1} aria-labelledby="archive-settings-title">
           {archiveError && <p className="form-error" role="alert">{archiveError}</p>}
           {trashedPages.length === 0 ? <div className="archive-settings-empty"><span aria-hidden="true">✓</span><div><strong>{locale === 'ar' ? 'المهملات فارغة' : 'Trash is empty'}</strong><p>{locale === 'ar' ? 'ستظهر الصفحات المؤرشفة هنا.' : 'Archived pages will appear here.'}</p></div></div> : <details className="backup-history-disclosure"><summary>{locale === 'ar' ? 'الصفحات المؤرشفة' : 'Archived pages'} <span>{trashedPages.length}</span></summary>{trashedPages.map((item) => <div className="archive-settings-item" key={item.id}><span>{item.title || (locale === 'ar' ? 'بدون عنوان' : 'Untitled')}</span><Button disabled={!!restoringPage} onClick={() => {
             setRestoringPage(item.id); setArchiveError(undefined);
@@ -291,7 +291,7 @@ export function SettingsPage({
       <h2 className="apple-settings-group-title" id="settings-danger-title">{locale === 'ar' ? 'خطر' : 'Danger'}</h2>
       <section className="settings-scroll-section" id="settings-danger" aria-labelledby="settings-danger-title">
           <UpdateSettings locale={locale} />
-          <div className="apple-settings-row">
+          <div className="apple-settings-row" data-setting="blueprint">
             <div className="apple-settings-row-left">
               <div className="apple-settings-content">
                 <span className="apple-settings-title">{translate(locale, 'blueprint')}</span>
@@ -303,7 +303,7 @@ export function SettingsPage({
               <Button icon={<Upload aria-hidden="true" size={15} />} onClick={() => setBlueprintModalTab('import')} variant="ghost">{translate(locale, 'importBlueprint')}</Button>
             </div>
           </div>
-        <div className="apple-settings-row">
+        <div className="apple-settings-row" data-setting="delete-workspace">
           <div className="apple-settings-row-left"><div className="apple-settings-content">
             <span className="apple-settings-title" style={{ color: 'var(--danger)' }}>{locale === 'ar' ? 'حذف مساحة العمل' : 'Delete workspace'}</span>
             <span className="apple-settings-description">{locale === 'ar' ? 'حذف جميع الصفحات وقواعد البيانات في مساحة العمل.' : 'Remove all pages and databases in this workspace.'}</span>
