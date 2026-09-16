@@ -26,8 +26,17 @@ afterEach(() => {
   }
 });
 
-/** A database left exactly as a Max build that only knew migrations 1..`upTo` would have left it. */
-function databaseAtVersion(upTo: number): string {
+/**
+ * A database left exactly as a Max build that only knew migrations 1..`upTo`
+ * would have left it.
+ *
+ * Applying a migration is synchronous SQLite work, and on a Windows runner
+ * eighteen of them in a row held the event loop for long enough that the test
+ * worker could not answer vitest's progress calls, which failed the run even
+ * though every test passed. Handing the loop back between migrations costs
+ * nothing and keeps the worker able to speak.
+ */
+async function databaseAtVersion(upTo: number): Promise<string> {
   const directory = mkdtempSync(join(tmpdir(), 'max-migration-chain-'));
   directories.push(directory);
   const path = join(directory, 'max.sqlite');
@@ -51,6 +60,7 @@ function databaseAtVersion(upTo: number): string {
     database
       .prepare('INSERT INTO system_migrations (id, name, applied_at) VALUES (?, ?, ?)')
       .run(migration.id, migration.name, new Date().toISOString());
+    await new Promise((resolve) => { setImmediate(resolve); });
   }
   database.close();
 
@@ -65,8 +75,8 @@ describe('upgrading a workspace left at an older schema version', () => {
     expect(everyVersion).toEqual(migrations.map((_, index) => index + 1));
   });
 
-  it.each(everyVersion)('catches a database stopped at version %i up to the current schema', (version) => {
-    const path = databaseAtVersion(version);
+  it.each(everyVersion)('catches a database stopped at version %i up to the current schema', async (version) => {
+    const path = await databaseAtVersion(version);
 
     const service = new DatabaseService(path);
     service.initialize();
@@ -87,8 +97,8 @@ describe('upgrading a workspace left at an older schema version', () => {
     }
   });
 
-  it('reopens an already-current workspace without applying anything again', () => {
-    const path = databaseAtVersion(latestVersion);
+  it('reopens an already-current workspace without applying anything again', async () => {
+    const path = await databaseAtVersion(latestVersion);
 
     const first = new DatabaseService(path);
     first.initialize();
