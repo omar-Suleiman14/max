@@ -5,6 +5,21 @@ import { useState, useMemo, useEffect } from 'react';
 import type { DatabaseSchema } from '../../shared/database-contract';
 import type { WorkspaceRecord, WorkspaceRecordDraft } from '../../shared/property-contract';
 
+/**
+ * The day a date property value falls on, as YYYY-MM-DD.
+ *
+ * A stored date arrives as `{ start, end?, hasTime }`; a day the person clicked
+ * on is written back as a plain string, so both shapes reach this view.
+ */
+function dayOf(value: unknown): string | null {
+  if (typeof value === 'string') return value.slice(0, 10);
+  if (value && typeof value === 'object') {
+    const { start } = value as { start?: unknown };
+    if (typeof start === 'string') return start.slice(0, 10);
+  }
+  return null;
+}
+
 type CalendarViewProps = Readonly<{
   databaseId: string;
   datePropertyId?: string | null;
@@ -164,8 +179,7 @@ export function CalendarView({
             if (selectedDatePropId === 'createdAt') {
               return new Date(r.createdAt).toDateString() === dayObj.date.toDateString();
             }
-            const val = r.properties[selectedDatePropId];
-            return typeof val === 'string' && val.slice(0, 10) === dayObj.dateString;
+            return dayOf(r.properties[selectedDatePropId]) === dayObj.dateString;
           });
 
           return (
