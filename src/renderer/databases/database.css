@@ -135,7 +135,8 @@ html[lang=en] :is(body,button,input,textarea,h1,h2,h3,h4,h5) { font-family: ui-s
 .database-gallery { display: grid; grid-template-columns: repeat(auto-fill,minmax(220px,1fr)); gap: 16px; padding: 16px 0; }
 .database-gallery-card,.database-gallery-new { border: 1px solid var(--line); border-radius: 7px; background: transparent; color: var(--text); padding: 0; overflow: hidden; text-align: start; }
 .database-gallery-card:hover { background: var(--line); }
-.database-gallery-card strong { display: block; padding: 14px; font-size: 14px; }
+.database-gallery-card strong { display: block; padding: 14px 14px 0; font-size: 14px; }
+.database-gallery-card > strong:last-child { padding-block-end: 14px; }
 .database-gallery-preview { display: grid; place-items: center; height: 115px; background: color-mix(in srgb,var(--text) 4%,transparent); color: var(--muted); }
 .database-gallery-new { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 160px; color: var(--muted); }
 .database-page-container .record-drawer hr { border: 0; border-top: 1px solid var(--line); margin: 24px 0; }
@@ -431,3 +432,10 @@ html[lang=en] :is(body,button,input,textarea,h1,h2,h3,h4,h5) { font-family: ui-s
 .board-column[data-drop-target] { outline:2px solid var(--accent); outline-offset:-2px; background:color-mix(in srgb,var(--accent) 8%,var(--canvas)); }
 .board-card[data-dragging] { opacity:.4; }
 .board-column__cards { min-height:160px; }
+
+.database-gallery-toolbar { display: flex; align-items: center; gap: 8px; padding-block-start: 12px; }
+.database-gallery-image { width: 100%; height: 100%; object-fit: cover; display: block; }
+.database-gallery-properties { display: grid; gap: 3px; margin: 0; padding: 0 14px 14px; }
+.database-gallery-properties > div { display: flex; gap: 8px; min-width: 0; font-size: 12px; }
+.database-gallery-properties dt { flex: 0 0 auto; color: var(--muted); }
+.database-gallery-properties dd { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }

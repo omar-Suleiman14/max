@@ -338,6 +338,7 @@ export function DatabasePage({ databaseId, embedded = false, initialViewId, loca
           onUpdateRecord={updateRecord}
           onManageProperties={() => setPropertyManagerOpen((open) => !open)}
           onEditProperty={(property) => { setEditingProperty(property); setPropertyModalOpen(true); }}
+          onCoverPropertyChange={(coverPropertyId) => { if (activeView) void updateView(activeView.id, { propertyState: { ...activeView.propertyState, coverPropertyId: coverPropertyId || null } }); }}
           onDatePropertyChange={(datePropertyId) => { if (activeView) void updateView(activeView.id, { propertyState: { ...activeView.propertyState, datePropertyId } }); }}
           onRemoveSorting={async () => {
             if (!activeView) return;
