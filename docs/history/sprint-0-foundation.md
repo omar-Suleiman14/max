@@ -1,3 +1,6 @@
+> [!NOTE]
+> **Historical document**: This document is preserved as a historical record of how Max was built during early development. It is not current truth and does not govern development. The mutable roadmap is GitHub Issues, Milestones, and the Max 2.0 Project.
+
 # Sprint 0 — Foundation and engineering rules
 
 ## What Max is becoming

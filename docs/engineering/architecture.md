@@ -1,4 +1,4 @@
-# Sprint 0 architecture
+# Max architecture
 
 ## Process boundary
 
@@ -34,9 +34,9 @@ violations fail CI.
 
 `DatabaseService` owns the built-in `node:sqlite` connection lifecycle. It enables
 foreign keys, a busy timeout, WAL for file databases, transactional numbered
-migrations, idempotent startup, and SQLite quick-check health reporting. Sprint 0
-creates only migration metadata and application metadata; no shop domain tables
-are present.
+migrations, idempotent startup, and SQLite quick-check health reporting. Initial
+migrations create schema and application metadata, with subsequent migrations adding
+workspace, pages, databases, and domain tables.
 
 Future migrations are append-only and contiguous. A capability PR owns its
 schema, migration, implementation, integration tests, and functional UI where
@@ -57,7 +57,7 @@ appropriate.
 Electron Forge packages each operating system on its native GitHub Actions
 runner. Windows uses Squirrel, macOS uses DMG plus ZIP, and Linux uses DEB.
 Flatpak is a separate Linux release job because its builder and Flathub runtime
-requirements are heavier than ordinary PR CI. Internal v0.1.0 artifacts are
+requirements are heavier than ordinary PR CI. Internal development artifacts are
 unsigned; public distribution requires signing/notarization work and credentials.
 
 ## Reproducible installation

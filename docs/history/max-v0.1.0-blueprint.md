@@ -1,3 +1,6 @@
+> [!NOTE]
+> **Historical document**: This document is preserved as a historical record of how Max was built during early development. It is not current truth and does not govern development. The mutable roadmap is GitHub Issues, Milestones, and the Max 2.0 Project.
+
 # Max v0.1.0 build blueprint
 
 Status: frozen product and delivery contract  
@@ -261,4 +264,3 @@ toolchain is supported.
 - Broad-distribution signing/notarization unless separately authorized and
   credentials are supplied.
 - Features invented during stabilization.
-
