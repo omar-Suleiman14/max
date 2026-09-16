@@ -19,7 +19,7 @@ import {
   Plus,
   Settings,
   Star,
-  Store,
+  LayoutGrid,
   Trash2,
   type LucideIcon,
 } from 'lucide-react';
@@ -355,7 +355,7 @@ export function Sidebar({
     ? (isRtl ? PanelRightOpen : PanelLeftOpen)
     : (isRtl ? PanelRightClose : PanelLeftClose);
   const settingsSections: readonly Readonly<{ icon: LucideIcon; id: SettingsSectionId; label: string }>[] = [
-    { icon: Store, id: 'settings-general', label: locale === 'ar' ? 'عام' : 'General' },
+    { icon: LayoutGrid, id: 'settings-general', label: locale === 'ar' ? 'عام' : 'General' },
     { icon: BadgeDollarSign, id: 'settings-quick-actions', label: locale === 'ar' ? 'الإجراءات السريعة' : 'Quick Actions' },
     { icon: Palette, id: 'settings-appearance', label: locale === 'ar' ? 'المظهر' : 'Appearance' },
     { icon: Database, id: 'settings-backup', label: locale === 'ar' ? 'النسخ الاحتياطي' : 'Backup' },

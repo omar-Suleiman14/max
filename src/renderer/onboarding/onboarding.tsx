@@ -115,9 +115,24 @@ function playWelcomeSound(surface: HTMLElement): (() => void) | undefined {
   } catch { /* Audio is an optional welcome enhancement. */ }
 }
 
+/**
+ * The name a workspace falls back to when somebody skips past the field. It is
+ * deliberately generic: Max is not a shop, and a notes workspace should never
+ * inherit a business name it never asked for.
+ */
+const DEFAULT_WORKSPACE_NAME = 'My workspace';
+
+/** The persisted workspace name column accepts one to a hundred and twenty characters. */
+const WORKSPACE_NAME_MAX_LENGTH = 120;
+
+function isValidWorkspaceName(value: string): boolean {
+  const trimmed = value.trim();
+  return trimmed.length >= 1 && trimmed.length <= WORKSPACE_NAME_MAX_LENGTH;
+}
+
 type OnboardingProps = Readonly<{
   initialLocale: Locale;
-  onComplete: (shopName: string, locale: Locale, backupSchedule: BackupSchedule, blueprint?: Blueprint, includeDemoData?: boolean, templateId?: 'blank' | 'custom' | 'phone-shop') => Promise<void>;
+  onComplete: (workspaceName: string, locale: Locale, backupSchedule: BackupSchedule, blueprint?: Blueprint, includeDemoData?: boolean, templateId?: 'blank' | 'custom' | 'phone-shop') => Promise<void>;
   onClose?: () => void;
   preview?: boolean;
 }>;
@@ -129,13 +144,17 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
   const [locale, setLocale] = useState<Locale>(initialLocale);
   const [showWelcome, setShowWelcome] = useState(!preview);
   const welcomeRef = useRef<HTMLElement>(null);
-  const [shopName, setShopName] = useState('');
+  const [workspaceName, setWorkspaceName] = useState('');
+  const [workspaceNameTouched, setWorkspaceNameTouched] = useState(false);
   const [template, setTemplate] = useState<'blank' | 'custom'>('blank');
   const [backupSchedule, setBackupSchedule] = useState<BackupSchedule>('daily');
   const [submitting, setSubmitting] = useState(false);
   const [finishError, setFinishError] = useState<string>();
   const [blueprint, setBlueprint] = useState<Blueprint>();
   const [blueprintError, setBlueprintError] = useState<string>();
+
+  const isWorkspaceNameValid = isValidWorkspaceName(workspaceName);
+  const showWorkspaceNameError = workspaceNameTouched && !isWorkspaceNameValid;
 
   const applyBlueprintText = useCallback(async (text: string) => {
     try {
@@ -210,11 +229,11 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
 
   async function handleFinish(event: FormEvent) {
     event.preventDefault();
-    if (!acceptedTerms || submitting || !shopName.trim()) return;
+    if (!acceptedTerms || submitting || !isWorkspaceNameValid) return;
     setFinishError(undefined);
     setSubmitting(true);
     try {
-      await onComplete(shopName.trim() || 'My Shop', locale, backupSchedule, template === 'custom' ? blueprint : undefined, false, template);
+      await onComplete(workspaceName.trim() || DEFAULT_WORKSPACE_NAME, locale, backupSchedule, template === 'custom' ? blueprint : undefined, false, template);
     } catch (error) {
       setFinishError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -324,12 +343,12 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
             </div>
           )}
 
-          {/* STEP 2: SHOP NAME */}
+          {/* STEP 2: WORKSPACE NAME */}
           {step === 2 && (
             <div
               className="onboarding-step"
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && shopName.trim()) {
+                if (e.key === 'Enter' && isWorkspaceNameValid) {
                   e.preventDefault();
                   setStep(3);
                 }
@@ -338,27 +357,35 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
               <p className="eyebrow">
                 {onboardingCopy(locale, 'step')} 2 {onboardingCopy(locale, 'stepOf')} 5
               </p>
-              <h2>{onboardingCopy(locale, 'shopNameTitle')}</h2>
-              <p className="step-subtitle">{onboardingCopy(locale, 'shopNameSubtitle')}</p>
+              <h2>{onboardingCopy(locale, 'workspaceNameTitle')}</h2>
+              <p className="step-subtitle">{onboardingCopy(locale, 'workspaceNameSubtitle')}</p>
 
               <div className="field-group">
                 <label className="field">
                   <input
+                    aria-describedby={showWorkspaceNameError ? 'workspace-name-error' : undefined}
+                    aria-invalid={showWorkspaceNameError || undefined}
                     autoFocus
                     className="field__input--large"
-                    maxLength={120}
-                    onChange={(event) => setShopName(event.target.value)}
+                    maxLength={WORKSPACE_NAME_MAX_LENGTH}
+                    onBlur={() => setWorkspaceNameTouched(true)}
+                    onChange={(event) => { setWorkspaceNameTouched(true); setWorkspaceName(event.target.value); }}
                     onKeyDown={(event) => {
-                      if (event.key === 'Enter' && shopName.trim()) {
+                      if (event.key === 'Enter' && isWorkspaceNameValid) {
                         event.preventDefault();
                         setStep(3);
                       }
                     }}
-                    placeholder={onboardingCopy(locale, 'shopNameHint')}
+                    placeholder={onboardingCopy(locale, 'workspaceNamePlaceholder')}
                     required
-                    value={shopName}
+                    value={workspaceName}
                   />
                 </label>
+                {showWorkspaceNameError && (
+                  <p className="field-error" id="workspace-name-error" role="alert">
+                    {onboardingCopy(locale, 'workspaceNameRequired')}
+                  </p>
+                )}
               </div>
             </div>
           )}
@@ -492,7 +519,7 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
               }}
             >
               <p className="eyebrow">{onboardingCopy(locale, 'readyTitle')}</p>
-              <h2>{shopName.trim() || 'My Shop'}</h2>
+              <h2>{workspaceName.trim() || DEFAULT_WORKSPACE_NAME}</h2>
               <p className="step-subtitle">{onboardingCopy(locale, 'readySubtitle')}</p>
 
               <Terms locale={locale} onScrollToBottom={() => setHasReadTerms(true)} />
@@ -524,7 +551,7 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
             <button
               className="apple-button"
               disabled={
-                (step === 2 && !shopName.trim()) ||
+                (step === 2 && !isWorkspaceNameValid) ||
                 (step === 5 && (!acceptedTerms || submitting))
               }
               onClick={(e) => {
