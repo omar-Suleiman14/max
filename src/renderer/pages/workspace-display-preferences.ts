@@ -2,7 +2,15 @@ import { useEffect, useState } from 'react';
 
 type Feature = 'graph' | 'connections';
 const eventName = 'max:workspace-display-changed';
-function read(feature: Feature) { return localStorage.getItem(`max.workspace.display.${feature}`) !== 'false'; }
+/**
+ * Page connections start switched off: a fresh workspace has nothing to link
+ * to, so the section only ever drew an empty box under every page until the
+ * owner asked for it. The graph button keeps its old default.
+ */
+function read(feature: Feature) {
+  const stored = localStorage.getItem(`max.workspace.display.${feature}`);
+  return stored === null ? feature === 'graph' : stored !== 'false';
+}
 export function useWorkspaceDisplay(feature: Feature) {
   const [enabled, setEnabled] = useState(() => read(feature));
   useEffect(() => {

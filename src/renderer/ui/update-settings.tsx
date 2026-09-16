@@ -62,7 +62,7 @@ export function UpdateSettings({ locale }: { locale: string }) {
     : status?.state === 'ready' ? (ar ? 'إعادة التشغيل والتثبيت' : 'Restart and install')
       : offered ? (ar ? 'تنزيل' : 'Download')
         : (ar ? 'البحث عن تحديثات' : 'Check for updates');
-  return <div className="apple-settings-row">
+  return <div className="apple-settings-row" data-setting="updates">
     <div className="apple-settings-row-left"><div className="apple-settings-content">
       <span className="apple-settings-title">{ar ? 'تحديثات Max' : 'Max updates'} {status?.currentVersion}</span>
       <span className="apple-settings-description" role="status">

@@ -783,6 +783,8 @@ describe('Max shell', () => {
   });
 
   it('opens action configuration directly from the empty actions popup', async () => {
+    // Quick actions ship switched off, so this workspace has to opt in first.
+    window.localStorage.setItem('max.quick-actions.enabled', 'true');
     const user = userEvent.setup(); render(<MaxApp />);
     await screen.findByRole('button', { name: 'Settings' });
     fireEvent.keyDown(document, { ctrlKey: true, key: 'k', code: 'KeyK' });

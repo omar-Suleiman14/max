@@ -181,6 +181,8 @@ export type NotionBlock = {
   checked?: boolean; // For todo items
   col1Blocks?: readonly NotionBlock[]; // For columns block (left)
   col2Blocks?: readonly NotionBlock[]; // For columns block (right)
+  color?: string;
+  backgroundColor?: string;
   content: string;
   databaseId?: string;
   databaseKind?: 'accounts' | 'items' | 'people' | 'reconciliation' | 'transactions';
@@ -188,6 +190,48 @@ export type NotionBlock = {
   type: BlockType;
   viewId?: string;
 };
+
+const TEXT_COLORS = [
+  { id: 'default', label: 'Default text', labelAr: 'لون افتراضي' },
+  { id: 'gray', label: 'Grey text', labelAr: 'رمادي' },
+  { id: 'brown', label: 'Brown text', labelAr: 'بني' },
+  { id: 'orange', label: 'Orange text', labelAr: 'برتقالي' },
+  { id: 'yellow', label: 'Yellow text', labelAr: 'أصفر' },
+  { id: 'green', label: 'Green text', labelAr: 'أخضر' },
+  { id: 'blue', label: 'Blue text', labelAr: 'أزرق' },
+  { id: 'purple', label: 'Purple text', labelAr: 'بنفسجي' },
+  { id: 'pink', label: 'Pink text', labelAr: 'وردي' },
+  { id: 'red', label: 'Red text', labelAr: 'أحمر' },
+] as const;
+
+const BG_COLORS = [
+  { id: 'default', label: 'Default background', labelAr: 'خلفية افتراضية' },
+  { id: 'gray_bg', label: 'Grey background', labelAr: 'خلفية رمادية' },
+  { id: 'brown_bg', label: 'Brown background', labelAr: 'خلفية بنية' },
+  { id: 'orange_bg', label: 'Orange background', labelAr: 'خلفية برتقالية' },
+  { id: 'yellow_bg', label: 'Yellow background', labelAr: 'خلفية صفراء' },
+  { id: 'green_bg', label: 'Green background', labelAr: 'خلفية خضراء' },
+  { id: 'blue_bg', label: 'Blue background', labelAr: 'خلفية زرقاء' },
+  { id: 'purple_bg', label: 'Purple background', labelAr: 'خلفية بنفسجية' },
+  { id: 'pink_bg', label: 'Pink background', labelAr: 'خلفية وردية' },
+  { id: 'red_bg', label: 'Red background', labelAr: 'خلفية حمراء' },
+] as const;
+
+/**
+ * Put the caret in a block this editor does not own.
+ *
+ * A toggle renders its children in a nested editor with its own ref table, so
+ * the outer editor cannot reach them through `focusBlock`; it finds the row in
+ * the document instead, once React has painted it.
+ */
+function focusNestedBlock(id: string): void {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      const row = document.querySelector<HTMLElement>(`[data-block-id="${id}"]`);
+      row?.querySelector<HTMLElement>('[contenteditable="true"], input:not([type="checkbox"]), textarea')?.focus();
+    });
+  });
+}
 
 function duplicateBlock(block: NotionBlock): NotionBlock {
   return { ...block, id: crypto.randomUUID(), col1Blocks: block.col1Blocks?.map(duplicateBlock), col2Blocks: block.col2Blocks?.map(duplicateBlock) };
@@ -813,10 +857,10 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
         // styling on the line, so those still go in one press; a callout, a
         // quote, a code block or a toggle is a box drawn around the line, and
         // "get rid of this box" is not the same request as "get rid of my line".
-        if (!block.content && CONTAINER_BLOCK_TYPES.includes(block.type)) {
+        if (CONTAINER_BLOCK_TYPES.includes(block.type)) {
           event.preventDefault();
           updateBlock(block.id, { type: 'text' });
-          focusBlock(block.id, true);
+          focusBlock(block.id, false);
           return;
         }
 
@@ -1280,6 +1324,8 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
             key={block.id}
             className="notion-block-row"
             data-block-id={block.id}
+            data-color={block.color || undefined}
+            data-bg={block.backgroundColor || undefined}
             onKeyDown={(event) => {
               // Backspace (or Delete) removes a block that has no caret of its
               // own, wherever focus happens to sit inside it — unless that is a
@@ -1359,7 +1405,6 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
                 draggable
                 aria-haspopup="menu"
                 aria-expanded={blockMenuId === block.id}
-                onMouseDown={(event) => event.preventDefault()}
                 onClick={(event) => { event.stopPropagation(); if (event.metaKey || event.ctrlKey) { selectionAnchor.current = index; toggleLine(index); } else if (event.shiftKey) { const anchor = selectionAnchor.current ?? index; selectionAnchor.current = anchor; selectLines(anchor, index); } else { selectionAnchor.current = index; setSelectedLines([index]); setBlockMenuId(current => current === block.id ? null : block.id); } }}
                 onDragStart={(event) => handleDragStart(event, index)}
                 onKeyDown={(event) => {
@@ -1368,7 +1413,7 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
                     moveBlock(index, event.key === 'ArrowUp' ? -1 : 1);
                   }
                 }}
-                title={locale === 'ar' ? 'انقر للخيارات، اسحب للترتيب' : 'Click for options · Drag to reorder'}
+                title={locale === 'ar' ? 'انقر للخيارات، اسحب للترتيب' : 'Click for options, drag to reorder'}
                 type="button"
               >
                 <GripVertical size={14} />
@@ -1381,6 +1426,12 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
                   <button disabled={index === 0} onClick={() => { moveBlock(index, -1); setBlockMenuId(null); }} role="menuitem" type="button">{locale === 'ar' ? 'نقل لأعلى' : 'Move up'}</button>
                   <button disabled={index === blocks.length - 1} onClick={() => { moveBlock(index, 1); setBlockMenuId(null); }} role="menuitem" type="button">{locale === 'ar' ? 'نقل لأسفل' : 'Move down'}</button>
                   {['text', 'h1', 'h2', 'h3', 'bullet', 'number', 'todo', 'quote', 'code'].includes(block.type) && <details><summary>{locale === 'ar' ? 'تحويل إلى' : 'Turn into'}</summary>{(['text', 'h1', 'h2', 'h3', 'bullet', 'number', 'todo', 'quote', 'code'] as const).map((type) => <button type="button" role="menuitem" key={type} onClick={() => { updateBlock(block.id, { type }); setBlockMenuId(null); }}>{({ text: 'Text', h1: 'Heading 1', h2: 'Heading 2', h3: 'Heading 3', bullet: 'Bulleted list', number: 'Numbered list', todo: 'To-do', quote: 'Quote', code: 'Code' })[type]}</button>)}</details>}
+                  <details><summary>{locale === 'ar' ? 'اللون' : 'Colour'}</summary>
+                    <p className="notion-color-section-label">{locale === 'ar' ? 'لون النص' : 'Text colour'}</p>
+                    {TEXT_COLORS.map(({ id, label, labelAr }) => <button type="button" role="menuitem" key={id} data-color-preview={id === 'default' ? undefined : id} aria-pressed={((block.color || 'default') === id) || undefined} onClick={() => { updateBlock(block.id, { color: id === 'default' ? undefined : id }); setBlockMenuId(null); }}>{locale === 'ar' ? labelAr : label}</button>)}
+                    <p className="notion-color-section-label">{locale === 'ar' ? 'لون الخلفية' : 'Background colour'}</p>
+                    {BG_COLORS.map(({ id, label, labelAr }) => <button type="button" role="menuitem" key={id} data-bg-preview={id === 'default' ? undefined : id} aria-pressed={((block.backgroundColor || 'default') === id) || undefined} onClick={() => { updateBlock(block.id, { backgroundColor: id === 'default' ? undefined : id }); setBlockMenuId(null); }}>{locale === 'ar' ? labelAr : label}</button>)}
+                  </details>
                   <button className="danger" onClick={() => { setBlockMenuId(null); removeBlock(block.id); }} role="menuitem" type="button">{locale === 'ar' ? 'حذف' : 'Delete'}</button>
                 </div>
               )}
@@ -1396,7 +1447,21 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
                 if (block.type !== 'code') handleKeyDown(event, block, index);
                 else if (event.key === 'Backspace' && !block.content) handleKeyDown(event, block, index);
               }} />}
-              {block.type === 'toggle' && <details className="notion-toggle-block" open><summary><input ref={(element) => { if (element) inputRefs.current.set(block.id, element); else inputRefs.current.delete(block.id); }} placeholder={locale === 'ar' ? 'عنوان' : 'Toggle heading'} value={block.content} onChange={(event) => updateBlock(block.id, { content: event.target.value })} /></summary><NotionBlockEditor blocks={block.col1Blocks ?? []} locale={locale} onChange={(next) => updateBlock(block.id, { col1Blocks: next })} parentPageId={parentPageId} onWorkspaceChange={onWorkspaceChange} /></details>}
+              {block.type === 'toggle' && <details className="notion-toggle-block" open={block.checked !== false} onToggle={(event) => updateBlock(block.id, { checked: (event.target as HTMLDetailsElement).open })}><summary><input ref={(element) => { if (element) inputRefs.current.set(block.id, element); else inputRefs.current.delete(block.id); }} placeholder={locale === 'ar' ? 'عنوان' : 'Toggle heading'} value={block.content} onChange={(event) => updateBlock(block.id, { content: event.target.value })} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => {
+                // Enter on a toggle's own line starts the first line inside it,
+                // which is the whole point of a toggle. It used to do nothing.
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault();
+                  const children = block.col1Blocks ?? [];
+                  const first = children[0];
+                  if (first && first.type === 'text' && !first.content) { updateBlock(block.id, { checked: true }); focusNestedBlock(first.id); return; }
+                  const child: NotionBlock = { content: '', id: crypto.randomUUID(), type: 'text' };
+                  updateBlock(block.id, { checked: true, col1Blocks: [child, ...children] });
+                  focusNestedBlock(child.id);
+                  return;
+                }
+                if (event.key === 'Backspace' && !block.content) handleKeyDown(event, block, index);
+              }} /></summary><NotionBlockEditor blocks={block.col1Blocks ?? []} locale={locale} onChange={(next) => updateBlock(block.id, { col1Blocks: next })} parentPageId={parentPageId} onWorkspaceChange={onWorkspaceChange} /></details>}
               {['h1', 'h2', 'h3'].includes(block.type) && richText}
 
               {block.type === 'todo' && (

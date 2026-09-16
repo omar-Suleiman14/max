@@ -307,9 +307,9 @@ html[lang=en] :is(body,button,input,textarea,h1,h2,h3,h4,h5) { font-family: ui-s
 .database-new-page:disabled { opacity:.5; cursor:wait; }
 .database-page-container .table-footer-row td { border:0; padding-block:14px; color:var(--muted); text-align:end; font-size:11px; letter-spacing:.5px; }
 
-.database-page-container .table-view tfoot,
+.database-page-container .table-view tfoot { position: sticky; bottom: 0; z-index: 2; }
 .database-page-container .table-view .table-footer-row,
-.database-page-container .table-view .table-footer-row td { background:transparent; border:0; box-shadow:none; font-weight:400; }
+.database-page-container .table-view .table-footer-row td { background: var(--bg, var(--canvas)); border:0; box-shadow:none; font-weight:400; }
 .database-page-container .table-view .table-footer-row td { padding-block:20px; }
 .database-count-label { font-size:11px; font-weight:400; letter-spacing:.6px; color:var(--muted); }
 .database-count-value { margin-inline-start:7px; font-size:14px; font-weight:400; letter-spacing:0; color:var(--text-soft); }

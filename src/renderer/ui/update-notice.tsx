@@ -1,4 +1,4 @@
-import { ArrowUpCircle, X } from 'lucide-react';
+import { ArrowUpCircle, LoaderCircle, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import type { UpdateStatus } from '../../shared/update-contract';
@@ -48,9 +48,10 @@ export function UpdateNotice({ locale, onOpen }: { locale: string; onOpen: () =>
 
   if (status.state === 'downloading') {
     return (
-      <span className="update-chip" role="status">
-        <ArrowUpCircle aria-hidden="true" size={15} />
+      <span className="update-chip update-chip--downloading" role="status">
+        <LoaderCircle className="update-spinner" aria-hidden="true" size={15} />
         {ar ? 'جارٍ تنزيل التحديث…' : 'Downloading update…'}
+        <progress aria-label={ar ? 'جارٍ تنزيل التحديث' : 'Downloading update'} className="update-progress update-progress--chip" />
       </span>
     );
   }
