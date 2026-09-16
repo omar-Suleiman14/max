@@ -270,8 +270,10 @@ a:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 68%, trans
 .nav-item:active,
 .sidebar-action:active { transform: scale(0.97); }
 .nav-item[aria-current="page"] { color: var(--text); background: color-mix(in srgb, var(--text) 8%, transparent); box-shadow: none; font-weight: 600; }
-.sidebar-action[data-active="true"] { position:relative; color: var(--accent); background:color-mix(in srgb,var(--accent) 14%,transparent); font-weight:650; box-shadow:inset 3px 0 0 var(--accent); }
-[dir="rtl"] .sidebar-action[data-active="true"] { box-shadow:inset -3px 0 0 var(--accent); }
+/* The selected item reads as selected through weight and a quiet fill. The
+   accent wash and accent-coloured label turned the settings side nav into a
+   slab of blue, which is louder than "you are here" needs to be. */
+.sidebar-action[data-active="true"] { position:relative; color: var(--text); background: var(--canvas-subtle); font-weight:650; }
 
 .sidebar__footer { display: grid; width: 100%; gap: 4px; margin-block-start: auto; flex-shrink: 0; }
 .sidebar__resize-handle { position: absolute; z-index: 8; inset-block: 0; inset-inline-end: -3px; width: 6px; outline: 0; cursor: col-resize; touch-action: none; }
@@ -1431,7 +1433,7 @@ kbd { display: inline-flex; min-width: 23px; min-height: 20px; align-items: cent
   place-items: center;
   border-radius: 8px;
   background: var(--canvas-subtle);
-  color: var(--accent);
+  color: var(--muted);
   flex-shrink: 0;
 }
 .settings-page-header h1 {
@@ -1510,13 +1512,14 @@ kbd { display: inline-flex; min-width: 23px; min-height: 20px; align-items: cent
   gap: 11px;
   margin-block-end: 22px;
 }
+/* A plain glyph, not a tinted chip. The accent-soft square read as a slab of
+   blue running down the left edge of every settings section. */
 .settings-section__intro > svg {
   width: 32px;
   height: 32px;
   padding: 7px;
-  border-radius: 6px;
-  color: var(--accent);
-  background: var(--accent-soft);
+  color: var(--muted);
+  background: transparent;
 }
 .settings-section__intro h2 { margin: 0; font-size: 18px; font-weight: 720; letter-spacing: -0.02em; }
 .settings-section__intro p { margin: 4px 0 0; color: var(--muted); font-size: 11px; line-height: 1.55; }

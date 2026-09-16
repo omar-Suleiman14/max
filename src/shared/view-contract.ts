@@ -12,7 +12,6 @@ export type ViewLayout =
   | 'gallery'
   | 'timeline'
   | 'chart'
-  | 'dashboard'
   | 'map'
   | 'form';
 

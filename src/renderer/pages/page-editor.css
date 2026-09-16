@@ -34,3 +34,18 @@
 .notion-block-row:focus-within > .notion-block-gutter { visibility:visible; opacity:1; }
 .block-selection-toolbar { position:sticky; top:0; z-index:65; display:flex; align-items:center; gap:12px; align-self:start; padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:var(--card); box-shadow:var(--shadow-sm); }
 .block-selection-toolbar select { color:var(--text); background:var(--card); padding:5px; border:1px solid var(--line); border-radius:6px; }
+
+/* An image sizes itself by its corners. Only the width is set, so the picture
+   keeps its own proportions and the handles follow the frame rather than the
+   original file. */
+.page-image-frame{position:relative;display:block;max-width:100%;margin-inline:auto;width:fit-content;line-height:0}
+.page-image-frame[data-resized="true"]{max-width:100%}
+.page-image-frame img{display:block;width:100%;height:auto;max-height:600px;border-radius:6px}
+.page-image-frame[data-resized="true"] img{max-height:none}
+.page-image-handle{position:absolute;width:14px;height:14px;padding:0;border:2px solid var(--surface);border-radius:3px;background:var(--accent);opacity:0;transition:opacity 120ms ease;touch-action:none}
+.page-image-frame:hover .page-image-handle,.page-image-handle:focus-visible{opacity:1}
+.page-image-handle[data-corner="nw"]{top:-7px;left:-7px;cursor:nwse-resize}
+.page-image-handle[data-corner="ne"]{top:-7px;right:-7px;cursor:nesw-resize}
+.page-image-handle[data-corner="sw"]{bottom:-7px;left:-7px;cursor:nesw-resize}
+.page-image-handle[data-corner="se"]{bottom:-7px;right:-7px;cursor:nwse-resize}
+@media (prefers-reduced-motion:reduce){.page-image-handle{transition:none}}

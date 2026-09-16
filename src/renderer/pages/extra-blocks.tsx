@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ExternalLink, FileText, Link2, Plus, X } from 'lucide-react';
 import type { NotionBlock } from '../ui/notion-block-editor';
 import type { Locale } from '../app/i18n';
@@ -22,6 +22,94 @@ function PageLinkBlock({ block, locale, onChange }: { block: NotionBlock; locale
   </div>;
 }
 
+const MIN_IMAGE_WIDTH = 80;
+const IMAGE_KEYBOARD_STEP = 24;
+const IMAGE_CORNERS = ['nw', 'ne', 'sw', 'se'] as const;
+
+/**
+ * An image that can be resized by dragging any of its four corners.
+ *
+ * Only the width is stored. Height stays `auto`, so the aspect ratio is kept by
+ * construction rather than by arithmetic that can drift. The corner sitting on
+ * the visual leading edge is worked out from live geometry instead of from the
+ * corner's name, so the gesture behaves the same in a right-to-left workspace.
+ */
+function ResizableImage({ alt, ar, onError, onResize, src, width }: Readonly<{
+  alt: string;
+  ar: boolean;
+  onError?: () => void;
+  onResize: (width: number | undefined) => void;
+  src: string;
+  width?: number;
+}>) {
+  const frameRef = useRef<HTMLDivElement>(null);
+  const [draft, setDraft] = useState<number>();
+  const shown = draft ?? width;
+
+  function widest() {
+    const available = frameRef.current?.parentElement?.getBoundingClientRect().width ?? 0;
+    return Math.max(MIN_IMAGE_WIDTH, Math.round(available) || MIN_IMAGE_WIDTH);
+  }
+
+  function clamp(value: number) {
+    return Math.min(widest(), Math.max(MIN_IMAGE_WIDTH, Math.round(value)));
+  }
+
+  function nudge(delta: number) {
+    const frame = frameRef.current;
+    if (frame) onResize(clamp(frame.getBoundingClientRect().width + delta));
+  }
+
+  function startResize(event: React.PointerEvent<HTMLButtonElement>) {
+    const frame = frameRef.current;
+    if (!frame || event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const handle = event.currentTarget;
+    const frameBox = frame.getBoundingClientRect();
+    const handleBox = handle.getBoundingClientRect();
+    const towardsPointer = handleBox.left + handleBox.width / 2 < frameBox.left + frameBox.width / 2 ? -1 : 1;
+    const startX = event.clientX;
+    const startWidth = frameBox.width;
+    let latest = startWidth;
+
+    const move = (moveEvent: PointerEvent) => {
+      latest = clamp(startWidth + (moveEvent.clientX - startX) * towardsPointer);
+      setDraft(latest);
+    };
+    const finish = () => {
+      handle.removeEventListener('pointermove', move);
+      handle.removeEventListener('pointerup', finish);
+      handle.removeEventListener('pointercancel', finish);
+      setDraft(undefined);
+      onResize(Math.round(latest));
+    };
+
+    handle.setPointerCapture(event.pointerId);
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', finish);
+    handle.addEventListener('pointercancel', finish);
+  }
+
+  return <div className="page-image-frame" data-resized={shown !== undefined} ref={frameRef} style={shown === undefined ? undefined : { width: `${shown}px` }}>
+    <img alt={alt} onError={onError} src={src} />
+    {IMAGE_CORNERS.map((corner) => <button
+      aria-label={ar ? 'تغيير حجم الصورة' : 'Resize image'}
+      className="page-image-handle"
+      data-corner={corner}
+      key={corner}
+      onKeyDown={(event) => {
+        if (['ArrowRight', 'ArrowUp'].includes(event.key)) { event.preventDefault(); nudge(IMAGE_KEYBOARD_STEP); }
+        else if (['ArrowLeft', 'ArrowDown'].includes(event.key)) { event.preventDefault(); nudge(-IMAGE_KEYBOARD_STEP); }
+        else if (event.key === 'Home') { event.preventDefault(); onResize(undefined); }
+      }}
+      onPointerDown={startResize}
+      title={ar ? 'اسحب لتغيير الحجم · الأسهم للضبط · Home للحجم الأصلي' : 'Drag to resize · Arrow keys to adjust · Home for the original size'}
+      type="button"
+    />)}
+  </div>;
+}
+
 export function ExtraBlock({ block, blocks, locale, onChange }: { block: NotionBlock; blocks: readonly NotionBlock[]; locale: Locale; onChange: (patch: Partial<NotionBlock>) => void }) {
   const ar = locale === 'ar';
   const [url, setUrl] = useState(block.url ?? '');
@@ -31,7 +119,7 @@ export function ExtraBlock({ block, blocks, locale, onChange }: { block: NotionB
   const localImage = /^max:\/\/asset\/[0-9a-f]{64}\.(png|jpg|gif|webp)$/.test(block.url ?? '');
   const localFile = /^max:\/\/attachment\/[0-9a-f]{64}\.[a-z0-9]{1,10}$/.test(block.url ?? '');
   if (localImage || localFile) return <figure className="page-media-block">
-    {localImage ? <img src={location.protocol.startsWith('http') ? block.url!.replace('max://asset/', '/__max/asset/') : block.url} alt={block.caption || ''} /> : <button className="page-bookmark" type="button" onClick={() => { void window.maxApi.assets.openAttachment(block.url!).then(result => { if (!result.ok) setError(result.error.message); }); }}><FileText size={24}/><span>{block.caption || (ar ? 'ملف مرفق' : 'Attachment')}</span><ExternalLink size={16}/></button>}
+    {localImage ? <ResizableImage alt={block.caption || ''} ar={ar} onResize={(width) => onChange({ width })} src={location.protocol.startsWith('http') ? block.url!.replace('max://asset/', '/__max/asset/') : block.url!} width={block.width} /> : <button className="page-bookmark" type="button" onClick={() => { void window.maxApi.assets.openAttachment(block.url!).then(result => { if (!result.ok) setError(result.error.message); }); }}><FileText size={24}/><span>{block.caption || (ar ? 'ملف مرفق' : 'Attachment')}</span><ExternalLink size={16}/></button>}
     <figcaption>{block.caption}</figcaption>{error && <p role="alert">{error}</p>}
   </figure>;
   if (block.type === 'page-link') return <PageLinkBlock block={block} locale={locale} onChange={onChange} />;
@@ -51,7 +139,7 @@ export function ExtraBlock({ block, blocks, locale, onChange }: { block: NotionB
       void file.arrayBuffer().then(bytes => block.type === 'image' ? window.maxApi.assets.importImage(new Uint8Array(bytes), file.name) : window.maxApi.assets.importAttachment(new Uint8Array(bytes), file.name)).then(result => { if (result.ok) onChange({ url: result.value.url, caption: file.name }); else setError(result.error.message); }).catch(error => setError(String(error)));
     }}/></label>}
     {editing || !savedUrl ? <form className="page-url-form" onSubmit={(event) => { event.preventDefault(); const next = safeWebUrl(url); if (!next) { setError(ar ? 'أدخل رابط HTTP أو HTTPS صالحاً.' : 'Enter a valid HTTP or HTTPS URL.'); return; } onChange({ url: next, content: '' }); setEditing(false); setLoaded(false); setError(''); }}><Link2 size={18} /><input autoFocus type="url" required aria-label={ar ? 'رابط المحتوى' : 'Content URL'} placeholder="https://…" value={url} onChange={(event) => setUrl(event.target.value)} /><button type="submit">{ar ? 'إدراج' : 'Insert'}</button></form> : <>
-      {['bookmark', 'file'].includes(block.type) ? <button type="button" className="page-bookmark" onClick={open}><FileText size={24} /><span><strong>{block.caption || new URL(savedUrl).hostname}</strong><small>{savedUrl}</small></span><ExternalLink size={16} /></button> : !loaded ? <button type="button" className="page-media-placeholder" onClick={() => setLoaded(true)}>{ar ? 'تحميل المحتوى الخارجي' : `Load ${block.type}`}<small>{new URL(savedUrl).hostname} · {ar ? 'يتطلب اتصالاً بالإنترنت' : 'Requires internet'}</small></button> : block.type === 'image' ? <img src={savedUrl} alt={block.caption ?? ''} onError={() => setError(ar ? 'تعذر تحميل الصورة.' : 'Could not load this image.')} /> : block.type === 'video' ? <video src={savedUrl} controls preload="metadata" onError={() => setError(ar ? 'استخدم رابط فيديو مباشر أو كتلة تضمين.' : 'Use a direct video URL or an Embed block.')} /> : block.type === 'audio' ? <audio src={savedUrl} controls preload="metadata" onError={() => setError(ar ? 'تعذر تحميل الصوت.' : 'Could not load audio.')} /> : <iframe title={block.caption || (ar ? 'محتوى مضمن' : 'Embedded content')} src={savedUrl} sandbox="allow-scripts allow-presentation" referrerPolicy="no-referrer" allowFullScreen />}
+      {['bookmark', 'file'].includes(block.type) ? <button type="button" className="page-bookmark" onClick={open}><FileText size={24} /><span><strong>{block.caption || new URL(savedUrl).hostname}</strong><small>{savedUrl}</small></span><ExternalLink size={16} /></button> : !loaded ? <button type="button" className="page-media-placeholder" onClick={() => setLoaded(true)}>{ar ? 'تحميل المحتوى الخارجي' : `Load ${block.type}`}<small>{new URL(savedUrl).hostname} · {ar ? 'يتطلب اتصالاً بالإنترنت' : 'Requires internet'}</small></button> : block.type === 'image' ? <ResizableImage alt={block.caption ?? ''} ar={ar} onError={() => setError(ar ? 'تعذر تحميل الصورة.' : 'Could not load this image.')} onResize={(width) => onChange({ width })} src={savedUrl} width={block.width} /> : block.type === 'video' ? <video src={savedUrl} controls preload="metadata" onError={() => setError(ar ? 'استخدم رابط فيديو مباشر أو كتلة تضمين.' : 'Use a direct video URL or an Embed block.')} /> : block.type === 'audio' ? <audio src={savedUrl} controls preload="metadata" onError={() => setError(ar ? 'تعذر تحميل الصوت.' : 'Could not load audio.')} /> : <iframe title={block.caption || (ar ? 'محتوى مضمن' : 'Embedded content')} src={savedUrl} sandbox="allow-scripts allow-presentation" referrerPolicy="no-referrer" allowFullScreen />}
       <div className="extra-block-actions"><input aria-label={ar ? 'تعليق' : 'Caption'} placeholder={ar ? 'إضافة تعليق…' : 'Add a caption…'} value={block.caption ?? ''} onChange={(event) => onChange({ caption: event.target.value })} /><button type="button" onClick={() => { setUrl(block.url ?? ''); setEditing(true); }}>{ar ? 'تعديل الرابط' : 'Edit URL'}</button><button type="button" onClick={open} aria-label={ar ? 'فتح في المتصفح' : 'Open in browser'}><ExternalLink size={14} /></button></div>
       {block.type === 'embed' && <small>{ar ? 'إذا منع الموقع التضمين، افتحه في المتصفح.' : 'If this site blocks embedding, open it in your browser.'}</small>}
     </>}

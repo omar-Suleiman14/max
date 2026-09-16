@@ -2,7 +2,7 @@
 
 import '@testing-library/jest-dom/vitest';
 
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -12,6 +12,16 @@ import { NotionBlockEditor, type NotionBlock } from './notion-block-editor';
 function EditorHarness({ initial, parentPageId }: Readonly<{ initial: readonly NotionBlock[]; parentPageId?: string }>) {
   const [blocks, setBlocks] = useState(initial);
   return <NotionBlockEditor blocks={blocks} locale="en" onChange={setBlocks} parentPageId={parentPageId} />;
+}
+
+function placeCaretAtStart(element: HTMLElement) {
+  element.focus();
+  const selection = window.getSelection()!;
+  const range = document.createRange();
+  range.selectNodeContents(element);
+  range.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(range);
 }
 
 afterEach(() => cleanup());
@@ -74,6 +84,11 @@ describe('NotionBlockEditor', () => {
 
     const title = screen.getByLabelText('Page title');
     await waitFor(() => expect(title).toHaveFocus());
+    // Removing the block also schedules a focus of the block above it. Waiting
+    // past that catches the caret being snatched back out of the title, which
+    // only showed up as a flaky failure on the slowest CI machines.
+    await new Promise((resolve) => { setTimeout(resolve, 80); });
+    expect(title).toHaveFocus();
     expect((title as HTMLTextAreaElement).selectionStart).toBe('Shop notes'.length);
   });
 
@@ -236,5 +251,128 @@ describe('NotionBlockEditor', () => {
     await user.click(await screen.findByRole('button', { name: 'Products' }));
 
     await waitFor(() => expect(createView).toHaveBeenCalledWith(expect.objectContaining({ databaseId: 'db-products', ownerId: 'one', ownerType: 'block' })));
+  });
+
+  it.each(['divider', 'image', 'bookmark'] as const)('removes a %s block by clicking it and pressing Backspace', async (type) => {
+    const user = userEvent.setup();
+    const { container } = render(<EditorHarness initial={[
+      { content: 'Intro', id: 'intro', type: 'text' },
+      { caption: 'A picture', content: '', id: 'void', type, url: 'https://example.com/a.png' },
+      { content: 'Tail', id: 'tail', type: 'text' },
+    ]} />);
+
+    // These blocks hold no text, so no caret can ever sit in them. Clicking one
+    // selects it; Backspace then removes it, the way it does for a paragraph.
+    const row = container.querySelector('[data-block-id="void"]')!;
+    // Click what the person actually sees — the rule, the picture — not the row.
+    await user.click(row.querySelector('.notion-block-body')!.firstElementChild ?? row);
+    expect(row.getAttribute('data-line-selected')).toBe('true');
+    await user.keyboard('{Backspace}');
+
+    expect(container.querySelector('[data-block-id="void"]')).toBeNull();
+    expect(container.querySelectorAll('[data-block-id]')).toHaveLength(2);
+  });
+
+  it('keeps Backspace editing text when the caret is in an image caption', async () => {
+    const user = userEvent.setup();
+    const { container } = render(<EditorHarness initial={[
+      { caption: 'Shelf', content: '', id: 'picture', type: 'image', url: 'https://example.com/a.png' },
+    ]} />);
+
+    await user.click(await screen.findByRole('button', { name: /Load image/ }));
+    const caption = screen.getByLabelText('Caption');
+    await user.click(caption);
+    await user.keyboard('{Backspace}');
+
+    expect(container.querySelector('[data-block-id="picture"]')).not.toBeNull();
+    expect(caption).toHaveValue('Shel');
+  });
+
+  it('imports a file dropped between two blocks at that position', async () => {
+    const importImage = vi.fn(() => Promise.resolve({ ok: true, value: { url: 'max://asset/' + 'a'.repeat(64) + '.png' } }));
+    Object.defineProperty(window, 'maxApi', { configurable: true, value: { assets: { importImage } } });
+    const { container } = render(<EditorHarness initial={[
+      { content: 'First', id: 'first', type: 'text' },
+      { content: 'Second', id: 'second', type: 'text' },
+    ]} />);
+
+    const file = new File([new Uint8Array([1, 2, 3])], 'shelf.png', { type: 'image/png' });
+    // jsdom has no drag machinery, so the transfer is built by hand.
+    const dataTransfer = { dropEffect: '', files: [file], types: ['Files'] } as unknown as DataTransfer;
+    const row = container.querySelector('[data-block-id="second"]')!;
+    fireEvent.dragOver(row, { clientY: 0, dataTransfer });
+    fireEvent.drop(row, { dataTransfer });
+
+    await waitFor(() => expect(importImage).toHaveBeenCalled());
+    await waitFor(() => {
+      const ids = [...container.querySelectorAll('[data-block-id]')].map((element) => element.getAttribute('data-block-id'));
+      expect(ids[0]).toBe('first');
+      expect(ids[2]).toBe('second');
+      expect(ids).toHaveLength(3);
+    });
+    // The insertion line must not survive the drop.
+    expect(container.querySelector('[data-drop-edge]')).toBeNull();
+  });
+
+  it('still selects blocks when the editor itself sits inside a database page', async () => {
+    const user = userEvent.setup();
+    // A record drawer renders its notes editor within the database page the
+    // record was opened from. The guard that ignores an embedded database view
+    // used to match that ancestor, so Backspace did nothing in record notes.
+    const { container } = render(<div className="database-page-container"><EditorHarness initial={[
+      { content: 'Intro', id: 'intro', type: 'text' },
+      { content: '', id: 'rule', type: 'divider' },
+    ]} /></div>);
+
+    const row = container.querySelector('[data-block-id="rule"]')!;
+    await user.click(row.querySelector('.notion-divider-wrap')!);
+    expect(row.getAttribute('data-line-selected')).toBe('true');
+    await user.keyboard('{Backspace}');
+
+    expect(container.querySelector('[data-block-id="rule"]')).toBeNull();
+  });
+
+  it('takes the box off an empty callout and leaves the caret on that line', async () => {
+    const user = userEvent.setup();
+    const { container } = render(<EditorHarness initial={[
+      { content: 'Intro', id: 'intro', type: 'text' },
+      { calloutIcon: 'lucide:Info', content: '', id: 'note', type: 'callout' },
+    ]} />);
+
+    // A callout is a box drawn around a line, so emptying it and pressing
+    // Backspace means "drop the box", not "drop my line and send me upwards".
+    const note = screen.getAllByRole('textbox')[1]!;
+    placeCaretAtStart(note);
+    await user.keyboard('{Backspace}');
+
+    await waitFor(() => expect(container.querySelector('.notion-callout-card')).toBeNull());
+    expect(container.querySelectorAll('[data-block-id]')).toHaveLength(2);
+    await waitFor(() => expect(screen.getAllByRole('textbox')[1]!).toHaveFocus());
+  });
+
+  it.each([
+    ['a page', (children: React.ReactNode) => <div>{children}</div>],
+    ['a record drawer inside a database page', (children: React.ReactNode) => <div className="database-page-container">{children}</div>],
+  ])('deletes a divider above with Backspace and keeps the line in %s', async (_where, wrap) => {
+    const user = userEvent.setup();
+    const { container } = render(wrap(<EditorHarness initial={[
+      { content: 'First line', id: 'first', type: 'text' },
+      { content: '', id: 'rule', type: 'divider' },
+      { content: 'Third line', id: 'third', type: 'text' },
+    ]} />));
+
+    // A divider holds no text, so it cannot take this line's text the way a
+    // paragraph above would. Backspacing into one used to hand it the text
+    // anyway, which quietly destroyed the line the person was standing on.
+    const third = screen.getAllByRole('textbox')[1]!;
+    placeCaretAtStart(third);
+    await user.keyboard('{Backspace}');
+
+    await waitFor(() => expect(container.querySelector('[data-block-id="rule"]')).toBeNull());
+    expect([...container.querySelectorAll('[data-block-id]')].map((row) => row.getAttribute('data-block-id')))
+      .toEqual(['first', 'third']);
+    expect(screen.getAllByRole('textbox').map((box) => box.textContent?.replaceAll('​', '')))
+      .toEqual(['First line', 'Third line']);
+    await waitFor(() => expect(screen.getAllByRole('textbox')[1]!).toHaveFocus());
   });
 });
