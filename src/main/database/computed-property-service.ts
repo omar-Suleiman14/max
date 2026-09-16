@@ -82,11 +82,16 @@ export class ComputedPropertyService {
     const matchCol = isSource ? 'source_record_id' : 'target_record_id';
     const targetCol = isSource ? 'target_record_id' : 'source_record_id';
 
+    // An archived record is out of the workspace, so it must not keep adding to
+    // a total. Archiving a record does not archive its edges, so the edge's own
+    // archived_at is not enough on its own and the record itself is checked too.
     const edgeRows = this.#database
       .prepare(`
-        SELECT ${targetCol} AS target_id
-        FROM workspace_relation_edges
-        WHERE relation_id = ? AND ${matchCol} = ? AND archived_at IS NULL
+        SELECT edge.${targetCol} AS target_id
+        FROM workspace_relation_edges AS edge
+        JOIN workspace_records AS target ON target.id = edge.${targetCol}
+        WHERE edge.relation_id = ? AND edge.${matchCol} = ?
+          AND edge.archived_at IS NULL AND target.archived_at IS NULL
       `)
       .all(relation.id, recordId) as { target_id: string }[];
 
