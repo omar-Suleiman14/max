@@ -9,15 +9,18 @@ export default tseslint.config(
   },
   eslint.configs.recommended,
   {
-    files: ['scripts/**/*.cjs', 'forge.config.cjs'],
+    files: ['scripts/**/*.cjs', 'scripts/**/*.mjs', 'forge.config.cjs'],
     languageOptions: {
       globals: {
         __dirname: 'readonly',
+        AbortSignal: 'readonly',
         Buffer: 'readonly',
+        console: 'readonly',
+        fetch: 'readonly',
         process: 'readonly',
         require: 'readonly',
-        console: 'readonly',
         setTimeout: 'readonly',
+        URL: 'readonly',
       },
     },
   },

@@ -45,6 +45,27 @@ function unauthorized(reason: string): Response {
 }
 
 /**
+ * R2 being unreachable is not the caller's mistake, and it is not a crash
+ * either. Left unhandled it became an exception with no body, which tells a
+ * desktop Max nothing about whether its backup was stored. Every bucket call
+ * goes through here so a storage failure comes back as one legible answer
+ * naming the operation that failed.
+ */
+class StorageFailure extends Error {
+  constructor(readonly operation: string) {
+    super(`Backup storage failed during ${operation}.`);
+  }
+}
+
+async function storage<T>(operation: string, run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch {
+    throw new StorageFailure(operation);
+  }
+}
+
+/**
  * Establish who is calling.
  *
  * Max's only client is the Electron main process, which holds a Clerk session
@@ -130,6 +151,7 @@ export function createWorker(authenticate: WorkerAuthenticator = authenticateReq
 
     // All /v1/backups endpoints require Clerk authentication
     if (pathname.startsWith('/v1/backups')) {
+      try {
       const auth = await authenticate(request, env);
       if (auth.error || !auth.userId) {
         return auth.error ?? new Response(JSON.stringify({ error: 'Unauthorized' }), { headers: corsHeaders, status: 401 });
@@ -140,7 +162,7 @@ export function createWorker(authenticate: WorkerAuthenticator = authenticateReq
 
       // 1. LIST BACKUPS: GET /v1/backups
       if (pathname === '/v1/backups' && method === 'GET') {
-        const objects = await env.BACKUPS_BUCKET.list({ prefix: userPrefix });
+        const objects = await storage('list', () => env.BACKUPS_BUCKET.list({ prefix: userPrefix }));
         const backups = objects.objects.map((obj: R2ObjectMetadata) => ({
           checksum: obj.customMetadata?.checksum ?? '',
           createdAt: obj.uploaded.toISOString(),
@@ -168,7 +190,7 @@ export function createWorker(authenticate: WorkerAuthenticator = authenticateReq
           return new Response(JSON.stringify({ error: 'Empty backup payload' }), { headers: corsHeaders, status: 400 });
         }
 
-        await env.BACKUPS_BUCKET.put(key, body, {
+        await storage('put', () => env.BACKUPS_BUCKET.put(key, body, {
           customMetadata: {
             checksum,
             trigger,
@@ -177,11 +199,11 @@ export function createWorker(authenticate: WorkerAuthenticator = authenticateReq
           httpMetadata: {
             contentType: 'application/octet-stream',
           },
-        });
+        }));
 
-        const retained = await env.BACKUPS_BUCKET.list({ prefix: userPrefix });
+        const retained = await storage('retention-list', () => env.BACKUPS_BUCKET.list({ prefix: userPrefix }));
         const expired = retained.objects.sort((left, right) => right.uploaded.getTime() - left.uploaded.getTime()).slice(30);
-        if (expired.length > 0) await env.BACKUPS_BUCKET.delete(expired.map(({ key: expiredKey }) => expiredKey));
+        if (expired.length > 0) await storage('retention-delete', () => env.BACKUPS_BUCKET.delete(expired.map(({ key: expiredKey }) => expiredKey)));
 
         return new Response(
           JSON.stringify({
@@ -202,7 +224,7 @@ export function createWorker(authenticate: WorkerAuthenticator = authenticateReq
           return new Response(JSON.stringify({ error: 'Invalid backup identifier' }), { headers: corsHeaders, status: 400 });
         }
         const key = `${userPrefix}${backupId}.maxbak`;
-        const object = await env.BACKUPS_BUCKET.get(key);
+        const object = await storage('get', () => env.BACKUPS_BUCKET.get(key));
 
         if (!object) {
           return new Response(JSON.stringify({ error: 'Backup not found' }), { headers: corsHeaders, status: 404 });
@@ -226,9 +248,16 @@ export function createWorker(authenticate: WorkerAuthenticator = authenticateReq
           return new Response(JSON.stringify({ error: 'Invalid backup identifier' }), { headers: corsHeaders, status: 400 });
         }
         const key = `${userPrefix}${backupId}.maxbak`;
-        await env.BACKUPS_BUCKET.delete(key);
+        await storage('delete', () => env.BACKUPS_BUCKET.delete(key));
 
         return new Response(JSON.stringify({ id: backupId, ok: true }), { headers: corsHeaders, status: 200 });
+      }
+      } catch (error) {
+        if (!(error instanceof StorageFailure)) throw error;
+        return new Response(
+          JSON.stringify({ error: 'Backup storage is unavailable.', operation: error.operation }),
+          { headers: corsHeaders, status: 503 },
+        );
       }
     }
 

@@ -14,21 +14,34 @@ import type { CloudBackupStep } from '../../shared/backup-contract';
  * claim out of it.
  */
 
+/**
+ * The message is the whole legible line, not the bare reason.
+ *
+ * Only `message` survives the trip from the main process to the renderer, so a
+ * failure that carried its step in a separate field arrived as "Backup not
+ * found" with nothing to say which of the fourteen steps that was. A failed
+ * upload read well because `create` formatted it by hand; a failed listing,
+ * download or restore did not. Building the line in the constructor makes every
+ * one of them legible wherever it ends up, and `reason` keeps the remote's own
+ * words for anything that wants them on their own.
+ */
 export class CloudBackupError extends Error {
+  readonly reason: string;
   readonly status?: number;
   readonly step: CloudBackupStep;
 
-  constructor(step: CloudBackupStep, message: string, status?: number) {
-    super(message);
+  constructor(step: CloudBackupStep, reason: string, status?: number) {
+    const status_ = status === undefined ? '' : ` (HTTP ${status})`;
+    super(`Cloud backup failed at step "${step}"${status_}: ${reason}`);
     this.name = 'CloudBackupError';
+    this.reason = reason;
     this.status = status;
     this.step = step;
   }
 
   /** A single line safe to show a person and safe to write to a log. */
   describe(): string {
-    const status = this.status === undefined ? '' : ` (HTTP ${this.status})`;
-    return `Cloud backup failed at step "${this.step}"${status}: ${this.message}`;
+    return this.message;
   }
 }
 
