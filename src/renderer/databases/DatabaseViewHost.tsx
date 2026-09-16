@@ -27,6 +27,7 @@ type DatabaseViewHostProps = Readonly<{
   onRemoveSorting?: () => Promise<void>;
   onPropertyMove?: (source: string, target: string) => void;
   onColumnResize?: (propertyId: string, width: number) => void;
+  onCoverPropertyChange?: (id: string) => void;
   onDatePropertyChange?: (id: string) => void;
   onUpdateRecord: (recordId: string, patch: WorkspaceRecordPatch) => Promise<void>;
   records: readonly WorkspaceRecord[];
@@ -49,6 +50,7 @@ export function DatabaseViewHost({
   onColumnResize,
   onPropertyMove,
   onRemoveSorting,
+  onCoverPropertyChange,
   onDatePropertyChange,
   onUpdateRecord,
   records,
@@ -85,6 +87,7 @@ export function DatabaseViewHost({
           onColumnResize={onColumnResize}
           onPropertyMove={onPropertyMove}
           onRemoveSorting={onRemoveSorting}
+          onCoverPropertyChange={onCoverPropertyChange}
           onDatePropertyChange={onDatePropertyChange}
           onUpdateRecord={onUpdateRecord}
           records={group.records}
@@ -98,7 +101,17 @@ export function DatabaseViewHost({
 
   switch (layout) {
     case 'gallery':
-      return <GalleryView records={records} onOpenRecord={onOpenRecord} locale={locale} onCreate={() => { void onCreateRecord({ databaseId, title: locale === 'ar' ? 'بدون عنوان' : 'Untitled' }).then((record) => { if (record) onOpenRecord(record); }); }} />;
+      return (
+        <GalleryView
+          coverPropertyId={activeView?.propertyState.coverPropertyId}
+          locale={locale}
+          onCoverPropertyChange={onCoverPropertyChange}
+          onCreate={() => { void onCreateRecord({ databaseId, title: locale === 'ar' ? 'بدون عنوان' : 'Untitled' }).then((record) => { if (record) onOpenRecord(record); }); }}
+          onOpenRecord={onOpenRecord}
+          records={records}
+          schema={schema}
+        />
+      );
     case 'board':
       return (
         <BoardView
