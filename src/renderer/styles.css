@@ -4630,6 +4630,42 @@ kbd { display: inline-flex; min-width: 23px; min-height: 20px; align-items: cent
    inner vertical scroll area traps the wheel and hides how long the database is. */
 .database-page-content { min-height: 220px; overflow: visible; background: var(--canvas); }
 
+/* Horizontal scrolling on a database's own page.
+
+   The real scrollbar sits under the last row, which on a full-height database
+   can be anywhere down the page or off the bottom of it. It is hidden there and
+   replaced by .sticky-scrollbar, a proxy bar that stays on the bottom edge of
+   the window and is drawn over the content rather than taking a row of space.
+   A view embedded in an ordinary page keeps its own bar, where it is close by. */
+.database-page-container[data-embedded="false"] .table-view-container,
+.database-page-container[data-embedded="false"] .board-view-container {
+  scrollbar-width: none;
+}
+
+.database-page-container[data-embedded="false"] .table-view-container::-webkit-scrollbar,
+.database-page-container[data-embedded="false"] .board-view-container::-webkit-scrollbar {
+  height: 0;
+}
+
+/* A sticky element inside a scroll container is held inside that container's
+   content box, so the page's own bottom padding would park the bar that far up
+   the screen. The inset cancels exactly that padding. */
+.sticky-scrollbar {
+  position: sticky;
+  z-index: 30;
+  inset-block-end: calc(var(--page-block-end-gutter, 0px) * -1);
+  height: 14px;
+  margin-block-start: -14px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  background: transparent;
+}
+
+.sticky-scrollbar > div {
+  height: 1px;
+}
+
+
 @media (max-width: 900px) {
   .database-title-row,
   .database-toolbar { align-items: stretch; flex-direction: column; }
@@ -5944,39 +5980,4 @@ body>.overlay { z-index:2000; isolation:isolate; }
   max-width: 360px;
   text-align: center;
   width: 100%;
-}
-
-/* Horizontal scrolling on a database's own page.
-
-   The real scrollbar sits under the last row, which on a full-height database
-   can be anywhere down the page or off the bottom of it. It is hidden there and
-   replaced by .sticky-scrollbar, a proxy bar that stays on the bottom edge of
-   the window and is drawn over the content rather than taking a row of space.
-   A view embedded in an ordinary page keeps its own bar, where it is close by. */
-.database-page-container[data-embedded="false"] .table-view-container,
-.database-page-container[data-embedded="false"] .board-view-container {
-  scrollbar-width: none;
-}
-
-.database-page-container[data-embedded="false"] .table-view-container::-webkit-scrollbar,
-.database-page-container[data-embedded="false"] .board-view-container::-webkit-scrollbar {
-  height: 0;
-}
-
-/* A sticky element inside a scroll container is held inside that container's
-   content box, so the page's own bottom padding would park the bar that far up
-   the screen. The inset cancels exactly that padding. */
-.sticky-scrollbar {
-  position: sticky;
-  z-index: 30;
-  inset-block-end: calc(var(--page-block-end-gutter, 0px) * -1);
-  height: 14px;
-  margin-block-start: -14px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  background: transparent;
-}
-
-.sticky-scrollbar > div {
-  height: 1px;
 }
