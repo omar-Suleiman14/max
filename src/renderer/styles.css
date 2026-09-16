@@ -489,7 +489,7 @@ kbd { display: inline-flex; min-width: 23px; min-height: 20px; align-items: cent
 .popover-menu button strong { font-size: 12px; }
 .popover-menu button small { color: var(--muted); font-size: 10px; }
 
-.content { --page-inline-gutter: clamp(20px, 3vw, 48px); min-width: 0; overflow: auto; padding: clamp(24px, 3vw, 44px) var(--page-inline-gutter) 64px; background: var(--canvas); }
+.content { --page-inline-gutter: clamp(20px, 3vw, 48px); --page-block-end-gutter: 64px; min-width: 0; overflow: auto; padding: clamp(24px, 3vw, 44px) var(--page-inline-gutter) var(--page-block-end-gutter); background: var(--canvas); }
 .page-header { display: grid; width: 100%; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 15px; margin: 0 0 34px; }
 .page-header__icon { display: grid; width: 46px; height: 46px; place-items: center; border-radius: 7px; color: var(--text); background: var(--canvas-subtle); }
 .page-header__copy { min-width: 0; }
@@ -4245,16 +4245,17 @@ kbd { display: inline-flex; min-width: 23px; min-height: 20px; align-items: cent
 
 .database-page-content {
   flex: 1;
-  overflow: auto;
+  overflow: visible;
   position: relative;
   background: var(--background);
 }
 
 /* Table View */
 .table-view-container {
-  height: 100%;
+  height: auto;
   width: 100%;
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: visible;
 }
 
 .table-view-scroll {
@@ -4625,7 +4626,9 @@ kbd { display: inline-flex; min-width: 23px; min-height: 20px; align-items: cent
 .database-toolbar__search { width: min(250px, 35%); height: 30px; padding: 3px 8px; border-color: transparent; background: transparent; }
 .database-toolbar__search:focus-within { border-color: var(--line-strong); background: var(--canvas-subtle); }
 .database-toolbar__actions { min-width: 0; justify-content: flex-end; gap: 2px; }
-.database-page-content { min-height: 220px; max-height: min(58vh, 620px); overflow: auto; background: var(--canvas); }
+/* A database renders at its full height and the page does the scrolling. An
+   inner vertical scroll area traps the wheel and hides how long the database is. */
+.database-page-content { min-height: 220px; overflow: visible; background: var(--canvas); }
 
 @media (max-width: 900px) {
   .database-title-row,
@@ -4727,7 +4730,7 @@ kbd { display: inline-flex; min-width: 23px; min-height: 20px; align-items: cent
 /* Board View */
 .board-view-container {
   padding: 1.25rem 1.5rem;
-  height: 100%;
+  height: auto;
   overflow-x: auto;
 }
 
@@ -4735,7 +4738,7 @@ kbd { display: inline-flex; min-width: 23px; min-height: 20px; align-items: cent
   display: flex;
   gap: 1.25rem;
   align-items: flex-start;
-  height: 100%;
+  height: auto;
 }
 
 .board-column {
@@ -5941,4 +5944,39 @@ body>.overlay { z-index:2000; isolation:isolate; }
   max-width: 360px;
   text-align: center;
   width: 100%;
+}
+
+/* Horizontal scrolling on a database's own page.
+
+   The real scrollbar sits under the last row, which on a full-height database
+   can be anywhere down the page or off the bottom of it. It is hidden there and
+   replaced by .sticky-scrollbar, a proxy bar that stays on the bottom edge of
+   the window and is drawn over the content rather than taking a row of space.
+   A view embedded in an ordinary page keeps its own bar, where it is close by. */
+.database-page-container[data-embedded="false"] .table-view-container,
+.database-page-container[data-embedded="false"] .board-view-container {
+  scrollbar-width: none;
+}
+
+.database-page-container[data-embedded="false"] .table-view-container::-webkit-scrollbar,
+.database-page-container[data-embedded="false"] .board-view-container::-webkit-scrollbar {
+  height: 0;
+}
+
+/* A sticky element inside a scroll container is held inside that container's
+   content box, so the page's own bottom padding would park the bar that far up
+   the screen. The inset cancels exactly that padding. */
+.sticky-scrollbar {
+  position: sticky;
+  z-index: 30;
+  inset-block-end: calc(var(--page-block-end-gutter, 0px) * -1);
+  height: 14px;
+  margin-block-start: -14px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  background: transparent;
+}
+
+.sticky-scrollbar > div {
+  height: 1px;
 }
