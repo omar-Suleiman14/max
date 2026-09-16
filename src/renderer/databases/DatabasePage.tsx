@@ -18,6 +18,7 @@ import { FilterBuilder } from './FilterBuilder';
 import { PropertyEditor } from './PropertyEditor';
 import { RecordDrawer } from './RecordDrawer';
 import { SortBuilder } from './SortBuilder';
+import { StickyScrollbar } from './StickyScrollbar';
 import { useDatabaseQuery } from './useDatabaseQuery';
 import { unmetRequirements } from './required-properties';
 import { recordDefaultsForFilter } from './view-defaults';
@@ -153,6 +154,15 @@ export function DatabasePage({ databaseId, embedded = false, initialViewId, loca
   const [selectedRecord, setSelectedRecord] = useState<WorkspaceRecord | null>(null);
   const [relatedSchema, setRelatedSchema] = useState<DatabaseSchema | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  // Whichever layout is showing brings its own horizontal scroller, so it is
+  // looked up from the rendered tree rather than threaded down through the view
+  // host, which has no reason to know this page is a database's own page.
+  const [scroller, setScroller] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    const found = embedded ? null : contentRef.current?.querySelector<HTMLElement>('.table-view-container, .board-view-container') ?? null;
+    setScroller((current) => (current === found ? current : found));
+  }, [embedded, activeView?.id, activeView?.layout, loading, schema]);
   useEffect(() => {
     const container = containerRef.current;
     const open = (event: Event) => {
@@ -323,7 +333,7 @@ export function DatabasePage({ databaseId, embedded = false, initialViewId, loca
       )}
 
       {/* Main View Grid / Board / List Host */}
-      <div className="database-page-content">
+      <div className="database-page-content" ref={contentRef}>
         <DatabaseViewHost
           activeView={activeView}
           calculations={calculations}
@@ -367,6 +377,7 @@ export function DatabasePage({ databaseId, embedded = false, initialViewId, loca
         />
         {/* The frame above is already on screen; only the rows are still coming. */}
         {!schema && <DatabaseSkeleton columns={4} embedded={embedded} locale={locale} rows={embedded ? 3 : 6} withFrame={false} />}
+        {!embedded && <StickyScrollbar scroller={scroller} />}
       </div>
 
       {totalCount > pageSize && <div className="database-pagination">
