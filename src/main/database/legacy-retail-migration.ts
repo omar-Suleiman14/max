@@ -1,4 +1,17 @@
-// Historical v0.2 conversion data. Never exposed as a product template.
+/**
+ * Retained deliberately. Classified as migration-only in issue #30.
+ *
+ * This is the shape a Max v0.1 retail workspace is converted *into* when
+ * `V020MigrationService` upgrades it: products, people, transactions and
+ * accounts expressed as generic databases and properties. It is historical
+ * conversion data, never a product template and never offered in onboarding.
+ *
+ * It cannot be deleted while any database created by Max v0.1 might still be
+ * opened, because a person who has not launched Max since then would otherwise
+ * lose their workspace on first start. `migration-chain.integration.test.ts`
+ * proves the whole chain from schema version 1 upward still upgrades cleanly.
+ * Delete this only once it is proven that no reachable database needs it.
+ */
 import type { WorkspaceTemplateV2 } from '../../shared/template-v2-contract';
 export function legacyRetailMigrationTemplate(locale: 'ar' | 'en' = 'en'): WorkspaceTemplateV2 {
     const isAr = locale === 'ar';
