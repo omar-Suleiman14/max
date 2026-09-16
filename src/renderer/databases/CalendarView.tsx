@@ -3,8 +3,13 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 
 import type { DatabaseSchema } from '../../shared/database-contract';
+import type { Locale } from '../app/i18n';
 import type { WorkspaceRecord, WorkspaceRecordDraft } from '../../shared/property-contract';
 
+const COPY = {
+  ar: { createdTime: 'وقت الإنشاء', dateBy: 'التاريخ حسب', next: 'الشهر التالي', previous: 'الشهر السابق', today: 'اليوم' },
+  en: { createdTime: 'Created time', dateBy: 'Date by', next: 'Next month', previous: 'Previous month', today: 'Today' },
+} as const;
 /**
  * The day a date property value falls on, as YYYY-MM-DD.
  *
@@ -23,6 +28,7 @@ function dayOf(value: unknown): string | null {
 type CalendarViewProps = Readonly<{
   databaseId: string;
   datePropertyId?: string | null;
+  locale?: Locale;
   onDatePropertyChange?: (id: string) => void;
   onArchiveRecord?: (recordId: string) => Promise<void>;
   onCreateRecord: (draft: WorkspaceRecordDraft) => Promise<WorkspaceRecord | null>;
@@ -34,6 +40,7 @@ type CalendarViewProps = Readonly<{
 export function CalendarView({
   databaseId,
   datePropertyId,
+  locale = 'en',
   onDatePropertyChange,
   onCreateRecord,
   onOpenRecord,
@@ -52,12 +59,17 @@ export function CalendarView({
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
 
-  const monthNames = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December',
-  ];
-
-  const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const copy = COPY[locale];
+  // A hardcoded English month list left an Arabic workspace reading "September"
+  // under a right to left page. The names come from the language instead.
+  // Latin numerals even in Arabic: the day numbers in the cells come straight
+  // from the date and are Latin, so an Arabic-Indic year above them would not
+  // match, and the rest of Max counts in Latin digits too.
+  const tag = locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en-US';
+  const monthTitle = new Intl.DateTimeFormat(tag, { month: 'long', year: 'numeric' }).format(currentDate);
+  const weekdayName = new Intl.DateTimeFormat(tag, { weekday: 'short' });
+  // Any week will do; this one starts on a Sunday, which is where the grid does.
+  const daysOfWeek = Array.from({ length: 7 }, (_, day) => weekdayName.format(new Date(2026, 0, 4 + day)));
 
   // Calculate calendar days
   const calendarDays = useMemo(() => {
@@ -105,7 +117,7 @@ export function CalendarView({
   const handleToday = () => setCurrentDate(new Date());
 
   const handleAddOnDate = async (dateString: string) => {
-    const title = 'Untitled';
+    const title = locale === 'ar' ? 'بدون عنوان' : 'Untitled';
 
     const props: Record<string, unknown> = {};
     if (selectedDatePropId !== 'createdAt') {
@@ -125,17 +137,15 @@ export function CalendarView({
       {/* Calendar Header / Navigation */}
       <div className="calendar-header">
         <div className="flex items-center gap-2">
-          <h3 className="calendar-header__title">
-            {monthNames[month]} {year}
-          </h3>
+          <h3 className="calendar-header__title">{monthTitle}</h3>
           <div className="flex items-center rounded-md border border-neutral-700 overflow-hidden">
-            <button type="button" className="btn-icon p-1.5" onClick={handlePrevMonth} title="Previous month">
+            <button type="button" className="btn-icon p-1.5" onClick={handlePrevMonth} title={copy.previous} aria-label={copy.previous}>
               <ChevronLeft size={16} />
             </button>
             <button type="button" className="btn btn-ghost text-xs px-2.5 py-1" onClick={handleToday}>
-              Today
+              {copy.today}
             </button>
-            <button type="button" className="btn-icon p-1.5" onClick={handleNextMonth} title="Next month">
+            <button type="button" className="btn-icon p-1.5" onClick={handleNextMonth} title={copy.next} aria-label={copy.next}>
               <ChevronRight size={16} />
             </button>
           </div>
@@ -143,13 +153,15 @@ export function CalendarView({
 
         {dateProperties.length > 0 && (
           <div className="flex items-center gap-2">
-            <span className="text-xs text-muted">Date by:</span>
+            {/* No trailing colon: under RTL it detaches and renders as ":by". */}
+            <span className="text-xs text-muted">{copy.dateBy}</span>
             <Select
+              aria-label={copy.dateBy}
               className="select-field text-xs py-1"
               value={selectedDatePropId}
               onChange={(e) => { setSelectedDatePropId(e.target.value); onDatePropertyChange?.(e.target.value); }}
             >
-              <option value="createdAt">Created time</option>
+              <option value="createdAt">{copy.createdTime}</option>
               {dateProperties.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
