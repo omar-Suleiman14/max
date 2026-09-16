@@ -67,3 +67,51 @@ jobs:
 
       - name: Verify production size budgets
         run: npm run verify:size
+
+  # The live cloud backup path, which needs a deployed Worker and a real Clerk
+  # session. Ordinary pull requests, and every pull request from a fork, have
+  # neither, so this must skip rather than fail: the secrets context cannot be
+  # read in a job-level `if`, which is what the preflight job is for.
+  cloud-staging-preflight:
+    name: Are staging credentials present
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      configured: ${{ steps.check.outputs.configured }}
+    steps:
+      - name: Look for both secrets without printing either
+        id: check
+        env:
+          MAX_STAGING_SESSION_TOKEN: ${{ secrets.MAX_STAGING_SESSION_TOKEN }}
+          MAX_STAGING_WORKER_URL: ${{ secrets.MAX_STAGING_WORKER_URL }}
+        run: |
+          if [ -n "$MAX_STAGING_WORKER_URL" ] && [ -n "$MAX_STAGING_SESSION_TOKEN" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            echo "Staging credentials are present; the live check will run."
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "Staging credentials are absent; the live check is skipped, not failed."
+          fi
+
+  cloud-staging:
+    name: Max Cloud Backup live path
+    needs: cloud-staging-preflight
+    if: needs.cloud-staging-preflight.outputs.configured == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Round trip a backup through the deployed Worker
+        env:
+          MAX_STAGING_SESSION_TOKEN: ${{ secrets.MAX_STAGING_SESSION_TOKEN }}
+          MAX_STAGING_WORKER_URL: ${{ secrets.MAX_STAGING_WORKER_URL }}
+        run: node scripts/cloud-backup-staging-check.mjs
