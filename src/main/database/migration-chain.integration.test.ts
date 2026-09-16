@@ -104,4 +104,8 @@ describe('upgrading a workspace left at an older schema version', () => {
       second.close();
     }
   });
-});
+// Every case here builds a database on disk and replays the migration chain
+// against it. That is comfortably inside a second on a developer machine and
+// has run past vitest's five second default on the Windows CI runner, which is
+// slower at creating and fsyncing files.
+}, 30_000);
