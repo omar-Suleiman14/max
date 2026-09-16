@@ -44,3 +44,19 @@ export type CloudBackupStatus = Readonly<{
   configured: boolean;
   lastSuccessfulCloudBackupAt?: string;
 }>;
+
+/**
+ * The steps a cloud backup passes through, in order. A failure names the step
+ * it stopped at so the next report says where it broke instead of only that it
+ * broke.
+ */
+export type CloudBackupStep =
+  | 'authenticate'
+  | 'local-backup'
+  | 'upload'
+  | 'list'
+  | 'download'
+  | 'checksum'
+  | 'import'
+  | 'restore'
+  | 'schedule';

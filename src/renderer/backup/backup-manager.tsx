@@ -14,6 +14,7 @@ import type { Locale } from '../app/i18n';
 import { Button } from '../ui/button';
 import { FocusedOverlay } from '../ui/focused-overlay';
 import { backupCopy } from './backup-i18n';
+import { CloudBackupPanel } from './cloud-backup-panel';
 
 type BackupManagerProps = Readonly<{
   locale: Locale;
@@ -48,6 +49,11 @@ export function BackupManager({ locale }: BackupManagerProps) {
 
   useEffect(() => {
     void loadBackups();
+    // Downloading a cloud backup puts a new file in the local backup list, so
+    // the list has to hear about it from outside this component.
+    const refresh = () => { void loadBackups(); };
+    window.addEventListener('max:backups-changed', refresh);
+    return () => window.removeEventListener('max:backups-changed', refresh);
   }, [loadBackups]);
 
   async function handleCreateBackup() {
@@ -137,6 +143,8 @@ export function BackupManager({ locale }: BackupManagerProps) {
           </div>{verificationResults[backup.id] && <p role="status">{backupCopy(locale, verificationResults[backup.id]!.valid ? 'integrityOk' : 'corrupted')}</p>}</div>
         </details>)}
       </details>
+
+      <CloudBackupPanel locale={locale} />
 
       {restoreConfirmBackup && (
         <FocusedOverlay className="object-dialog" labelId="restore-confirm-title" onClose={() => setRestoreConfirmBackup(undefined)}>

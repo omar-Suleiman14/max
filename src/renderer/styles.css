@@ -5942,3 +5942,55 @@ body>.overlay { z-index:2000; isolation:isolate; }
   text-align: center;
   width: 100%;
 }
+/* Max Cloud Backup, an opt-in panel inside the local backup settings. */
+.cloud-backup-panel {
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
+  width: 100%;
+}
+
+.cloud-backup-toggle {
+  align-items: center;
+  display: flex;
+  font-size: 13px;
+  gap: 8px;
+}
+
+.cloud-backup-note {
+  color: var(--text-soft);
+  font-size: 13px;
+  margin: 0;
+}
+
+.cloud-backup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cloud-backup-row {
+  align-items: center;
+  border-top: 1px solid var(--line);
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 10px 0;
+}
+
+.cloud-backup-row div:first-child {
+  display: flex;
+  flex-direction: column;
+}
+
+.cloud-backup-row small {
+  color: var(--text-soft);
+}
+
+.cloud-backup-row__actions {
+  display: flex;
+  gap: 8px;
+}

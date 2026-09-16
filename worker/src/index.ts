@@ -1,4 +1,4 @@
-import { createClerkClient } from '@clerk/backend';
+import { createClerkClient, verifyToken } from '@clerk/backend';
 
 export interface R2ObjectMetadata {
   customMetadata?: Record<string, string>;
@@ -36,28 +36,56 @@ export interface Env {
   CLERK_SECRET_KEY: string;
 }
 
+/** A 401 that says which check failed, without ever echoing the token. */
+function unauthorized(reason: string): Response {
+  return new Response(JSON.stringify({ error: 'Authentication failed', reason }), {
+    headers: { 'Content-Type': 'application/json' },
+    status: 401,
+  });
+}
+
 /**
- * Verify Clerk JWT token using public key or claims verification.
- * Extracts authenticated userId from token subject ('sub').
+ * Establish who is calling.
+ *
+ * Max's only client is the Electron main process, which holds a Clerk session
+ * token it was handed by the renderer and sends it as `Authorization: Bearer`.
+ * That is the case `verifyToken` is documented for: a token already in hand,
+ * verified against Clerk's signing keys with no cookie and no handshake.
+ * `authenticateRequest` is built for a request arriving from a browser, and it
+ * carries cookie and handshake logic that a desktop request cannot satisfy, so
+ * relying on it alone left the desktop path unproven.
+ *
+ * Both are kept. A Bearer token is verified directly, which is what Max sends.
+ * Anything else falls through to `authenticateRequest`, so a browser client
+ * would still work if one is ever added. The 401 says which check failed.
  */
-async function authenticateRequest(request: Request, env: Env): Promise<{ error?: Response; userId?: string }> {
+export async function authenticateRequest(request: Request, env: Env): Promise<{ error?: Response; userId?: string }> {
+  if (!env.CLERK_SECRET_KEY || !env.CLERK_PUBLISHABLE_KEY) {
+    return { error: unauthorized('clerk-not-configured') };
+  }
+
+  const bearer = /^Bearer (.+)$/.exec(request.headers.get('Authorization') ?? '')?.[1]?.trim();
+  if (bearer) {
+    try {
+      const claims = await verifyToken(bearer, { secretKey: env.CLERK_SECRET_KEY });
+      if (!claims.sub) return { error: unauthorized('token-missing-subject') };
+      return { userId: claims.sub };
+    } catch {
+      return { error: unauthorized('token-rejected') };
+    }
+  }
+
   try {
-    if (!env.CLERK_SECRET_KEY || !env.CLERK_PUBLISHABLE_KEY) throw new Error('Clerk is not configured.');
     const state = await createClerkClient({
       publishableKey: env.CLERK_PUBLISHABLE_KEY,
       secretKey: env.CLERK_SECRET_KEY,
     }).authenticateRequest(request);
-    if (!state.isAuthenticated) throw new Error('Unauthenticated.');
+    if (!state.isAuthenticated) return { error: unauthorized('request-unauthenticated') };
     const userId = state.toAuth().userId;
-    if (!userId) throw new Error('Missing Clerk user.');
+    if (!userId) return { error: unauthorized('missing-clerk-user') };
     return { userId };
   } catch {
-    return {
-      error: new Response(JSON.stringify({ error: 'Authentication failed' }), {
-        headers: { 'Content-Type': 'application/json' },
-        status: 401,
-      }),
-    };
+    return { error: unauthorized('authenticate-request-failed') };
   }
 }
 
