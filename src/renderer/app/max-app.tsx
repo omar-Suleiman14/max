@@ -440,14 +440,12 @@ export function MaxApp() {
     nextLocale: Locale,
     backupSchedule: BackupSchedule,
     blueprint?: Blueprint,
-    includeDemoData?: boolean,
-    templateId?: 'blank' | 'custom' | 'phone-shop',
+    templateId?: 'blank' | 'custom',
   ) {
     const res = await window.maxApi.shop.completeOnboarding({
       acceptedTermsVersion: TERMS_VERSION,
       backupSchedule,
       blueprint,
-      includeDemoData,
       locale: nextLocale,
       shopName: nextShopName,
       templateId,

@@ -132,7 +132,13 @@ function isValidWorkspaceName(value: string): boolean {
 
 type OnboardingProps = Readonly<{
   initialLocale: Locale;
-  onComplete: (workspaceName: string, locale: Locale, backupSchedule: BackupSchedule, blueprint?: Blueprint, includeDemoData?: boolean, templateId?: 'blank' | 'custom' | 'phone-shop') => Promise<void>;
+  /**
+   * A workspace is built either empty or from a blueprint the person brought.
+   * There was a third value, `phone-shop`, left from a preset card step three
+   * stopped rendering, and a `includeDemoData` flag that only ever travelled
+   * as `false`. Neither could be produced here, so neither is asked for.
+   */
+  onComplete: (workspaceName: string, locale: Locale, backupSchedule: BackupSchedule, blueprint?: Blueprint, templateId?: 'blank' | 'custom') => Promise<void>;
   onClose?: () => void;
   preview?: boolean;
 }>;
@@ -233,7 +239,7 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
     setFinishError(undefined);
     setSubmitting(true);
     try {
-      await onComplete(workspaceName.trim() || DEFAULT_WORKSPACE_NAME, locale, backupSchedule, template === 'custom' ? blueprint : undefined, false, template);
+      await onComplete(workspaceName.trim() || DEFAULT_WORKSPACE_NAME, locale, backupSchedule, template === 'custom' ? blueprint : undefined, template);
     } catch (error) {
       setFinishError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -426,8 +432,12 @@ export function Onboarding({ initialLocale, onClose, onComplete, preview = false
                   data-selected={template === 'custom'}
                   role="radio"
                 >
-                  <strong>{locale === 'ar' ? 'استيراد مخطط' : 'Import Blueprint'}</strong>
-                  <p>{blueprint ? blueprint.name : locale === 'ar' ? 'ابدأ من ملف مخطط موجود.' : 'Start from an existing blueprint file.'}</p>
+                  {/* These read from the translation file the rest of the flow
+                      uses. They used to be written out here instead, so the file
+                      carried translations nobody saw and the screen carried
+                      strings nobody could translate. */}
+                  <strong>{onboardingCopy(locale, 'importCustomTitle')}</strong>
+                  <p>{blueprint ? blueprint.name : onboardingCopy(locale, 'importCustomSubtitle')}</p>
                   <input accept=".json,.max-blueprint.json" onChange={(e) => void handleFileSelect(e)} style={{ display: 'none' }} type="file" />
                 </label>
               </div>
