@@ -130,6 +130,7 @@ export function DatabaseViewHost({
       return (
         <CalendarView
           datePropertyId={activeView?.propertyState.datePropertyId}
+          locale={locale}
           onDatePropertyChange={onDatePropertyChange}
           databaseId={databaseId}
           onArchiveRecord={onArchiveRecord}
