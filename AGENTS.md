@@ -19,7 +19,7 @@ The mutable roadmap is **GitHub Issues, Milestones, issue dependencies and the
 `Max 2.0` Project**. Read them before starting work.
 
 Do not treat any static document as the current product plan. In particular,
-`docs/product/max-v0.1.0-blueprint.md` and everything under `docs/sprints/` are
+`docs/history/max-v0.1.0-blueprint.md` and everything under `docs/history/` are
 historical records of how Max was built, not statements about what Max is now or
 what it should become.
 
