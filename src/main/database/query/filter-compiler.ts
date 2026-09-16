@@ -2,7 +2,7 @@ import type { SQLInputValue } from 'node:sqlite';
 
 import type { FilterNode, PropertyFilterNode, RelationFilterNode } from '../../../shared/query-contract';
 import type { WorkspaceProperty } from '../../../shared/property-contract';
-import { resolveRelativeDate } from './date-resolver';
+import { resolveRelativeDate, type ResolvedDateRange } from './date-resolver';
 import { valueToText } from '../value-utils';
 
 export type CompiledFilter = Readonly<{
@@ -80,6 +80,12 @@ export class FilterCompiler {
 
     if (prop?.type === 'auto_id') return this.#compileSequenceFilter(node);
 
+    // A date property keeps its value in date_start, never in text_value, so
+    // Exact date used to compare an always-empty column and match nothing.
+    if (prop?.type === 'date' && (node.operator === 'equals' || node.operator === 'not_equals')) {
+      return this.#compileStoredDateFilter(node, propId);
+    }
+
     const type = prop?.type ?? 'text';
     if (type === 'checkbox' && typeof node.value === 'boolean' && ['equals', 'not_equals'].includes(node.operator)) {
       const checked = node.operator === 'equals' ? node.value : !node.value;
@@ -131,53 +137,11 @@ export class FilterCompiler {
           )`,
         };
 
-      case 'relative_date': {
-        const period = node.relativePeriod || 'THIS_MONTH';
-        const range = resolveRelativeDate(period, node.relativeValue);
-        // A date that carries a time still belongs to its own day, so the day
-        // is compared rather than the whole stored string.
-        return {
-          params: [propId, range.startDate, range.endDate],
-          whereSql: `EXISTS (
-            SELECT 1 FROM workspace_property_values pv
-            WHERE pv.record_id = r.id AND pv.property_id = ? AND substr(pv.date_start, 1, 10) >= ? AND substr(pv.date_start, 1, 10) <= ?
-          )`,
-        };
-      }
-
-      case 'before_date': {
-        const dStr = valueToText(node.value);
-        return {
-          params: [propId, dStr],
-          whereSql: `EXISTS (
-            SELECT 1 FROM workspace_property_values pv
-            WHERE pv.record_id = r.id AND pv.property_id = ? AND substr(pv.date_start, 1, 10) < ?
-          )`,
-        };
-      }
-
-      case 'after_date': {
-        const dStr = valueToText(node.value);
-        return {
-          params: [propId, dStr],
-          whereSql: `EXISTS (
-            SELECT 1 FROM workspace_property_values pv
-            WHERE pv.record_id = r.id AND pv.property_id = ? AND substr(pv.date_start, 1, 10) > ?
-          )`,
-        };
-      }
-
-      case 'between_dates': {
-        const start = valueToText(node.value);
-        const end = valueToText(node.valueTo);
-        return {
-          params: [propId, start, end],
-          whereSql: `EXISTS (
-            SELECT 1 FROM workspace_property_values pv
-            WHERE pv.record_id = r.id AND pv.property_id = ? AND substr(pv.date_start, 1, 10) >= ? AND substr(pv.date_start, 1, 10) <= ?
-          )`,
-        };
-      }
+      case 'relative_date':
+      case 'before_date':
+      case 'after_date':
+      case 'between_dates':
+        return this.#compileStoredDateFilter(node, propId);
 
       case 'in_options': {
         const options = (Array.isArray(node.value) ? node.value : [node.value]).map(valueToText);
@@ -327,6 +291,91 @@ export class FilterCompiler {
         const day = localDayBounds(valueToText(node.value).slice(0, 10));
         return { params: [day.start, day.end], whereSql: `${column} >= ? AND ${column} < ?` };
       }
+    }
+  }
+
+  /**
+   * A date property keeps its value in `workspace_property_values.date_start`,
+   * which holds one of two shapes. Every date input in the application writes a
+   * plain calendar day with no zone, which is already the day the person meant.
+   * A blueprint import, a workflow, the v0.2.0 migration or any caller of the
+   * record contract can instead write a full instant, whose first ten characters
+   * are the *UTC* day. In Cairo a value at local 2026-09-14 00:30 stores as
+   * 2026-09-13T22:30:00Z, so comparing those ten characters put it in Yesterday.
+   *
+   * The two shapes are therefore compared differently in the same statement. A
+   * plain day is compared as a day. An instant is compared against the pair of
+   * instants that bound the range on this machine's clock, as a half-open range:
+   * from local midnight up to, but not including, the midnight that ends it.
+   * `julianday` is what does the comparing, because it understands a trailing Z,
+   * a numeric offset and a bare timestamp alike, and returns NULL rather than a
+   * wrong answer for anything it cannot read.
+   */
+  #compileStoredDateFilter(node: PropertyFilterNode, propId: string): CompiledFilter {
+    const day = (value: unknown) => valueToText(value).slice(0, 10);
+
+    const withinRange = (range: ResolvedDateRange): CompiledFilter => ({
+      params: [propId, range.startInstant, range.endInstant, range.startDate, range.endDate],
+      whereSql: `EXISTS (
+        SELECT 1 FROM workspace_property_values pv
+        WHERE pv.record_id = r.id AND pv.property_id = ? AND pv.date_start IS NOT NULL AND CASE
+          WHEN length(pv.date_start) > 10
+            THEN julianday(pv.date_start) >= julianday(?) AND julianday(pv.date_start) < julianday(?)
+          ELSE substr(pv.date_start, 1, 10) >= ? AND substr(pv.date_start, 1, 10) <= ?
+        END
+      )`,
+    });
+
+    /** The range covering the single calendar day `from` through `to`. */
+    const spanning = (from: string, to: string): ResolvedDateRange => ({
+      endDate: to,
+      endInstant: localDayBounds(to).end,
+      startDate: from,
+      startInstant: localDayBounds(from).start,
+    });
+
+    switch (node.operator) {
+      case 'relative_date':
+        return withinRange(resolveRelativeDate(node.relativePeriod || 'THIS_MONTH', node.relativeValue));
+
+      case 'between_dates':
+        return withinRange(spanning(day(node.value), day(node.valueTo)));
+
+      case 'before_date': {
+        const boundary = day(node.value);
+        return {
+          params: [propId, localDayBounds(boundary).start, boundary],
+          whereSql: `EXISTS (
+            SELECT 1 FROM workspace_property_values pv
+            WHERE pv.record_id = r.id AND pv.property_id = ? AND pv.date_start IS NOT NULL AND CASE
+              WHEN length(pv.date_start) > 10 THEN julianday(pv.date_start) < julianday(?)
+              ELSE substr(pv.date_start, 1, 10) < ?
+            END
+          )`,
+        };
+      }
+
+      case 'after_date': {
+        const boundary = day(node.value);
+        return {
+          params: [propId, localDayBounds(boundary).end, boundary],
+          whereSql: `EXISTS (
+            SELECT 1 FROM workspace_property_values pv
+            WHERE pv.record_id = r.id AND pv.property_id = ? AND pv.date_start IS NOT NULL AND CASE
+              WHEN length(pv.date_start) > 10 THEN julianday(pv.date_start) >= julianday(?)
+              ELSE substr(pv.date_start, 1, 10) > ?
+            END
+          )`,
+        };
+      }
+
+      case 'not_equals': {
+        const exact = withinRange(spanning(day(node.value), day(node.value)));
+        return { params: exact.params, whereSql: `NOT ${exact.whereSql}` };
+      }
+
+      default:
+        return withinRange(spanning(day(node.value), day(node.value)));
     }
   }
 

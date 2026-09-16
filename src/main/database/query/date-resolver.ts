@@ -15,10 +15,13 @@ export type ResolvedDateRange = Readonly<{
  * hours out of every twenty-four, and a shop that opens at eight and closes at
  * midnight would otherwise watch its own takings fall out of a Today filter.
  *
- * A date property holds a plain calendar day with no zone, so it is compared
- * against `startDate`/`endDate` directly. A timestamp property such as Created
- * time holds a UTC instant, so it is compared against `startInstant` and
- * `endInstant`, which are local midnight converted to UTC.
+ * Both pairs are returned because a stored value can be either shape. A plain
+ * calendar day with no zone is compared against `startDate`/`endDate`. A UTC
+ * instant, which is what a timestamp property always holds and what a date
+ * property holds whenever its value carries a time, is compared against
+ * `startInstant` and `endInstant`, which are local midnight converted to UTC.
+ * Comparing an instant against the plain days instead reads the UTC day, which
+ * is a different day from the local one for part of every twenty-four hours.
  */
 function formatYMD(date: Date): string {
   const month = `${date.getMonth() + 1}`.padStart(2, '0');
