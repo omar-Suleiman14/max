@@ -4,8 +4,9 @@ import { PageIconRenderer } from '../ui/page-icon-renderer';
 import { RelationValue } from './RelationValue';
 import { PropertyEditor } from './PropertyEditor';
 import { generateOrderKey } from '../../shared/order-key';
-import { parseNumericInput } from '../../shared/digits';
-import { NumberInput } from '../ui/number-input';
+import { normalizeNumericInput, parseNumericInput } from '../../shared/digits';
+import { DraftInput } from '../ui/draft-input';
+import { ReadOnlyPropertyValue } from '../ui/property-editing';
 import { GripVertical, Plus } from 'lucide-react';
 import { MultiSelectValue } from './MultiSelectValue';
 import { isRequirementUnmet, unmetRequirements } from './required-properties';
@@ -148,12 +149,6 @@ export function RecordDrawer({
 
   const missingRequired = unmetRequirements(schema.properties, properties, title);
 
-  const handleTitleBlur = () => {
-    if (title.trim() !== record.title) {
-      void save({ title: title.trim() || 'Untitled' });
-    }
-  };
-
   const handlePropertyChange = (propertyId: string, value: unknown) => {
     const next = { ...properties, [propertyId]: value };
     setProperties(next);
@@ -221,13 +216,13 @@ export function RecordDrawer({
               {iconPickerOpen && <IconPickerDialog anchor={iconButtonRef.current} currentIcon={icon} locale={locale} onClose={() => setIconPickerOpen(false)} onSelect={(next) => { setIcon(next); setIconPickerOpen(false); void save({ icon: next || null }); }} />}
             </div>
             {/* Record Title Input */}
-            <input
+            <DraftInput
               type="text"
               className="record-drawer__title-input"
               aria-label={locale === 'ar' ? 'عنوان الصفحة' : 'Page title'}
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              onBlur={handleTitleBlur}
+              value={record.title}
+              onDraftChange={setTitle}
+              onCommit={(next) => { const committed = next.trim() || 'Untitled'; setTitle(committed); void save({ title: committed }); }}
               placeholder="Untitled record"
             />
 
@@ -276,24 +271,26 @@ export function RecordDrawer({
                     <div className="record-drawer__prop-value">
                       {/* Text */}
                       {['text', 'email', 'phone', 'url'].includes(prop.type) && (
-                        <input
+                        <DraftInput
                           type="text"
                           className="input-clean"
                           placeholder="Empty"
                           value={formatUnknown(value)}
-                          onChange={(e) => handlePropertyChange(prop.id, e.target.value)}
+                          onDraftChange={(next) => setProperties((current) => ({ ...current, [prop.id]: next || null }))}
+                          onCommit={(next) => handlePropertyChange(prop.id, next || null)}
                         />
                       )}
 
                       {/* Number */}
                       {prop.type === 'number' && (
-                        <NumberInput
+                        <DraftInput
                           className="input-clean"
                           placeholder="Empty"
+                          inputMode="decimal"
                           value={typeof value === 'number' ? String(value) : ''}
-                          onValueChange={(next) =>
-                            handlePropertyChange(prop.id, next === '' ? null : parseNumericInput(next) ?? null)
-                          }
+                          normalize={normalizeNumericInput}
+                          onDraftChange={(next) => setProperties((current) => ({ ...current, [prop.id]: next }))}
+                          onCommit={(next) => handlePropertyChange(prop.id, next === '' ? null : parseNumericInput(next) ?? null)}
                         />
                       )}
 
@@ -369,16 +366,16 @@ export function RecordDrawer({
                       )}
                       {/* Formula / Rollup / Auto ID (Read-only) */}
                       {['formula', 'rollup', 'auto_id'].includes(prop.type) && (
-                        <span className="badge badge-primary font-mono">
+                        <ReadOnlyPropertyValue className="badge badge-primary font-mono" locale={locale}>
                           {value !== undefined && value !== null ? formatUnknown(value) : '—'}
-                        </span>
+                        </ReadOnlyPropertyValue>
                       )}
 
                       {/* Timestamps (Read-only) */}
                       {['created_time', 'last_edited_time'].includes(prop.type) && (
-                        <span className="text-sm text-muted font-mono">
+                        <ReadOnlyPropertyValue className="text-sm text-muted font-mono" locale={locale}>
                           {typeof value === 'string' || typeof value === 'number' ? new Date(value).toLocaleString(locale === 'ar' ? 'ar-EG' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' }) : '—'}
-                        </span>
+                        </ReadOnlyPropertyValue>
                       )}
                     </div>
                   </div>
@@ -387,7 +384,7 @@ export function RecordDrawer({
             </div>
 
             <button type="button" className="page-add-property" onClick={() => setAddingProperty(true)}><Plus size={14} />{locale === 'ar' ? 'إضافة خاصية' : 'Add a property'}</button>
-            <PropertyEditor databaseId={record.databaseId} schema={schema} isOpen={addingProperty} onClose={() => setAddingProperty(false)} onSave={async (draft) => {
+            <PropertyEditor databaseId={record.databaseId} schema={schema} isOpen={addingProperty} locale={locale} onClose={() => setAddingProperty(false)} onSave={async (draft) => {
               if (!('type' in draft)) return null;
               const result = await window.maxApi.workspace.createProperty(draft);
               if (!result.ok) { setSaveError(result.error.message); return null; }

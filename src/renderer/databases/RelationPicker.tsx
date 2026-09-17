@@ -34,6 +34,7 @@ export function RelationPicker({
   const [error, setError] = useState('');
   const generation = useRef(0);
   const [selectedSet, setSelectedSet] = useState<Set<string>>(() => new Set(selectedTargetIds));
+  const [active, setActive] = useState(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -46,7 +47,7 @@ export function RelationPicker({
     setLoading(true);
     try {
       const results = await window.maxApi.workspace.searchRelationTargets(relationId, q, 30, recordId);
-      if (request === generation.current) setTargets(results);
+      if (request === generation.current) { setTargets(results); setActive(0); }
     } catch {
       setTargets([]);
     } finally {
@@ -97,7 +98,11 @@ export function RelationPicker({
             type="text"
             placeholder={locale === 'ar' ? 'ابحث عن صفحة لربطها…' : 'Search pages to link…'}
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => { setQuery(e.target.value); setActive(0); }}
+            onKeyDown={(event) => {
+              if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); setActive((current) => (current + (event.key === 'ArrowDown' ? 1 : -1) + targets.length) % Math.max(targets.length, 1)); }
+              if (event.key === 'Enter' && targets[active]) { event.preventDefault(); void toggleSelect(targets[active].id); }
+            }}
             className="input-clean"
           />
         </div>
@@ -109,7 +114,7 @@ export function RelationPicker({
             <div className="p-4 text-center text-muted">{locale === 'ar' ? 'لا توجد صفحات.' : 'No pages found.'}</div>
           )}
           {!loading &&
-            targets.map((target) => {
+            targets.map((target, index) => {
               const isSelected = selectedSet.has(target.id);
               return (
                 <button
@@ -117,7 +122,9 @@ export function RelationPicker({
                   type="button"
                   disabled={pending}
                   aria-pressed={isSelected}
+                  data-active={index === active || undefined}
                   className={`relation-picker__item ${isSelected ? 'relation-picker__item--selected' : ''}`}
+                  onMouseMove={() => setActive(index)}
                   onClick={() => void toggleSelect(target.id)}
                 >
                   <div className="relation-picker__item-main">

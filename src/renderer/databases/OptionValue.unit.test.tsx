@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
+import axe from 'axe-core';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -7,6 +8,7 @@ import type { PropertyOptionDraft, WorkspaceProperty } from '../../shared/proper
 import { OptionValue } from './OptionValue';
 import { FilterBuilder } from './FilterBuilder';
 import { SortBuilder } from './SortBuilder';
+import { propertySaveError } from '../ui/property-editing-copy';
 
 afterEach(cleanup);
 const property: WorkspaceProperty = { id: 'category', databaseId: 'entries', name: 'Category', type: 'multi_select', required: false, uniqueValue: false, config: {}, positionKey: 'a0', createdAt: '', updatedAt: '', archivedAt: null, options: [{ id: 'one', propertyId: 'category', label: 'Research', positionKey: 'a0', style: {} }] };
@@ -41,6 +43,29 @@ it('creates, colors and renames an option through the normal property API', asyn
   await user.type(screen.getByRole('textbox', { name: 'Option name' }), 'Drafting');
   await user.click(screen.getByRole('button', { name: 'Save name' }));
   expect(await screen.findByRole('option', { name: 'Drafting' })).toBeInTheDocument();
+});
+it('uses arrows and Enter predictably, and Tab does not trap focus in the option popup', async () => {
+  const user = userEvent.setup(), change = vi.fn();
+  const twoOptions = { ...property, options: [...(property.options ?? []), { id: 'two', propertyId: 'category', label: 'Planning', positionKey: 'a1', style: {} }] };
+  render(<><OptionValue property={twoOptions} value={[]} multiple onChange={change} /><button type="button">After</button></>);
+  await user.click(screen.getByRole('button', { name: 'Category' }));
+  const search = screen.getByRole('textbox', { name: 'Search options' });
+  await user.keyboard('{ArrowDown}{Enter}');
+  expect(change).toHaveBeenCalledWith(['two']);
+  await user.click(search);
+  await user.tab();
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});
+it('shows the shared property validation error and passes an axe check', async () => {
+  const user = userEvent.setup();
+  Object.defineProperty(window, 'maxApi', { configurable: true, value: { workspace: { updateProperty: vi.fn().mockResolvedValue({ ok: false, error: { message: 'backend wording' } }) } } });
+  const { container } = render(<OptionValue property={property} value={[]} multiple onChange={vi.fn()} />);
+  await user.click(screen.getByRole('button', { name: 'Category' }));
+  await user.type(screen.getByRole('textbox', { name: 'Search options' }), 'New choice');
+  await user.click(screen.getByRole('button', { name: /Create/ }));
+  expect(await screen.findByRole('alert')).toHaveTextContent(propertySaveError('en'));
+  const result = await axe.run(container.ownerDocument.body, { rules: { 'color-contrast': { enabled: false } } });
+  expect(result.violations).toEqual([]);
 });
 it('starts filters and sorts with searchable property choices and saves their IDs', async () => {
   const user = userEvent.setup(), apply = vi.fn();

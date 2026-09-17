@@ -1,6 +1,8 @@
 import { OptionValue } from './OptionValue';
 import { normalizeNumericInput, parseNumericInput } from '../../shared/digits';
 import { PageIconRenderer } from '../ui/page-icon-renderer';
+import { DraftInput } from '../ui/draft-input';
+import { ReadOnlyPropertyValue } from '../ui/property-editing';
 import { generateOrderKey } from '../../shared/order-key';
 import { RelationValue } from './RelationValue';
 import { PropertyIcon } from './PropertyIcon';
@@ -186,7 +188,7 @@ export function TableView({
           {/* Header Row */}
           <thead>
             <tr>
-              <th className="table-col-action w-8" scope="col"></th>
+              <th className="table-col-action w-8" scope="col"><span className="sr-only">{locale === 'ar' ? 'إجراءات' : 'Actions'}</span></th>
               <th className="table-col-title" scope="col" style={{ width: widthFor(properties.find((property) => property.type === 'title')?.id ?? '', 320) }}>
                 {(() => {
                   const titleProp = properties.find((property) => property.type === 'title');
@@ -243,26 +245,19 @@ export function TableView({
                 <td className="table-cell-title">
                   <div className="table-cell-title-content">
                     <PageIconRenderer icon={record.icon || 'lucide:FileText'} size={16} />
-                    <input
+                    <DraftInput
                       type="text"
                       className="table-cell-input font-medium"
                       style={{ fontWeight: 500 }}
                       placeholder={locale === 'ar' ? 'بدون عنوان' : 'Untitled'}
-                      defaultValue={record.title}
+                      value={record.title}
                       autoFocus={createdRecordId === record.id}
                       onFocus={(e) => {
                         if (e.target.value === 'Untitled' || e.target.value === 'بدون عنوان') {
                           e.target.select();
                         }
                       }}
-                      onBlur={(e) => {
-                        if (e.target.value !== record.title) {
-                          void onUpdateRecord(record.id, { title: e.target.value });
-                        }
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') e.currentTarget.blur();
-                      }}
+                      onCommit={(next) => { void onUpdateRecord(record.id, { title: next }); }}
                     />
                     <button type="button" className="record-open-button" onClick={() => onOpenRecord(record)} aria-label={locale === 'ar' ? 'فتح الصفحة' : 'Open page'}><PanelLeft size={15} strokeWidth={1.5} />{locale === 'ar' ? 'فتح' : 'OPEN'}</button>
                   </div>
@@ -277,35 +272,25 @@ export function TableView({
                     <td key={prop.id} className="table-cell-value">
                       {/* Text */}
                       {['text', 'email', 'phone', 'url'].includes(prop.type) && (
-                        <input
+                        <DraftInput
                           type="text"
                           className="table-cell-input"
                           placeholder="—"
-                          defaultValue={formatUnknown(value)}
-                          onBlur={(e) => handleCellChange(record, prop.id, e.target.value || null)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                          }}
+                          value={formatUnknown(value)}
+                          onCommit={(next) => handleCellChange(record, prop.id, next || null)}
                         />
                       )}
 
                       {/* Number */}
                       {prop.type === 'number' && (
-                        <input
+                        <DraftInput
                           type="text"
                           inputMode="decimal"
                           className="table-cell-input"
                           placeholder="—"
-                          defaultValue={typeof value === 'number' ? String(value) : ''}
-                          // Arabic-Indic digits are rewritten as they are typed;
-                          // see shared/digits.ts for why this is not type=number.
-                          onInput={(e) => { e.currentTarget.value = normalizeNumericInput(e.currentTarget.value); }}
-                          onBlur={(e) =>
-                            handleCellChange(record, prop.id, e.target.value === '' ? null : parseNumericInput(e.target.value) ?? null)
-                          }
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                          }}
+                          value={typeof value === 'number' ? String(value) : ''}
+                          normalize={normalizeNumericInput}
+                          onCommit={(next) => handleCellChange(record, prop.id, next === '' ? null : parseNumericInput(next) ?? null)}
                         />
                       )}
 
@@ -344,16 +329,16 @@ export function TableView({
                       {prop.type === 'multi_select' && <MultiSelectValue property={prop} value={value} onChange={(next) => handleCellChange(record, prop.id, next)} />}
                       {/* Formula / Rollup / Auto ID (Read-only badge) */}
                       {['formula', 'rollup', 'auto_id'].includes(prop.type) && (
-                        <span className="text-xs px-2 py-1 text-muted">
+                        <ReadOnlyPropertyValue className="text-xs px-2 py-1 text-muted" locale={locale}>
                           {value !== undefined && value !== null ? formatUnknown(value) : <span className="database-cell-empty">—</span>}
-                        </span>
+                        </ReadOnlyPropertyValue>
                       )}
 
                       {/* Timestamps (Read-only) */}
                       {['created_time', 'last_edited_time'].includes(prop.type) && (
-                        <span className="text-xs px-2 py-1 text-muted font-mono">
+                        <ReadOnlyPropertyValue className="text-xs px-2 py-1 text-muted font-mono" locale={locale}>
                           {typeof value === 'string' || typeof value === 'number' ? new Date(value).toLocaleString(locale === 'ar' ? 'ar-EG' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' }) : <span className="database-cell-empty">—</span>}
-                        </span>
+                        </ReadOnlyPropertyValue>
                       )}
 
                       {/* File (Read-only summary) */}

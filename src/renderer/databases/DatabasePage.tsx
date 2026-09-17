@@ -434,6 +434,7 @@ export function DatabasePage({ databaseId, embedded = false, initialViewId, loca
       <PropertyEditor
         databaseId={databaseId}
         isOpen={propertyModalOpen}
+        locale={locale}
         onClose={() => {
           setPropertyModalOpen(false);
           setEditingProperty(null);

@@ -1,5 +1,5 @@
 import { FileText, Plus } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { WorkspaceProperty, WorkspaceRecord } from '../../shared/property-contract';
 import type { Locale } from '../app/i18n';
 import { RelationPicker } from './RelationPicker';
@@ -8,6 +8,7 @@ export function RelationValue({ recordId, property, locale = 'en' }: { recordId:
   const [related, setRelated] = useState<readonly WorkspaceRecord[]>([]);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState('');
+  const trigger = useRef<HTMLButtonElement>(null);
   const relationId = typeof property.config.relationId === 'string' ? property.config.relationId : '';
   useEffect(() => {
     let active = true;
@@ -33,8 +34,8 @@ export function RelationValue({ recordId, property, locale = 'en' }: { recordId:
     {related.map((record) => <button className="relation-page-link" key={record.id} type="button" onClick={(event) => event.currentTarget.dispatchEvent(new CustomEvent('max:open-record', { bubbles: true, detail: record }))}>
       <FileText size={14} /><span>{record.title}</span>
     </button>)}
-    <button className="relation-add" disabled={!relationId} type="button" onClick={() => setOpen(true)} aria-label={`${locale === 'ar' ? 'ربط صفحة' : 'Link page'}: ${property.name}`}><Plus size={13} />{!related.length && (locale === 'ar' ? 'فارغ' : 'Empty')}</button>
+    <button ref={trigger} className="relation-add" disabled={!relationId} type="button" onClick={() => setOpen(true)} aria-label={`${locale === 'ar' ? 'ربط صفحة' : 'Link page'}: ${property.name}`}><Plus size={13} />{!related.length && (locale === 'ar' ? 'فارغ' : 'Empty')}</button>
     {error && <span role="alert">{error}</span>}
-    <RelationPicker locale={locale} isOpen={open} onClose={() => setOpen(false)} onLink={(id) => change(id)} onUnlink={(id) => change(id, true)} recordId={recordId} relationId={relationId} selectedTargetIds={related.map((record) => record.id)} title={property.name} />
+    <RelationPicker locale={locale} isOpen={open} onClose={() => { setOpen(false); queueMicrotask(() => trigger.current?.focus()); }} onLink={(id) => change(id)} onUnlink={(id) => change(id, true)} recordId={recordId} relationId={relationId} selectedTargetIds={related.map((record) => record.id)} title={property.name} />
   </div>;
 }
