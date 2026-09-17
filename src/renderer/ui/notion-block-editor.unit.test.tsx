@@ -8,10 +8,36 @@ import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { NotionBlockEditor, type NotionBlock } from './notion-block-editor';
+import type { FrontmatterEntry } from '../../shared/page-frontmatter';
 
-function EditorHarness({ initial, parentPageId }: Readonly<{ initial: readonly NotionBlock[]; parentPageId?: string }>) {
+function EditorHarness({ initial, onFrontmatterPaste, parentPageId }: Readonly<{ initial: readonly NotionBlock[]; onFrontmatterPaste?: (entries: readonly FrontmatterEntry[]) => void; parentPageId?: string }>) {
   const [blocks, setBlocks] = useState(initial);
-  return <NotionBlockEditor blocks={blocks} locale="en" onChange={setBlocks} parentPageId={parentPageId} />;
+  return <NotionBlockEditor blocks={blocks} locale="en" onChange={setBlocks} onFrontmatterPaste={onFrontmatterPaste} parentPageId={parentPageId} />;
+}
+
+function pastePlainText(target: Element, text: string) {
+  fireEvent.paste(target, { clipboardData: { getData: (type: string) => (type === 'text/plain' ? text : '') } });
+}
+
+// jsdom does not implement execCommand at all. This gives `insertText` just
+// enough behavior — replace the current selection with the given text — for
+// paste handling to be exercised the way a real contentEditable would.
+if (typeof document.execCommand !== 'function') {
+  Object.defineProperty(document, 'execCommand', {
+    configurable: true,
+    value: (command: string, _showUI?: boolean, value?: string) => {
+      if (command === 'insertText') {
+        const selection = window.getSelection();
+        if (selection && selection.rangeCount) {
+          const range = selection.getRangeAt(0);
+          range.deleteContents();
+          range.insertNode(document.createTextNode(value ?? ''));
+          range.collapse(false);
+        }
+      }
+      return true;
+    },
+  });
 }
 
 function placeCaretAtStart(element: HTMLElement) {
@@ -391,5 +417,36 @@ describe('NotionBlockEditor', () => {
     expect(screen.getAllByRole('textbox').map((box) => box.textContent?.replaceAll('​', '')))
       .toEqual(['First line', 'Third line']);
     await waitFor(() => expect(screen.getAllByRole('textbox')[1]!).toHaveFocus());
+  });
+
+  it('reports frontmatter pasted at the start of an empty page instead of pasting it literally', () => {
+    const onFrontmatterPaste = vi.fn();
+    render(<EditorHarness initial={[{ content: '', id: 'one', type: 'text' }]} onFrontmatterPaste={onFrontmatterPaste} />);
+    const textbox = screen.getByRole('textbox');
+    placeCaretAtStart(textbox);
+    pastePlainText(textbox, '---\nTitle: Hello\nDone: true\n---\nBody text');
+    expect(onFrontmatterPaste).toHaveBeenCalledWith([['Title', 'Hello'], ['Done', true]]);
+    expect(textbox).toHaveTextContent('Body text');
+  });
+
+  it('does not treat ordinary pasted text as frontmatter', () => {
+    const onFrontmatterPaste = vi.fn();
+    render(<EditorHarness initial={[{ content: '', id: 'one', type: 'text' }]} onFrontmatterPaste={onFrontmatterPaste} />);
+    pastePlainText(screen.getByRole('textbox'), 'Just a normal paragraph.');
+    expect(onFrontmatterPaste).not.toHaveBeenCalled();
+  });
+
+  it('leaves an unterminated frontmatter block untouched rather than consuming the page body', () => {
+    const onFrontmatterPaste = vi.fn();
+    render(<EditorHarness initial={[{ content: '', id: 'one', type: 'text' }]} onFrontmatterPaste={onFrontmatterPaste} />);
+    pastePlainText(screen.getByRole('textbox'), '---\nTitle: Hello\nstill going with no closer');
+    expect(onFrontmatterPaste).not.toHaveBeenCalled();
+  });
+
+  it('does not treat a paste into a non-empty first block as frontmatter', () => {
+    const onFrontmatterPaste = vi.fn();
+    render(<EditorHarness initial={[{ content: 'Already has text', id: 'one', type: 'text' }]} onFrontmatterPaste={onFrontmatterPaste} />);
+    pastePlainText(screen.getByRole('textbox'), '---\nTitle: Hello\n---\nBody text');
+    expect(onFrontmatterPaste).not.toHaveBeenCalled();
   });
 });

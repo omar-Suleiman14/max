@@ -8,6 +8,8 @@ import { IconPickerDialog } from '../ui/icon-picker-dialog';
 import { NotionBlockEditor, type NotionBlock } from '../ui/notion-block-editor';
 import { PageIconRenderer } from '../ui/page-icon-renderer';
 import { AddCoverButton, PageCover } from './page-cover';
+import { PageFrontmatter } from './page-frontmatter';
+import { applyFrontmatterEntries } from './page-frontmatter-sync';
 import { PageProperties } from './page-properties';
 import '../databases/database.css';
 
@@ -121,6 +123,7 @@ export function CustomPageView({
 
       {/* Notion Block Document Canvas */}
       <PageProperties createdAt={page.createdAt} properties={page.properties} locale={locale} onChange={(properties) => onUpdatePage(page.id, { properties })} updatedAt={page.updatedAt} />
+      <PageFrontmatter locale={locale} properties={page.properties} onChange={(properties) => onUpdatePage(page.id, { properties })} />
       <div
         className="custom-page-content"
         onClick={(e) => {
@@ -135,6 +138,7 @@ export function CustomPageView({
           blocks={page.blocks}
           locale={locale}
           onChange={handleBlocksChange}
+          onFrontmatterPaste={(entries) => onUpdatePage(page.id, { properties: applyFrontmatterEntries(page.properties ?? [], entries) })}
           onWorkspaceChange={onWorkspaceChange}
           parentPageId={page.id}
         />
