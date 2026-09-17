@@ -419,13 +419,14 @@ describe('NotionBlockEditor', () => {
     await waitFor(() => expect(screen.getAllByRole('textbox')[1]!).toHaveFocus());
   });
 
-  it('reports frontmatter pasted at the start of an empty page instead of pasting it literally', () => {
+  it('reports frontmatter pasted at the start of an empty page instead of pasting it literally', async () => {
     const onFrontmatterPaste = vi.fn();
     render(<EditorHarness initial={[{ content: '', id: 'one', type: 'text' }]} onFrontmatterPaste={onFrontmatterPaste} />);
     const textbox = screen.getByRole('textbox');
     placeCaretAtStart(textbox);
     pastePlainText(textbox, '---\nTitle: Hello\nDone: true\n---\nBody text');
-    expect(onFrontmatterPaste).toHaveBeenCalledWith([['Title', 'Hello'], ['Done', true]]);
+    // The frontmatter parser loads on demand, so applying a matching paste is async.
+    await waitFor(() => expect(onFrontmatterPaste).toHaveBeenCalledWith([['Title', 'Hello'], ['Done', true]]));
     expect(textbox).toHaveTextContent('Body text');
   });
 
@@ -436,10 +437,13 @@ describe('NotionBlockEditor', () => {
     expect(onFrontmatterPaste).not.toHaveBeenCalled();
   });
 
-  it('leaves an unterminated frontmatter block untouched rather than consuming the page body', () => {
+  it('leaves an unterminated frontmatter block untouched rather than consuming the page body', async () => {
     const onFrontmatterPaste = vi.fn();
     render(<EditorHarness initial={[{ content: '', id: 'one', type: 'text' }]} onFrontmatterPaste={onFrontmatterPaste} />);
-    pastePlainText(screen.getByRole('textbox'), '---\nTitle: Hello\nstill going with no closer');
+    const textbox = screen.getByRole('textbox');
+    placeCaretAtStart(textbox);
+    pastePlainText(textbox, '---\nTitle: Hello\nstill going with no closer');
+    await waitFor(() => expect(textbox).toHaveTextContent('still going with no closer'));
     expect(onFrontmatterPaste).not.toHaveBeenCalled();
   });
 

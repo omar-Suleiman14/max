@@ -4,7 +4,7 @@ import { ExtraBlock } from '../pages/extra-blocks';
 import { renderInline, escapeText } from '../pages/rich-text';
 import { openPage } from '../pages/page-graph-store';
 import { safeWebUrl } from '../../shared/page-links';
-import { parseFrontmatterYaml, splitFrontmatterBlock, type FrontmatterEntry } from '../../shared/page-frontmatter';
+import type { FrontmatterEntry } from '../../shared/page-frontmatter';
 import {
   Check,
   Database,
@@ -384,14 +384,20 @@ function RichTextBlock({ blockId, content, index, locale, onBlur, onContentChang
         if (!html && index === 0 && !content && onFrontmatterPaste) {
           const text = event.clipboardData.getData('text/plain');
           if (text.trimStart().startsWith('---')) {
-            const split = splitFrontmatterBlock(text);
-            const parsed = split ? parseFrontmatterYaml(split.yaml) : null;
-            if (split && parsed && !parsed.error) {
-              onFrontmatterPaste(parsed.entries);
-              document.execCommand('insertText', false, split.body.replace(/^\n+/, ''));
+            // Loaded on demand: a paste that opens with "---" is rare, and the
+            // frontmatter parser has no reason to sit in every page's startup bundle.
+            void import('../../shared/page-frontmatter').then(({ parseFrontmatterYaml, splitFrontmatterBlock }) => {
+              const split = splitFrontmatterBlock(text);
+              const parsed = split ? parseFrontmatterYaml(split.yaml) : null;
+              if (split && parsed && !parsed.error) {
+                onFrontmatterPaste(parsed.entries);
+                document.execCommand('insertText', false, split.body.replace(/^\n+/, ''));
+              } else {
+                document.execCommand('insertText', false, text);
+              }
               handleInput();
-              return;
-            }
+            });
+            return;
           }
         }
         if (html) { const doc = new DOMParser().parseFromString(html, 'text/html'); document.execCommand('insertHTML', false, renderInline(htmlToMarkdown(doc.body))); } else document.execCommand('insertText', false, event.clipboardData.getData('text/plain'));
