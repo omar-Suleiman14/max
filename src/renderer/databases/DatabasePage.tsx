@@ -22,6 +22,7 @@ import { StickyScrollbar } from './StickyScrollbar';
 import { useDatabaseQuery } from './useDatabaseQuery';
 import { unmetRequirements } from './required-properties';
 import { recordDefaultsForFilter } from './view-defaults';
+import { orderPropertiesForView } from './view-property-state';
 
 type DatabasePageProps = Readonly<{
   databaseId: string;
@@ -229,7 +230,12 @@ export function DatabasePage({ databaseId, embedded = false, initialViewId, loca
   };
 
   async function handleCreateBlankRecord(templateId?: string) {
-    const template = recordTemplates.find(({ id }) => id === templateId);
+    const defaultTemplateId = typeof activeView?.layoutConfig.defaultTemplateId === 'string'
+      && recordTemplates.some(({ id }) => id === activeView.layoutConfig.defaultTemplateId)
+      ? activeView.layoutConfig.defaultTemplateId
+      : undefined;
+    const resolvedTemplateId = templateId ?? defaultTemplateId;
+    const template = recordTemplates.find(({ id }) => id === resolvedTemplateId);
     const record = await createRecordInView({
       databaseId,
       properties: {},
@@ -239,16 +245,26 @@ export function DatabasePage({ databaseId, embedded = false, initialViewId, loca
     if (record) handleOpenRecord(record);
   }
 
+  const createRecordInLayout = useCallback(
+    (draft: Parameters<typeof createRecordInView>[0]) => {
+      const defaultTemplateId = typeof activeView?.layoutConfig.defaultTemplateId === 'string'
+        && recordTemplates.some(({ id }) => id === activeView.layoutConfig.defaultTemplateId)
+        ? activeView.layoutConfig.defaultTemplateId
+        : undefined;
+      return createRecordInView({
+        ...draft,
+        templateId: draft.templateId === undefined ? defaultTemplateId : draft.templateId,
+      });
+    },
+    [activeView?.layoutConfig.defaultTemplateId, createRecordInView, recordTemplates],
+  );
+
   const activeFilterCount = filterAst
     ? filterAst.kind === 'group'
       ? filterAst.conditions.length
       : 1
     : 0;
-  const orderedProperties = [...(schema?.properties ?? [])].sort((a, b) => {
-    const columns = activeView?.propertyState.columns ?? [];
-    if (columns.length < (schema?.properties.length ?? 0)) return 0;
-    return columns.findIndex((column) => column.propertyId === a.id) - columns.findIndex((column) => column.propertyId === b.id);
-  });
+  const orderedProperties = orderPropertiesForView(schema?.properties ?? [], activeView?.propertyState.columns ?? []);
   function moveProperty(id: string, direction: number) {
     if (!activeView) return;
     const columns = orderedProperties.map((property) => ({ ...activeView.propertyState.columns.find((column) => column.propertyId === property.id), propertyId: property.id }));
@@ -343,7 +359,7 @@ export function DatabasePage({ databaseId, embedded = false, initialViewId, loca
           loading={loading}
           locale={locale}
           onArchiveRecord={archiveRecord}
-          onCreateRecord={createRecordInView}
+          onCreateRecord={createRecordInLayout}
           onOpenRecord={handleOpenRecord}
           onUpdateRecord={updateRecord}
           onManageProperties={() => setPropertyManagerOpen((open) => !open)}

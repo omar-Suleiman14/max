@@ -3,9 +3,11 @@ import { useState } from 'react';
 
 import type { DatabaseSchema } from '../../shared/database-contract';
 import type { WorkspaceRecord, WorkspaceRecordDraft } from '../../shared/property-contract';
+import type { Locale } from '../app/i18n';
 
 type ListViewProps = Readonly<{
   databaseId: string;
+  locale?: Locale;
   onArchiveRecord: (recordId: string) => Promise<void>;
   onCreateRecord: (draft: WorkspaceRecordDraft) => Promise<WorkspaceRecord | null>;
   onOpenRecord: (record: WorkspaceRecord) => void;
@@ -23,12 +25,14 @@ function formatUnknown(value: unknown): string {
 
 export function ListView({
   databaseId,
+  locale = 'en',
   onArchiveRecord,
   onCreateRecord,
   onOpenRecord,
   records,
   schema,
 }: ListViewProps) {
+  const ar = locale === 'ar';
   const [newTitle, setNewTitle] = useState('');
   const [adding, setAdding] = useState(false);
 
@@ -37,11 +41,12 @@ export function ListView({
     if (!newTitle.trim()) return;
     setAdding(true);
     try {
-      await onCreateRecord({
+      const created = await onCreateRecord({
         databaseId,
         properties: {},
         title: newTitle.trim(),
       });
+      if (created) onOpenRecord(created);
       setNewTitle('');
     } finally {
       setAdding(false);
@@ -51,6 +56,11 @@ export function ListView({
   return (
     <div className="list-view-container">
       <div className="list-view">
+        {records.length === 0 && (
+          <p className="p-4 text-sm text-muted" role="status">
+            {ar ? 'لا توجد سجلات بعد. أنشئ أول سجل أدناه.' : 'No records yet. Create the first record below.'}
+          </p>
+        )}
         {records.map((record) => {
           // Extract 2 key properties for display
           const displayProps = schema?.properties.filter((p) => p.type !== 'title').slice(0, 3) || [];
@@ -102,7 +112,8 @@ export function ListView({
                     e.stopPropagation();
                     void onArchiveRecord(record.id);
                   }}
-                  title="Archive record"
+                  aria-label={ar ? `أرشفة ${record.title}` : `Archive ${record.title}`}
+                  title={ar ? 'أرشفة السجل' : 'Archive record'}
                 >
                   <Trash2 size={14} />
                 </button>
@@ -119,7 +130,7 @@ export function ListView({
           <input
             type="text"
             className="input-clean flex-1"
-            placeholder="+ New record (press Enter)..."
+            placeholder={ar ? '+ سجل جديد (اضغط Enter)...' : '+ New record (press Enter)...'}
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
             disabled={adding}

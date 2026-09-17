@@ -84,6 +84,16 @@ describe('GalleryView', () => {
     expect(screen.getByText('Planning')).toBeInTheDocument();
   });
 
+  it('uses the visible schema for card properties while keeping the full schema for cover configuration', () => {
+    const visibleSchema = { ...schema, properties: [schema.properties[0]!, schema.properties[3]!] } as DatabaseSchema;
+    show([record('Website redesign', { [PHOTO]: null, [RISK]: 'risk-high', [STAGE]: 'Hidden stage' })], { visibleSchema });
+
+    expect(screen.getByRole('combobox', { name: 'Cover property' })).toBeInTheDocument();
+    expect(screen.getByText('Risk')).toBeInTheDocument();
+    expect(screen.queryByText('Stage')).not.toBeInTheDocument();
+    expect(screen.queryByText('Hidden stage')).not.toBeInTheDocument();
+  });
+
   it('names a choice rather than printing the option id it is stored as', () => {
     show([record('Website redesign', { [PHOTO]: null, [RISK]: 'risk-high' })]);
 
@@ -99,5 +109,20 @@ describe('GalleryView', () => {
     await userEvent.click(await screen.findByRole('option', { name: 'Photo' }));
 
     expect(onCoverPropertyChange).toHaveBeenCalledWith(PHOTO);
+  });
+
+  it('opens a card and offers a single useful creation action when empty', async () => {
+    const onOpenRecord = vi.fn();
+    const one = record('Website redesign', {});
+    const { rerender } = show([one], { onOpenRecord });
+    await userEvent.click(screen.getByRole('button', { name: /Website redesign/ }));
+    expect(onOpenRecord).toHaveBeenCalledWith(one);
+
+    const onCreate = vi.fn();
+    rerender(<GalleryView coverPropertyId={PHOTO} locale="en" onCreate={onCreate} onOpenRecord={onOpenRecord} records={[]} schema={schema} />);
+    expect(screen.getByText('No records yet.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'New page' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Create first page' }));
+    expect(onCreate).toHaveBeenCalledOnce();
   });
 });

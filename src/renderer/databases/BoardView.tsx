@@ -4,28 +4,54 @@ import { useRef, useState } from 'react';
 import { generateOrderKey } from '../../shared/order-key';
 
 import type { DatabaseSchema } from '../../shared/database-contract';
-import type { WorkspaceRecord, WorkspaceRecordDraft, WorkspaceRecordPatch } from '../../shared/property-contract';
+import type { WorkspaceProperty, WorkspaceRecord, WorkspaceRecordDraft, WorkspaceRecordPatch } from '../../shared/property-contract';
+import type { Locale } from '../app/i18n';
 
 type BoardViewProps = Readonly<{
   databaseId: string;
   groupPropertyId?: string;
+  locale?: Locale;
   onArchiveRecord?: (recordId: string) => Promise<void>;
   onCreateRecord: (draft: WorkspaceRecordDraft) => Promise<WorkspaceRecord | null>;
+  onManageProperties?: () => void;
   onOpenRecord: (record: WorkspaceRecord) => void;
   onUpdateRecord: (recordId: string, patch: WorkspaceRecordPatch) => Promise<void>;
   records: readonly WorkspaceRecord[];
   schema: DatabaseSchema | null;
+  visibleSchema?: DatabaseSchema | null;
 }>;
+
+function summarise(property: WorkspaceProperty, value: unknown): string {
+  if (value === null || value === undefined || value === '') return '';
+  if (property.type === 'select' || property.type === 'status') {
+    const optionId = typeof value === 'string' ? value : '';
+    return property.options?.find((option) => option.id === optionId)?.label ?? optionId;
+  }
+  if (property.type === 'multi_select' && Array.isArray(value)) {
+    return value.map((id) => property.options?.find((option) => option.id === id)?.label).filter(Boolean).join(', ');
+  }
+  if (property.type === 'checkbox') return value ? '✓' : '';
+  if (property.type === 'date' && value && typeof value === 'object') {
+    const { start } = value as { start?: unknown };
+    return typeof start === 'string' ? start.slice(0, 10) : '';
+  }
+  if (Array.isArray(value)) return value.length > 0 ? String(value.length) : '';
+  return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' ? String(value) : '';
+}
 
 export function BoardView({
   databaseId,
   groupPropertyId,
+  locale = 'en',
   onCreateRecord,
+  onManageProperties,
   onOpenRecord,
   onUpdateRecord,
   records,
   schema,
+  visibleSchema,
 }: BoardViewProps) {
+  const ar = locale === 'ar';
   // Find group property (first select or status property)
   const groupProp = schema?.properties.find((p) => p.id === groupPropertyId && ['select', 'status'].includes(p.type))
     ?? schema?.properties.find((p) => ['select', 'status'].includes(p.type)) ?? null;
@@ -42,10 +68,15 @@ export function BoardView({
   if (!groupProp) {
     return (
       <div className="p-8 text-center text-muted">
-        To use Board View, add a <strong>Select</strong> or <strong>Status</strong> property to this database.
+        <p>{ar ? 'تحتاج اللوحة إلى خاصية اختيار أو حالة لتقسيم السجلات إلى أعمدة.' : 'Board needs a Select or Status property to split records into columns.'}</p>
+        {onManageProperties && <button className="btn btn-secondary mt-3" type="button" onClick={onManageProperties}>{ar ? 'إدارة الخصائص' : 'Manage properties'}</button>}
       </div>
     );
   }
+
+  const displayProperties = (visibleSchema?.properties ?? schema.properties)
+    .filter((property) => property.type !== 'title' && property.id !== groupProp.id)
+    .slice(0, 3);
 
   const options = groupProp.options || [];
   const columns = [
@@ -54,7 +85,7 @@ export function BoardView({
       id: opt.id || opt.label,
       label: opt.label,
     })),
-    { color: '#64748b', id: '__no_group__', label: 'No Status' },
+    { color: '#64748b', id: '__no_group__', label: ar ? 'بدون حالة' : 'No Status' },
   ];
 
   const handleCreateInColumn = async (columnId: string) => {
@@ -62,13 +93,14 @@ export function BoardView({
     if (!title) return;
 
     const propValue = columnId === '__no_group__' ? null : columnId;
-    await onCreateRecord({
+    const created = await onCreateRecord({
       databaseId,
       properties: {
         [groupProp.id]: propValue,
       },
       title,
     });
+    if (created) onOpenRecord(created);
 
     setNewCardTitles({ ...newCardTitles, [columnId]: '' });
     setAddingColumnId(null);
@@ -91,6 +123,7 @@ export function BoardView({
   return (
     <div className="board-view-container">
       {error && <p role="alert">{error}</p>}
+      {records.length === 0 && <p className="p-3 text-sm text-muted" role="status">{ar ? 'لا توجد سجلات بعد. أضف بطاقة في أي عمود للبدء.' : 'No records yet. Add a card in any column to get started.'}</p>}
       <div className="board-view">
         {columns.map((col) => {
           const colRecords = records.filter((r) => {
@@ -120,7 +153,8 @@ export function BoardView({
                   type="button"
                   className="btn-icon p-1"
                   onClick={() => setAddingColumnId(col.id)}
-                  title="Add card"
+                  aria-label={ar ? 'إضافة بطاقة' : 'Add card'}
+                  title={ar ? 'إضافة بطاقة' : 'Add card'}
                 >
                   <Plus size={14} />
                 </button>
@@ -147,6 +181,21 @@ export function BoardView({
                     </div>
 
                     <h5 className="board-card__title">{record.title}</h5>
+
+                    {displayProperties.length > 0 && (
+                      <dl className="mt-2 grid gap-1 text-xs text-muted">
+                        {displayProperties.map((property) => {
+                          const text = summarise(property, record.properties[property.id]);
+                          if (!text) return null;
+                          return (
+                            <div className="flex gap-2" key={property.id}>
+                              <dt className="shrink-0 font-medium">{property.name}</dt>
+                              <dd className="truncate">{text}</dd>
+                            </div>
+                          );
+                        })}
+                      </dl>
+                    )}
 
                     {/* Quick Move Trigger / Status Pill */}
                     <div className="mt-3 flex items-center justify-between">
@@ -177,7 +226,7 @@ export function BoardView({
                     <input
                       type="text"
                       className="input-field text-sm mb-2"
-                      placeholder="Card title..."
+                      placeholder={ar ? 'عنوان البطاقة...' : 'Card title...'}
                       value={newCardTitles[col.id] || ''}
                       onChange={(e) => setNewCardTitles({ ...newCardTitles, [col.id]: e.target.value })}
                       autoFocus
@@ -192,14 +241,14 @@ export function BoardView({
                         className="btn btn-primary btn-xs"
                         onClick={() => void handleCreateInColumn(col.id)}
                       >
-                        Add Card
+                        {ar ? 'إضافة بطاقة' : 'Add card'}
                       </button>
                       <button
                         type="button"
                         className="btn btn-ghost btn-xs"
                         onClick={() => setAddingColumnId(null)}
                       >
-                        Cancel
+                        {ar ? 'إلغاء' : 'Cancel'}
                       </button>
                     </div>
                   </div>
@@ -209,7 +258,7 @@ export function BoardView({
                     className="board-column__add-btn"
                     onClick={() => setAddingColumnId(col.id)}
                   >
-                    <Plus size={14} className="mr-1" /> New card
+                    <Plus size={14} className="mr-1" /> {ar ? 'بطاقة جديدة' : 'New card'}
                   </button>
                 )}
               </div>

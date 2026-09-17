@@ -35,7 +35,11 @@ function record(title: string, value: unknown): WorkspaceRecord {
   } as unknown as WorkspaceRecord;
 }
 
-function show(records: readonly WorkspaceRecord[] = [], locale: Locale = 'en') {
+function show(
+  records: readonly WorkspaceRecord[] = [],
+  locale: Locale = 'en',
+  overrides: Partial<Parameters<typeof CalendarView>[0]> = {},
+) {
   vi.setSystemTime(new Date('2026-09-16T10:00:00.000Z'));
   return render(
     <CalendarView
@@ -46,6 +50,7 @@ function show(records: readonly WorkspaceRecord[] = [], locale: Locale = 'en') {
       onOpenRecord={vi.fn()}
       records={records}
       schema={schema}
+      {...overrides}
     />,
   );
 }
@@ -104,5 +109,27 @@ describe('CalendarView', () => {
     const { container } = show([], 'ar');
 
     expect(container.querySelector('.calendar-cell--today')).not.toBeNull();
+  });
+
+  it('offers creation in its empty state and opens the record it creates', async () => {
+    const created = record('Untitled', '2026-09-16');
+    const onCreateRecord = vi.fn().mockResolvedValue(created);
+    const onOpenRecord = vi.fn();
+    show([], 'en', { onCreateRecord, onOpenRecord });
+
+    expect(screen.getByText('No records yet.')).toBeInTheDocument();
+    await (await import('@testing-library/user-event')).default.click(screen.getByRole('button', { name: 'Create a record today' }));
+
+    expect(onCreateRecord).toHaveBeenCalledWith(expect.objectContaining({
+      databaseId: 'db',
+      properties: { [DUE]: '2026-09-16' },
+    }));
+    expect(onOpenRecord).toHaveBeenCalledWith(created);
+  });
+
+  it('keeps a configured date property selected after render', () => {
+    show([], 'en', { datePropertyId: DUE });
+
+    expect(screen.getByRole('combobox', { name: 'Date by' })).toHaveTextContent('Due');
   });
 });

@@ -68,6 +68,7 @@ type GalleryViewProps = Readonly<{
   onOpenRecord: (record: WorkspaceRecord) => void;
   records: readonly WorkspaceRecord[];
   schema?: DatabaseSchema | null;
+  visibleSchema?: DatabaseSchema | null;
 }>;
 
 export function GalleryView({
@@ -78,12 +79,13 @@ export function GalleryView({
   onOpenRecord,
   records,
   schema,
+  visibleSchema,
 }: GalleryViewProps) {
   const ar = locale === 'ar';
   const properties = schema?.properties ?? [];
   const coverChoices = properties.filter((property) => COVER_TYPES.includes(property.type));
   const cover = coverChoices.find((property) => property.id === coverPropertyId) ?? null;
-  const summary: readonly WorkspaceProperty[] = properties
+  const summary: readonly WorkspaceProperty[] = (visibleSchema?.properties ?? properties)
     .filter((property) => property.type !== 'title' && property.id !== cover?.id)
     .slice(0, 3);
 
@@ -105,6 +107,15 @@ export function GalleryView({
       )}
 
       <div className="database-gallery">
+        {records.length === 0 && (
+          <div className="database-gallery-empty" role="status">
+            <FileText size={28} strokeWidth={1} />
+            <p>{ar ? 'لا توجد سجلات بعد.' : 'No records yet.'}</p>
+            <button className="btn btn-secondary" type="button" onClick={onCreate}>
+              <Plus size={15} />{ar ? 'إنشاء أول صفحة' : 'Create first page'}
+            </button>
+          </div>
+        )}
         {records.map((record) => {
           const picture = cover ? coverUrl(record.properties[cover.id]) : null;
           return (
@@ -132,9 +143,11 @@ export function GalleryView({
             </button>
           );
         })}
-        <button className="database-gallery-new" type="button" onClick={onCreate}>
-          <Plus size={17} />{ar ? 'صفحة جديدة' : 'New page'}
-        </button>
+        {records.length > 0 && (
+          <button className="database-gallery-new" type="button" onClick={onCreate}>
+            <Plus size={17} />{ar ? 'صفحة جديدة' : 'New page'}
+          </button>
+        )}
       </div>
     </div>
   );

@@ -9,6 +9,7 @@ import { ListView } from './ListView';
 import { TableView } from './TableView';
 import { GalleryView } from './GalleryView';
 import { AdditionalViews } from './AdditionalViews';
+import { visiblePropertiesForView } from './view-property-state';
 
 type DatabaseViewHostProps = Readonly<{
   activeView: WorkspaceView | null;
@@ -58,16 +59,9 @@ export function DatabaseViewHost({
 }: DatabaseViewHostProps) {
   const layout: ViewLayout = activeView?.layout || 'table';
   const columns = activeView?.propertyState.columns ?? [];
-  const schema = sourceSchema ? { ...sourceSchema, properties: [...sourceSchema.properties]
-    .filter((property) => property.type === 'title' || !columns.find((column) => column.propertyId === property.id)?.hidden)
-    .sort((a, b) => {
-      if (columns.length < sourceSchema.properties.length) return 0;
-      if (a.type === 'title') return -1;
-      if (b.type === 'title') return 1;
-      const ai = columns.findIndex((column) => column.propertyId === a.id);
-      const bi = columns.findIndex((column) => column.propertyId === b.id);
-      return (ai < 0 ? columns.length : ai) - (bi < 0 ? columns.length : bi);
-    }) } : null;
+  const schema = sourceSchema
+    ? { ...sourceSchema, properties: visiblePropertiesForView(sourceSchema.properties, columns) }
+    : null;
 
   if (layout !== 'board' && groups && groups.length > 0) {
     return <div className="space-y-5">{groups.map((group) => (
@@ -109,7 +103,8 @@ export function DatabaseViewHost({
           onCreate={() => { void onCreateRecord({ databaseId, title: locale === 'ar' ? 'بدون عنوان' : 'Untitled' }).then((record) => { if (record) onOpenRecord(record); }); }}
           onOpenRecord={onOpenRecord}
           records={records}
-          schema={schema}
+          schema={sourceSchema}
+          visibleSchema={schema}
         />
       );
     case 'board':
@@ -121,8 +116,11 @@ export function DatabaseViewHost({
           onCreateRecord={onCreateRecord}
           onOpenRecord={onOpenRecord}
           onUpdateRecord={onUpdateRecord}
+          locale={locale}
+          onManageProperties={onManageProperties}
           records={records}
           schema={sourceSchema}
+          visibleSchema={schema}
         />
       );
 
@@ -131,6 +129,7 @@ export function DatabaseViewHost({
       return (
         <ListView
           databaseId={databaseId}
+          locale={locale}
           onArchiveRecord={onArchiveRecord}
           onCreateRecord={onCreateRecord}
           onOpenRecord={onOpenRecord}
@@ -150,7 +149,7 @@ export function DatabaseViewHost({
           onCreateRecord={onCreateRecord}
           onOpenRecord={onOpenRecord}
           records={records}
-          schema={schema}
+          schema={sourceSchema}
         />
       );
 

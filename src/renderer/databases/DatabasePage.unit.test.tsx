@@ -33,13 +33,18 @@ const createRecord = vi.hoisted(() => vi.fn(() => Promise.resolve({
 // The schema the page sees, so one test can give the database a required
 // property without changing the others.
 const query = vi.hoisted(() => ({
+  activeView: null as null | {
+    id: string;
+    layoutConfig: Readonly<Record<string, unknown>>;
+    propertyState: { columns: readonly [] };
+  },
   refresh: vi.fn(() => Promise.resolve()),
   schema: { database: { title: 'Products' }, properties: [] as unknown[], views: [] },
 }));
 
 vi.mock('./useDatabaseQuery', () => ({
   useDatabaseQuery: () => ({
-    activeView: null,
+    activeView: query.activeView,
     archiveProperty: vi.fn(),
     archiveRecord: vi.fn(),
     calculations: [],
@@ -69,7 +74,11 @@ vi.mock('./useDatabaseQuery', () => ({
   }),
 }));
 
-vi.mock('./DatabaseViewHost', () => ({ DatabaseViewHost: () => <div>Database rows</div> }));
+vi.mock('./DatabaseViewHost', () => ({
+  DatabaseViewHost: ({ onCreateRecord }: { onCreateRecord: (draft: { databaseId: string; properties: Record<string, unknown>; title: string }) => Promise<unknown> }) => (
+    <button type="button" onClick={() => void onCreateRecord({ databaseId: 'db-products', properties: {}, title: 'From layout' })}>Create from layout</button>
+  ),
+}));
 vi.mock('./RecordDrawer', () => ({
   RecordDrawer: ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => (isOpen
     ? <button onClick={onClose} type="button">Close record</button>
@@ -106,6 +115,7 @@ function api(overrides: Record<string, unknown> = {}) {
 }
 
 beforeEach(() => {
+  query.activeView = null;
   query.schema = { database: { title: 'Products' }, properties: [], views: [] };
   newRecord.properties = {};
   newRecord.title = 'Retail sale';
@@ -150,6 +160,25 @@ describe('DatabasePage record creation', () => {
       databaseId: 'db-products',
       templateId: 'template-retail',
       title: 'Retail sale',
+    })));
+  });
+
+  it('uses the active view default template for layout-local creation', async () => {
+    query.activeView = {
+      id: 'view-gallery',
+      layoutConfig: { defaultTemplateId: 'template-retail' },
+      propertyState: { columns: [] },
+    };
+    api();
+    const user = userEvent.setup();
+    render(<DatabasePage databaseId="db-products" />);
+
+    await user.click(screen.getByRole('button', { name: 'Create from layout' }));
+
+    await waitFor(() => expect(createRecord).toHaveBeenCalledWith(expect.objectContaining({
+      databaseId: 'db-products',
+      templateId: 'template-retail',
+      title: 'From layout',
     })));
   });
 
