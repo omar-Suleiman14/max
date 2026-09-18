@@ -1,8 +1,9 @@
-import { useState, type CSSProperties } from 'react';
+import { type CSSProperties } from 'react';
 import type { DatabaseSchema } from '../../shared/database-contract';
 import type { WorkspaceRecord, WorkspaceRecordDraft } from '../../shared/property-contract';
 import type { AggregateCalculationType, QueryCalculationResult, RecordGroup } from '../../shared/query-contract';
 import type { ChartLayoutConfig, TimelineLayoutConfig } from '../../shared/view-contract';
+import { FormView } from './FormView';
 
 /** Property values are stored as unknown; only the scalar shapes are readable. */
 function formatValue(value: unknown): string {
@@ -81,20 +82,10 @@ type Props = {
 
 export function AdditionalViews({ calculations = [], groups = [], layout, layoutConfig = {}, records, schema, locale, onLayoutConfigChange, onManageProperties, onOpenRecord, onCreateRecord }: Props) {
   const ar = locale === 'ar';
-  const [title, setTitle] = useState('');
-  const [values, setValues] = useState<Record<string, unknown>>({});
-  const [message, setMessage] = useState('');
-  const [busy, setBusy] = useState(false);
   if (!schema) return null;
   const dates = schema.properties.filter(p => p.type === 'date');
   const create = () => { void onCreateRecord({ databaseId: schema.database.id, title: ar ? 'بدون عنوان' : 'Untitled' }).then(record => { if (record) onOpenRecord(record); }); };
-  if (layout === 'form') return <form className="database-entry-form" onSubmit={event => {
-    event.preventDefault(); if (busy) return; setBusy(true); setMessage('');
-    void onCreateRecord({ databaseId: schema.database.id, title, properties: values }).then(record => { if (record) { setTitle(''); setValues({}); setMessage(ar ? 'تم حفظ السجل' : 'Record saved'); } }).catch(error => setMessage(String(error))).finally(() => setBusy(false));
-  }}><h2>{schema.database.title}</h2><label>{ar ? 'الاسم' : 'Name'}<input required value={title} onChange={event => setTitle(event.target.value)}/></label>
-    {schema.properties.filter(p => ['text','number','date','checkbox','select','status','email','url','phone'].includes(p.type)).map(p => <label key={p.id}>{p.name}{p.required ? ' *' : ''}{['select','status'].includes(p.type) ? <select required={p.required} value={formatValue(values[p.id])} onChange={event => setValues(old => ({...old,[p.id]:event.target.value}))}><option value="">—</option>{p.options?.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}</select> : <input required={p.required} type={p.type === 'number' ? 'number' : p.type === 'date' ? 'date' : p.type === 'checkbox' ? 'checkbox' : 'text'} step="any" checked={p.type === 'checkbox' ? !!values[p.id] : undefined} value={p.type === 'checkbox' ? undefined : formatValue(values[p.id])} onChange={event => setValues(old => ({...old,[p.id]:p.type === 'checkbox' ? event.target.checked : p.type === 'number' ? event.target.value === '' ? null : Number(event.target.value) : event.target.value}))}/>}</label>)}
-    {message && <p role="status">{message}</p>}<button className="btn btn-primary" disabled={busy} type="submit">{ar ? 'حفظ' : 'Submit'}</button>
-  </form>;
+  if (layout === 'form') return <FormView layoutConfig={layoutConfig} locale={locale} onCreateRecord={onCreateRecord} onLayoutConfigChange={onLayoutConfigChange} schema={schema} />;
   if (layout === 'timeline') {
     const timelineConfig = readTimelineConfig(layoutConfig);
     const startProperty = dates.find(p => p.id === timelineConfig.startPropertyId) ?? dates[0];

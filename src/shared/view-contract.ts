@@ -44,6 +44,18 @@ export type MapLayoutConfig = Readonly<{
   locationPropertyId?: string | null;
 }>;
 
+export type FormFieldConfig = Readonly<{
+  helpText?: string;
+  label?: string;
+  propertyId: string;
+  required?: boolean;
+  visible?: boolean;
+}>;
+
+export type FormLayoutConfig = Readonly<{
+  fields?: readonly FormFieldConfig[];
+}>;
+
 export type WorkspaceView = Readonly<{
   archivedAt?: string | null;
   createdAt: string;
