@@ -2,6 +2,7 @@ import type { UpdateApi } from './update-contract';
 import type { AccountDefinition, AccountDraft } from './account-contract';
 import type { PageGraph } from './page-links';
 import type { PhotoResult, StoredAsset } from './cover-contract';
+import type { MapPoint, MapProviderStatus, MapRenderResult } from './map-contract';
 import type {
   BackupMetadata,
   BackupTrigger,
@@ -164,6 +165,8 @@ export const IPC_CHANNELS = {
   photosUse: 'max:photos:use',
   photosGetAccessKey: 'max:photos:key:get',
   photosSetAccessKey: 'max:photos:key:set',
+  mapsStatus: 'max:maps:status',
+  mapsRender: 'max:maps:render',
 
   // Max v0.2.0 Workspace Channels
   workspaceGetNavigation: 'max:workspace:navigation:get',
@@ -231,7 +234,6 @@ export type DatabaseHealth = Readonly<{
   schemaVersion: number;
   status: 'ready';
 }>;
-
 export type SystemHealth = Readonly<{
   appVersion: string;
   database: DatabaseHealth;
@@ -350,6 +352,10 @@ export type MaxApi = Readonly<{
     setAccessKey: (key: string) => Promise<MutationResult<{ configured: boolean }>>;
     /** Download the chosen photo and report the use back to the library. */
     use: (photo: Readonly<{ authorName: string; authorUrl: string; downloadUrl: string; fullUrl: string }>) => Promise<MutationResult<StoredAsset>>;
+  }>;
+  maps: Readonly<{
+    getStatus: () => Promise<MapProviderStatus>;
+    render: (points: readonly MapPoint[]) => Promise<MutationResult<MapRenderResult>>;
   }>;
   search: Readonly<{
     query: (searchTerm: string) => Promise<readonly SearchResult[]>;
