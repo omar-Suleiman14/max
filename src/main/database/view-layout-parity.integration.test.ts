@@ -121,4 +121,35 @@ describe('saved database view parity', () => {
       reopened.close();
     }
   });
+
+  it('round trips Chart query and presentation configuration across a close and reopen', () => {
+    const { database, filename } = fileWorkspace();
+    const sales = database.databases.createDatabase({ title: 'Sales' });
+    const amount = database.properties.createProperty({ databaseId: sales.id, name: 'Amount', type: 'number' });
+    database.views.createView({
+      databaseId: sales.id,
+      layout: 'chart',
+      layoutConfig: {
+        calculations: [{ calculation: 'sum', propertyId: amount.id }],
+        chart: { calculation: 'sum', propertyId: amount.id, type: 'line' },
+        density: 'compact',
+      },
+      name: 'Revenue chart',
+    });
+    database.close();
+
+    const reopened = new DatabaseService(filename);
+    reopened.initialize();
+    try {
+      const view = reopened.views.listViews(sales.id).find((candidate) => candidate.name === 'Revenue chart');
+      expect(view?.layout).toBe('chart');
+      expect(view?.layoutConfig).toEqual({
+        calculations: [{ calculation: 'sum', propertyId: amount.id }],
+        chart: { calculation: 'sum', propertyId: amount.id, type: 'line' },
+        density: 'compact',
+      });
+    } finally {
+      reopened.close();
+    }
+  });
 });

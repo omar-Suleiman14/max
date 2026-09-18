@@ -2,7 +2,7 @@
  * Workspace views and layout state contracts for Max v0.2.0.
  */
 
-import type { FilterNode, GroupRule, SortRule } from './query-contract';
+import type { AggregateCalculationType, FilterNode, GroupRule, SortRule } from './query-contract';
 
 export type ViewLayout =
   | 'table'
@@ -32,6 +32,12 @@ export type PropertyViewState = Readonly<{
 export type TimelineLayoutConfig = Readonly<{
   endPropertyId?: string | null;
   startPropertyId?: string | null;
+}>;
+
+export type ChartLayoutConfig = Readonly<{
+  calculation?: AggregateCalculationType;
+  propertyId?: string | null;
+  type?: 'bar' | 'line' | 'pie';
 }>;
 
 export type WorkspaceView = Readonly<{
