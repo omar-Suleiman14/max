@@ -2,6 +2,7 @@ import { DatabasePopover } from '../ui/database-popover';
 import { IconPickerDialog } from '../ui/icon-picker-dialog';
 import { PropertyIcon } from './PropertyIcon';
 import { Select } from '../ui/select';
+import { propertySaveError } from '../ui/property-editing-copy';
 import {
   Binary,
   Calendar,
@@ -19,9 +20,10 @@ import {
   Type,
   X,
 } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useId, useRef } from 'react';
 
 import type { DatabaseSchema } from '../../shared/database-contract';
+import type { Locale } from '../app/i18n';
 import type {
   PropertyOptionDraft,
   PropertyType,
@@ -37,6 +39,7 @@ import type { NavigationItem } from '../../shared/workspace-contract';
 type PropertyEditorProps = Readonly<{
   databaseId: string;
   isOpen: boolean;
+  locale?: Locale;
   onClose: () => void;
   onSave: (draft: WorkspacePropertyDraft | WorkspacePropertyPatch) => Promise<WorkspaceProperty | null>;
   property?: WorkspaceProperty | null;
@@ -66,12 +69,14 @@ const colorOptions = ['blue', 'pink', 'yellow', 'green', 'brown', 'purple', 'red
 export function PropertyEditor({
   databaseId,
   isOpen,
+  locale = 'en',
   onClose,
   onSave,
   property,
   schema,
 }: PropertyEditorProps) {
   const isEditing = Boolean(property);
+  const titleId = useId();
 
   const [icon, setIcon] = useState(typeof property?.config.icon === 'string' ? property.config.icon : '');
   const [pickingIcon, setPickingIcon] = useState(false);
@@ -212,7 +217,7 @@ export function PropertyEditor({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
-      setError('Property name is required.');
+      setError(propertySaveError(locale));
       return;
     }
 
@@ -257,10 +262,10 @@ export function PropertyEditor({
           type,
           uniqueValue,
         });
-        if (!createdProperty) throw new Error('Property could not be saved. Check the name and constraints.');
+        if (!createdProperty) throw new Error(propertySaveError(locale));
         if (type === 'relation') {
           if (!createdProperty || !relationTargetDatabaseId) {
-            throw new Error('A target database is required for a relation.');
+            throw new Error(propertySaveError(locale));
           }
           const relation = await window.maxApi.workspace.createRelation({
             inversePropertyName: inversePropertyName.trim() || schema?.database.title || 'Related pages',
@@ -278,8 +283,8 @@ export function PropertyEditor({
 
       window.dispatchEvent(new Event('max:workspace-changed'));
       onClose();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save property.');
+    } catch {
+      setError(propertySaveError(locale));
     } finally {
       setSaving(false);
     }
@@ -288,13 +293,13 @@ export function PropertyEditor({
   const relationProperties = schema?.properties.filter((p) => p.type === 'relation') || [];
 
   return (
-    <DatabasePopover onClose={onClose}>
+    <DatabasePopover labelId={titleId} onClose={onClose}>
       <div className="modal-container property-editor-modal" onClick={(e) => e.stopPropagation()}>
         <form onSubmit={(e) => { void handleSubmit(e); }}>
           <div className="modal-header">
             <div className="modal-header__title">
               <button ref={iconButtonRef} type="button" className="property-icon-button" aria-label="Choose property icon" onClick={() => setPickingIcon((open) => !open)}><PropertyIcon type={type} icon={icon} /></button>
-              <h3>{isEditing ? 'Edit Property' : 'New Property'}</h3>
+              <h3 id={titleId}>{isEditing ? 'Edit Property' : 'New Property'}</h3>
             </div>
             <button className="btn-icon" onClick={onClose} type="button" aria-label="Close">
               <X size={16} />

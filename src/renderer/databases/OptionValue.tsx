@@ -3,6 +3,7 @@ import { GripVertical, Check, MoreHorizontal, Plus, Trash2, X } from 'lucide-rea
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { anchorPopover, currentViewport, type AnchoredPosition } from '../ui/anchor-popover';
+import { propertySaveError } from '../ui/property-editing-copy';
 import type { PropertyOptionDraft, WorkspaceProperty } from '../../shared/property-contract';
 import type { Locale } from '../app/i18n';
 
@@ -59,11 +60,11 @@ export function OptionValue({ property, value, onChange, multiple = false, local
     saving.current = true; setBusy(true); setError('');
     try {
       const result = await window.maxApi.workspace.updateProperty(property.id, { options: next });
-      if (!result.ok) { setError(result.error.message); return null; }
+      if (!result.ok) { setError(propertySaveError(locale)); return null; }
       setOptions(result.value.options ?? []);
       window.dispatchEvent(new Event('max:workspace-changed'));
       return result.value.options ?? [];
-    } catch { setError(ar ? 'تعذر حفظ الخيارات.' : 'Could not save options.'); return null; }
+    } catch { setError(propertySaveError(locale)); return null; }
     finally { saving.current = false; setBusy(false); }
   };
   const reorder = (id: string, targetId: string) => {
@@ -84,7 +85,7 @@ export function OptionValue({ property, value, onChange, multiple = false, local
 
   return <>
     <button ref={trigger} type="button" className="database-cell-button option-value" aria-label={property.name} aria-haspopup="dialog" aria-expanded={open} onClick={() => { setOpen(true); setQuery(''); setEditing(undefined); setActive(0); }}>{selected.length ? selected.map((id) => <span key={id}>{tag(id)}</span>) : <span className="database-cell-empty">—</span>}</button>
-    {open && createPortal(<div ref={popup} style={position} className="option-popup" role="dialog" aria-label={property.name} onKeyDown={(event) => { if (event.key === 'Escape') { event.stopPropagation(); if (editing) { setEditing(undefined); return; } setOpen(false); trigger.current?.focus(); } }}>
+    {open && createPortal(<div ref={popup} style={position} className="option-popup" role="dialog" aria-label={property.name} onKeyDown={(event) => { if (event.key === 'Escape') { event.stopPropagation(); if (editing) { setEditing(undefined); return; } setOpen(false); trigger.current?.focus(); } else if (event.key === 'Tab' && !editing) { setOpen(false); } }}>
       {editing ? <div className="option-edit">
         <header className="option-edit__header">
           <button type="button" className="option-edit__back" aria-label={ar ? 'رجوع' : 'Back'} onClick={() => setEditing(undefined)}><X size={14} /></button>

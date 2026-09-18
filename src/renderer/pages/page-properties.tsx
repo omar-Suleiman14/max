@@ -2,6 +2,9 @@ import { GripVertical, Paperclip, Plus, X, ArrowUp, ArrowDown } from 'lucide-rea
 import { useEffect, useRef, useState } from 'react';
 import type { Locale } from '../app/i18n';
 import { PropertyIcon } from '../databases/PropertyIcon';
+import { normalizeNumericInput, parseNumericInput } from '../../shared/digits';
+import { DraftInput } from '../ui/draft-input';
+import { ReadOnlyPropertyValue } from '../ui/property-editing';
 
 /** A file kept in the workspace, named the way the person chose it. */
 export type PageFileValue = Readonly<{ name: string; url: string }>;
@@ -57,6 +60,7 @@ function ChoiceEditor({ ar, choices, onChange }: { ar: boolean; choices: readonl
       onBlur={add}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ',') { event.preventDefault(); add(); }
+        if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); setDraft(''); event.currentTarget.blur(); }
         if (event.key === 'Backspace' && !draft && choices.length) onChange(choices.slice(0, -1));
       }}
     />
@@ -110,19 +114,29 @@ export function PageProperties({ properties = [], onChange, locale, createdAt, u
         event.preventDefault(); const next = [...properties]; const target = index + (event.key === 'ArrowUp' ? -1 : 1); const neighbor = next[target];
         if (neighbor) { next[index] = neighbor; next[target] = property; onChange(next); }
       }}><GripVertical size={14} /></button>
-      <div className="page-property-name"><PropertyIcon type={property.type} /><input aria-label={ar ? 'اسم الخاصية' : 'Property name'} value={property.name} onChange={(event) => update(property.id, { name: event.target.value })} /></div>
+      <div className="page-property-name"><PropertyIcon type={property.type} /><DraftInput aria-label={ar ? 'اسم الخاصية' : 'Property name'} value={property.name} onCommit={(name) => update(property.id, { name })} /></div>
       <div className="page-property-value">
         {property.type === 'checkbox'
           ? <input type="checkbox" aria-label={property.name} checked={property.value === true} onChange={(event) => update(property.id, { value: event.target.checked })} />
           : READ_ONLY.includes(property.type)
-            ? <PageTimestampValue ar={ar} at={property.type === 'created_time' ? createdAt : updatedAt} name={property.name} />
+            ? <PageTimestampValue ar={ar} at={property.type === 'created_time' ? createdAt : updatedAt} locale={locale} name={property.name} />
             : property.type === 'file'
               ? <PageFileField ar={ar} property={property} onChange={(value) => update(property.id, { value })} />
               : property.type === 'multi_select'
                 ? <PageMultiSelectValue ar={ar} property={property} onChange={(value) => update(property.id, { value })} onAddChoice={(choice) => update(property.id, { options: [...new Set([...(property.options ?? []), choice])], value: [...asList(property.value), choice] })} />
                 : ['select', 'status'].includes(property.type)
                   ? <PageSelectValue ar={ar} property={property} onPick={(value) => update(property.id, { value })} onAddChoice={(choice) => update(property.id, { options: [...new Set([...(property.options ?? []), choice])], value: choice })} />
-                  : <input aria-label={property.name} type={property.type === 'number' ? 'number' : property.type === 'date' ? 'date' : property.type === 'url' ? 'url' : property.type === 'email' ? 'email' : property.type === 'phone' ? 'tel' : 'text'} placeholder={ar ? 'فارغ' : 'Empty'} value={asText(property.value)} onChange={(event) => update(property.id, { value: property.type === 'number' ? event.target.value === '' ? null : Number(event.target.value) : event.target.value })} />}
+                  : property.type === 'date'
+                    ? <input aria-label={property.name} type="date" value={asText(property.value)} onChange={(event) => update(property.id, { value: event.target.value || null })} />
+                    : <DraftInput
+                        aria-label={property.name}
+                        inputMode={property.type === 'number' ? 'decimal' : undefined}
+                        type={property.type === 'url' ? 'url' : property.type === 'email' ? 'email' : property.type === 'phone' ? 'tel' : 'text'}
+                        placeholder={ar ? 'فارغ' : 'Empty'}
+                        value={asText(property.value)}
+                        normalize={property.type === 'number' ? normalizeNumericInput : undefined}
+                        onCommit={(next) => update(property.id, { value: property.type === 'number' ? next === '' ? null : parseNumericInput(next) ?? null : next || null })}
+                      />}
       </div>
       <button type="button" className="page-property-edit" aria-label={`${ar ? 'إعدادات' : 'Options for'} ${property.name}`} onClick={() => setEditingId(editingId === property.id ? null : property.id)}>•••</button>
       {editingId === property.id && <div className="page-property-options">
@@ -150,9 +164,9 @@ export function PageProperties({ properties = [], onChange, locale, createdAt, u
 }
 
 /** Created and last edited answer themselves from the page's own record. */
-function PageTimestampValue({ ar, at, name }: { ar: boolean; at?: string; name: string }) {
-  if (!at) return <span className="page-select__empty">{ar ? 'فارغ' : 'Empty'}</span>;
-  return <time className="page-property-readonly" aria-label={name} dateTime={at}>{new Date(at).toLocaleString(ar ? 'ar' : 'en', { dateStyle: 'medium', timeStyle: 'short' })}</time>;
+function PageTimestampValue({ ar, at, locale, name }: { ar: boolean; at?: string; locale: Locale; name: string }) {
+  if (!at) return <ReadOnlyPropertyValue className="page-select__empty" locale={locale}>{ar ? 'فارغ' : 'Empty'}</ReadOnlyPropertyValue>;
+  return <ReadOnlyPropertyValue className="page-property-readonly" locale={locale}><time aria-label={name} dateTime={at}>{new Date(at).toLocaleString(ar ? 'ar' : 'en', { dateStyle: 'medium', timeStyle: 'short' })}</time></ReadOnlyPropertyValue>;
 }
 
 /**
@@ -195,7 +209,9 @@ function PageFileField({ ar, property, onChange }: { ar: boolean; property: Page
 function PageMultiSelectValue({ ar, property, onChange, onAddChoice }: { ar: boolean; property: PageProperty; onChange: (value: readonly string[]) => void; onAddChoice: (choice: string) => void }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState('');
+  const [active, setActive] = useState(0);
   const box = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (!open) return;
     const dismiss = (event: PointerEvent) => { if (event.target instanceof Node && !box.current?.contains(event.target)) setOpen(false); };
@@ -204,8 +220,9 @@ function PageMultiSelectValue({ ar, property, onChange, onAddChoice }: { ar: boo
   }, [open]);
   const picked = asList(property.value);
   const typed = draft.trim();
+  const filtered = (property.options ?? []).filter((choice) => choice.toLocaleLowerCase().includes(typed.toLocaleLowerCase()));
   return <div className="page-select" ref={box}>
-    <button type="button" className="page-select__trigger" aria-label={property.name} aria-haspopup="listbox" aria-expanded={open} onClick={() => { setOpen(!open); setDraft(''); }}>
+    <button ref={trigger} type="button" className="page-select__trigger" aria-label={property.name} aria-haspopup="listbox" aria-expanded={open} onClick={() => { setOpen(!open); setDraft(''); setActive(0); }}>
       {picked.length
         ? picked.map((choice) => <span className="page-property-choice page-property-choice--static" key={choice}>{choice}</span>)
         : <span className="page-select__empty">{ar ? 'فارغ' : 'Empty'}</span>}
@@ -216,10 +233,15 @@ function PageMultiSelectValue({ ar, property, onChange, onAddChoice }: { ar: boo
         aria-label={ar ? 'ابحث أو أنشئ خياراً' : 'Search or create a choice'}
         placeholder={ar ? 'ابحث أو أنشئ خياراً' : 'Search or create a choice'}
         value={draft}
-        onChange={(event) => setDraft(event.target.value)}
-        onKeyDown={(event) => { if (event.key === 'Enter' && typed) { event.preventDefault(); if (!(property.options ?? []).includes(typed)) onAddChoice(typed); else if (!picked.includes(typed)) onChange([...picked, typed]); setDraft(''); } }}
+        onChange={(event) => { setDraft(event.target.value); setActive(0); }}
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); setActive((current) => (current + (event.key === 'ArrowDown' ? 1 : -1) + filtered.length) % Math.max(filtered.length, 1)); }
+          if (event.key === 'Enter') { event.preventDefault(); const choice = filtered[active]; if (choice) onChange(picked.includes(choice) ? picked.filter((candidate) => candidate !== choice) : [...picked, choice]); else if (typed) onAddChoice(typed); setDraft(''); setActive(0); }
+          if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); setDraft(''); setOpen(false); trigger.current?.focus(); }
+          if (event.key === 'Tab') setOpen(false);
+        }}
       />
-      {(property.options ?? []).filter((choice) => choice.toLocaleLowerCase().includes(typed.toLocaleLowerCase())).map((choice) => <button key={choice} type="button" role="option" aria-selected={picked.includes(choice)} onClick={() => onChange(picked.includes(choice) ? picked.filter((candidate) => candidate !== choice) : [...picked, choice])}>
+      {filtered.map((choice, index) => <button key={choice} type="button" role="option" aria-selected={picked.includes(choice)} data-active={index === active || undefined} onMouseMove={() => setActive(index)} onClick={() => onChange(picked.includes(choice) ? picked.filter((candidate) => candidate !== choice) : [...picked, choice])}>
         <span className="page-property-choice page-property-choice--static" data-picked={picked.includes(choice) || undefined}>{choice}</span>
       </button>)}
       {!!typed && !(property.options ?? []).includes(typed) && <button type="button" className="page-select__create" onClick={() => { onAddChoice(typed); setDraft(''); }}><Plus size={12} />{ar ? 'إنشاء' : 'Create'} “{typed}”</button>}
@@ -232,7 +254,9 @@ function PageMultiSelectValue({ ar, property, onChange, onAddChoice }: { ar: boo
 function PageSelectValue({ ar, property, onPick, onAddChoice }: { ar: boolean; property: PageProperty; onPick: (value: string | null) => void; onAddChoice: (choice: string) => void }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState('');
+  const [active, setActive] = useState(0);
   const box = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (!open) return;
     const dismiss = (event: PointerEvent) => { if (event.target instanceof Node && !box.current?.contains(event.target)) setOpen(false); };
@@ -242,8 +266,9 @@ function PageSelectValue({ ar, property, onPick, onAddChoice }: { ar: boolean; p
   const current = asText(property.value);
   const choices = property.options ?? [];
   const typed = draft.trim();
+  const filtered = choices.filter((choice) => choice.toLocaleLowerCase().includes(typed.toLocaleLowerCase()));
   return <div className="page-select" ref={box}>
-    <button type="button" className="page-select__trigger" aria-label={property.name} aria-haspopup="listbox" aria-expanded={open} onClick={() => { setOpen(!open); setDraft(''); }}>
+    <button ref={trigger} type="button" className="page-select__trigger" aria-label={property.name} aria-haspopup="listbox" aria-expanded={open} onClick={() => { setOpen(!open); setDraft(''); setActive(0); }}>
       {current ? <span className="page-property-choice page-property-choice--static">{current}</span> : <span className="page-select__empty">{ar ? 'فارغ' : 'Empty'}</span>}
     </button>
     {open && <div className="page-select__popup" role="listbox" aria-label={property.name}>
@@ -252,11 +277,16 @@ function PageSelectValue({ ar, property, onPick, onAddChoice }: { ar: boolean; p
         aria-label={ar ? 'ابحث أو أنشئ خياراً' : 'Search or create a choice'}
         placeholder={ar ? 'ابحث أو أنشئ خياراً' : 'Search or create a choice'}
         value={draft}
-        onChange={(event) => setDraft(event.target.value)}
-        onKeyDown={(event) => { if (event.key === 'Enter' && typed) { event.preventDefault(); if (!choices.includes(typed)) onAddChoice(typed); else onPick(typed); setOpen(false); } }}
+        onChange={(event) => { setDraft(event.target.value); setActive(0); }}
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); setActive((currentIndex) => (currentIndex + (event.key === 'ArrowDown' ? 1 : -1) + filtered.length) % Math.max(filtered.length, 1)); }
+          if (event.key === 'Enter') { event.preventDefault(); const choice = filtered[active]; if (choice) onPick(choice); else if (typed) onAddChoice(typed); setOpen(false); }
+          if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); setDraft(''); setOpen(false); trigger.current?.focus(); }
+          if (event.key === 'Tab') setOpen(false);
+        }}
       />
       {current && <button type="button" className="page-select__clear" onClick={() => { onPick(null); setOpen(false); }}>{ar ? 'مسح' : 'Clear'}</button>}
-      {choices.filter((choice) => choice.toLocaleLowerCase().includes(typed.toLocaleLowerCase())).map((choice) => <button key={choice} type="button" role="option" aria-selected={choice === current} onClick={() => { onPick(choice); setOpen(false); }}><span className="page-property-choice page-property-choice--static">{choice}</span></button>)}
+      {filtered.map((choice, index) => <button key={choice} type="button" role="option" aria-selected={choice === current} data-active={index === active || undefined} onMouseMove={() => setActive(index)} onClick={() => { onPick(choice); setOpen(false); }}><span className="page-property-choice page-property-choice--static">{choice}</span></button>)}
       {!!typed && !choices.includes(typed) && <button type="button" className="page-select__create" onClick={() => { onAddChoice(typed); setOpen(false); }}><Plus size={12} />{ar ? 'إنشاء' : 'Create'} “{typed}”</button>}
       {!choices.length && !typed && <p className="page-select__empty-note">{ar ? 'لا توجد خيارات بعد' : 'No choices yet'}</p>}
     </div>}

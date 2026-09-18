@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom/vitest';
+import axe from 'axe-core';
 
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -112,5 +113,28 @@ describe('a record with unanswered required properties', () => {
     expect(labels.find(({ name }) => name.includes('Note'))?.unmet).toBe(false);
     // Required is still announced on every required property, answered or not.
     expect(document.querySelectorAll('.record-required-mark')).toHaveLength(2);
+  });
+
+  it('does not persist a scalar draft until commit and restores it on Escape', async () => {
+    const user = userEvent.setup();
+    drawer();
+    const row = [...document.querySelectorAll('.record-drawer__prop-row')].find((candidate) => candidate.textContent?.includes('Note'))!;
+    const input = row.querySelector('input')!;
+
+    await user.type(input, 'temporary');
+    expect(window.maxApi.workspace.updateRecord).not.toHaveBeenCalled();
+    await user.keyboard('{Escape}');
+    expect(input).toHaveValue('');
+    expect(window.maxApi.workspace.updateRecord).not.toHaveBeenCalled();
+
+    await user.type(input, 'saved');
+    await user.keyboard('{Enter}');
+    expect(window.maxApi.workspace.updateRecord).toHaveBeenCalled();
+  });
+
+  it('has no detectable accessibility violations in the drawer editing surface', async () => {
+    const { container } = drawer();
+    const result = await axe.run(container, { rules: { 'color-contrast': { enabled: false } } });
+    expect(result.violations).toEqual([]);
   });
 });

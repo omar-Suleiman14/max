@@ -28,7 +28,6 @@ import type { BackupSchedule } from '../../shared/blueprint-contract';
 import type { UpdateStatus } from '../../shared/update-contract';
 import type { WorkspaceTemplateV2 as Blueprint } from '../../shared/template-v2-contract';
 import type { WorkspaceNavigation } from '../../shared/workspace-contract';
-import { CustomPageView } from '../pages/custom-page-view';
 import {
   createPersistentCustomPage,
   loadPersistentCustomPages,
@@ -54,6 +53,7 @@ import { EmptyPage } from '../ui/empty-page';
 import { Sidebar } from '../ui/sidebar';
 
 const WorkspaceGraph = lazy(() => import('../pages/workspace-graph').then(module => ({ default: module.WorkspaceGraph })));
+const CustomPageView = lazy(() => import('../pages/custom-page-view').then((module) => ({ default: module.CustomPageView })));
 const SettingsPage = lazy(() => import('../ui/settings-page').then(module => ({ default: module.SettingsPage })));
 const BlueprintDialog = lazy(() => import('../blueprints/blueprint-dialog').then((module) => ({ default: module.BlueprintDialog })));
 const CommandMenu = lazy(() => import('../ui/command-menu').then((module) => ({ default: module.CommandMenu })));

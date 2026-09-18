@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom/vitest';
+import axe from 'axe-core';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -84,6 +85,45 @@ describe('the values those types hold', () => {
     expect(screen.getByLabelText('Mail')).toHaveAttribute('type', 'email');
     expect(screen.getByLabelText('Ring')).toHaveAttribute('type', 'tel');
     expect(screen.getByLabelText('Site')).toHaveAttribute('type', 'url');
+  });
+
+  it('commits scalar drafts, cancels them with Escape, and restores select focus on Escape', async () => {
+    const onChange = vi.fn();
+    const props = [property({ name: 'Note', value: 'old' }), property({ id: 's', name: 'Stage', options: ['One', 'Two'], type: 'select' })];
+    render(<PageProperties locale="en" onChange={onChange} properties={props} />);
+    const user = userEvent.setup();
+    const note = screen.getByLabelText('Note');
+    await user.clear(note);
+    await user.type(note, 'cancelled');
+    await user.keyboard('{Escape}');
+    expect(note).toHaveValue('old');
+    expect(onChange).not.toHaveBeenCalled();
+    await user.clear(note);
+    await user.type(note, 'saved');
+    await user.keyboard('{Enter}');
+    expect(onChange).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ name: 'Note', value: 'saved' })]));
+
+    const select = screen.getByRole('button', { name: 'Stage' });
+    await user.click(select);
+    await user.keyboard('{Escape}');
+    expect(select).toHaveFocus();
+    expect(screen.queryByRole('listbox', { name: 'Stage' })).not.toBeInTheDocument();
+  });
+
+  it('moves through page select choices with arrows and Enter', async () => {
+    const onChange = vi.fn();
+    render(<PageProperties locale="en" onChange={onChange} properties={[property({ name: 'Stage', options: ['One', 'Two'], type: 'select' })]} />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Stage' }));
+    await user.keyboard('{ArrowDown}{Enter}');
+    expect(onChange).toHaveBeenCalledWith([expect.objectContaining({ value: 'Two' })]);
+  });
+
+  it('explains read-only timestamps and has no detectable accessibility violations', async () => {
+    const { container } = render(<PageProperties createdAt="2026-09-01T08:30:00.000Z" locale="en" onChange={vi.fn()} properties={[property({ name: 'Created', type: 'created_time' })]} />);
+    expect(screen.getByText(/generated automatically by Max/)).toBeInTheDocument();
+    const result = await axe.run(container, { rules: { 'color-contrast': { enabled: false } } });
+    expect(result.violations).toEqual([]);
   });
 });
 

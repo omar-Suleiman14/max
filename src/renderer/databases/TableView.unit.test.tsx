@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom/vitest';
+import axe from 'axe-core';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -209,5 +210,31 @@ describe('TableView', () => {
         'prop-active': false,
       },
     });
+  });
+
+  it('uses the shared draft contract for title cells', async () => {
+    const user = userEvent.setup();
+    const handleUpdateRecord = vi.fn();
+    render(<TableView calculations={[]} databaseId="db-1" onCreateRecord={vi.fn()} onOpenRecord={vi.fn()} onUpdateRecord={handleUpdateRecord} records={mockRecords} schema={mockSchema} />);
+    const input = screen.getByDisplayValue('iPhone 15 Pro');
+
+    await user.click(input);
+    await user.clear(input);
+    await user.type(input, 'Cancelled');
+    await user.keyboard('{Escape}');
+    expect(input).toHaveValue('iPhone 15 Pro');
+    expect(handleUpdateRecord).not.toHaveBeenCalled();
+
+    await user.click(input);
+    await user.clear(input);
+    await user.type(input, 'Committed');
+    await user.keyboard('{Enter}');
+    expect(handleUpdateRecord).toHaveBeenCalledWith('rec-1', { title: 'Committed' });
+  });
+
+  it('has no detectable accessibility violations in the editing surface', async () => {
+    const { container } = render(<TableView calculations={[]} databaseId="db-1" onCreateRecord={vi.fn()} onOpenRecord={vi.fn()} onUpdateRecord={vi.fn()} records={mockRecords} schema={mockSchema} />);
+    const result = await axe.run(container, { rules: { 'color-contrast': { enabled: false } } });
+    expect(result.violations).toEqual([]);
   });
 });
