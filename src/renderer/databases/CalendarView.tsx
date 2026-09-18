@@ -7,8 +7,8 @@ import type { Locale } from '../app/i18n';
 import type { WorkspaceRecord, WorkspaceRecordDraft } from '../../shared/property-contract';
 
 const COPY = {
-  ar: { createdTime: 'وقت الإنشاء', dateBy: 'التاريخ حسب', next: 'الشهر التالي', previous: 'الشهر السابق', today: 'اليوم' },
-  en: { createdTime: 'Created time', dateBy: 'Date by', next: 'Next month', previous: 'Previous month', today: 'Today' },
+  ar: { createToday: 'إنشاء سجل اليوم', createdTime: 'وقت الإنشاء', dateBy: 'التاريخ حسب', empty: 'لا توجد سجلات بعد.', next: 'الشهر التالي', previous: 'الشهر السابق', today: 'اليوم' },
+  en: { createToday: 'Create a record today', createdTime: 'Created time', dateBy: 'Date by', empty: 'No records yet.', next: 'Next month', previous: 'Previous month', today: 'Today' },
 } as const;
 /**
  * The day a date property value falls on, as YYYY-MM-DD.
@@ -134,6 +134,14 @@ export function CalendarView({
 
   return (
     <div className="calendar-view-container">
+      {records.length === 0 && (
+        <div className="flex items-center justify-between gap-3 p-3 text-sm text-muted" role="status">
+          <span>{copy.empty}</span>
+          <button className="btn btn-secondary btn-sm" type="button" onClick={() => { const today = new Date(); void handleAddOnDate(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`); }}>
+            {copy.createToday}
+          </button>
+        </div>
+      )}
       {/* Calendar Header / Navigation */}
       <div className="calendar-header">
         <div className="flex items-center gap-2">
