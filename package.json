@@ -1,7 +1,7 @@
 {
   "name": "max-shop-os",
   "productName": "Max",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "Local-first workspace and operations application",
   "license": "GPL-2.0-only",
   "private": true,
