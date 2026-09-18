@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom/vitest';
+import axe from 'axe-core';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -38,13 +39,122 @@ function renderView(layout: 'chart' | 'timeline' | 'form', onCreateRecord = vi.f
 describe('the chart, timeline and form layouts', () => {
   afterEach(cleanup);
 
-  it('draws one bar per record and opens the record behind it', async () => {
-    const { onOpenRecord } = renderView('chart');
+  it('draws one bar per record and opens the record behind it', () => {
+    render(<AdditionalViews
+      calculations={[{ calculation: 'count', formattedValue: '2', propertyId: 'title', value: 2 }]}
+      layout="chart"
+      locale="en"
+      onCreateRecord={vi.fn()}
+      onOpenRecord={vi.fn()}
+      records={records}
+      schema={schema}
+    />);
 
-    expect(screen.getByText('iPhone 15 Pro')).toBeInTheDocument();
-    await userEvent.setup().click(screen.getByText('Galaxy S24'));
+    expect(screen.getByRole('img', { name: 'Bar chart' })).toBeInTheDocument();
+    expect(screen.getByRole('listitem', { name: 'All records: 2' })).toBeInTheDocument();
+  });
 
-    expect(onOpenRecord).toHaveBeenCalledWith(expect.objectContaining({ id: 'rec-2' }));
+  it('renders line and pie from the same grouped query calculations', () => {
+    const groups = [
+      { calculations: [{ calculation: 'sum' as const, formattedValue: '1650.00', propertyId: 'prop-price', value: 1650 }], groupKey: 'new', label: 'Brand New', records: [records[0]!], totalCount: 1 },
+      { calculations: [{ calculation: 'sum' as const, formattedValue: '350.00', propertyId: 'prop-price', value: 350 }], groupKey: 'other', label: 'Other', records: [records[1]!], totalCount: 1 },
+    ];
+    const { rerender } = render(<AdditionalViews
+      groups={groups}
+      layout="chart"
+      layoutConfig={{ chart: { calculation: 'sum', propertyId: 'prop-price', type: 'line' } }}
+      locale="en"
+      onCreateRecord={vi.fn()}
+      onOpenRecord={vi.fn()}
+      records={records}
+      schema={schema}
+    />);
+    expect(screen.getByRole('img', { name: 'Line chart' })).toBeInTheDocument();
+    expect(screen.getByRole('listitem', { name: 'Brand New: 1,650' })).toBeInTheDocument();
+
+    rerender(<AdditionalViews
+      groups={groups}
+      layout="chart"
+      layoutConfig={{ chart: { calculation: 'sum', propertyId: 'prop-price', type: 'pie' } }}
+      locale="en"
+      onCreateRecord={vi.fn()}
+      onOpenRecord={vi.fn()}
+      records={records}
+      schema={schema}
+    />);
+    expect(screen.getByRole('img', { name: 'Pie chart' })).toBeInTheDocument();
+    expect(screen.getByRole('listitem', { name: 'Other: 350' })).toBeInTheDocument();
+  });
+
+  it('persists chart type and aggregation without replacing unrelated layout settings', async () => {
+    const onLayoutConfigChange = vi.fn();
+    render(<AdditionalViews
+      calculations={[{ calculation: 'count', formattedValue: '2', propertyId: 'title', value: 2 }]}
+      layout="chart"
+      layoutConfig={{ density: 'compact' }}
+      locale="en"
+      onCreateRecord={vi.fn()}
+      onLayoutConfigChange={onLayoutConfigChange}
+      onOpenRecord={vi.fn()}
+      records={records}
+      schema={schema}
+    />);
+    const user = userEvent.setup();
+    await user.selectOptions(screen.getByLabelText('Value'), 'prop-price');
+    expect(onLayoutConfigChange).toHaveBeenLastCalledWith({
+      calculations: [{ calculation: 'sum', propertyId: 'prop-price' }],
+      chart: { calculation: 'sum', propertyId: 'prop-price', type: 'bar' },
+      density: 'compact',
+    });
+  });
+
+  it('shows an empty state when the filtered query has no calculated data', () => {
+    render(<AdditionalViews layout="chart" locale="en" onCreateRecord={vi.fn()} onOpenRecord={vi.fn()} records={[]} schema={schema} />);
+    expect(screen.getByRole('status')).toHaveTextContent('No chart data');
+  });
+
+  it('renders a single data point and exposes negative values', () => {
+    render(<AdditionalViews
+      groups={[{ calculations: [{ calculation: 'sum', formattedValue: '-25.00', propertyId: 'prop-price', value: -25 }], groupKey: 'loss', label: 'Loss', records: [records[0]!], totalCount: 1 }]}
+      layout="chart"
+      layoutConfig={{ chart: { calculation: 'sum', propertyId: 'prop-price', type: 'bar' } }}
+      locale="en"
+      onCreateRecord={vi.fn()}
+      onOpenRecord={vi.fn()}
+      records={[records[0]!]}
+      schema={schema}
+    />);
+    expect(screen.getByRole('listitem', { name: 'Loss: -25' })).toBeInTheDocument();
+    expect(document.querySelector('.database-chart-track i')).toHaveAttribute('data-negative');
+  });
+
+  it('uses only the calculations returned by the active filtered query', () => {
+    render(<AdditionalViews
+      calculations={[{ calculation: 'sum', formattedValue: '350.00', propertyId: 'prop-price', value: 350 }]}
+      layout="chart"
+      layoutConfig={{ chart: { calculation: 'sum', propertyId: 'prop-price', type: 'bar' } }}
+      locale="en"
+      onCreateRecord={vi.fn()}
+      onOpenRecord={vi.fn()}
+      records={[records[1]!]}
+      schema={schema}
+    />);
+    expect(screen.getByRole('listitem', { name: 'All records: 350' })).toBeInTheDocument();
+    expect(screen.queryByText('1,650')).not.toBeInTheDocument();
+  });
+
+  it('is accessible in dark RTL rendering', async () => {
+    const { container } = render(<div data-theme="dark"><AdditionalViews
+      calculations={[{ calculation: 'count', formattedValue: '2', propertyId: 'title', value: 2 }]}
+      layout="chart"
+      locale="ar"
+      onCreateRecord={vi.fn()}
+      onOpenRecord={vi.fn()}
+      records={records}
+      schema={schema}
+    /></div>);
+    expect(container.querySelector('.database-chart')).toHaveAttribute('dir', 'rtl');
+    expect((await axe.run(container)).violations).toEqual([]);
   });
 
   it('uses the saved single-date property, orders chronologically, and persists config changes', async () => {

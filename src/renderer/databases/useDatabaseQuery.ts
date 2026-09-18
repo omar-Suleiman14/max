@@ -108,12 +108,17 @@ export function useDatabaseQuery(databaseId: string, initialViewId?: string): Us
     setError(null);
 
     try {
-      const layoutCalculations: readonly AggregateCalculation[] =
+      const savedCalculations: readonly AggregateCalculation[] =
         activeView?.layoutConfig &&
         typeof activeView.layoutConfig === 'object' &&
         'calculations' in activeView.layoutConfig &&
         Array.isArray(activeView.layoutConfig.calculations)
           ? (activeView.layoutConfig.calculations as readonly AggregateCalculation[])
+          : [];
+      const layoutCalculations: readonly AggregateCalculation[] = savedCalculations.length > 0
+        ? savedCalculations
+        : activeView?.layout === 'chart'
+          ? [{ calculation: 'count', propertyId: 'title' }]
           : [];
 
       const params: DatabaseQueryParams = {

@@ -65,7 +65,7 @@ export function DatabaseViewHost({
     ? { ...sourceSchema, properties: visiblePropertiesForView(sourceSchema.properties, columns) }
     : null;
 
-  if (layout !== 'board' && groups && groups.length > 0) {
+  if (layout !== 'board' && layout !== 'chart' && groups && groups.length > 0) {
     return <div className="space-y-5">{groups.map((group) => (
       <section className="database-record-group" key={group.groupKey}>
         <h3 className="mb-2 text-sm font-semibold">{group.label} <span className="text-muted">({group.totalCount})</span></h3>
@@ -96,6 +96,8 @@ export function DatabaseViewHost({
 
   if (layout === 'chart' || layout === 'timeline' || layout === 'form') return <AdditionalViews
     key={activeView?.id}
+    calculations={calculations}
+    groups={groups}
     layout={layout}
     layoutConfig={activeView?.layoutConfig}
     schema={layout === 'timeline' ? schema : sourceSchema}
