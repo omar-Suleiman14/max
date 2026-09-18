@@ -1,6 +1,6 @@
 import { Select } from '../ui/select';
 import { Plus } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useRef, useState, type CSSProperties } from 'react';
 import { generateOrderKey } from '../../shared/order-key';
 
 import type { DatabaseSchema } from '../../shared/database-contract';
@@ -53,8 +53,9 @@ export function BoardView({
       color: opt.style?.background || '#6366f1',
       id: opt.id || opt.label,
       label: opt.label,
+      textColor: opt.style?.color || 'var(--text)',
     })),
-    { color: '#64748b', id: '__no_group__', label: 'No Status' },
+    { color: '#64748b', id: '__no_group__', label: 'No Status', textColor: 'var(--text)' },
   ];
 
   const handleCreateInColumn = async (columnId: string) => {
@@ -100,9 +101,13 @@ export function BoardView({
             }
             return String(val) === col.id;
           });
+          const columnStyle = {
+            '--board-column-color': col.color,
+            '--board-column-text-color': col.textColor,
+          } as CSSProperties;
 
           return (
-            <div key={col.id} className="board-column" data-drop-target={dropColumn === col.id || undefined} onDragOver={(event) => { if (!dragging) return; event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setDropColumn(col.id); const container = event.currentTarget.closest('.board-view'); if (container) { const rect = container.getBoundingClientRect(); if (event.clientX > rect.right - 60) container.scrollLeft += 18; if (event.clientX < rect.left + 60) container.scrollLeft -= 18; } }} onDrop={(event) => {
+            <div key={col.id} className="board-column" data-board-color={col.color} data-drop-target={dropColumn === col.id || undefined} style={columnStyle} onDragOver={(event) => { if (!dragging) return; event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setDropColumn(col.id); const container = event.currentTarget.closest('.board-view'); if (container) { const rect = container.getBoundingClientRect(); if (event.clientX > rect.right - 60) container.scrollLeft += 18; if (event.clientX < rect.left + 60) container.scrollLeft -= 18; } }} onDrop={(event) => {
               event.preventDefault();
               event.stopPropagation();
               const record = records.find((candidate) => candidate.id === event.dataTransfer.getData('text/max-record'));
@@ -151,12 +156,7 @@ export function BoardView({
                     {/* Quick Move Trigger / Status Pill */}
                     <div className="mt-3 flex items-center justify-between">
                       <Select
-                        className="select-clean text-xs font-medium py-0.5 px-1.5 rounded"
-                        style={{
-                          background: `${col.color}20`,
-                          borderColor: `${col.color}40`,
-                          color: col.color,
-                        }}
+                        className="board-card__move-select select-clean text-xs font-medium py-0.5 px-1.5 rounded"
                         value={col.id}
                         onClick={(e) => e.stopPropagation()}
                         onChange={(e) => { void handleMoveRecord(record, e.target.value); }}

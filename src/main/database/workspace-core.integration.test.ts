@@ -2,6 +2,7 @@ import { legacyRetailMigrationTemplate } from './legacy-retail-migration';
 import { describe, expect, it } from 'vitest';
 
 import { DatabaseService } from './database-service';
+import { resolveRelativeDate } from './query/date-resolver';
 import { phoneShopBlueprint } from '../../shared/starter-blueprints';
 
 describe('Max v0.2.0 Core Workspace Integration Tests', () => {
@@ -485,11 +486,10 @@ describe('Max v0.2.0 Core Workspace Integration Tests', () => {
       const lineTotal = transactionSchema.properties.find(({ name }) => name === 'Quantity × Price')!;
       const date = transactionSchema.properties.find(({ name }) => name === 'Date')!;
       const amount = transactionSchema.properties.find(({ name }) => name === 'Total Amount')!;
-      const today = new Date().toISOString().slice(0, 10);
-      const yesterdayDate = new Date();
-      yesterdayDate.setUTCDate(yesterdayDate.getUTCDate() - 1);
+      const today = resolveRelativeDate('TODAY').startDate;
+      const yesterday = resolveRelativeDate('YESTERDAY').startDate;
       db.records.createRecord({ databaseId: transactionDb.id, properties: { [amount.id]: 300, [date.id]: today, [quantity.id]: 2, [unitPrice.id]: 150 }, title: 'Today sale' });
-      db.records.createRecord({ databaseId: transactionDb.id, properties: { [amount.id]: 99, [date.id]: yesterdayDate.toISOString().slice(0, 10) }, title: 'Yesterday sale' });
+      db.records.createRecord({ databaseId: transactionDb.id, properties: { [amount.id]: 99, [date.id]: yesterday }, title: 'Yesterday sale' });
       const todayResult = db.databaseQuery.query({ calculations: [{ calculation: 'sum', propertyId: amount.id }], databaseId: transactionDb.id, filter: todayView.filterAst, group: todayView.group });
       expect(todayResult.records).toHaveLength(1);
       expect(todayResult.records[0]?.properties[lineTotal.id]).toBe(300);
