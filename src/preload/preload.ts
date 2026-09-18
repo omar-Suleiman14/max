@@ -4,6 +4,7 @@ import type { AccountDraft } from '../shared/account-contract';
 import type { BackupTrigger } from '../shared/backup-contract';
 import type { Blueprint, CompleteOnboardingDraft, ShopMetadata } from '../shared/blueprint-contract';
 import { IPC_CHANNELS, type MaxApi } from '../shared/ipc-contract';
+import type { MapPoint } from '../shared/map-contract';
 import type { ConfigurableRecordDraft, ObjectKind, PropertyDraft } from '../shared/object-contract';
 import type { ForgivenessDraft, RepaymentDraft } from '../shared/person-debt-contract';
 import type { CloseSessionDraft, OpenSessionDraft } from '../shared/reconciliation-contract';
@@ -144,6 +145,10 @@ const maxApi: MaxApi = Object.freeze({
       ipcRenderer.invoke(IPC_CHANNELS.photosSetAccessKey, key) as ReturnType<MaxApi['photos']['setAccessKey']>,
     use: (photo: Readonly<{ authorName: string; authorUrl: string; downloadUrl: string; fullUrl: string }>) =>
       ipcRenderer.invoke(IPC_CHANNELS.photosUse, photo) as ReturnType<MaxApi['photos']['use']>,
+  }),
+  maps: Object.freeze({
+    getStatus: () => ipcRenderer.invoke(IPC_CHANNELS.mapsStatus) as ReturnType<MaxApi['maps']['getStatus']>,
+    render: (points: readonly MapPoint[]) => ipcRenderer.invoke(IPC_CHANNELS.mapsRender, points) as ReturnType<MaxApi['maps']['render']>,
   }),
   shop: Object.freeze({
     completeOnboarding: (draft: CompleteOnboardingDraft) =>

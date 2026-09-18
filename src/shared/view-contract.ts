@@ -21,7 +21,6 @@ export type ColumnState = Readonly<{
   width?: number;
   wrap?: boolean;
 }>;
-
 export type PropertyViewState = Readonly<{
   columns: readonly ColumnState[];
   coverPropertyId?: string | null;
@@ -38,6 +37,11 @@ export type ChartLayoutConfig = Readonly<{
   calculation?: AggregateCalculationType;
   propertyId?: string | null;
   type?: 'bar' | 'line' | 'pie';
+}>;
+
+export type MapLayoutConfig = Readonly<{
+  disclosureAccepted?: boolean;
+  locationPropertyId?: string | null;
 }>;
 
 export type WorkspaceView = Readonly<{

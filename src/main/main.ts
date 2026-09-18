@@ -8,6 +8,7 @@ import { PhotoLibrary } from './assets/photo-library';
 import { CloudBackupService } from './cloud/cloud-backup-service';
 import { DatabaseService } from './database/database-service';
 import { registerIpcHandlers, removeIpcHandlers } from './ipc/register-ipc-handlers';
+import { StaticMapProvider } from './maps/map-provider';
 import { getPlatformAdapter } from './platform/platform-adapter';
 import { handleWindowsSquirrelLifecycle } from './platform/windows/squirrel-lifecycle';
 import { registerAppProtocol, registerAppScheme } from './protocol/register-app-protocol';
@@ -106,6 +107,7 @@ async function latestPublishedRelease(): Promise<LatestRelease | null> {
         cloudBackups,
         database,
         developmentServerUrl: MAIN_WINDOW_VITE_DEV_SERVER_URL,
+        maps: new StaticMapProvider(),
         photos: new PhotoLibrary(join(app.getPath('userData'), 'integrations.json'), MAX_UNSPLASH_ACCESS_KEY),
         platform,
       });

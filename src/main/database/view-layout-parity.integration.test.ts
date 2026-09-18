@@ -152,4 +152,33 @@ describe('saved database view parity', () => {
       reopened.close();
     }
   });
+
+  it('round trips Map disclosure and location configuration across a close and reopen', () => {
+    const { database, filename } = fileWorkspace();
+    const places = database.databases.createDatabase({ title: 'Places' });
+    const coordinates = database.properties.createProperty({ databaseId: places.id, name: 'Coordinates', type: 'text' });
+    database.views.createView({
+      databaseId: places.id,
+      layout: 'map',
+      layoutConfig: {
+        density: 'compact',
+        map: { disclosureAccepted: true, locationPropertyId: coordinates.id },
+      },
+      name: 'Map',
+    });
+    database.close();
+
+    const reopened = new DatabaseService(filename);
+    reopened.initialize();
+    try {
+      const view = reopened.views.listViews(places.id).find((candidate) => candidate.name === 'Map');
+      expect(view?.layout).toBe('map');
+      expect(view?.layoutConfig).toEqual({
+        density: 'compact',
+        map: { disclosureAccepted: true, locationPropertyId: coordinates.id },
+      });
+    } finally {
+      reopened.close();
+    }
+  });
 });

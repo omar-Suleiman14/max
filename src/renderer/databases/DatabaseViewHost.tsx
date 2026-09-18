@@ -9,6 +9,7 @@ import { ListView } from './ListView';
 import { TableView } from './TableView';
 import { GalleryView } from './GalleryView';
 import { AdditionalViews } from './AdditionalViews';
+import { MapView } from './MapView';
 import { visiblePropertiesForView } from './view-property-state';
 
 type DatabaseViewHostProps = Readonly<{
@@ -65,7 +66,7 @@ export function DatabaseViewHost({
     ? { ...sourceSchema, properties: visiblePropertiesForView(sourceSchema.properties, columns) }
     : null;
 
-  if (layout !== 'board' && layout !== 'chart' && groups && groups.length > 0) {
+  if (layout !== 'board' && layout !== 'chart' && layout !== 'map' && groups && groups.length > 0) {
     return <div className="space-y-5">{groups.map((group) => (
       <section className="database-record-group" key={group.groupKey}>
         <h3 className="mb-2 text-sm font-semibold">{group.label} <span className="text-muted">({group.totalCount})</span></h3>
@@ -141,7 +142,6 @@ export function DatabaseViewHost({
       );
 
     case 'list':
-    case 'map':
       return (
         <ListView
           databaseId={databaseId}
@@ -151,6 +151,22 @@ export function DatabaseViewHost({
           onOpenRecord={onOpenRecord}
           records={records}
           schema={schema}
+        />
+      );
+
+    case 'map':
+      return (
+        <MapView
+          databaseId={databaseId}
+          layoutConfig={activeView?.layoutConfig}
+          locale={locale}
+          onArchiveRecord={onArchiveRecord}
+          onCreateRecord={onCreateRecord}
+          onLayoutConfigChange={onLayoutConfigChange}
+          onManageProperties={onManageProperties}
+          onOpenRecord={onOpenRecord}
+          records={records}
+          schema={sourceSchema}
         />
       );
 

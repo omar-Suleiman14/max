@@ -57,6 +57,8 @@ import {
 import type { DatabaseService } from '../database/database-service';
 import { AssetError, type AssetStore } from '../assets/asset-store';
 import { PhotoLibraryError, type PhotoLibrary } from '../assets/photo-library';
+import { MapProviderError, type StaticMapProvider } from '../maps/map-provider';
+import type { MapPoint } from '../../shared/map-contract';
 import type { CloudBackupService } from '../cloud/cloud-backup-service';
 import { ObjectDomainError } from '../database/object-repository';
 import { WorkspaceDomainError, type MutationResult as WorkspaceMutationResult } from '../../shared/workspace-contract';
@@ -92,6 +94,7 @@ type RegisterIpcHandlersOptions = Readonly<{
   cloudBackups: CloudBackupService;
   database: DatabaseService;
   developmentServerUrl?: string;
+  maps?: StaticMapProvider;
   photos?: PhotoLibrary;
   platform: PlatformAdapter;
 }>;
@@ -485,6 +488,7 @@ export function registerIpcHandlers({
   cloudBackups,
   database,
   developmentServerUrl,
+  maps,
   photos,
   platform,
 }: RegisterIpcHandlersOptions): void {
@@ -853,6 +857,46 @@ export function registerIpcHandlers({
       if (typeof photo.downloadUrl === 'string') await photos?.reportDownload(photo.downloadUrl);
       return stored;
     });
+  });
+
+  function parseMapPoints(value: unknown): readonly MapPoint[] {
+    if (!Array.isArray(value) || value.length > 100) {
+      throw new MapProviderError('A valid set of map coordinates is required.');
+    }
+    const points = value.map((candidate) => {
+      if (!isObject(candidate)
+        || typeof candidate.latitude !== 'number'
+        || typeof candidate.longitude !== 'number'
+        || !Number.isFinite(candidate.latitude)
+        || !Number.isFinite(candidate.longitude)
+        || candidate.latitude < -90
+        || candidate.latitude > 90
+        || candidate.longitude < -180
+        || candidate.longitude > 180) {
+        throw new MapProviderError('A valid set of map coordinates is required.');
+      }
+      return { latitude: candidate.latitude, longitude: candidate.longitude };
+    });
+    return points;
+  }
+
+  ipcMain.handle(IPC_CHANNELS.mapsStatus, (event) => {
+    trust(event);
+    return maps?.status() ?? {
+      configured: false,
+      disclosure: 'Map rendering is unavailable in this build.',
+      providerName: 'Unavailable',
+    };
+  });
+  ipcMain.handle(IPC_CHANNELS.mapsRender, async (event, points: unknown) => {
+    trust(event);
+    try {
+      if (!maps) throw new MapProviderError('Map provider is not configured.');
+      return { ok: true, value: await maps.render(parseMapPoints(points)) };
+    } catch (error) {
+      const message = error instanceof MapProviderError ? error.message : 'Could not render the map.';
+      return { ok: false, error: { code: 'invalid-input', message } };
+    }
   });
 
   // Daily Reconciliation
