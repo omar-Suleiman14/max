@@ -181,4 +181,43 @@ describe('saved database view parity', () => {
       reopened.close();
     }
   });
+
+  it('round trips Form configuration and stores submissions as ordinary records', () => {
+    const { database, filename } = fileWorkspace();
+    const products = database.databases.createDatabase({ title: 'Products' });
+    const price = database.properties.createProperty({ databaseId: products.id, name: 'Price', type: 'number' });
+    database.views.createView({
+      databaseId: products.id,
+      layout: 'form',
+      layoutConfig: {
+        density: 'compact',
+        form: { fields: [
+          { helpText: 'Shown to the person entering data', label: 'Product name', propertyId: 'title', required: true, visible: true },
+          { label: 'Price', propertyId: price.id, required: true, visible: true },
+        ] },
+      },
+      name: 'Intake',
+    });
+    const submitted = database.records.createRecord({ databaseId: products.id, properties: { [price.id]: 99 }, title: 'Cable' });
+    expect(database.records.listRecords(products.id)).toContainEqual(expect.objectContaining({ id: submitted.id, title: 'Cable' }));
+    database.close();
+
+    const reopened = new DatabaseService(filename);
+    reopened.initialize();
+    try {
+      const view = reopened.views.listViews(products.id).find((candidate) => candidate.name === 'Intake');
+      expect(view?.layout).toBe('form');
+      expect(view?.layoutConfig).toEqual({
+        density: 'compact',
+        form: { fields: [
+          { helpText: 'Shown to the person entering data', label: 'Product name', propertyId: 'title', required: true, visible: true },
+          { label: 'Price', propertyId: price.id, required: true, visible: true },
+        ] },
+      });
+      expect(reopened.records.getRecord(submitted.id)).toEqual(expect.objectContaining({ databaseId: products.id, id: submitted.id, title: 'Cable' }));
+      expect(reopened.records.listRecords(products.id)).toHaveLength(1);
+    } finally {
+      reopened.close();
+    }
+  });
 });
