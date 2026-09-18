@@ -19,10 +19,28 @@ describe('propertiesToFrontmatterEntries', () => {
 });
 
 describe('applyFrontmatterEntries', () => {
-  it('preserves an existing property type against a conflicting YAML value', () => {
+  it('preserves an existing property type and normalizes compatible scalar YAML values', () => {
     const properties: PageProperty[] = [property({ id: '1', name: 'Priority', type: 'select', value: 'High', options: ['High', 'Low'] })];
     const next = applyFrontmatterEntries(properties, [['Priority', 42]]);
-    expect(next).toEqual([property({ id: '1', name: 'Priority', type: 'select', value: 42, options: ['High', 'Low'] })]);
+    expect(next).toEqual([property({ id: '1', name: 'Priority', type: 'select', value: '42', options: ['High', 'Low', '42'] })]);
+  });
+
+  it('ignores YAML values that cannot be represented by the existing property type', () => {
+    const properties: PageProperty[] = [
+      property({ id: '1', name: 'Done', type: 'checkbox', value: true }),
+      property({ id: '2', name: 'Count', type: 'number', value: 5 }),
+      property({ id: '3', name: 'Due', type: 'date', value: '2026-09-18' }),
+      property({ id: '4', name: 'Tags', type: 'multi_select', value: ['a'], options: ['a'] }),
+      property({ id: '5', name: 'Cover', type: 'file', value: { name: 'a.png', url: 'max://asset/a.png' } }),
+    ];
+
+    expect(applyFrontmatterEntries(properties, [
+      ['Done', 'yes'],
+      ['Count', '42'],
+      ['Due', 'tomorrow'],
+      ['Tags', 'a'],
+      ['Cover', 'replacement.png'],
+    ])).toEqual(properties);
   });
 
   it('infers a new property type from the value, never from the key name', () => {

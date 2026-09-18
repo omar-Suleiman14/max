@@ -14,9 +14,36 @@ export function propertiesToFrontmatterEntries(properties: readonly PageProperty
   return properties.filter((property) => SCALAR_TYPES.includes(property.type)).map((property): FrontmatterEntry => [property.name, toScalar(property.value)]);
 }
 
-function sameValue(a: PagePropertyValue, b: FrontmatterScalar): boolean {
+function sameValue(a: PagePropertyValue, b: PagePropertyValue): boolean {
   if (Array.isArray(a) && Array.isArray(b)) return a.length === b.length && a.every((v, i) => v === b[i]);
   return a === b;
+}
+
+type NormalizedFrontmatterValue = Readonly<{ valid: true; value: PagePropertyValue }> | Readonly<{ valid: false }>;
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Keeps an existing page property's persisted value compatible with its
+ * configured type. Frontmatter is a text editing surface, so scalar values can
+ * be stringified for text-like properties, while structurally typed values
+ * (number, checkbox, date and multi-select) only accept their native YAML shape.
+ *
+ * A mismatched value is ignored rather than corrupting the property. File and
+ * read-only timestamp properties are never writable from frontmatter.
+ */
+function normalizeForExistingType(type: PagePropertyType, value: FrontmatterScalar): NormalizedFrontmatterValue {
+  if (value === null) return SCALAR_TYPES.includes(type) ? { valid: true, value: null } : { valid: false };
+
+  if (['text', 'url', 'email', 'phone', 'select', 'status'].includes(type)) {
+    if (Array.isArray(value)) return { valid: false };
+    return { valid: true, value: String(value) };
+  }
+  if (type === 'number') return typeof value === 'number' ? { valid: true, value } : { valid: false };
+  if (type === 'checkbox') return typeof value === 'boolean' ? { valid: true, value } : { valid: false };
+  if (type === 'date') return typeof value === 'string' && ISO_DATE.test(value) ? { valid: true, value } : { valid: false };
+  if (type === 'multi_select') return Array.isArray(value) ? { valid: true, value } : { valid: false };
+  return { valid: false };
 }
 
 /**
@@ -45,10 +72,22 @@ export function applyFrontmatterEntries(properties: readonly PageProperty[], ent
       continue;
     }
     const current = next[existingIndex]!;
-    if (sameValue(current.value, value)) continue;
-    const incoming: readonly string[] = Array.isArray(value) ? value : [];
+    const normalized = normalizeForExistingType(current.type, value);
+    if (!normalized.valid || sameValue(current.value, normalized.value)) continue;
+    const incoming: readonly string[] = Array.isArray(normalized.value) ? normalized.value : [];
+    const incomingChoice = ['select', 'status'].includes(current.type) && typeof normalized.value === 'string'
+      ? normalized.value
+      : null;
     next = next.map((property, index) => index === existingIndex
-      ? { ...property, value, options: property.type === 'multi_select' && incoming.length ? [...new Set([...(property.options ?? []), ...incoming])] : property.options }
+      ? {
+        ...property,
+        value: normalized.value,
+        options: property.type === 'multi_select' && incoming.length
+          ? [...new Set([...(property.options ?? []), ...incoming])]
+          : incomingChoice && !(property.options ?? []).includes(incomingChoice)
+            ? [...(property.options ?? []), incomingChoice]
+            : property.options,
+      }
       : property);
   }
   return next;
