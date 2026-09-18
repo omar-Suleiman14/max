@@ -29,6 +29,11 @@ export type PropertyViewState = Readonly<{
   groupPropertyId?: string | null;
 }>;
 
+export type TimelineLayoutConfig = Readonly<{
+  endPropertyId?: string | null;
+  startPropertyId?: string | null;
+}>;
+
 export type WorkspaceView = Readonly<{
   archivedAt?: string | null;
   createdAt: string;

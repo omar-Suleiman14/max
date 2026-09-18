@@ -362,6 +362,7 @@ export function DatabasePage({ databaseId, embedded = false, initialViewId, loca
           onCreateRecord={createRecordInLayout}
           onOpenRecord={handleOpenRecord}
           onUpdateRecord={updateRecord}
+          onLayoutConfigChange={(layoutConfig) => { if (activeView) void updateView(activeView.id, { layoutConfig }); }}
           onManageProperties={() => setPropertyManagerOpen((open) => !open)}
           onEditProperty={(property) => { setEditingProperty(property); setPropertyModalOpen(true); }}
           onCoverPropertyChange={(coverPropertyId) => { if (activeView) void updateView(activeView.id, { propertyState: { ...activeView.propertyState, coverPropertyId: coverPropertyId || null } }); }}

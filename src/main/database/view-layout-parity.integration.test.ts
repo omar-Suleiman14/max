@@ -91,4 +91,34 @@ describe('saved database view parity', () => {
       reopened.close();
     }
   });
+
+  it('round trips Timeline date-range configuration across a close and reopen', () => {
+    const { database, filename } = fileWorkspace();
+    const tasks = database.databases.createDatabase({ title: 'Tasks' });
+    const start = database.properties.createProperty({ databaseId: tasks.id, name: 'Start', type: 'date' });
+    const due = database.properties.createProperty({ databaseId: tasks.id, name: 'Due', type: 'date' });
+    database.views.createView({
+      databaseId: tasks.id,
+      layout: 'timeline',
+      layoutConfig: {
+        density: 'compact',
+        timeline: { endPropertyId: due.id, startPropertyId: start.id },
+      },
+      name: 'Schedule',
+    });
+    database.close();
+
+    const reopened = new DatabaseService(filename);
+    reopened.initialize();
+    try {
+      const view = reopened.views.listViews(tasks.id).find((candidate) => candidate.name === 'Schedule');
+      expect(view?.layout).toBe('timeline');
+      expect(view?.layoutConfig).toEqual({
+        density: 'compact',
+        timeline: { endPropertyId: due.id, startPropertyId: start.id },
+      });
+    } finally {
+      reopened.close();
+    }
+  });
 });

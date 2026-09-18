@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { DatabaseSchema } from '../../shared/database-contract';
 import type { WorkspaceRecord, WorkspaceRecordDraft } from '../../shared/property-contract';
+import type { TimelineLayoutConfig } from '../../shared/view-contract';
 
 /** Property values are stored as unknown; only the scalar shapes are readable. */
 function formatValue(value: unknown): string {
@@ -9,16 +10,34 @@ function formatValue(value: unknown): string {
   return '';
 }
 
+function timelineObject(layoutConfig: Readonly<Record<string, unknown>>): Readonly<Record<string, unknown>> {
+  const timeline = layoutConfig.timeline;
+  return timeline && typeof timeline === 'object' && !Array.isArray(timeline)
+    ? timeline as Readonly<Record<string, unknown>>
+    : {};
+}
+
+function readTimelineConfig(layoutConfig: Readonly<Record<string, unknown>>): TimelineLayoutConfig {
+  const timeline = timelineObject(layoutConfig);
+  return {
+    endPropertyId: typeof timeline.endPropertyId === 'string' ? timeline.endPropertyId : null,
+    startPropertyId: typeof timeline.startPropertyId === 'string' ? timeline.startPropertyId : null,
+  };
+}
+
 type Props = {
   layout: 'chart' | 'timeline' | 'form';
+  layoutConfig?: Readonly<Record<string, unknown>>;
   records: readonly WorkspaceRecord[];
   schema: DatabaseSchema | null;
   locale: string;
+  onLayoutConfigChange?: (layoutConfig: Readonly<Record<string, unknown>>) => void;
+  onManageProperties?: () => void;
   onOpenRecord: (record: WorkspaceRecord) => void;
   onCreateRecord: (draft: WorkspaceRecordDraft) => Promise<WorkspaceRecord | null>;
 };
 
-export function AdditionalViews({ layout, records, schema, locale, onOpenRecord, onCreateRecord }: Props) {
+export function AdditionalViews({ layout, layoutConfig = {}, records, schema, locale, onLayoutConfigChange, onManageProperties, onOpenRecord, onCreateRecord }: Props) {
   const ar = locale === 'ar';
   const [propertyId, setPropertyId] = useState('');
   const [title, setTitle] = useState('');
@@ -28,7 +47,7 @@ export function AdditionalViews({ layout, records, schema, locale, onOpenRecord,
   if (!schema) return null;
   const numeric = schema.properties.filter(p => ['number', 'formula', 'rollup'].includes(p.type));
   const dates = schema.properties.filter(p => p.type === 'date');
-  const selected = (layout === 'timeline' ? dates : numeric).find(p => p.id === propertyId) ?? (layout === 'timeline' ? dates : numeric)[0];
+  const selected = numeric.find(p => p.id === propertyId) ?? numeric[0];
   const create = () => { void onCreateRecord({ databaseId: schema.database.id, title: ar ? 'بدون عنوان' : 'Untitled' }).then(record => { if (record) onOpenRecord(record); }); };
   if (layout === 'form') return <form className="database-entry-form" onSubmit={event => {
     event.preventDefault(); if (busy) return; setBusy(true); setMessage('');
@@ -38,10 +57,68 @@ export function AdditionalViews({ layout, records, schema, locale, onOpenRecord,
     {message && <p role="status">{message}</p>}<button className="btn btn-primary" disabled={busy} type="submit">{ar ? 'حفظ' : 'Submit'}</button>
   </form>;
   if (layout === 'timeline') {
-    const dated = records.map(record => ({record, date: selected ? formatValue(record.properties[selected.id]) : ''}));
-    return <section className="database-timeline"><label>{ar ? 'خاصية التاريخ' : 'Date property'}<select value={selected?.id ?? ''} onChange={event => setPropertyId(event.target.value)}><option value="">—</option>{dates.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
-      {!dates.length && <p>{ar ? 'أضف خاصية تاريخ من إعدادات الخصائص.' : 'Add a Date property in property settings to place records on the timeline.'}</p>}
-      {dated.sort((a,b) => (a.date || 'z').localeCompare(b.date || 'z')).map(({record,date}) => <button type="button" key={record.id} onClick={() => onOpenRecord(record)}><time>{date || (ar ? 'بدون تاريخ' : 'No date')}</time><span>{record.title}</span></button>)}<button type="button" onClick={create}>{ar ? 'سجل جديد' : 'New record'}</button></section>;
+    const timelineConfig = readTimelineConfig(layoutConfig);
+    const startProperty = dates.find(p => p.id === timelineConfig.startPropertyId) ?? dates[0];
+    const endProperty = timelineConfig.endPropertyId && timelineConfig.endPropertyId !== startProperty?.id
+      ? dates.find(p => p.id === timelineConfig.endPropertyId)
+      : undefined;
+    const saveTimelineConfig = (next: TimelineLayoutConfig) => {
+      onLayoutConfigChange?.({
+        ...layoutConfig,
+        timeline: { ...timelineObject(layoutConfig), ...next },
+      });
+    };
+
+    if (!startProperty) {
+      return <section className="database-timeline" dir={ar ? 'rtl' : 'ltr'}>
+        <div className="database-timeline__empty">
+          <p>{ar ? 'أضف خاصية تاريخ لعرض السجلات على الخط الزمني.' : 'Add a Date property to place records on the timeline.'}</p>
+          {onManageProperties && <button type="button" onClick={onManageProperties}>{ar ? 'إضافة خاصية تاريخ' : 'Add Date property'}</button>}
+        </div>
+        <button type="button" onClick={create}>{ar ? 'سجل جديد' : 'New record'}</button>
+      </section>;
+    }
+
+    const dated = records.map((record, index) => ({
+      end: endProperty ? formatValue(record.properties[endProperty.id]) : '',
+      index,
+      record,
+      start: formatValue(record.properties[startProperty.id]),
+    }));
+    dated.sort((a, b) => {
+      if (!a.start && b.start) return 1;
+      if (a.start && !b.start) return -1;
+      return a.start.localeCompare(b.start) || a.index - b.index;
+    });
+
+    return <section className="database-timeline" dir={ar ? 'rtl' : 'ltr'}>
+      <div className="database-timeline__controls">
+        <label>{ar ? 'تاريخ البداية' : 'Start date'}
+          <select value={startProperty.id} onChange={event => {
+            const startPropertyId = event.target.value;
+            saveTimelineConfig({
+              endPropertyId: timelineConfig.endPropertyId === startPropertyId ? null : timelineConfig.endPropertyId ?? null,
+              startPropertyId,
+            });
+          }}>{dates.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+        </label>
+        <label>{ar ? 'تاريخ النهاية' : 'End date'}
+          <select value={endProperty?.id ?? ''} onChange={event => saveTimelineConfig({
+            endPropertyId: event.target.value || null,
+            startPropertyId: startProperty.id,
+          })}>
+            <option value="">{ar ? 'بدون تاريخ نهاية' : 'No end date'}</option>
+            {dates.filter(p => p.id !== startProperty.id).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </label>
+      </div>
+      {dated.map(({ record, start, end }) => {
+        const startLabel = start || (endProperty ? (ar ? 'بدون تاريخ بداية' : 'No start date') : (ar ? 'بدون تاريخ' : 'No date'));
+        const range = endProperty ? `${startLabel} → ${end || (ar ? 'بدون تاريخ نهاية' : 'No end date')}` : startLabel;
+        return <button className="database-timeline__record" type="button" key={record.id} onClick={() => onOpenRecord(record)}><time>{range}</time><span>{record.title}</span></button>;
+      })}
+      <button type="button" onClick={create}>{ar ? 'سجل جديد' : 'New record'}</button>
+    </section>;
   }
   const data = records.map(record => ({record, value:selected ? Number(record.properties[selected.id]) || 0 : 1}));
   const maximum = Math.max(1,...data.map(row => Math.abs(row.value)));
