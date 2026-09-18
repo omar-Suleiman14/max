@@ -1,5 +1,5 @@
 import { useWorkspaceDisplay } from './workspace-display-preferences';
-import { useRef, useState } from 'react';
+import { lazy, Suspense, useRef, useState } from 'react';
 import { PageConnections } from './page-connections';
 
 import type { CustomPage } from '../app/app-types';
@@ -10,6 +10,10 @@ import { PageIconRenderer } from '../ui/page-icon-renderer';
 import { AddCoverButton, PageCover } from './page-cover';
 import { PageProperties } from './page-properties';
 import '../databases/database.css';
+
+// Loaded on demand: frontmatter is a minority workflow, so its parser and
+// source-view UI have no reason to sit in the startup bundle every page pays for.
+const PageFrontmatter = lazy(() => import('./page-frontmatter').then((module) => ({ default: module.PageFrontmatter })));
 
 type CustomPageViewProps = Readonly<{
   isHome?: boolean;
@@ -121,6 +125,9 @@ export function CustomPageView({
 
       {/* Notion Block Document Canvas */}
       <PageProperties createdAt={page.createdAt} properties={page.properties} locale={locale} onChange={(properties) => onUpdatePage(page.id, { properties })} updatedAt={page.updatedAt} />
+      <Suspense fallback={null}>
+        <PageFrontmatter locale={locale} properties={page.properties} onChange={(properties) => onUpdatePage(page.id, { properties })} />
+      </Suspense>
       <div
         className="custom-page-content"
         onClick={(e) => {
@@ -135,6 +142,7 @@ export function CustomPageView({
           blocks={page.blocks}
           locale={locale}
           onChange={handleBlocksChange}
+          onFrontmatterPaste={(entries) => { void import('./page-frontmatter-sync').then(({ applyFrontmatterEntries }) => onUpdatePage(page.id, { properties: applyFrontmatterEntries(page.properties ?? [], entries) })); }}
           onWorkspaceChange={onWorkspaceChange}
           parentPageId={page.id}
         />

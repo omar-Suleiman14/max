@@ -4,6 +4,7 @@ import { ExtraBlock } from '../pages/extra-blocks';
 import { renderInline, escapeText } from '../pages/rich-text';
 import { openPage } from '../pages/page-graph-store';
 import { safeWebUrl } from '../../shared/page-links';
+import type { FrontmatterEntry } from '../../shared/page-frontmatter';
 import {
   Check,
   Database,
@@ -241,6 +242,7 @@ type NotionBlockEditorProps = Readonly<{
   blocks: readonly NotionBlock[];
   locale: Locale;
   onChange: (blocks: readonly NotionBlock[]) => void;
+  onFrontmatterPaste?: (entries: readonly FrontmatterEntry[]) => void;
   onWorkspaceChange?: () => void;
   parentPageId?: string;
   placeholder?: string;
@@ -267,6 +269,7 @@ type RichTextBlockProps = {
   onBlur: () => void;
   onContentChange: (id: string, text: string) => void;
   onFocus: () => void;
+  onFrontmatterPaste?: (entries: readonly FrontmatterEntry[]) => void;
   onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => void;
   registerRef: (el: HTMLDivElement | null) => void;
 };
@@ -277,7 +280,7 @@ type RichTextBlockProps = {
  * interrupted; formatting is applied after a 500ms idle pause and whenever
  * content changes externally (block split, merge, etc.).
  */
-function RichTextBlock({ blockId, content, index, locale, onBlur, onContentChange, onFocus, onKeyDown, registerRef }: RichTextBlockProps) {
+function RichTextBlock({ blockId, content, index, locale, onBlur, onContentChange, onFocus, onFrontmatterPaste, onKeyDown, registerRef }: RichTextBlockProps) {
   const divRef = useRef<HTMLDivElement | null>(null);
   const savedSelection = useRef<Range | null>(null);
   const [selectionOpen, setSelectionOpen] = useState(false);
@@ -375,7 +378,31 @@ function RichTextBlock({ blockId, content, index, locale, onBlur, onContentChang
       onMouseUp={trackSelection}
       onKeyUp={trackSelection}
       onKeyDown={(event) => { if (event.nativeEvent.isComposing) return; if ((event.ctrlKey || event.metaKey) && ['b', 'i', 'u'].includes(event.key.toLowerCase())) { event.preventDefault(); document.execCommand(({ b: 'bold', i: 'italic', u: 'underline' })[event.key.toLowerCase() as 'b' | 'i' | 'u']); handleInput(); return; } onKeyDown(event); }}
-      onPaste={(event) => { event.preventDefault(); const html = event.clipboardData.getData('text/html'); if (html) { const doc = new DOMParser().parseFromString(html, 'text/html'); document.execCommand('insertHTML', false, renderInline(htmlToMarkdown(doc.body))); } else document.execCommand('insertText', false, event.clipboardData.getData('text/plain')); handleInput(); }}
+      onPaste={(event) => {
+        event.preventDefault();
+        const html = event.clipboardData.getData('text/html');
+        if (!html && index === 0 && !content && onFrontmatterPaste) {
+          const text = event.clipboardData.getData('text/plain');
+          if (text.trimStart().startsWith('---')) {
+            // Loaded on demand: a paste that opens with "---" is rare, and the
+            // frontmatter parser has no reason to sit in every page's startup bundle.
+            void import('../../shared/page-frontmatter').then(({ parseFrontmatterYaml, splitFrontmatterBlock }) => {
+              const split = splitFrontmatterBlock(text);
+              const parsed = split ? parseFrontmatterYaml(split.yaml) : null;
+              if (split && parsed && !parsed.error) {
+                onFrontmatterPaste(parsed.entries);
+                document.execCommand('insertText', false, split.body.replace(/^\n+/, ''));
+              } else {
+                document.execCommand('insertText', false, text);
+              }
+              handleInput();
+            });
+            return;
+          }
+        }
+        if (html) { const doc = new DOMParser().parseFromString(html, 'text/html'); document.execCommand('insertHTML', false, renderInline(htmlToMarkdown(doc.body))); } else document.execCommand('insertText', false, event.clipboardData.getData('text/plain'));
+        handleInput();
+      }}
       onClick={(event) => { const link = (event.target as Element).closest('a'); if (!link) return; event.preventDefault(); event.stopPropagation(); const id = link.getAttribute('data-page-id'); if (id) openPage(id); else { const url = safeWebUrl(link.getAttribute('href') ?? ''); if (url) void window.maxApi.workspace.openExternal(url).then((result) => { if (!result.ok) setLinkError(result.error.message); }).catch(() => setLinkError('Could not open link.')); } }}
       role="textbox"
       suppressContentEditableWarning
@@ -390,7 +417,7 @@ function RichTextBlock({ blockId, content, index, locale, onBlur, onContentChang
     </div>
   );
 }
-export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspaceChange, parentPageId }: NotionBlockEditorProps) {
+export function NotionBlockEditor({ blocks, locale, onChange: publish, onFrontmatterPaste, onWorkspaceChange, parentPageId }: NotionBlockEditorProps) {
   const currentBlocks = useRef(blocks);
   currentBlocks.current = blocks;
   const undoStack = useRef<(readonly NotionBlock[])[]>([]);
@@ -1317,7 +1344,7 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
         const isSlashActive = activeSlashBlockId === block.id;
         let listNumber = 1;
         for (let previous = index - 1; previous >= 0 && blocks[previous]?.type === 'number'; previous--) listNumber++;
-        const richText = <RichTextBlock blockId={block.id} content={block.content} focused={focusedBlockId === block.id} index={index} locale={locale} onContentChange={handleContentChange} onFocus={() => setFocusedBlockId(block.id)} onBlur={() => setFocusedBlockId(null)} onKeyDown={(event) => handleKeyDown(event, block, index)} registerRef={(element) => { if (element) inputRefs.current.set(block.id, element); else inputRefs.current.delete(block.id); }} />;
+        const richText = <RichTextBlock blockId={block.id} content={block.content} focused={focusedBlockId === block.id} index={index} locale={locale} onContentChange={handleContentChange} onFocus={() => setFocusedBlockId(block.id)} onBlur={() => setFocusedBlockId(null)} onFrontmatterPaste={onFrontmatterPaste} onKeyDown={(event) => handleKeyDown(event, block, index)} registerRef={(element) => { if (element) inputRefs.current.set(block.id, element); else inputRefs.current.delete(block.id); }} />;
 
         return (
           <div

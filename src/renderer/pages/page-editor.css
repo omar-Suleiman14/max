@@ -49,3 +49,14 @@
 .page-image-handle[data-corner="sw"]{bottom:-7px;left:-7px;cursor:nesw-resize}
 .page-image-handle[data-corner="se"]{bottom:-7px;right:-7px;cursor:nwse-resize}
 @media (prefers-reduced-motion:reduce){.page-image-handle{transition:none}}
+
+/* The page's properties, shown as a raw `---` delimited YAML source block. */
+.page-frontmatter-toggle{display:flex;align-items:center;gap:6px;margin:4px 0 10px;border:0;background:transparent;color:var(--muted);font:inherit;font-size:12px;padding:4px 2px;cursor:pointer}
+.page-frontmatter-toggle:hover{color:var(--text)}
+.page-frontmatter{margin:4px 0 14px;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.page-frontmatter__bar{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:var(--card);font-size:12px;color:var(--muted)}
+.page-frontmatter__bar button{border:0;background:transparent;color:var(--muted);cursor:pointer;font:inherit}
+.page-frontmatter__bar button:hover{color:var(--text)}
+.page-frontmatter__source{display:block;width:100%;min-height:90px;box-sizing:border-box;border:0;border-top:1px solid var(--line);background:var(--bg);color:var(--text);font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12.5px;line-height:1.6;padding:10px;resize:vertical;direction:ltr;text-align:start}
+.page-frontmatter__source[aria-invalid="true"]{outline:1px solid var(--danger,#e5534b)}
+.page-frontmatter__error{margin:0;padding:6px 10px;font-size:12px;color:var(--danger,#e5534b);background:var(--card)}
