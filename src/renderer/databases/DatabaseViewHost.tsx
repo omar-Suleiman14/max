@@ -23,6 +23,7 @@ type DatabaseViewHostProps = Readonly<{
   onArchiveRecord: (recordId: string) => Promise<void>;
   onCreateRecord: (draft: WorkspaceRecordDraft) => Promise<WorkspaceRecord | null>;
   onOpenRecord: (record: WorkspaceRecord) => void;
+  onLayoutConfigChange?: (layoutConfig: Readonly<Record<string, unknown>>) => void;
   onManageProperties?: () => void;
   onEditProperty?: (property: WorkspaceProperty | null) => void;
   onRemoveSorting?: () => Promise<void>;
@@ -46,6 +47,7 @@ export function DatabaseViewHost({
   onArchiveRecord,
   onCreateRecord,
   onOpenRecord,
+  onLayoutConfigChange,
   onManageProperties,
   onEditProperty,
   onColumnResize,
@@ -77,6 +79,7 @@ export function DatabaseViewHost({
           onArchiveRecord={onArchiveRecord}
           onCreateRecord={onCreateRecord}
           onOpenRecord={onOpenRecord}
+          onLayoutConfigChange={onLayoutConfigChange}
           onManageProperties={onManageProperties} onEditProperty={onEditProperty}
           onColumnResize={onColumnResize}
           onPropertyMove={onPropertyMove}
@@ -91,7 +94,18 @@ export function DatabaseViewHost({
     ))}</div>;
   }
 
-  if (layout === 'chart' || layout === 'timeline' || layout === 'form') return <AdditionalViews key={activeView?.id} layout={layout} schema={sourceSchema} records={records} locale={locale} onOpenRecord={onOpenRecord} onCreateRecord={onCreateRecord}/>;
+  if (layout === 'chart' || layout === 'timeline' || layout === 'form') return <AdditionalViews
+    key={activeView?.id}
+    layout={layout}
+    layoutConfig={activeView?.layoutConfig}
+    schema={layout === 'timeline' ? schema : sourceSchema}
+    records={records}
+    locale={locale}
+    onLayoutConfigChange={onLayoutConfigChange}
+    onManageProperties={onManageProperties}
+    onOpenRecord={onOpenRecord}
+    onCreateRecord={onCreateRecord}
+  />;
 
   switch (layout) {
     case 'gallery':
