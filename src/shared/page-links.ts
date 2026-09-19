@@ -38,7 +38,10 @@ export function pageGraphMetadata(contentJson: string): Readonly<{ properties: r
       }
       Object.values(object).forEach((item) => { if (item && typeof item === 'object') walk(item); });
     };
-    walk(root?.blocks ?? (Array.isArray(parsed) ? parsed : []));
+    const document = root?.document;
+    const documentBlocks = document && typeof document === 'object' && Array.isArray((document as Record<string, unknown>).blocks)
+      ? (document as Record<string, unknown>).blocks : root?.blocks;
+    walk(documentBlocks ?? (Array.isArray(parsed) ? parsed : []));
     return { properties, text: text.join('\n').slice(0, 20_000) };
   } catch {
     return { properties: [], text: '' };
@@ -55,7 +58,10 @@ export function pageLinkTargets(contentJson: string): readonly string[] {
     } else if (Array.isArray(value)) value.forEach(walk);
     else if (value && typeof value === 'object') {
       const object = value as Record<string, unknown>;
-      if (object.type === 'page-link' && typeof object.pageId === 'string') targets.add(object.pageId);
+      if (object.type === 'page-link') {
+        const data = object.data && typeof object.data === 'object' ? object.data as Record<string, unknown> : object;
+        if (typeof data.pageId === 'string') targets.add(data.pageId);
+      }
       Object.values(object).forEach(walk);
     }
   };

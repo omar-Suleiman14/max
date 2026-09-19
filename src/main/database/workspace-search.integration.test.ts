@@ -27,6 +27,17 @@ describe('searching the whole workspace', () => {
     expect(db.workspaceSearch.search('SN-4471', 10)[0]?.entityId).toBe(note.id);
   });
 
+  it('indexes text stored in the canonical MaxDocument envelope', () => {
+    const db = workspace();
+    const note = db.workspace.createNode({
+      contentJson: JSON.stringify({ document: { blocks: [{ data: { content: 'Canonical document search text' }, id: 'block-1', type: 'text' }], version: 1 } }),
+      kind: 'page',
+      title: 'Canonical page',
+    });
+
+    expect(db.workspaceSearch.search('canonical document', 10)[0]?.entityId).toBe(note.id);
+  });
+
   it('reads through nested column blocks and their captions', () => {
     const db = workspace();
     const note = page(db, 'Shelf layout', [{

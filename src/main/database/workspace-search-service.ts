@@ -77,12 +77,14 @@ export function blockText(contentJson: string): string {
         if (Array.isArray(row)) for (const cell of row) take(cell);
       }
     }
-    // contentJson wraps its blocks inside { blocks: [...] }.
-    walk(block.blocks);
+    // Historic pages use { blocks }; canonical Max pages use { document: { blocks } }.
+    const document = block.document;
+    walk(document && typeof document === 'object' ? (document as Record<string, unknown>).blocks : block.blocks);
     // Callouts, toggles and columns nest child blocks.
     walk(block.children);
     walk(block.col1Blocks);
     walk(block.col2Blocks);
+    walk(block.data);
   };
 
   walk(parsed);
