@@ -8,11 +8,10 @@ import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { NotionBlockEditor, type NotionBlock } from './notion-block-editor';
-import type { FrontmatterEntry } from '../../shared/page-frontmatter';
 
-function EditorHarness({ initial, onFrontmatterPaste, parentPageId }: Readonly<{ initial: readonly NotionBlock[]; onFrontmatterPaste?: (entries: readonly FrontmatterEntry[]) => void; parentPageId?: string }>) {
+function EditorHarness({ initial, parentPageId }: Readonly<{ initial: readonly NotionBlock[]; parentPageId?: string }>) {
   const [blocks, setBlocks] = useState(initial);
-  return <NotionBlockEditor blocks={blocks} locale="en" onChange={setBlocks} onFrontmatterPaste={onFrontmatterPaste} parentPageId={parentPageId} />;
+  return <NotionBlockEditor blocks={blocks} locale="en" onChange={setBlocks} parentPageId={parentPageId} />;
 }
 
 function pastePlainText(target: Element, text: string) {
@@ -118,12 +117,12 @@ describe('NotionBlockEditor', () => {
     expect((title as HTMLTextAreaElement).selectionStart).toBe('Shop notes'.length);
   });
 
-  it('lays a page that still holds two columns out one block after another', async () => {
+  it('renders both columns without rewriting the page', async () => {
     render(<EditorHarness initial={[
       { id: 'columns', type: 'columns', content: '', col1Blocks: [{ id: 'left', type: 'text', content: 'Left side' }], col2Blocks: [{ id: 'right', type: 'h3', content: 'Right side' }] },
     ]} />);
 
-    // The block was withdrawn; the writing inside one is kept.
+    expect(document.querySelector('[data-block-id="columns"]')).toBeInTheDocument();
     await waitFor(() => expect(screen.getAllByRole('textbox')).toHaveLength(2));
     expect(screen.getAllByRole('textbox').map((box) => box.textContent)).toEqual(['Left side', 'Right side']);
   });
@@ -419,38 +418,12 @@ describe('NotionBlockEditor', () => {
     await waitFor(() => expect(screen.getAllByRole('textbox')[1]!).toHaveFocus());
   });
 
-  it('reports frontmatter pasted at the start of an empty page instead of pasting it literally', async () => {
-    const onFrontmatterPaste = vi.fn();
-    render(<EditorHarness initial={[{ content: '', id: 'one', type: 'text' }]} onFrontmatterPaste={onFrontmatterPaste} />);
+  it('pastes YAML literally without consuming properties or body', () => {
+    render(<EditorHarness initial={[{ content: '', id: 'one', type: 'text' }]} />);
     const textbox = screen.getByRole('textbox');
     placeCaretAtStart(textbox);
     pastePlainText(textbox, '---\nTitle: Hello\nDone: true\n---\nBody text');
-    // The frontmatter parser loads on demand, so applying a matching paste is async.
-    await waitFor(() => expect(onFrontmatterPaste).toHaveBeenCalledWith([['Title', 'Hello'], ['Done', true]]));
+    expect(textbox).toHaveTextContent('Title: Hello');
     expect(textbox).toHaveTextContent('Body text');
-  });
-
-  it('does not treat ordinary pasted text as frontmatter', () => {
-    const onFrontmatterPaste = vi.fn();
-    render(<EditorHarness initial={[{ content: '', id: 'one', type: 'text' }]} onFrontmatterPaste={onFrontmatterPaste} />);
-    pastePlainText(screen.getByRole('textbox'), 'Just a normal paragraph.');
-    expect(onFrontmatterPaste).not.toHaveBeenCalled();
-  });
-
-  it('leaves an unterminated frontmatter block untouched rather than consuming the page body', async () => {
-    const onFrontmatterPaste = vi.fn();
-    render(<EditorHarness initial={[{ content: '', id: 'one', type: 'text' }]} onFrontmatterPaste={onFrontmatterPaste} />);
-    const textbox = screen.getByRole('textbox');
-    placeCaretAtStart(textbox);
-    pastePlainText(textbox, '---\nTitle: Hello\nstill going with no closer');
-    await waitFor(() => expect(textbox).toHaveTextContent('still going with no closer'));
-    expect(onFrontmatterPaste).not.toHaveBeenCalled();
-  });
-
-  it('does not treat a paste into a non-empty first block as frontmatter', () => {
-    const onFrontmatterPaste = vi.fn();
-    render(<EditorHarness initial={[{ content: 'Already has text', id: 'one', type: 'text' }]} onFrontmatterPaste={onFrontmatterPaste} />);
-    pastePlainText(screen.getByRole('textbox'), '---\nTitle: Hello\n---\nBody text');
-    expect(onFrontmatterPaste).not.toHaveBeenCalled();
   });
 });

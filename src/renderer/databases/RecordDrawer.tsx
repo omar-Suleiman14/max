@@ -10,9 +10,6 @@ import { ReadOnlyPropertyValue } from '../ui/property-editing';
 import { GripVertical, Plus } from 'lucide-react';
 import { MultiSelectValue } from './MultiSelectValue';
 import { isRequirementUnmet, unmetRequirements } from './required-properties';
-import { RecordFrontmatter } from './RecordFrontmatter';
-import { propertyDraftFromFrontmatter, resolveRecordFrontmatterValue, type RecordFrontmatterOperation } from '../../shared/record-frontmatter';
-import type { FrontmatterScalar } from '../../shared/page-frontmatter';
 
 import {
   Calendar,
@@ -158,38 +155,6 @@ export function RecordDrawer({
     void save({ properties: { [propertyId]: value } });
   };
 
-  const handleFrontmatterWrite = async (operation: RecordFrontmatterOperation): Promise<string | null> => {
-    await flush();
-    const patch: WorkspaceRecordPatch = operation.target === 'title'
-      ? { title: operation.value.trim() || 'Untitled' }
-      : { properties: { [operation.property.id]: operation.value } };
-    const result = await window.maxApi.workspace.updateRecord(record.id, patch);
-    if (!result.ok) return result.error.message;
-    if (operation.target === 'title') setTitle(result.value.title);
-    else setProperties((current) => ({ ...current, [operation.property.id]: result.value.properties[operation.property.id] }));
-    window.dispatchEvent(new Event('max:workspace-changed'));
-    return null;
-  };
-
-  const handleFrontmatterCreate = async (
-    key: string,
-    type: Parameters<typeof propertyDraftFromFrontmatter>[2],
-    value: FrontmatterScalar,
-  ): Promise<string | null> => {
-    const prepared = propertyDraftFromFrontmatter(record.databaseId, key, type, value);
-    if (prepared.error || !prepared.draft) return prepared.error ?? 'Property could not be created.';
-    const created = await window.maxApi.workspace.createProperty(prepared.draft);
-    if (!created.ok) return created.error.message;
-    const resolved = resolveRecordFrontmatterValue(created.value, value);
-    if (resolved.error) return resolved.error;
-    const updated = await window.maxApi.workspace.updateRecord(record.id, { properties: { [created.value.id]: resolved.value } });
-    if (!updated.ok) return updated.error.message;
-    const refreshed = await window.maxApi.workspace.getDatabaseSchema(record.databaseId);
-    setLocalSchema(refreshed);
-    setProperties({ ...updated.value.properties });
-    window.dispatchEvent(new Event('max:workspace-changed'));
-    return null;
-  };
 
   const handleBlocksChange = (newBlocks: readonly NotionBlock[]) => {
     setBlocks(newBlocks);
@@ -272,14 +237,6 @@ export function RecordDrawer({
               </p>
             )}
 
-            <RecordFrontmatter
-              locale={locale}
-              onCreateProperty={handleFrontmatterCreate}
-              onWrite={handleFrontmatterWrite}
-              properties={properties}
-              schema={schema}
-              title={title}
-            />
 
             {/* Properties Table */}
             <div className="record-drawer__properties">

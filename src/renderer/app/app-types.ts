@@ -2,6 +2,7 @@
 export const EMPTY_WORKSPACE_PAGE = 'workspace-empty';
 
 import type { LucideIcon } from 'lucide-react';
+import type { MaxDocument } from '../../shared/max-document';
 import type { PageCover } from '../../shared/cover-contract';
 import type { NotionBlock } from '../ui/notion-block-editor';
 import type { PageProperty } from '../pages/page-properties';
@@ -17,6 +18,9 @@ export type AppPage =
   | (string & {});
 
 export type CustomPage = Readonly<{
+  documentMetadata?: Readonly<Record<string, unknown>>;
+  documentEnvelope?: MaxDocument;
+  readOnlySource?: string;
   properties?: readonly PageProperty[];
   blocks: readonly NotionBlock[];
   cover?: PageCover;

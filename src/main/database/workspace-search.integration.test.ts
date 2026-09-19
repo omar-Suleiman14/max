@@ -16,6 +16,24 @@ function page(db: DatabaseService, title: string, blocks: readonly unknown[]) {
 const titles = (results: readonly { displayTitle: string }[]) => results.map((result) => result.displayTitle);
 
 describe('searching the whole workspace', () => {
+  it('includes mid-word title matches before body matches even at a small limit', () => {
+    const db = workspace();
+    const body = page(db, 'A body match', [{ content: 'needle', id: 'body', type: 'text' }]);
+    const contains = page(db, 'Hayneedle', []);
+    const exact = page(db, 'Needle', []);
+    expect(db.workspaceSearch.search('needle', 2).map(result => result.entityId)).toEqual([exact.id, contains.id]);
+    expect(db.workspaceSearch.search('needle', 3).map(result => result.entityId)).toContain(body.id);
+    db.close();
+  });
+
+  it('ranks Arabic exact titles and matches both digit sets', () => {
+    const db = workspace();
+    page(db, 'الحسابات ١٢٣ إضافية', []);
+    const exact = page(db, 'الحسابات ١٢٣', []);
+    expect(db.workspaceSearch.search('الحسابات 123', 1)[0]?.entityId).toBe(exact.id);
+    expect(db.workspaceSearch.search('الحسابات ١٢٣', 1)[0]?.entityId).toBe(exact.id);
+    db.close();
+  });
   it('finds a page by a word written inside it, not only by its title', () => {
     const db = workspace();
     const note = page(db, 'Monday handover', [
@@ -25,6 +43,17 @@ describe('searching the whole workspace', () => {
 
     expect(db.workspaceSearch.search('supplier', 10)[0]?.entityId).toBe(note.id);
     expect(db.workspaceSearch.search('SN-4471', 10)[0]?.entityId).toBe(note.id);
+  });
+
+  it('indexes text stored in the canonical MaxDocument envelope', () => {
+    const db = workspace();
+    const note = db.workspace.createNode({
+      contentJson: JSON.stringify({ document: { blocks: [{ data: { content: 'Canonical document search text' }, id: 'block-1', type: 'text' }], version: 1 } }),
+      kind: 'page',
+      title: 'Canonical page',
+    });
+
+    expect(db.workspaceSearch.search('canonical document', 10)[0]?.entityId).toBe(note.id);
   });
 
   it('reads through nested column blocks and their captions', () => {
@@ -69,6 +98,16 @@ describe('searching the whole workspace', () => {
 
     expect(titles(db.workspaceSearch.search('scr', 10))).toContain('Screen stock');
     expect(db.workspaceSearch.search('screen', 10)[0]?.entityId).toBe(screens.id);
+  });
+
+  it('orders exact titles, title prefixes, title contains, then body matches', () => {
+    const db = workspace();
+    const exact = page(db, 'Needle', [{ content: 'Nothing here', id: 'exact', type: 'text' }]);
+    const prefix = page(db, 'Needle notes', [{ content: 'Nothing here', id: 'prefix', type: 'text' }]);
+    const contains = page(db, 'My needle reference', [{ content: 'Nothing here', id: 'contains', type: 'text' }]);
+    const body = page(db, 'Reference', [{ content: 'Needle appears only in the body', id: 'body', type: 'text' }]);
+
+    expect(db.workspaceSearch.search('needle', 10).map((result) => result.entityId)).toEqual([exact.id, prefix.id, contains.id, body.id]);
   });
 
   it('finds a record by any of its property values', () => {

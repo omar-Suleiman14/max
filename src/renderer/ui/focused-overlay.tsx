@@ -30,13 +30,17 @@ export function FocusedOverlay({ children, className = '', labelId, onClose }: F
   }, []);
 
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    // Portalled child dialogs still bubble through their React parent.
+    if ((event.target as Element).closest('[role="dialog"]') !== panelRef.current) return;
     if (event.key === 'Escape') {
       event.preventDefault();
+      event.stopPropagation();
       onClose();
       return;
     }
 
     if (event.key !== 'Tab') return;
+    event.stopPropagation();
     const focusable = Array.from(panelRef.current?.querySelectorAll<HTMLElement>(focusableSelector) ?? []);
     if (focusable.length === 0) {
       event.preventDefault();
@@ -46,10 +50,10 @@ export function FocusedOverlay({ children, className = '', labelId, onClose }: F
     const first = focusable[0];
     const last = focusable.at(-1);
     if (!first) return;
-    if (event.shiftKey && document.activeElement === first) {
+    if (event.shiftKey && (document.activeElement === first || document.activeElement === panelRef.current)) {
       event.preventDefault();
       last?.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
+    } else if (!event.shiftKey && (document.activeElement === last || document.activeElement === panelRef.current)) {
       event.preventDefault();
       first.focus();
     }

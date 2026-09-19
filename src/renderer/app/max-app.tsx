@@ -263,7 +263,7 @@ export function MaxApp() {
         .catch(() => {});
     };
     refresh();
-    const timer = setInterval(refresh, 30_000);
+    const timer = setInterval(refresh, 2000);
     return () => { active = false; clearInterval(timer); };
   }, []);
 

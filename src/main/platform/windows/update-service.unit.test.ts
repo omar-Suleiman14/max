@@ -9,6 +9,38 @@ class Updater extends EventEmitter {
 }
 afterEach(() => vi.useRealTimers());
 describe('Windows updates', () => {
+  it('times out a stalled check and allows retry', () => {
+    vi.useFakeTimers();
+    const updater = new Updater();
+    const service = new UpdateService(updater, '1.2.0', 'https://example.com/feed');
+    expect(service.check().state).toBe('checking');
+    vi.advanceTimersByTime(60_000);
+    expect(service.getStatus().state).toBe('error');
+    expect(service.check().state).toBe('checking');
+    updater.emit('update-not-available');
+    vi.advanceTimersByTime(60_000);
+    expect(service.getStatus().state).toBe('current');
+    service.dispose();
+  });
+
+  it('shows installation progress and prevents duplicate installation', () => {
+    const updater = new Updater();
+    const service = new UpdateService(updater, '1.2.0', 'https://example.com/feed');
+    updater.emit('update-downloaded', {}, '', '1.3.0');
+    expect(service.install().state).toBe('installing');
+    service.install();
+    expect(updater.quitAndInstall).toHaveBeenCalledOnce();
+    service.dispose();
+  });
+
+  it('reports a failed installation', () => {
+    const updater = new Updater();
+    updater.quitAndInstall.mockImplementation(() => { throw new Error('failed'); });
+    const service = new UpdateService(updater, '1.2.0', 'https://example.com/feed');
+    updater.emit('update-downloaded');
+    expect(service.install().state).toBe('error');
+    service.dispose();
+  });
   it('checks automatically, prevents duplicate downloads, and installs only when ready', () => {
     vi.useFakeTimers(); const updater = new Updater();
     const service = new UpdateService(updater, '0.3.0', 'https://example.com/feed');
@@ -33,6 +65,29 @@ describe('Windows updates', () => {
 });
 
 describe('a build that cannot replace itself', () => {
+  it('does not call an empty feed up to date', async () => {
+    const service = new UpdateService(undefined, '1.2.0', '', () => Promise.resolve(null));
+    service.check();
+    await Promise.resolve();
+    expect(service.getStatus().state).toBe('error');
+    service.dispose();
+  });
+
+  it('ignores late feed replies after a timeout and retry', async () => {
+    vi.useFakeTimers();
+    let resolve!: (value: { version: string; downloadUrl: string }) => void;
+    const latest = vi.fn().mockImplementationOnce(() => new Promise(r => { resolve = r; })).mockResolvedValue({ version: '1.2.0', downloadUrl: 'https://example.com' });
+    const service = new UpdateService(undefined, '1.2.0', '', latest);
+    service.check();
+    vi.advanceTimersByTime(60_000);
+    expect(service.getStatus().state).toBe('error');
+    service.check();
+    await Promise.resolve();
+    resolve({ version: '9.0.0', downloadUrl: 'https://example.com' });
+    await Promise.resolve();
+    expect(service.getStatus().state).toBe('current');
+    service.dispose();
+  });
   const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
   it('reads the release feed and offers the download', async () => {
