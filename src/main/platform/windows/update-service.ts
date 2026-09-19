@@ -39,6 +39,19 @@ export class UpdateService {
   #startup?: ReturnType<typeof setTimeout>;
   #interval?: ReturnType<typeof setInterval>;
   #looking = false;
+  #watchdog?: ReturnType<typeof setTimeout>;
+  #generation = 0;
+  #disposed = false;
+
+  #watch(timeout: number): void {
+    clearTimeout(this.#watchdog);
+    this.#watchdog = setTimeout(() => {
+      this.#generation++;
+      this.#looking = false;
+      this.#status = { ...this.#status, state: 'error' };
+    }, timeout);
+    this.#watchdog.unref();
+  }
   constructor(
     private readonly updater: NativeUpdater | undefined,
     private readonly version: string,
@@ -54,6 +67,9 @@ export class UpdateService {
       'update-not-available': 'current', 'update-downloaded': 'ready', error: 'error',
     } as const)) {
       const listener = (...args: unknown[]) => {
+        if (this.#disposed || this.#status.state === 'installing') return;
+        if (state === 'checking' || state === 'downloading') this.#watch(state === 'downloading' ? 30 * 60_000 : 60_000);
+        else clearTimeout(this.#watchdog);
         // Squirrel reports `update-downloaded` as
         // (event, releaseNotes, releaseName, releaseDate, updateURL), so the
         // version people are being offered is the third argument.
@@ -69,10 +85,11 @@ export class UpdateService {
   }
   getStatus(): UpdateStatus { return { ...this.#status }; }
   check(): UpdateStatus {
-    if (['checking', 'downloading', 'ready'].includes(this.#status.state)) return this.getStatus();
+    if (this.#disposed || ['checking', 'downloading', 'ready', 'installing'].includes(this.#status.state)) return this.getStatus();
     if (!this.updater) { void this.#askTheFeed(); return this.getStatus(); }
     this.#status = { ...this.#status, state: 'checking', checkedAt: new Date().toISOString() };
-    try { this.updater.checkForUpdates(); } catch { this.#status = { ...this.#status, state: 'error' }; }
+    this.#watch(60_000);
+    try { this.updater.checkForUpdates(); } catch { clearTimeout(this.#watchdog); this.#status = { ...this.#status, state: 'error' }; }
     return this.getStatus();
   }
 
@@ -80,18 +97,24 @@ export class UpdateService {
   async #askTheFeed(): Promise<void> {
     if (!this.latestRelease || this.#looking) return;
     this.#looking = true;
+    const generation = ++this.#generation;
+    this.#watch(60_000);
     this.#status = { ...this.#status, state: 'checking', checkedAt: new Date().toISOString() };
     try {
       const release = await this.latestRelease();
+      if (this.#disposed || generation !== this.#generation) return;
+      if (!release) throw new Error('No release information');
       this.#status = release && isNewerVersion(release.version, this.version)
         ? { ...this.#status, availableVersion: release.version, downloadUrl: release.downloadUrl, state: 'available' }
-        : { ...this.#status, availableVersion: undefined, state: 'current' };
-    } catch { this.#status = { ...this.#status, state: 'error' }; }
-    finally { this.#looking = false; }
+        : { ...this.#status, availableVersion: undefined, downloadUrl: undefined, state: 'current' };
+    } catch { if (!this.#disposed && generation === this.#generation) this.#status = { ...this.#status, state: 'error' }; }
+    finally { if (generation === this.#generation) { this.#looking = false; clearTimeout(this.#watchdog); } }
   }
   install(): UpdateStatus {
-    if (this.#status.state === 'ready') {
-      try { this.updater?.quitAndInstall(); } catch { this.#status = { ...this.#status, state: 'error' }; }
+    if (!this.#disposed && this.#status.state === 'ready' && this.updater) {
+      this.#status = { ...this.#status, state: 'installing' };
+      this.#watch(60_000);
+      try { this.updater.quitAndInstall(); } catch { clearTimeout(this.#watchdog); this.#status = { ...this.#status, state: 'error' }; }
     }
     return this.getStatus();
   }
@@ -103,6 +126,9 @@ export class UpdateService {
     this.#startup.unref(); this.#interval.unref();
   }
   dispose(): void {
+    this.#disposed = true;
+    this.#generation++;
+    clearTimeout(this.#watchdog);
     clearTimeout(this.#startup); clearInterval(this.#interval);
     for (const [event, listener] of this.#listeners) this.updater?.removeListener(event, listener);
   }

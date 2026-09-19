@@ -16,6 +16,24 @@ function page(db: DatabaseService, title: string, blocks: readonly unknown[]) {
 const titles = (results: readonly { displayTitle: string }[]) => results.map((result) => result.displayTitle);
 
 describe('searching the whole workspace', () => {
+  it('includes mid-word title matches before body matches even at a small limit', () => {
+    const db = workspace();
+    const body = page(db, 'A body match', [{ content: 'needle', id: 'body', type: 'text' }]);
+    const contains = page(db, 'Hayneedle', []);
+    const exact = page(db, 'Needle', []);
+    expect(db.workspaceSearch.search('needle', 2).map(result => result.entityId)).toEqual([exact.id, contains.id]);
+    expect(db.workspaceSearch.search('needle', 3).map(result => result.entityId)).toContain(body.id);
+    db.close();
+  });
+
+  it('ranks Arabic exact titles and matches both digit sets', () => {
+    const db = workspace();
+    page(db, 'الحسابات ١٢٣ إضافية', []);
+    const exact = page(db, 'الحسابات ١٢٣', []);
+    expect(db.workspaceSearch.search('الحسابات 123', 1)[0]?.entityId).toBe(exact.id);
+    expect(db.workspaceSearch.search('الحسابات ١٢٣', 1)[0]?.entityId).toBe(exact.id);
+    db.close();
+  });
   it('finds a page by a word written inside it, not only by its title', () => {
     const db = workspace();
     const note = page(db, 'Monday handover', [

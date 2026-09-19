@@ -21,10 +21,8 @@ const SELECT_COLUMNS = `
   FROM workspace_search_index
 `;
 
-// A title match should outrank the same word buried in a page, so the title is
-// its own indexed column and carries most of the weight. The zeros are the
-// UNINDEXED display columns, which bm25 still expects a weight for.
-const RANKING = 'bm25(workspace_search_index, 0, 0, 0, 0, 0, 0, 12.0, 1.0)';
+// FTS finds body/token matches; normalized display titles supply exact, prefix
+// and substring ranking independently of the extra Arabic index tokens.
 
 const INSERT_SQL = `
   INSERT INTO workspace_search_index (
@@ -111,6 +109,7 @@ export class WorkspaceSearchService {
 
   constructor(database: DatabaseSync) {
     this.#database = database;
+    database.function('max_search_normalize', { deterministic: true }, (value) => normalizeSearchText(String(value ?? '')));
   }
 
   /**
@@ -211,20 +210,29 @@ export class WorkspaceSearchService {
     if (tokens.length === 0) return [];
 
     const ftsQuery = tokens.map((token) => `"${token}"*`).join(' AND ');
+    const escaped = normalized.replace(/[\\%_]/g, '\\$&');
+    const contains = `%${escaped}%`;
+    const prefix = `${escaped}%`;
+    const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(100, Math.trunc(limit))) : 20;
 
     try {
       const rows = this.#database
-        .prepare(`${SELECT_COLUMNS} WHERE workspace_search_index MATCH ?
-          ORDER BY CASE WHEN title_text = ? THEN 0 WHEN title_text LIKE ? THEN 1 WHEN title_text LIKE ? THEN 2 ELSE 3 END, ${RANKING}, display_title COLLATE NOCASE LIMIT ?`)
-        .all(ftsQuery, normalized, `${normalized}%`, `%${normalized}%`, limit) as FtsRow[];
+        .prepare(`${SELECT_COLUMNS} WHERE rowid IN (
+          SELECT rowid FROM workspace_search_index WHERE workspace_search_index MATCH ?
+          UNION SELECT rowid FROM workspace_search_index WHERE max_search_normalize(display_title) LIKE ? ESCAPE '\\'
+        ) ORDER BY CASE WHEN max_search_normalize(display_title) = ? THEN 0
+          WHEN max_search_normalize(display_title) LIKE ? ESCAPE '\\' THEN 1
+          WHEN max_search_normalize(display_title) LIKE ? ESCAPE '\\' THEN 2 ELSE 3 END,
+          display_title COLLATE NOCASE, entity_id LIMIT ?`)
+        .all(ftsQuery, contains, normalized, prefix, contains, safeLimit) as FtsRow[];
       return rows.map(toResult);
     } catch {
       // A query FTS5 will not parse still has to return something useful.
-      const pattern = `%${normalized}%`;
+      const pattern = contains;
       const rows = this.#database
         .prepare(`${SELECT_COLUMNS} WHERE title_text LIKE ? OR search_text LIKE ?
           ORDER BY CASE WHEN title_text = ? THEN 0 WHEN title_text LIKE ? THEN 1 WHEN title_text LIKE ? THEN 2 ELSE 3 END, display_title COLLATE NOCASE LIMIT ?`)
-        .all(pattern, pattern, normalized, `${normalized}%`, pattern, limit) as FtsRow[];
+        .all(pattern, pattern, normalized, prefix, pattern, safeLimit) as FtsRow[];
       return rows.map(toResult);
     }
   }

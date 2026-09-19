@@ -1,20 +1,9 @@
 import type { DatabaseSync } from 'node:sqlite';
 
 import type { SearchResult, SearchResultKind } from '../../shared/views-search-contract';
-import { toLatinDigits } from '../../shared/digits';
+import { normalizeSearchText } from '../../shared/search-text';
+export { normalizeSearchText } from '../../shared/search-text';
 
-export function normalizeSearchText(text: string): string {
-  return toLatinDigits(text)
-    .normalize('NFKD')
-    .toLowerCase()
-    .replace(/[\u064B-\u065F\u0670]/g, '')
-    .replace(/[أإآآٱ]/g, 'ا')
-    .replace(/[ة]/g, 'ه')
-    .replace(/[ى]/g, 'ي')
-    .replace(/[ؤ]/g, 'و')
-    .replace(/[ئ]/g, 'ي')
-    .trim();
-}
 
 type SearchIndexRow = Readonly<{
   display_metadata: string | null;
@@ -35,7 +24,9 @@ function toFtsQuery(term: string): string {
 }
 
 export class SearchService {
-  constructor(private readonly database: DatabaseSync) {}
+  constructor(private readonly database: DatabaseSync) {
+    database.function('max_search_normalize', { deterministic: true }, (value) => normalizeSearchText(String(value ?? '')));
+  }
 
   query(searchTerm: string, limit = 20): readonly SearchResult[] {
     const normalizedTerm = normalizeSearchText(searchTerm);
@@ -45,16 +36,20 @@ export class SearchService {
     if (!ftsQuery) return [];
 
     const safeLimit = Math.max(1, Math.min(Math.trunc(limit), 100));
+    const escaped = normalizedTerm.replace(/[\\%_]/g, '\\$&');
     const rows = this.database
       .prepare(`
         SELECT entity_id, kind, display_title, display_subtitle, display_metadata,
-          bm25(search_index) AS rank
+          0 AS rank
         FROM search_index
-        WHERE search_index MATCH ?
-        ORDER BY rank, display_title COLLATE NOCASE
+        WHERE rowid IN (SELECT rowid FROM search_index WHERE search_index MATCH ?
+          UNION SELECT rowid FROM search_index WHERE max_search_normalize(display_title) LIKE ? ESCAPE '\\')
+        ORDER BY CASE WHEN max_search_normalize(display_title) = ? THEN 0
+          WHEN max_search_normalize(display_title) LIKE ? ESCAPE '\\' THEN 1
+          WHEN max_search_normalize(display_title) LIKE ? ESCAPE '\\' THEN 2 ELSE 3 END, display_title COLLATE NOCASE
         LIMIT ?
       `)
-      .all(ftsQuery, safeLimit) as SearchIndexRow[];
+      .all(ftsQuery, `%${escaped}%`, normalizedTerm, `${escaped}%`, `%${escaped}%`, safeLimit) as SearchIndexRow[];
 
     return rows.map((row, index) => {
       const normalizedTitle = normalizeSearchText(row.display_title);

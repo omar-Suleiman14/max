@@ -8,9 +8,12 @@ const CUSTOM_PAGES_KEY = 'max:custom_pages';
 const LEGACY_TRASHED_PAGES_KEY = 'max:trashed_pages';
 
 function fromWorkspacePage(page: WorkspaceNode): CustomPage {
-  const { document, metadata } = parsePageDocument(page.contentJson);
+  const { document, metadata, readOnlySource } = parsePageDocument(page.contentJson);
   const layout = metadata as { cover?: unknown; favorite?: boolean; wiki?: boolean; properties?: CustomPage['properties'] };
   return {
+    documentMetadata: metadata,
+    documentEnvelope: document,
+    readOnlySource,
     blocks: maxDocumentToLegacyBlocks(document) as readonly NotionBlock[],
     properties: Array.isArray(layout.properties) ? layout.properties : [],
     cover: parseCover(layout.cover),
@@ -28,9 +31,9 @@ function fromWorkspacePage(page: WorkspaceNode): CustomPage {
 
 function toWorkspacePatch(page: CustomPage) {
   return {
-    contentJson: serializePageDocument({
-      document: legacyBlocksToMaxDocument(page.blocks),
-      metadata: { cover: page.cover, favorite: page.favorite ?? false, properties: page.properties ?? [], wiki: page.wiki ?? false },
+    contentJson: page.readOnlySource ?? serializePageDocument({
+      document: { ...page.documentEnvelope, ...legacyBlocksToMaxDocument(page.blocks) },
+      metadata: { ...page.documentMetadata, cover: page.cover, favorite: page.favorite ?? false, properties: page.properties ?? [], wiki: page.wiki ?? false },
     }),
     icon: page.icon,
     parentNodeId: page.parentNodeId,
@@ -70,7 +73,7 @@ export async function createPersistentCustomPage(
 export async function updatePersistentCustomPage(page: CustomPage, position: number): Promise<void> {
   const result = await window.maxApi.workspace.updateNode(page.id, {
     ...toWorkspacePatch(page),
-    positionKey: `p${String(position).padStart(8, '0')}`,
+    positionKey: page.positionKey ?? `p${String(position).padStart(8, '0')}`,
   });
   if (result.ok) window.dispatchEvent(new Event('max:page-content-changed'));
 }

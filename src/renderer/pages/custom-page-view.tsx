@@ -1,21 +1,16 @@
 import { useWorkspaceDisplay } from './workspace-display-preferences';
-import { lazy, Suspense, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { PageConnections } from './page-connections';
 
 import type { CustomPage } from '../app/app-types';
 import type { Locale } from '../app/i18n';
 import { IconPickerDialog } from '../ui/icon-picker-dialog';
 import { NotionBlockEditor, type NotionBlock } from '../ui/notion-block-editor';
-import { BlockNotePageEditor } from '../ui/blocknote-page-editor';
-import { canUseBlockNote } from '../ui/blocknote-support';
 import { PageIconRenderer } from '../ui/page-icon-renderer';
 import { AddCoverButton, PageCover } from './page-cover';
 import { PageProperties } from './page-properties';
 import '../databases/database.css';
 
-// Loaded on demand: frontmatter is a minority workflow, so its parser and
-// source-view UI have no reason to sit in the startup bundle every page pays for.
-const PageFrontmatter = lazy(() => import('./page-frontmatter').then((module) => ({ default: module.PageFrontmatter })));
 
 type CustomPageViewProps = Readonly<{
   isHome?: boolean;
@@ -127,9 +122,6 @@ export function CustomPageView({
 
       {/* Notion Block Document Canvas */}
       <PageProperties createdAt={page.createdAt} properties={page.properties} locale={locale} onChange={(properties) => onUpdatePage(page.id, { properties })} updatedAt={page.updatedAt} />
-      <Suspense fallback={null}>
-        <PageFrontmatter locale={locale} properties={page.properties} onChange={(properties) => onUpdatePage(page.id, { properties })} />
-      </Suspense>
       <div
         className="custom-page-content"
         onClick={(e) => {
@@ -140,13 +132,10 @@ export function CustomPageView({
           }
         }}
       >
-        {canUseBlockNote(page.blocks)
-          ? <BlockNotePageEditor blocks={page.blocks} locale={locale} onChange={handleBlocksChange} />
-          : <NotionBlockEditor
+        {page.readOnlySource !== undefined ? <p role="alert">{locale === 'ar' ? 'تعذر فتح محتوى هذه الصفحة بأمان. تم الاحتفاظ بالمحتوى الأصلي دون تغيير.' : 'This page content cannot be opened safely. Its original content has been preserved unchanged.'}</p> : <NotionBlockEditor
               blocks={page.blocks}
               locale={locale}
               onChange={handleBlocksChange}
-              onFrontmatterPaste={(entries) => { void import('./page-frontmatter-sync').then(({ applyFrontmatterEntries }) => onUpdatePage(page.id, { properties: applyFrontmatterEntries(page.properties ?? [], entries) })); }}
               onWorkspaceChange={onWorkspaceChange}
               parentPageId={page.id}
             />}

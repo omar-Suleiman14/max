@@ -4,7 +4,7 @@ export type UpdateStatus = Readonly<{
    * means a newer release exists but this build cannot install itself — a Mac,
    * a Linux package or a portable copy — so the answer is a download link.
    */
-  state: 'unsupported' | 'idle' | 'checking' | 'downloading' | 'available' | 'ready' | 'current' | 'error';
+  state: 'unsupported' | 'idle' | 'checking' | 'downloading' | 'available' | 'ready' | 'installing' | 'current' | 'error';
   currentVersion: string;
   /** Version waiting to be installed, when the feed named one. */
   availableVersion?: string;

@@ -1,10 +1,10 @@
+import { isUnsupportedLegacyBlock } from '../../shared/max-document-legacy';
 import { DatabaseSkeleton } from '../databases/DatabaseSkeleton';
 import { LegacyDatabaseLink } from '../databases/LegacyDatabaseLink';
 import { ExtraBlock } from '../pages/extra-blocks';
 import { renderInline, escapeText } from '../pages/rich-text';
 import { openPage } from '../pages/page-graph-store';
 import { safeWebUrl } from '../../shared/page-links';
-import type { FrontmatterEntry } from '../../shared/page-frontmatter';
 import {
   Check,
   Database,
@@ -118,7 +118,7 @@ export type BlockType =
   | 'toggle'
   | 'bullet'
   | 'callout'
-  | 'columns' // legacy: flattened into its children on load
+  | 'columns' // legacy: preserve each column independently
   | 'database-view'
   | 'divider'
   | 'h1'
@@ -242,7 +242,6 @@ type NotionBlockEditorProps = Readonly<{
   blocks: readonly NotionBlock[];
   locale: Locale;
   onChange: (blocks: readonly NotionBlock[]) => void;
-  onFrontmatterPaste?: (entries: readonly FrontmatterEntry[]) => void;
   onWorkspaceChange?: () => void;
   parentPageId?: string;
   placeholder?: string;
@@ -269,7 +268,6 @@ type RichTextBlockProps = {
   onBlur: () => void;
   onContentChange: (id: string, text: string) => void;
   onFocus: () => void;
-  onFrontmatterPaste?: (entries: readonly FrontmatterEntry[]) => void;
   onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => void;
   registerRef: (el: HTMLDivElement | null) => void;
 };
@@ -280,7 +278,7 @@ type RichTextBlockProps = {
  * interrupted; formatting is applied after a 500ms idle pause and whenever
  * content changes externally (block split, merge, etc.).
  */
-function RichTextBlock({ blockId, content, index, locale, onBlur, onContentChange, onFocus, onFrontmatterPaste, onKeyDown, registerRef }: RichTextBlockProps) {
+function RichTextBlock({ blockId, content, index, locale, onBlur, onContentChange, onFocus, onKeyDown, registerRef }: RichTextBlockProps) {
   const divRef = useRef<HTMLDivElement | null>(null);
   const savedSelection = useRef<Range | null>(null);
   const [selectionOpen, setSelectionOpen] = useState(false);
@@ -381,25 +379,6 @@ function RichTextBlock({ blockId, content, index, locale, onBlur, onContentChang
       onPaste={(event) => {
         event.preventDefault();
         const html = event.clipboardData.getData('text/html');
-        if (!html && index === 0 && !content && onFrontmatterPaste) {
-          const text = event.clipboardData.getData('text/plain');
-          if (text.trimStart().startsWith('---')) {
-            // Loaded on demand: a paste that opens with "---" is rare, and the
-            // frontmatter parser has no reason to sit in every page's startup bundle.
-            void import('../../shared/page-frontmatter').then(({ parseFrontmatterYaml, splitFrontmatterBlock }) => {
-              const split = splitFrontmatterBlock(text);
-              const parsed = split ? parseFrontmatterYaml(split.yaml) : null;
-              if (split && parsed && !parsed.error) {
-                onFrontmatterPaste(parsed.entries);
-                document.execCommand('insertText', false, split.body.replace(/^\n+/, ''));
-              } else {
-                document.execCommand('insertText', false, text);
-              }
-              handleInput();
-            });
-            return;
-          }
-        }
         if (html) { const doc = new DOMParser().parseFromString(html, 'text/html'); document.execCommand('insertHTML', false, renderInline(htmlToMarkdown(doc.body))); } else document.execCommand('insertText', false, event.clipboardData.getData('text/plain'));
         handleInput();
       }}
@@ -417,7 +396,7 @@ function RichTextBlock({ blockId, content, index, locale, onBlur, onContentChang
     </div>
   );
 }
-export function NotionBlockEditor({ blocks, locale, onChange: publish, onFrontmatterPaste, onWorkspaceChange, parentPageId }: NotionBlockEditorProps) {
+export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspaceChange, parentPageId }: NotionBlockEditorProps) {
   const currentBlocks = useRef(blocks);
   currentBlocks.current = blocks;
   const undoStack = useRef<(readonly NotionBlock[])[]>([]);
@@ -430,18 +409,6 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onFrontma
     currentBlocks.current = next;
     publish(next);
   }
-  // Two side-by-side columns were withdrawn: they were unusable on a narrow
-  // window and every block inside them sat outside the page's own selection and
-  // undo. A page that still holds one keeps its writing, laid out one block
-  // after another.
-  useEffect(() => {
-    if (!blocks.some((block) => block.type === 'columns')) return;
-    publish(blocks.flatMap((block) => block.type === 'columns'
-      ? [...(block.col1Blocks ?? []), ...(block.col2Blocks ?? [])].filter((child) => child.content || child.type !== 'text')
-      : [block]));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [blocks]);
-
   const deletedSelection = useRef<readonly NotionBlock[] | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const selectionAnchor = useRef<number | null>(null);
@@ -1339,12 +1306,13 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onFrontma
       <p className="sr-only" role="status">{failedMoveBlockId ? (locale === 'ar' ? 'لا يمكن نقل الكتلة أبعد من ذلك.' : 'This block cannot move any farther.') : ''}</p>
       {fileError && <p role="alert">{fileError}</p>}
       {blocks.map((block, index) => {
+        if (isUnsupportedLegacyBlock(block) || typeof block.content !== 'string' || !['text', 'h1', 'h2', 'h3', 'bullet', 'number', 'todo', 'quote', 'code', 'toggle', 'callout', 'columns', 'database-view', 'divider', 'page-link', 'embed', 'bookmark', 'image', 'video', 'audio', 'file', 'simple-table', 'table-of-contents'].includes(block.type)) return <div key={block.id} role="note">{locale === 'ar' ? 'كتلة غير مدعومة — تم الاحتفاظ بالمحتوى.' : 'Unsupported block — content preserved.'}</div>;
         const isDragging = draggedIndex === index;
         const isDragOver = dragOverIndex === index;
         const isSlashActive = activeSlashBlockId === block.id;
         let listNumber = 1;
         for (let previous = index - 1; previous >= 0 && blocks[previous]?.type === 'number'; previous--) listNumber++;
-        const richText = <RichTextBlock blockId={block.id} content={block.content} focused={focusedBlockId === block.id} index={index} locale={locale} onContentChange={handleContentChange} onFocus={() => setFocusedBlockId(block.id)} onBlur={() => setFocusedBlockId(null)} onFrontmatterPaste={onFrontmatterPaste} onKeyDown={(event) => handleKeyDown(event, block, index)} registerRef={(element) => { if (element) inputRefs.current.set(block.id, element); else inputRefs.current.delete(block.id); }} />;
+        const richText = <RichTextBlock blockId={block.id} content={block.content} focused={focusedBlockId === block.id} index={index} locale={locale} onContentChange={handleContentChange} onFocus={() => setFocusedBlockId(block.id)} onBlur={() => setFocusedBlockId(null)} onKeyDown={(event) => handleKeyDown(event, block, index)} registerRef={(element) => { if (element) inputRefs.current.set(block.id, element); else inputRefs.current.delete(block.id); }} />;
 
         return (
           <div
@@ -1466,6 +1434,7 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onFrontma
 
             {/* Block Body */}
             <div className="notion-block-body">
+              {block.type === 'columns' && <div className="notion-columns">{(['col1Blocks', 'col2Blocks'] as const).map((column) => <NotionBlockEditor key={column} blocks={block[column] ?? []} locale={locale} onChange={(next) => updateBlock(block.id, { [column]: next })} parentPageId={parentPageId} onWorkspaceChange={onWorkspaceChange} />)}</div>}
               {['page-link', 'embed', 'bookmark', 'image', 'video', 'audio', 'file', 'simple-table', 'table-of-contents'].includes(block.type) && <ExtraBlock block={block} blocks={blocks} locale={locale} onChange={(patch) => updateBlock(block.id, patch)} />}
               {block.type === 'text' && richText}
               {(block.type === 'quote' || block.type === 'code') && <textarea ref={(element) => { if (element) inputRefs.current.set(block.id, element); else inputRefs.current.delete(block.id); }} className={'notion-extra-block notion-extra-block--' + block.type} aria-label={block.type} rows={Math.max(2, block.content.split('\n').length)} value={block.content} onChange={(event) => updateBlock(block.id, { content: event.target.value })} onKeyDown={(event) => {
@@ -1474,7 +1443,7 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onFrontma
                 if (block.type !== 'code') handleKeyDown(event, block, index);
                 else if (event.key === 'Backspace' && !block.content) handleKeyDown(event, block, index);
               }} />}
-              {block.type === 'toggle' && <details className="notion-toggle-block" open={block.checked !== false} onToggle={(event) => updateBlock(block.id, { checked: (event.target as HTMLDetailsElement).open })}><summary><input ref={(element) => { if (element) inputRefs.current.set(block.id, element); else inputRefs.current.delete(block.id); }} placeholder={locale === 'ar' ? 'عنوان' : 'Toggle heading'} value={block.content} onChange={(event) => updateBlock(block.id, { content: event.target.value })} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => {
+              {block.type === 'toggle' && <details className="notion-toggle-block" open={block.checked !== false} onToggle={(event) => { const open = (event.target as HTMLDetailsElement).open; if (open !== (block.checked !== false)) updateBlock(block.id, { checked: open }); }}><summary><input ref={(element) => { if (element) inputRefs.current.set(block.id, element); else inputRefs.current.delete(block.id); }} placeholder={locale === 'ar' ? 'عنوان' : 'Toggle heading'} value={block.content} onChange={(event) => updateBlock(block.id, { content: event.target.value })} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => {
                 // Enter on a toggle's own line starts the first line inside it,
                 // which is the whole point of a toggle. It used to do nothing.
                 if (event.key === 'Enter' && !event.shiftKey) {

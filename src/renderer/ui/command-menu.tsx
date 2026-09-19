@@ -3,6 +3,7 @@ import { useMemo, useState, type KeyboardEvent } from 'react';
 
 import { type Locale, translate } from '../app/i18n';
 import { FocusedOverlay } from './focused-overlay';
+import { normalizeSearchText } from '../../shared/search-text';
 
 export type Command = Readonly<{
   id: string;
@@ -20,18 +21,16 @@ type CommandMenuProps = Readonly<{
 export function CommandMenu({ commands, locale, onClose }: CommandMenuProps) {
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
-  const normalizedQuery = query.trim().toLocaleLowerCase(locale);
+  const normalizedQuery = normalizeSearchText(query);
   const visibleCommands = useMemo(
     () =>
       normalizedQuery.length === 0
         ? commands
         : commands.filter((command) =>
-            [command.label, ...command.keywords]
-              .join(' ')
-              .toLocaleLowerCase(locale)
+            normalizeSearchText([command.label, ...command.keywords].join(' '))
               .includes(normalizedQuery),
           ),
-    [commands, locale, normalizedQuery],
+    [commands, normalizedQuery],
   );
   const safeActiveIndex = Math.min(activeIndex, Math.max(visibleCommands.length - 1, 0));
 

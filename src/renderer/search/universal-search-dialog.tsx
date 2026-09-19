@@ -23,7 +23,7 @@ import { localeDigit, shortcutDigit } from '../app/keyboard';
 import { FocusedOverlay } from '../ui/focused-overlay';
 import { PageIconRenderer } from '../ui/page-icon-renderer';
 import { searchCopy } from './search-i18n';
-import { toLatinDigits } from '../../shared/digits';
+import { normalizeSearchText } from '../../shared/search-text';
 
 const QuickActionForm = lazy(() => import('../workflows/quick-action-form').then((module) => ({ default: module.QuickActionForm })));
 
@@ -57,7 +57,7 @@ type Section = Readonly<{ items: readonly UniversalSearchResult[]; title: string
 
 /** Exact title, prefix title, contains title, then body or metadata matches. */
 function rankResult(result: UniversalSearchResult, query: string): number {
-  const title = toLatinDigits(result.title).toLocaleLowerCase();
+  const title = normalizeSearchText(result.title);
   if (title === query) return 0;
   if (title.startsWith(query)) return 1;
   if (title.includes(query)) return 2;
@@ -174,7 +174,7 @@ export function UniversalSearchDialog({
             title: result.displayTitle,
           }));
           const seen = new Set(generic.map((result) => result.id));
-          const normalizedQuery = toLatinDigits(trimmed).toLocaleLowerCase(locale);
+          const normalizedQuery = normalizeSearchText(trimmed);
           setMatches([...generic, ...legacyResults.filter((result) => !seen.has(result.id))]
             .sort((a, b) => rankResult(a, normalizedQuery) - rankResult(b, normalizedQuery) || a.title.localeCompare(b.title, locale)));
         } catch {
