@@ -1,3 +1,4 @@
+import { BlockActionMenu } from './block-action-menu';
 import { isUnsupportedLegacyBlock } from '../../shared/max-document-legacy';
 import { DatabaseSkeleton } from '../databases/DatabaseSkeleton';
 import { LegacyDatabaseLink } from '../databases/LegacyDatabaseLink';
@@ -471,13 +472,13 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
   useEffect(() => {
     if (!blockMenuId) return;
     const close = (event: PointerEvent) => {
-      if (event.target instanceof Element && event.target.closest('.notion-block-gutter')) return;
+      if (event.target instanceof Element && event.target.closest('.notion-block-gutter,.notion-block-action-menu')) return;
       setBlockMenuId(null);
     };
     const escape = (event: globalThis.KeyboardEvent) => { if (event.key === 'Escape') { event.stopPropagation(); setBlockMenuId(null); } };
     document.addEventListener('pointerdown', close);
-    document.addEventListener('keydown', escape, true);
-    return () => { document.removeEventListener('pointerdown', close); document.removeEventListener('keydown', escape, true); };
+    document.addEventListener('keydown', escape);
+    return () => { document.removeEventListener('pointerdown', close); document.removeEventListener('keydown', escape); };
   }, [blockMenuId]);
   const [workspaceDatabases, setWorkspaceDatabases] = useState<readonly NavigationItem[]>([]);
   const [newDatabaseBlockId, setNewDatabaseBlockId] = useState<string | null>(null);
@@ -1296,7 +1297,7 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
         else focusBlock(last.id);
       }}
     >
-      {selectedLines.length > 0 && <div className="block-selection-toolbar" role="toolbar" aria-label={locale === 'ar' ? 'الكتل المحددة' : 'Selected blocks'}>
+      {selectedLines.length > 0 && !blockMenuId && <div className="block-selection-toolbar" role="toolbar" aria-label={locale === 'ar' ? 'الكتل المحددة' : 'Selected blocks'}>
         <span>{selectedLines.length} {locale === 'ar' ? 'محدد' : 'selected'}</span>
         <select aria-label={locale === 'ar' ? 'تحويل إلى' : 'Turn selected blocks into'} value="" onChange={event => {
           const type = event.target.value as BlockType;
@@ -1414,21 +1415,12 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
                 <GripVertical size={14} />
               </button>
               {blockMenuId === block.id && (
-                <div className="notion-block-action-menu" role="menu">
-                  <button onClick={() => { setBlockMenuId(null); updateBlock(block.id, { type: 'text' }); }} role="menuitem" type="button">{locale === 'ar' ? 'نص' : 'Text'}</button>
-                  <button onClick={() => { setBlockMenuId(null); updateBlock(block.id, { type: 'h2' }); }} role="menuitem" type="button">{locale === 'ar' ? 'عنوان' : 'Heading'}</button>
-                  <button onClick={() => { const next = [...blocks]; next.splice(index + 1, 0, duplicateBlock(block)); onChange(next); setBlockMenuId(null); }} role="menuitem" type="button">{locale === 'ar' ? 'إنشاء نسخة' : 'Duplicate'}</button>
-                  <button disabled={index === 0} onClick={() => { moveBlock(index, -1); setBlockMenuId(null); }} role="menuitem" type="button">{locale === 'ar' ? 'نقل لأعلى' : 'Move up'}</button>
-                  <button disabled={index === blocks.length - 1} onClick={() => { moveBlock(index, 1); setBlockMenuId(null); }} role="menuitem" type="button">{locale === 'ar' ? 'نقل لأسفل' : 'Move down'}</button>
-                  {['text', 'h1', 'h2', 'h3', 'bullet', 'number', 'todo', 'quote', 'code'].includes(block.type) && <details><summary>{locale === 'ar' ? 'تحويل إلى' : 'Turn into'}</summary>{(['text', 'h1', 'h2', 'h3', 'bullet', 'number', 'todo', 'quote', 'code'] as const).map((type) => <button type="button" role="menuitem" key={type} onClick={() => { updateBlock(block.id, { type }); setBlockMenuId(null); }}>{({ text: 'Text', h1: 'Heading 1', h2: 'Heading 2', h3: 'Heading 3', bullet: 'Bulleted list', number: 'Numbered list', todo: 'To-do', quote: 'Quote', code: 'Code' })[type]}</button>)}</details>}
-                  <details><summary>{locale === 'ar' ? 'اللون' : 'Colour'}</summary>
-                    <p className="notion-color-section-label">{locale === 'ar' ? 'لون النص' : 'Text colour'}</p>
-                    {TEXT_COLORS.map(({ id, label, labelAr }) => <button type="button" role="menuitem" key={id} data-color-preview={id === 'default' ? undefined : id} aria-pressed={((block.color || 'default') === id) || undefined} onClick={() => { updateBlock(block.id, { color: id === 'default' ? undefined : id }); setBlockMenuId(null); }}>{locale === 'ar' ? labelAr : label}</button>)}
-                    <p className="notion-color-section-label">{locale === 'ar' ? 'لون الخلفية' : 'Background colour'}</p>
-                    {BG_COLORS.map(({ id, label, labelAr }) => <button type="button" role="menuitem" key={id} data-bg-preview={id === 'default' ? undefined : id} aria-pressed={((block.backgroundColor || 'default') === id) || undefined} onClick={() => { updateBlock(block.id, { backgroundColor: id === 'default' ? undefined : id }); setBlockMenuId(null); }}>{locale === 'ar' ? labelAr : label}</button>)}
-                  </details>
-                  <button className="danger" onClick={() => { setBlockMenuId(null); removeBlock(block.id); }} role="menuitem" type="button">{locale === 'ar' ? 'حذف' : 'Delete'}</button>
-                </div>
+                <BlockActionMenu block={block} locale={locale} textColours={TEXT_COLORS} backgroundColours={BG_COLORS}
+                  first={index === 0} last={index === blocks.length - 1}
+                  onClose={() => setBlockMenuId(null)} onChange={(patch) => updateBlock(block.id, patch)}
+                  onMove={(direction) => moveBlock(index, direction)} onDelete={() => removeBlock(block.id)}
+                  onDuplicate={() => { const next = [...blocks]; next.splice(index + 1, 0, duplicateBlock(block)); onChange(next); }}
+                />
               )}
             </div>
 

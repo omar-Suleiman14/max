@@ -105,6 +105,12 @@ const mockRecords: readonly WorkspaceRecord[] = [
 ];
 
 describe('TableView', () => {
+  it('lets the database resolve the default template title for bottom New page', async () => {
+    const onCreateRecord = vi.fn().mockResolvedValue(null);
+    render(<TableView calculations={[]} databaseId="db-1" onCreateRecord={onCreateRecord} onOpenRecord={vi.fn()} onUpdateRecord={vi.fn()} records={[]} schema={mockSchema} />);
+    await userEvent.setup().click(screen.getByRole('button', { name: 'New page' }));
+    expect(onCreateRecord).toHaveBeenCalledWith({ databaseId: 'db-1', properties: {}, title: '' });
+  });
   afterEach(() => {
     cleanup();
   });

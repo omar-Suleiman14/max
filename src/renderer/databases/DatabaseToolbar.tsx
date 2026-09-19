@@ -13,7 +13,7 @@ type Props = {
   locale: Locale; databaseId: string; activeView: WorkspaceView | null; views: readonly WorkspaceView[];
   templates: readonly WorkspaceRecordTemplate[]; search: string; filterCount: number; sortCount: number;
   onSearch: (value: string) => void; onSelectView: (view: WorkspaceView) => void;
-  onCreate: (templateId?: string) => void; onCreateView: (draft: WorkspaceViewDraft) => Promise<WorkspaceView | null>;
+  onCreate: (templateId?: string | null) => void; onCreateView: (draft: WorkspaceViewDraft) => Promise<WorkspaceView | null>;
   onUpdateView: (id: string, patch: WorkspaceViewPatch) => Promise<void>; onArchiveView: (id: string) => Promise<void>;
   onFilter: () => void; onSort: () => void; onProperties: () => void; onExport: () => void;
   grouping: ReactNode;
@@ -126,7 +126,7 @@ export function DatabaseToolbar(props: Props) {
             </div>}
           </div>;
         })}
-        <button type="button" onClick={() => action(() => props.onCreate())}><PageIconRenderer icon="lucide:File" size={16} />{ar ? 'صفحة فارغة' : 'Empty page'}</button><hr /><button type="button" onClick={() => { setPanel(null); setTemplateEditor('new'); }}><Plus size={16} />{ar ? 'قالب جديد' : 'New template'}</button>{templateError && <p role="alert">{templateError}</p>}
+        <button type="button" onClick={() => action(() => props.onCreate(null))}><PageIconRenderer icon="lucide:File" size={16} />{ar ? 'صفحة فارغة' : 'Empty page'}</button><hr /><button type="button" onClick={() => { setPanel(null); setTemplateEditor('new'); }}><Plus size={16} />{ar ? 'قالب جديد' : 'New template'}</button>{templateError && <p role="alert">{templateError}</p>}
       </>}
     </div>}
       {confirmDelete && createPortal(<div className="record-sort-confirm-backdrop" onClick={() => { if (!deleteLock.current) setConfirmDelete(false); }}><section role="alertdialog" aria-modal="true" className="record-sort-confirm" style={{ width: 340, padding: 20 }} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => {

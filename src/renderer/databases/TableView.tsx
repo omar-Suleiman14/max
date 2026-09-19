@@ -151,7 +151,7 @@ export function TableView({
     if (adding) return;
     setAdding(true);
     try {
-      const created = await onCreateRecord({ databaseId, properties: {}, title: locale === 'ar' ? 'بدون عنوان' : 'Untitled' });
+      const created = await onCreateRecord({ databaseId, properties: {}, title: '' });
       if (created) {
         setCreatedRecordId(created.id);
         setAwaitingRow(created);

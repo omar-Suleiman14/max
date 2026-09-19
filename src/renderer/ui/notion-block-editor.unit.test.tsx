@@ -418,6 +418,17 @@ describe('NotionBlockEditor', () => {
     await waitFor(() => expect(screen.getAllByRole('textbox')[1]!).toHaveFocus());
   });
 
+  it('applies a colour from the portalled submenu without losing the block content', async () => {
+    render(<EditorHarness initial={[{ content: 'Keep this text', id: 'one', type: 'text' }]} />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Block actions' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Colour' }));
+    await user.click(screen.getByRole('menuitemradio', { name: 'Blue background' }));
+    expect(document.querySelector('[data-block-id="one"]')).toHaveAttribute('data-bg', 'blue_bg');
+    expect(screen.getByRole('textbox')).toHaveTextContent('Keep this text');
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+
   it('pastes YAML literally without consuming properties or body', () => {
     render(<EditorHarness initial={[{ content: '', id: 'one', type: 'text' }]} />);
     const textbox = screen.getByRole('textbox');
