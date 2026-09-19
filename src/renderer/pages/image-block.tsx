@@ -2,7 +2,6 @@ import { useRef, useState } from 'react';
 import type { NotionBlock } from '../ui/notion-block-editor';
 import type { Locale } from '../app/i18n';
 import { ResizableImage } from './resizable-image';
-import { exportWorkspaceImage } from './export-image';
 
 export function ImageBlock({ block, locale, onChange }: { block: NotionBlock; locale: Locale; onChange: (patch: Partial<NotionBlock>) => void }) {
   const ar = locale === 'ar';
@@ -37,13 +36,13 @@ export function ImageBlock({ block, locale, onChange }: { block: NotionBlock; lo
     {local ? <ResizableImage alt={block.caption || (ar ? 'صورة' : 'Image')} ar={ar} src={location.protocol.startsWith('http') ? block.url!.replace('max://asset/', '/__max/asset/') : block.url!} width={block.width} onResize={width => onChange({ width })} onError={() => setError(ar ? 'تعذر قراءة الصورة المحفوظة.' : 'Could not read the saved image.')} />
       : <div className="page-image-upload"><p>{ar ? 'اسحب صورة هنا أو اختر ملفًا' : 'Drop an image here or choose a file'}</p><button type="button" disabled={busy} onClick={() => input.current?.click()}>{ar ? 'اختيار صورة' : 'Choose image'}</button>{block.url && <button type="button" disabled={busy} onClick={() => void importImage(undefined, block.url)}>{ar ? 'حفظ الصورة محليًا' : 'Save linked image locally'}</button>}</div>}
     {busy && <p role="status">{ar ? 'جارٍ حفظ الصورة…' : 'Saving image…'}</p>}
-    <div className="extra-block-actions">
-      {local && <><input aria-label={ar ? 'تعليق الصورة' : 'Image caption'} placeholder={ar ? 'إضافة تعليق…' : 'Add a caption…'} value={block.caption ?? ''} onChange={event => onChange({ caption: event.target.value })} />
-        <button type="button" disabled={busy} onClick={() => input.current?.click()}>{ar ? 'استبدال' : 'Replace'}</button>
-        <button type="button" disabled={busy} onClick={() => { void exportWorkspaceImage(block.url!).catch(() => setError(ar ? 'تعذر تصدير الصورة.' : 'Could not export the image.')); }}>{ar ? 'تنزيل' : 'Download'}</button></>}
-      <button type="button" disabled={busy} aria-expanded={linkOpen} onClick={() => setLinkOpen(!linkOpen)}>{ar ? 'إدراج من رابط' : 'Insert from link'}</button>
-    </div>
-    {linkOpen && <form className="page-url-form" onSubmit={event => { event.preventDefault(); void importImage(); }}><input aria-label={ar ? 'رابط الصورة' : 'Image URL'} type="url" required value={link} onChange={event => setLink(event.target.value)} placeholder="https://…" /><button disabled={busy} type="submit">{ar ? 'حفظ الصورة' : 'Save image'}</button></form>}
+    {/* A picture in the page is a picture, not a panel of tools. Only the
+        caption stays; changing or saving a placed image is the cover's job,
+        and an inline one is replaced by removing the block and adding another. */}
+    {local
+      ? <div className="extra-block-actions"><input aria-label={ar ? 'تعليق الصورة' : 'Image caption'} placeholder={ar ? 'إضافة تعليق…' : 'Add a caption…'} value={block.caption ?? ''} onChange={event => onChange({ caption: event.target.value })} /></div>
+      : <div className="extra-block-actions"><button type="button" disabled={busy} aria-expanded={linkOpen} onClick={() => setLinkOpen(!linkOpen)}>{ar ? 'إدراج من رابط' : 'Insert from link'}</button></div>}
+    {!local && linkOpen && <form className="page-url-form" onSubmit={event => { event.preventDefault(); void importImage(); }}><input aria-label={ar ? 'رابط الصورة' : 'Image URL'} type="url" required value={link} onChange={event => setLink(event.target.value)} placeholder="https://…" /><button disabled={busy} type="submit">{ar ? 'حفظ الصورة' : 'Save image'}</button></form>}
     {error && <p role="alert">{error}</p>}
   </figure>;
 }

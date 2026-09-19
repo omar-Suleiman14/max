@@ -12,7 +12,7 @@
 .page-image-upload{padding:28px 16px;border:1px dashed var(--line-strong);border-radius:10px;text-align:center;background:var(--canvas-subtle)}
 .page-image-upload button{padding:8px 12px;border-radius:7px;border:1px solid var(--line);background:var(--card);color:var(--text)}
 .page-image-block[data-drop-active]{outline:2px solid var(--accent);outline-offset:4px}
-.page-cover__controls{opacity:1;max-width:calc(100% - 24px);flex-wrap:wrap}
+.page-cover__controls{max-width:calc(100% - 24px);flex-wrap:wrap}
 .page-cover[data-repositioning] .page-cover__controls{inset-block-start:12px;inset-block-end:auto}
 .page-cover[data-repositioning] .page-cover__image{touch-action:none;user-select:none}
 .page-cover__reposition{max-width:calc(100% - 32px);flex-wrap:wrap}

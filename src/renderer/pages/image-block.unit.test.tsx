@@ -24,7 +24,8 @@ it('stores a linked image locally before rendering it', async () => {
   expect(downloadImage).toHaveBeenCalledWith('https://example.test/photo.png');
   expect(await screen.findByRole('img')).toHaveAttribute('src', `/__max/asset/${'a'.repeat(64)}.png`);
   expect(screen.queryByRole('textbox', { name: 'Image URL' })).not.toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Replace' })).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Insert from link' })).not.toBeInTheDocument();
+  expect(screen.getByRole('textbox', { name: 'Image caption' })).toBeVisible();
 });
 
 it('shows upload progress and replaces the placeholder after success', async () => {

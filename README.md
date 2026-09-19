@@ -6,7 +6,7 @@ with no internet connection, no account and no subscription.
 
 A shop is one workspace somebody can build with Max. It is not what Max is.
 
-Current version: 1.2.0.
+Current version: 1.2.5.
 
 ## What is in it
 
