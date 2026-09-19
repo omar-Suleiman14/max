@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
-import { mkdir, readdir, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, rename, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { assetFolder, storedAssetPath } from './asset-path';
 
 /** Covers are decoration, not archives: a few megabytes is already generous. */
 export const MAX_ASSET_BYTES = 12 * 1024 * 1024;
@@ -44,10 +45,29 @@ export class AssetError extends Error {}
 export class AssetStore {
   constructor(private readonly directory: string, private readonly baseUrl = 'max://asset/') {}
 
+  async organize(): Promise<void> {
+    for (const folder of ['images', 'documents', 'audio', 'videos', 'archives']) await mkdir(join(this.directory, folder), { recursive: true });
+    for (const name of await readdir(this.directory)) {
+      const folder = assetFolder(name);
+      if (!folder) continue;
+      const target = join(this.directory, folder, name);
+      // Validated hash filenames and fixed folder names cannot escape this store.
+      if (!(await stat(target).catch(() => undefined))) await rename(join(this.directory, name), target);
+    }
+  }
+
+  imagePath(url: string): string {
+    const name = this.fileNameFor(url);
+    if (!name) throw new AssetError('Invalid image.');
+    return storedAssetPath(this.directory, name)!;
+  }
+
   attachmentPath(url: string): string {
     const name = url.startsWith('max://attachment/') ? url.slice(17) : '';
     if (!/^[0-9a-f]{64}\.[a-z0-9]{1,10}$/.test(name)) throw new AssetError('Invalid attachment.');
-    return join(this.directory, name);
+    const target = storedAssetPath(this.directory, name);
+    if (!target) throw new AssetError('Invalid attachment.');
+    return target;
   }
 
   async storeAttachment(bytes: Uint8Array, fileName: string): Promise<{ byteLength: number; url: string }> {
@@ -56,8 +76,9 @@ export class AssetStore {
     const allowed = new Set(['pdf','txt','csv','json','md','doc','docx','xls','xlsx','ppt','pptx','zip','mp3','mp4','wav','ogg','webm']);
     if (!extension || !allowed.has(extension)) throw new AssetError('Use a document, archive, audio or video file.');
     const name = `${createHash('sha256').update(bytes).digest('hex')}.${extension}`;
-    await mkdir(this.directory, { recursive: true });
-    await writeFile(join(this.directory, name), bytes, { flag: 'wx' }).catch((error: NodeJS.ErrnoException) => { if (error.code !== 'EEXIST') throw error; });
+    const folder = join(this.directory, assetFolder(name)!);
+    await mkdir(folder, { recursive: true });
+    await writeFile(join(folder, name), bytes, { flag: 'wx' }).catch((error: NodeJS.ErrnoException) => { if (error.code !== 'EEXIST') throw error; });
     return { byteLength: bytes.byteLength, url: `max://attachment/${name}` };
   }
 
@@ -77,8 +98,8 @@ export class AssetStore {
     if (!extension) throw new AssetError('That file is not a PNG, JPEG, GIF or WebP image.');
 
     const name = `${createHash('sha256').update(bytes).digest('hex')}.${extension}`;
-    const target = join(this.directory, name);
-    await mkdir(this.directory, { recursive: true });
+    const target = join(this.directory, 'images', name);
+    await mkdir(join(this.directory, 'images'), { recursive: true });
     // Content-addressed: an identical file is already the file we would write.
     const existing = await stat(target).catch(() => undefined);
     if (!existing) {
@@ -110,7 +131,7 @@ export class AssetStore {
       throw new AssetError('Image links must start with http:// or https://.');
     }
 
-    const response = await fetchImpl(address.toString(), { redirect: 'follow' }).catch(() => {
+    const response = await fetchImpl(address.toString(), { redirect: 'follow', signal: AbortSignal.timeout(30_000) }).catch(() => {
       throw new AssetError('Could not reach that address.');
     });
     if (!response.ok) throw new AssetError(`That address answered ${response.status}.`);
@@ -120,13 +141,33 @@ export class AssetStore {
       throw new AssetError(`Images must be under ${Math.round(MAX_ASSET_BYTES / 1024 / 1024)} MB.`);
     }
 
-    return this.store(new Uint8Array(await response.arrayBuffer()));
+    if (!response.body) throw new AssetError('The image is empty.');
+    const reader = response.body.getReader() as ReadableStreamDefaultReader<Uint8Array>;
+    const chunks: Uint8Array[] = [];
+    let length = 0;
+    try {
+      for (;;) {
+        const part = await reader.read();
+        if (part.done) break;
+        length += part.value.byteLength;
+        if (length > MAX_ASSET_BYTES) { await reader.cancel(); throw new AssetError('Images must be under 12 MB.'); }
+        chunks.push(part.value);
+      }
+    } finally { reader.releaseLock(); }
+    return this.store(Buffer.concat(chunks));
   }
 
   /** Every stored file, for the size report in settings. */
   async usage(): Promise<{ byteLength: number; count: number }> {
-    const names = await readdir(this.directory).catch(() => [] as string[]);
-    const sizes = await Promise.all(names.map(async (name) => (await stat(join(this.directory, name)).catch(() => undefined))?.size ?? 0));
-    return { byteLength: sizes.reduce((total, size) => total + size, 0), count: names.length };
+    const files = new Map<string, number>();
+    for (const folder of ['', 'images', 'documents', 'audio', 'videos', 'archives']) {
+      const names = await readdir(join(this.directory, folder)).catch(() => [] as string[]);
+      for (const name of names) {
+        if (!assetFolder(name)) continue;
+        const entry = await stat(join(this.directory, folder, name)).catch(() => undefined);
+        if (entry?.isFile()) files.set(name, entry.size);
+      }
+    }
+    return { byteLength: [...files.values()].reduce((total, size) => total + size, 0), count: files.size };
   }
 }

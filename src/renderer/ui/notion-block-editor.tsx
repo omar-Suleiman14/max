@@ -1,10 +1,13 @@
+import { autoScrollDuringDrag, setDragPreview } from './drag-preview';
+import { ActivitySpinner } from './activity-spinner';
+import { BlockActionMenu } from './block-action-menu';
+import { isUnsupportedLegacyBlock } from '../../shared/max-document-legacy';
 import { DatabaseSkeleton } from '../databases/DatabaseSkeleton';
 import { LegacyDatabaseLink } from '../databases/LegacyDatabaseLink';
 import { ExtraBlock } from '../pages/extra-blocks';
 import { renderInline, escapeText } from '../pages/rich-text';
 import { openPage } from '../pages/page-graph-store';
 import { safeWebUrl } from '../../shared/page-links';
-import type { FrontmatterEntry } from '../../shared/page-frontmatter';
 import {
   Check,
   Database,
@@ -118,7 +121,7 @@ export type BlockType =
   | 'toggle'
   | 'bullet'
   | 'callout'
-  | 'columns' // legacy: flattened into its children on load
+  | 'columns' // legacy: preserve each column independently
   | 'database-view'
   | 'divider'
   | 'h1'
@@ -242,7 +245,6 @@ type NotionBlockEditorProps = Readonly<{
   blocks: readonly NotionBlock[];
   locale: Locale;
   onChange: (blocks: readonly NotionBlock[]) => void;
-  onFrontmatterPaste?: (entries: readonly FrontmatterEntry[]) => void;
   onWorkspaceChange?: () => void;
   parentPageId?: string;
   placeholder?: string;
@@ -269,7 +271,6 @@ type RichTextBlockProps = {
   onBlur: () => void;
   onContentChange: (id: string, text: string) => void;
   onFocus: () => void;
-  onFrontmatterPaste?: (entries: readonly FrontmatterEntry[]) => void;
   onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => void;
   registerRef: (el: HTMLDivElement | null) => void;
 };
@@ -280,7 +281,7 @@ type RichTextBlockProps = {
  * interrupted; formatting is applied after a 500ms idle pause and whenever
  * content changes externally (block split, merge, etc.).
  */
-function RichTextBlock({ blockId, content, index, locale, onBlur, onContentChange, onFocus, onFrontmatterPaste, onKeyDown, registerRef }: RichTextBlockProps) {
+function RichTextBlock({ blockId, content, index, locale, onBlur, onContentChange, onFocus, onKeyDown, registerRef }: RichTextBlockProps) {
   const divRef = useRef<HTMLDivElement | null>(null);
   const savedSelection = useRef<Range | null>(null);
   const [selectionOpen, setSelectionOpen] = useState(false);
@@ -381,25 +382,6 @@ function RichTextBlock({ blockId, content, index, locale, onBlur, onContentChang
       onPaste={(event) => {
         event.preventDefault();
         const html = event.clipboardData.getData('text/html');
-        if (!html && index === 0 && !content && onFrontmatterPaste) {
-          const text = event.clipboardData.getData('text/plain');
-          if (text.trimStart().startsWith('---')) {
-            // Loaded on demand: a paste that opens with "---" is rare, and the
-            // frontmatter parser has no reason to sit in every page's startup bundle.
-            void import('../../shared/page-frontmatter').then(({ parseFrontmatterYaml, splitFrontmatterBlock }) => {
-              const split = splitFrontmatterBlock(text);
-              const parsed = split ? parseFrontmatterYaml(split.yaml) : null;
-              if (split && parsed && !parsed.error) {
-                onFrontmatterPaste(parsed.entries);
-                document.execCommand('insertText', false, split.body.replace(/^\n+/, ''));
-              } else {
-                document.execCommand('insertText', false, text);
-              }
-              handleInput();
-            });
-            return;
-          }
-        }
         if (html) { const doc = new DOMParser().parseFromString(html, 'text/html'); document.execCommand('insertHTML', false, renderInline(htmlToMarkdown(doc.body))); } else document.execCommand('insertText', false, event.clipboardData.getData('text/plain'));
         handleInput();
       }}
@@ -417,7 +399,7 @@ function RichTextBlock({ blockId, content, index, locale, onBlur, onContentChang
     </div>
   );
 }
-export function NotionBlockEditor({ blocks, locale, onChange: publish, onFrontmatterPaste, onWorkspaceChange, parentPageId }: NotionBlockEditorProps) {
+export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspaceChange, parentPageId }: NotionBlockEditorProps) {
   const currentBlocks = useRef(blocks);
   currentBlocks.current = blocks;
   const undoStack = useRef<(readonly NotionBlock[])[]>([]);
@@ -430,18 +412,6 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onFrontma
     currentBlocks.current = next;
     publish(next);
   }
-  // Two side-by-side columns were withdrawn: they were unusable on a narrow
-  // window and every block inside them sat outside the page's own selection and
-  // undo. A page that still holds one keeps its writing, laid out one block
-  // after another.
-  useEffect(() => {
-    if (!blocks.some((block) => block.type === 'columns')) return;
-    publish(blocks.flatMap((block) => block.type === 'columns'
-      ? [...(block.col1Blocks ?? []), ...(block.col2Blocks ?? [])].filter((child) => child.content || child.type !== 'text')
-      : [block]));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [blocks]);
-
   const deletedSelection = useRef<readonly NotionBlock[] | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const selectionAnchor = useRef<number | null>(null);
@@ -485,6 +455,9 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onFrontma
   const [activeSlashBlockId, setActiveSlashBlockId] = useState<string | null>(null);
   const [slashQuery, setSlashQuery] = useState('');
   const [fileError, setFileError] = useState('');
+  const [importingFiles, setImportingFiles] = useState(false);
+  const fileImportLock = useRef(false);
+  const draggedIds = useRef<readonly string[]>([]);
   const [slashIndex, setSlashIndex] = useState(0);
   const [calloutPickerId, setCalloutPickerId] = useState<string>();
   const calloutIconRefs = useRef(new Map<string, HTMLButtonElement>());
@@ -504,13 +477,13 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onFrontma
   useEffect(() => {
     if (!blockMenuId) return;
     const close = (event: PointerEvent) => {
-      if (event.target instanceof Element && event.target.closest('.notion-block-gutter')) return;
+      if (event.target instanceof Element && event.target.closest('.notion-block-gutter,.notion-block-action-menu')) return;
       setBlockMenuId(null);
     };
     const escape = (event: globalThis.KeyboardEvent) => { if (event.key === 'Escape') { event.stopPropagation(); setBlockMenuId(null); } };
     document.addEventListener('pointerdown', close);
-    document.addEventListener('keydown', escape, true);
-    return () => { document.removeEventListener('pointerdown', close); document.removeEventListener('keydown', escape, true); };
+    document.addEventListener('keydown', escape);
+    return () => { document.removeEventListener('pointerdown', close); document.removeEventListener('keydown', escape); };
   }, [blockMenuId]);
   const [workspaceDatabases, setWorkspaceDatabases] = useState<readonly NavigationItem[]>([]);
   const [newDatabaseBlockId, setNewDatabaseBlockId] = useState<string | null>(null);
@@ -1159,18 +1132,23 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onFrontma
 
   // Drag-and-drop block reordering
   function handleDragStart(event: React.DragEvent, index: number) {
+    event.stopPropagation();
     event.dataTransfer.effectAllowed = 'move';
-    event.dataTransfer.setData('text/plain', blocks[index]?.id ?? '');
+    event.dataTransfer.setData('application/x-max-block', blocks[index]?.id ?? '');
+    draggedIds.current = selectedLines.includes(index) ? selectedLines.map(line => blocks[line]!.id) : [blocks[index]!.id];
+    const row = event.currentTarget.closest<HTMLElement>('.notion-block-row');
+    if (row) setDragPreview(event.dataTransfer, row, draggedIds.current.length);
     setDraggedIndex(index);
   }
 
   function handleDragOver(e: React.DragEvent, index: number) {
-    const files = e.dataTransfer.types.includes('Files');
+    const files = e.dataTransfer.types.includes('Files') || (draggedIndex === null && e.dataTransfer.types.includes('text/uri-list'));
     // A file dragged in from outside is not a reorder. The insertion line still
     // shows where it will land, but the cursor says copy and the drop below
     // imports the file instead of moving a block that was never picked up.
     if (!files && draggedIndex === null) return;
-    e.preventDefault();
+    e.preventDefault(); e.stopPropagation();
+    autoScrollDuringDrag(e.currentTarget as HTMLElement, e.clientY);
     e.dataTransfer.dropEffect = files ? 'copy' : 'move';
     const rect = e.currentTarget.getBoundingClientRect();
     setDragOverEdge(e.clientY >= rect.top + rect.height / 2 ? 'after' : 'before');
@@ -1179,23 +1157,22 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onFrontma
     }
   }
 
-  function handleDrop(targetIndex: number) {
-    if (draggedIndex === null || draggedIndex === targetIndex) {
-      if (draggedIndex !== null) signalMoveFailure(blocks[draggedIndex]?.id);
-      setDraggedIndex(null);
-      setDragOverIndex(null);
-      return;
+  function handleDrop(targetIndex: number, after = dragOverEdge === 'after') {
+    const target = blocks[targetIndex];
+    if (draggedIndex === null || !target || draggedIds.current.includes(target.id)) {
+      setDraggedIndex(null); setDragOverIndex(null); return;
     }
-    const next = [...blocks];
-    const [moved] = next.splice(draggedIndex, 1);
-    if (moved) {
-      const adjustedTarget = draggedIndex < targetIndex ? targetIndex - 1 : targetIndex;
-      const insertAt = Math.max(0, adjustedTarget + (dragOverEdge === 'after' ? 1 : 0));
-      next.splice(insertAt, 0, moved);
-      onChange(next);
+    const ids = new Set(draggedIds.current);
+    const existing = currentBlocks.current;
+    const moved = existing.filter(block => ids.has(block.id));
+    const remaining = existing.filter(block => !ids.has(block.id));
+    const targetAt = remaining.findIndex(block => block.id === target.id);
+    if (targetAt >= 0 && moved.length) {
+      remaining.splice(targetAt + (after ? 1 : 0), 0, ...moved);
+      onChange(remaining); setSelectedLines([]);
     }
-    setDraggedIndex(null);
-    setDragOverIndex(null);
+    draggedIds.current = [];
+    setDraggedIndex(null); setDragOverIndex(null);
   }
 
   function moveBlock(index: number, direction: -1 | 1) {
@@ -1210,11 +1187,15 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onFrontma
   }
 
   async function addDroppedFiles(files: FileList, insertAt?: number) {
+    if (fileImportLock.current) return;
+    fileImportLock.current = true; setImportingFiles(true);
+    const list = Array.from(files);
+    const beforeId = insertAt === undefined ? undefined : currentBlocks.current[insertAt]?.id;
     setFileError('');
     try {
     const additions: NotionBlock[] = [];
-    for (const file of Array.from(files)) {
-      if (file.type.startsWith('image/')) {
+    for (const file of list) {
+      if (file.type.startsWith('image/') || /\.(png|jpe?g|gif|webp)$/i.test(file.name)) {
         const result = await window.maxApi.assets.importImage(new Uint8Array(await file.arrayBuffer()), file.name);
         if (!result.ok) throw new Error(result.error.message);
         additions.push({ caption: file.name, content: '', id: crypto.randomUUID(), type: 'image', url: result.value.url });
@@ -1228,13 +1209,34 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onFrontma
     // Land the file where the insertion line was drawn, not at the end of the
     // page. Dropping onto the canvas below the last block still appends.
     const existing = currentBlocks.current;
-    const at = Math.max(0, Math.min(existing.length, insertAt ?? existing.length));
+    const anchorIndex = beforeId ? existing.findIndex(block => block.id === beforeId) : -1;
+    const at = anchorIndex >= 0 ? anchorIndex : Math.max(0, Math.min(existing.length, insertAt ?? existing.length));
     const next = [...existing.slice(0, at), ...additions, ...existing.slice(at)];
     // A file dropped last leaves a paragraph under it, so there is somewhere to
     // keep typing without having to reach for the gutter.
     if (at === existing.length) next.push({ content: '', id: crypto.randomUUID(), type: 'text' });
     onChange(next);
-    } catch (error) { setFileError(String(error)); }
+    } catch (error) { setFileError(error instanceof Error ? error.message : String(error)); }
+    finally { fileImportLock.current = false; setImportingFiles(false); }
+  }
+
+  async function addDroppedImage(address: string, at = currentBlocks.current.length) {
+    if (fileImportLock.current) return;
+    fileImportLock.current = true; setImportingFiles(true); setFileError('');
+    try {
+      const result = await window.maxApi.assets.downloadImage(address);
+      if (!result.ok) throw new Error(result.error.message);
+      const next = [...currentBlocks.current];
+      next.splice(at, 0, { id: crypto.randomUUID(), type: 'image', content: '', url: result.value.url });
+      onChange(next);
+    } catch (reason) { setFileError(reason instanceof Error ? reason.message : String(reason)); }
+    finally { fileImportLock.current = false; setImportingFiles(false); }
+  }
+
+  function droppedImageUrl(data: DataTransfer): string | undefined {
+    const html = data.getData('text/html');
+    const source = html ? new DOMParser().parseFromString(html, 'text/html').querySelector('img')?.getAttribute('src') : undefined;
+    return safeWebUrl(source ?? data.getData('text/uri-list').split('\n').find(line => !line.startsWith('#')) ?? '') || undefined;
   }
 
   return (
@@ -1242,8 +1244,16 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onFrontma
       ref={canvasRef}
       tabIndex={-1}
       className="notion-editor-canvas"
+      aria-busy={importingFiles}
+      onPasteCapture={event => {
+        if (!event.clipboardData.files.length) return;
+        event.preventDefault(); event.stopPropagation();
+        const id = (event.target as Element).closest<HTMLElement>('[data-block-id]')?.dataset.blockId;
+        const index = blocks.findIndex(block => block.id === id);
+        void addDroppedFiles(event.clipboardData.files, index < 0 ? undefined : index + 1);
+      }}
       onDragOver={(event) => {
-        if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; }
+        if (event.dataTransfer.types.includes('Files') || event.dataTransfer.types.includes('text/uri-list')) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; }
       }}
       onDragLeave={(event) => {
         // An external drag never fires dragend here, so the insertion line has
@@ -1252,10 +1262,12 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onFrontma
         setDragOverIndex(null);
       }}
       onDrop={(event) => {
-        if (!event.dataTransfer.files.length) return;
+        const address = droppedImageUrl(event.dataTransfer);
+        if (!event.dataTransfer.files.length && !address) return;
         event.preventDefault(); event.stopPropagation();
         setDragOverIndex(null); setDraggedIndex(null);
-        void addDroppedFiles(event.dataTransfer.files);
+        if (event.dataTransfer.files.length) void addDroppedFiles(event.dataTransfer.files);
+        else if (address) void addDroppedImage(address);
       }}
       onContextMenu={(event) => {
         const target = event.target as Element;
@@ -1329,7 +1341,7 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onFrontma
         else focusBlock(last.id);
       }}
     >
-      {selectedLines.length > 0 && <div className="block-selection-toolbar" role="toolbar" aria-label={locale === 'ar' ? 'الكتل المحددة' : 'Selected blocks'}>
+      {selectedLines.length > 0 && !blockMenuId && <div className="block-selection-toolbar" role="toolbar" aria-label={locale === 'ar' ? 'الكتل المحددة' : 'Selected blocks'}>
         <span>{selectedLines.length} {locale === 'ar' ? 'محدد' : 'selected'}</span>
         <select aria-label={locale === 'ar' ? 'تحويل إلى' : 'Turn selected blocks into'} value="" onChange={event => {
           const type = event.target.value as BlockType;
@@ -1337,14 +1349,16 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onFrontma
         }}><option value="" disabled>{locale === 'ar' ? 'تحويل إلى…' : 'Turn into…'}</option>{(['text','h1','h2','h3','bullet','number','todo','quote','callout','code'] as const).map(type => <option key={type} value={type}>{({text:'Text',h1:'Heading 1',h2:'Heading 2',h3:'Heading 3',bullet:'Bulleted list',number:'Numbered list',todo:'To-do',quote:'Quote',callout:'Callout',code:'Code'})[type]}</option>)}</select>
       </div>}
       <p className="sr-only" role="status">{failedMoveBlockId ? (locale === 'ar' ? 'لا يمكن نقل الكتلة أبعد من ذلك.' : 'This block cannot move any farther.') : ''}</p>
+      {importingFiles && <p className="workspace-import-status" role="status"><ActivitySpinner />{locale === 'ar' ? 'جارٍ حفظ الملفات…' : 'Saving files…'}</p>}
       {fileError && <p role="alert">{fileError}</p>}
       {blocks.map((block, index) => {
-        const isDragging = draggedIndex === index;
+        if (isUnsupportedLegacyBlock(block) || typeof block.content !== 'string' || !['text', 'h1', 'h2', 'h3', 'bullet', 'number', 'todo', 'quote', 'code', 'toggle', 'callout', 'columns', 'database-view', 'divider', 'page-link', 'embed', 'bookmark', 'image', 'video', 'audio', 'file', 'simple-table', 'table-of-contents'].includes(block.type)) return <div key={block.id} role="note">{locale === 'ar' ? 'كتلة غير مدعومة — تم الاحتفاظ بالمحتوى.' : 'Unsupported block — content preserved.'}</div>;
+        const isDragging = draggedIndex !== null && draggedIds.current.includes(block.id);
         const isDragOver = dragOverIndex === index;
         const isSlashActive = activeSlashBlockId === block.id;
         let listNumber = 1;
         for (let previous = index - 1; previous >= 0 && blocks[previous]?.type === 'number'; previous--) listNumber++;
-        const richText = <RichTextBlock blockId={block.id} content={block.content} focused={focusedBlockId === block.id} index={index} locale={locale} onContentChange={handleContentChange} onFocus={() => setFocusedBlockId(block.id)} onBlur={() => setFocusedBlockId(null)} onFrontmatterPaste={onFrontmatterPaste} onKeyDown={(event) => handleKeyDown(event, block, index)} registerRef={(element) => { if (element) inputRefs.current.set(block.id, element); else inputRefs.current.delete(block.id); }} />;
+        const richText = <RichTextBlock blockId={block.id} content={block.content} focused={focusedBlockId === block.id} index={index} locale={locale} onContentChange={handleContentChange} onFocus={() => setFocusedBlockId(block.id)} onBlur={() => setFocusedBlockId(null)} onKeyDown={(event) => handleKeyDown(event, block, index)} registerRef={(element) => { if (element) inputRefs.current.set(block.id, element); else inputRefs.current.delete(block.id); }} />;
 
         return (
           <div
@@ -1407,10 +1421,18 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onFrontma
             }}
             onDragOver={(e) => handleDragOver(e, index)}
             onDrop={(event) => {
-              if (!event.dataTransfer.files.length) { handleDrop(index); return; }
+              event.preventDefault(); event.stopPropagation();
+              const rect = event.currentTarget.getBoundingClientRect();
+              const after = event.clientY >= rect.top + rect.height / 2;
+              if (!event.dataTransfer.files.length) {
+                const address = droppedImageUrl(event.dataTransfer);
+                if (draggedIndex !== null) handleDrop(index, after);
+                else if (address) void addDroppedImage(address, index + (after ? 1 : 0));
+                return;
+              }
               // An image or a file dropped between two blocks belongs there.
               event.preventDefault(); event.stopPropagation();
-              const at = index + (dragOverEdge === 'after' ? 1 : 0);
+              const at = index + (after ? 1 : 0);
               setDragOverIndex(null); setDraggedIndex(null);
               void addDroppedFiles(event.dataTransfer.files, at);
             }}
@@ -1446,26 +1468,18 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onFrontma
                 <GripVertical size={14} />
               </button>
               {blockMenuId === block.id && (
-                <div className="notion-block-action-menu" role="menu">
-                  <button onClick={() => { setBlockMenuId(null); updateBlock(block.id, { type: 'text' }); }} role="menuitem" type="button">{locale === 'ar' ? 'نص' : 'Text'}</button>
-                  <button onClick={() => { setBlockMenuId(null); updateBlock(block.id, { type: 'h2' }); }} role="menuitem" type="button">{locale === 'ar' ? 'عنوان' : 'Heading'}</button>
-                  <button onClick={() => { const next = [...blocks]; next.splice(index + 1, 0, duplicateBlock(block)); onChange(next); setBlockMenuId(null); }} role="menuitem" type="button">{locale === 'ar' ? 'إنشاء نسخة' : 'Duplicate'}</button>
-                  <button disabled={index === 0} onClick={() => { moveBlock(index, -1); setBlockMenuId(null); }} role="menuitem" type="button">{locale === 'ar' ? 'نقل لأعلى' : 'Move up'}</button>
-                  <button disabled={index === blocks.length - 1} onClick={() => { moveBlock(index, 1); setBlockMenuId(null); }} role="menuitem" type="button">{locale === 'ar' ? 'نقل لأسفل' : 'Move down'}</button>
-                  {['text', 'h1', 'h2', 'h3', 'bullet', 'number', 'todo', 'quote', 'code'].includes(block.type) && <details><summary>{locale === 'ar' ? 'تحويل إلى' : 'Turn into'}</summary>{(['text', 'h1', 'h2', 'h3', 'bullet', 'number', 'todo', 'quote', 'code'] as const).map((type) => <button type="button" role="menuitem" key={type} onClick={() => { updateBlock(block.id, { type }); setBlockMenuId(null); }}>{({ text: 'Text', h1: 'Heading 1', h2: 'Heading 2', h3: 'Heading 3', bullet: 'Bulleted list', number: 'Numbered list', todo: 'To-do', quote: 'Quote', code: 'Code' })[type]}</button>)}</details>}
-                  <details><summary>{locale === 'ar' ? 'اللون' : 'Colour'}</summary>
-                    <p className="notion-color-section-label">{locale === 'ar' ? 'لون النص' : 'Text colour'}</p>
-                    {TEXT_COLORS.map(({ id, label, labelAr }) => <button type="button" role="menuitem" key={id} data-color-preview={id === 'default' ? undefined : id} aria-pressed={((block.color || 'default') === id) || undefined} onClick={() => { updateBlock(block.id, { color: id === 'default' ? undefined : id }); setBlockMenuId(null); }}>{locale === 'ar' ? labelAr : label}</button>)}
-                    <p className="notion-color-section-label">{locale === 'ar' ? 'لون الخلفية' : 'Background colour'}</p>
-                    {BG_COLORS.map(({ id, label, labelAr }) => <button type="button" role="menuitem" key={id} data-bg-preview={id === 'default' ? undefined : id} aria-pressed={((block.backgroundColor || 'default') === id) || undefined} onClick={() => { updateBlock(block.id, { backgroundColor: id === 'default' ? undefined : id }); setBlockMenuId(null); }}>{locale === 'ar' ? labelAr : label}</button>)}
-                  </details>
-                  <button className="danger" onClick={() => { setBlockMenuId(null); removeBlock(block.id); }} role="menuitem" type="button">{locale === 'ar' ? 'حذف' : 'Delete'}</button>
-                </div>
+                <BlockActionMenu block={block} locale={locale} textColours={TEXT_COLORS} backgroundColours={BG_COLORS}
+                  first={index === 0} last={index === blocks.length - 1}
+                  onClose={() => setBlockMenuId(null)} onChange={(patch) => updateBlock(block.id, patch)}
+                  onMove={(direction) => moveBlock(index, direction)} onDelete={() => removeBlock(block.id)}
+                  onDuplicate={() => { const next = [...blocks]; next.splice(index + 1, 0, duplicateBlock(block)); onChange(next); }}
+                />
               )}
             </div>
 
             {/* Block Body */}
             <div className="notion-block-body">
+              {block.type === 'columns' && <div className="notion-columns">{(['col1Blocks', 'col2Blocks'] as const).map((column) => <NotionBlockEditor key={column} blocks={block[column] ?? []} locale={locale} onChange={(next) => updateBlock(block.id, { [column]: next })} parentPageId={parentPageId} onWorkspaceChange={onWorkspaceChange} />)}</div>}
               {['page-link', 'embed', 'bookmark', 'image', 'video', 'audio', 'file', 'simple-table', 'table-of-contents'].includes(block.type) && <ExtraBlock block={block} blocks={blocks} locale={locale} onChange={(patch) => updateBlock(block.id, patch)} />}
               {block.type === 'text' && richText}
               {(block.type === 'quote' || block.type === 'code') && <textarea ref={(element) => { if (element) inputRefs.current.set(block.id, element); else inputRefs.current.delete(block.id); }} className={'notion-extra-block notion-extra-block--' + block.type} aria-label={block.type} rows={Math.max(2, block.content.split('\n').length)} value={block.content} onChange={(event) => updateBlock(block.id, { content: event.target.value })} onKeyDown={(event) => {
@@ -1474,7 +1488,7 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onFrontma
                 if (block.type !== 'code') handleKeyDown(event, block, index);
                 else if (event.key === 'Backspace' && !block.content) handleKeyDown(event, block, index);
               }} />}
-              {block.type === 'toggle' && <details className="notion-toggle-block" open={block.checked !== false} onToggle={(event) => updateBlock(block.id, { checked: (event.target as HTMLDetailsElement).open })}><summary><input ref={(element) => { if (element) inputRefs.current.set(block.id, element); else inputRefs.current.delete(block.id); }} placeholder={locale === 'ar' ? 'عنوان' : 'Toggle heading'} value={block.content} onChange={(event) => updateBlock(block.id, { content: event.target.value })} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => {
+              {block.type === 'toggle' && <details className="notion-toggle-block" open={block.checked !== false} onToggle={(event) => { const open = (event.target as HTMLDetailsElement).open; if (open !== (block.checked !== false)) updateBlock(block.id, { checked: open }); }}><summary><input ref={(element) => { if (element) inputRefs.current.set(block.id, element); else inputRefs.current.delete(block.id); }} placeholder={locale === 'ar' ? 'عنوان' : 'Toggle heading'} value={block.content} onChange={(event) => updateBlock(block.id, { content: event.target.value })} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => {
                 // Enter on a toggle's own line starts the first line inside it,
                 // which is the whole point of a toggle. It used to do nothing.
                 if (event.key === 'Enter' && !event.shiftKey) {

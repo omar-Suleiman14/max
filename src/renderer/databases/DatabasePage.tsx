@@ -203,7 +203,7 @@ export function DatabasePage({ databaseId, embedded = false, initialViewId, loca
     const refreshTemplates = () => {
       void window.maxApi.workspace.listRecordTemplates(databaseId).then((templates) => {
         if (active) setRecordTemplates(templates);
-      });
+      }).catch(() => { /* Creation retries template loading before writing a record. */ });
     };
     refreshTemplates();
     window.addEventListener('max:workspace-changed', refreshTemplates);
@@ -229,35 +229,37 @@ export function DatabasePage({ databaseId, embedded = false, initialViewId, loca
     setRecordDrawerOpen(true);
   };
 
-  async function handleCreateBlankRecord(templateId?: string) {
-    const defaultTemplateId = typeof activeView?.layoutConfig.defaultTemplateId === 'string'
-      && recordTemplates.some(({ id }) => id === activeView.layoutConfig.defaultTemplateId)
-      ? activeView.layoutConfig.defaultTemplateId
-      : undefined;
-    const resolvedTemplateId = templateId ?? defaultTemplateId;
-    const template = recordTemplates.find(({ id }) => id === resolvedTemplateId);
-    const record = await createRecordInView({
-      databaseId,
-      properties: {},
-      templateId: template?.id,
-      title: template?.name ?? (locale === 'ar' ? 'بدون عنوان' : 'Untitled'),
-    });
+  const [creationError, setCreationError] = useState('');
+  const createRecordInLayout = useCallback(
+    async (draft: Parameters<typeof createRecordInView>[0]) => {
+      setCreationError('');
+      const selectedId = draft.templateId === undefined
+        ? (typeof activeView?.layoutConfig.defaultTemplateId === 'string' ? activeView.layoutConfig.defaultTemplateId : undefined)
+        : draft.templateId;
+      try {
+        // New page may be pressed before the initial template request completes.
+        const templates = selectedId && !recordTemplates.some(({ id }) => id === selectedId)
+          ? await window.maxApi.workspace.listRecordTemplates(databaseId)
+          : recordTemplates;
+        const template = templates.find(({ id }) => id === selectedId);
+        if (selectedId && !template) throw new Error('The selected template is unavailable.');
+        return await createRecordInView({
+          ...draft,
+          templateId: template?.id ?? null,
+          title: draft.title.trim() || template?.name || (locale === 'ar' ? 'بدون عنوان' : 'Untitled'),
+        });
+      } catch {
+        setCreationError(locale === 'ar' ? 'تعذر إنشاء الصفحة. حاول مرة أخرى.' : 'Could not create the page. Please try again.');
+        return null;
+      }
+    },
+    [activeView?.layoutConfig.defaultTemplateId, createRecordInView, databaseId, locale, recordTemplates],
+  );
+
+  async function handleCreateBlankRecord(templateId?: string | null) {
+    const record = await createRecordInLayout({ databaseId, properties: {}, templateId, title: '' });
     if (record) handleOpenRecord(record);
   }
-
-  const createRecordInLayout = useCallback(
-    (draft: Parameters<typeof createRecordInView>[0]) => {
-      const defaultTemplateId = typeof activeView?.layoutConfig.defaultTemplateId === 'string'
-        && recordTemplates.some(({ id }) => id === activeView.layoutConfig.defaultTemplateId)
-        ? activeView.layoutConfig.defaultTemplateId
-        : undefined;
-      return createRecordInView({
-        ...draft,
-        templateId: draft.templateId === undefined ? defaultTemplateId : draft.templateId,
-      });
-    },
-    [activeView?.layoutConfig.defaultTemplateId, createRecordInView, recordTemplates],
-  );
 
   const activeFilterCount = filterAst
     ? filterAst.kind === 'group'
@@ -337,6 +339,7 @@ export function DatabasePage({ databaseId, embedded = false, initialViewId, loca
 
         </>}
       />
+      {creationError && <p className="form-error" role="alert">{creationError}</p>}
       {exportError && <p className="form-error" role="alert">{exportError}</p>}
       {/* Error alert */}
       {error && (

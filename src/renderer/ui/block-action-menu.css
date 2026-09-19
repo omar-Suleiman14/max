@@ -1,0 +1,7 @@
+.notion-block-action-menu.notion-block-action-menu--nested{position:fixed;inset:auto;z-index:250;width:220px;min-width:0;max-width:calc(100vw - 16px);overflow-y:auto;box-sizing:border-box}
+.notion-block-action-menu--nested [role="group"]{display:grid}
+.notion-block-action-menu--nested button{display:flex;align-items:center;gap:8px;width:100%}
+.notion-block-action-menu--nested button>span{margin-inline-start:auto}
+.notion-block-action-menu--nested button[aria-checked="true"]::after{content:'✓';margin-inline-start:auto;color:var(--accent)}
+.notion-block-action-menu--nested button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px;background:var(--canvas-subtle)}
+.notion-block-gutter:has([aria-expanded="true"]){opacity:1}

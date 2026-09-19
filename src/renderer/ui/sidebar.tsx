@@ -1,10 +1,11 @@
+import { autoScrollDuringDrag, setDragPreview } from './drag-preview';
+import { ActivitySpinner } from './activity-spinner';
 import maxLogo from '../assets/max-logo.png';
 import type { UpdateStatus } from '../../shared/update-contract';
 import { revealSetting, searchSettings, settingsEntryLabel } from './settings-index';
 import {
   AlertTriangle,
   ArrowUpCircle,
-  LoaderCircle,
   BadgeDollarSign,
   Archive,
   ArrowLeft,
@@ -156,6 +157,13 @@ export function Sidebar({
   const resizeStartRef = useRef<{ pointerId: number; startWidth: number; startX: number } | undefined>(undefined);
 
   const favoritePages = customPages.filter((candidate) => candidate.favorite);
+  const updateBusy = updateState && ['checking', 'downloading', 'installing'].includes(updateState.state);
+  const updateLabel = updateState?.state === 'checking' ? (locale === 'ar' ? 'جارٍ البحث…' : 'Checking for updates…')
+    : updateState?.state === 'installing' ? (locale === 'ar' ? 'جارٍ إعادة التشغيل…' : 'Restarting to install…')
+      : updateState?.state === 'error' ? (locale === 'ar' ? 'تعذر التحديث · إعادة المحاولة' : 'Update failed · Retry')
+        : updateState?.state === 'downloading' ? (locale === 'ar' ? 'جارٍ التنزيل…' : 'Downloading…')
+          : updateState?.state === 'ready' ? (locale === 'ar' ? 'تحديث جاهز' : 'Update ready')
+            : (locale === 'ar' ? `${updateState?.availableVersion ?? ''} متاح` : `${updateState?.availableVersion ?? ''} available`);
 
   useEffect(() => {
     const kinds = ['account', 'item', 'person', 'transaction'] as const;
@@ -216,11 +224,13 @@ export function Sidebar({
   function handleDragStart(event: React.DragEvent, index: number) {
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/plain', rootRows[index]?.id ?? '');
+    setDragPreview(event.dataTransfer, event.currentTarget as HTMLElement);
     setDraggedIndex(index);
   }
 
   function handleDragOver(event: React.DragEvent, index: number) {
     event.preventDefault();
+    autoScrollDuringDrag(event.currentTarget as HTMLElement, event.clientY);
     event.dataTransfer.dropEffect = 'move';
     const rect = event.currentTarget.getBoundingClientRect();
     setDragOverEdge(event.clientY >= rect.top + rect.height / 2 ? 'after' : 'before');
@@ -649,17 +659,13 @@ export function Sidebar({
       </div>
 
       <div className="sidebar__footer">
-        {updateState && ['available', 'downloading', 'ready'].includes(updateState.state) && onUpdateClick && (
-          <button type="button" className={`sidebar-action sidebar-update${updateState.state === 'ready' ? ' sidebar-update--ready' : ''}`} onClick={onUpdateClick}>
-            {updateState.state === 'downloading'
-              ? <LoaderCircle className="update-spinner" aria-hidden="true" size={17} />
+        {updateState && ['checking', 'available', 'downloading', 'ready', 'installing', 'error'].includes(updateState.state) && onUpdateClick && (
+          <button type="button" aria-label={updateLabel} title={updateLabel} aria-busy={updateBusy} className={`sidebar-action sidebar-update${updateState.state === 'ready' ? ' sidebar-update--ready' : ''}`} onClick={onUpdateClick}>
+            {updateBusy
+              ? <ActivitySpinner size={17} />
               : <ArrowUpCircle aria-hidden="true" size={17} />}
             {!collapsed && <span className="sidebar-action__label">
-              {updateState.state === 'downloading'
-                ? (locale === 'ar' ? 'جارٍ التنزيل…' : 'Downloading…')
-                : updateState.state === 'ready'
-                  ? (locale === 'ar' ? 'تحديث جاهز' : 'Update ready')
-                  : (locale === 'ar' ? `${updateState.availableVersion ?? ''} متاح` : `${updateState.availableVersion ?? ''} available`)}
+              {updateLabel}
             </span>}
           </button>
         )}

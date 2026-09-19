@@ -21,7 +21,7 @@ const MIGRATIONS_TABLE_SQL = `
 `;
 
 /** Raise this whenever indexing rules change, to reindex existing workspaces. */
-const SEARCH_INDEX_GENERATION = 3;
+const SEARCH_INDEX_GENERATION = 4;
 
 import { BackupService } from './backup-service';
 import { PersonDebtService } from './person-debt-service';

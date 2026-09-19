@@ -1,5 +1,5 @@
+import { ActivitySpinner } from './activity-spinner';
 import { useEffect, useRef, useState } from 'react';
-import { LoaderCircle } from 'lucide-react';
 import type { UpdateStatus } from '../../shared/update-contract';
 import { Button } from './button';
 
@@ -35,6 +35,7 @@ export function UpdateSettings({ locale }: { locale: string }) {
     idle: ar ? 'يتم البحث عن التحديثات تلقائيًا.' : 'Updates are checked automatically.',
     checking: ar ? 'جارٍ البحث عن تحديثات…' : 'Checking for updates…',
     downloading: ar ? 'جارٍ تنزيل التحديث…' : 'Downloading update…',
+    installing: ar ? 'جارٍ إعادة التشغيل…' : 'Restarting to install…',
     available: ar ? 'يتوفر إصدار أحدث للتنزيل.' : 'A newer version is available to download.',
     ready: ar ? 'التحديث جاهز. أعد التشغيل لتثبيته.' : 'Update ready. Restart to install it.',
     current: ar ? 'لديك أحدث إصدار.' : 'You’re up to date.',
@@ -55,10 +56,10 @@ export function UpdateSettings({ locale }: { locale: string }) {
     catch { await held; setStatus(previous => ({ currentVersion: previous?.currentVersion ?? '', state: 'error' })); }
     finally { inFlight.current = false; setPending(false); }
   };
-  const busy = pending || status?.state === 'checking' || status?.state === 'downloading';
+  const busy = !status || pending || ['checking', 'downloading', 'installing'].includes(status.state);
   const offered = status?.state === 'available' ? status : undefined;
   const label = busy
-    ? (status?.state === 'ready' ? (ar ? 'جارٍ إعادة التشغيل…' : 'Restarting…') : messages[status?.state === 'downloading' ? 'downloading' : 'checking'])
+    ? (status?.state === 'ready' || status?.state === 'installing' ? (ar ? 'جارٍ إعادة التشغيل…' : 'Restarting…') : messages[status?.state === 'downloading' ? 'downloading' : 'checking'])
     : status?.state === 'ready' ? (ar ? 'إعادة التشغيل والتثبيت' : 'Restart and install')
       : offered ? (ar ? 'تنزيل' : 'Download')
         : (ar ? 'البحث عن تحديثات' : 'Check for updates');
@@ -75,10 +76,17 @@ export function UpdateSettings({ locale }: { locale: string }) {
     </div></div>
     <div className="apple-settings-row-right"><Button
       aria-busy={busy}
-      icon={busy ? <LoaderCircle className="update-spinner" aria-hidden="true" size={16} /> : undefined}
+      icon={busy ? <ActivitySpinner size={16} /> : undefined}
       disabled={!status || busy || status.state === 'unsupported'}
       onClick={() => {
-        if (offered?.downloadUrl) { void window.maxApi.workspace.openExternal(offered.downloadUrl); return; }
+        if (offered?.downloadUrl) {
+          setPending(true);
+          void window.maxApi.workspace.openExternal(offered.downloadUrl)
+            .then((result) => { if (!result.ok) setStatus({ currentVersion: offered.currentVersion, state: 'error' }); })
+            .catch(() => setStatus({ currentVersion: offered.currentVersion, state: 'error' }))
+            .finally(() => setPending(false));
+          return;
+        }
         void run(status?.state === 'ready');
       }}
       variant="ghost"

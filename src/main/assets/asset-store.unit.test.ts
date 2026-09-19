@@ -1,4 +1,5 @@
-import { mkdtempSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -14,6 +15,28 @@ function store() {
 }
 
 describe('the workspace image store', () => {
+  it('moves legacy assets into categories without changing saved URLs', async () => {
+    const { assets, directory } = store();
+    const name = `${createHash('sha256').update(PNG).digest('hex')}.png`;
+    writeFileSync(join(directory, name), PNG);
+    const url = `max://asset/${name}`;
+    expect(assets.imagePath(url)).toBe(join(directory, name));
+    await assets.organize();
+    await assets.organize();
+    expect(assets.imagePath(url)).toBe(join(directory, 'images', name));
+    expect(existsSync(join(directory, name))).toBe(false);
+    expect(readFileSync(assets.imagePath(url))).toEqual(Buffer.from(PNG));
+    expect(await assets.usage()).toEqual({ byteLength: PNG.length, count: 1 });
+  });
+
+  it.each([['notes.pdf', 'documents'], ['song.mp3', 'audio'], ['clip.mp4', 'videos'], ['bundle.zip', 'archives']])('stores %s under %s', async (fileName, folder) => {
+    const { assets, directory } = store();
+    const saved = await assets.storeAttachment(new Uint8Array([1, 2, 3]), fileName);
+    expect(assets.attachmentPath(saved.url)).toContain(join(directory, folder));
+    expect(await assets.usage()).toEqual({ byteLength: 3, count: 1 });
+    expect(() => assets.attachmentPath('max://attachment/../../secret.pdf')).toThrow();
+    expect(() => assets.imagePath(saved.url)).toThrow();
+  });
   it('reads the format from the file rather than from its name', () => {
     expect(imageExtension(PNG)).toBe('png');
     expect(imageExtension(new Uint8Array([0xff, 0xd8, 0xff, 0xe0]))).toBe('jpg');
@@ -29,8 +52,8 @@ describe('the workspace image store', () => {
 
     expect(first.url).toBe(second.url);
     expect(first.url).toMatch(/^max:\/\/asset\/[0-9a-f]{64}\.png$/);
-    expect(readdirSync(directory)).toHaveLength(1);
-    expect(readFileSync(join(directory, first.url.slice('max://asset/'.length)))).toEqual(Buffer.from(PNG));
+    expect(readdirSync(join(directory, 'images'))).toHaveLength(1);
+    expect(readFileSync(assets.imagePath(first.url))).toEqual(Buffer.from(PNG));
   });
 
   it('refuses anything that is not an image it can serve', async () => {

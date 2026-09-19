@@ -1,4 +1,5 @@
-import { ArrowUpCircle, LoaderCircle, X } from 'lucide-react';
+import { ActivitySpinner } from './activity-spinner';
+import { ArrowUpCircle, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import type { UpdateStatus } from '../../shared/update-contract';
@@ -27,7 +28,7 @@ export function UpdateNotice({ locale, onOpen }: { locale: string; onOpen: () =>
         .catch(() => {});
     };
     refresh();
-    const timer = setInterval(refresh, 30_000);
+    const timer = setInterval(refresh, 2000);
     return () => { active = false; clearInterval(timer); };
   }, []);
 
@@ -46,10 +47,19 @@ export function UpdateNotice({ locale, onOpen }: { locale: string; onOpen: () =>
     );
   }
 
+  if (status.state === 'installing') {
+    return <span className="update-chip" role="status" aria-busy="true"><ActivitySpinner size={15} />{ar ? 'جارٍ إعادة التشغيل…' : 'Restarting to install…'}</span>;
+  }
+  if (status.state === 'checking') {
+    return <span className="update-chip" role="status" aria-busy="true"><ActivitySpinner size={15} />{ar ? 'جارٍ البحث عن تحديثات…' : 'Checking for updates…'}</span>;
+  }
+  if (status.state === 'error') {
+    return <button className="update-chip" onClick={onOpen} type="button">{ar ? 'تعذر التحديث · إعادة المحاولة' : 'Update failed · Retry'}</button>;
+  }
   if (status.state === 'downloading') {
     return (
       <span className="update-chip update-chip--downloading" role="status">
-        <LoaderCircle className="update-spinner" aria-hidden="true" size={15} />
+        <ActivitySpinner size={15} />
         {ar ? 'جارٍ تنزيل التحديث…' : 'Downloading update…'}
         <progress aria-label={ar ? 'جارٍ تنزيل التحديث' : 'Downloading update'} className="update-progress update-progress--chip" />
       </span>
@@ -59,8 +69,11 @@ export function UpdateNotice({ locale, onOpen }: { locale: string; onOpen: () =>
   if (!ready) return null;
 
   const install = () => {
+    if (!window.maxApi.updates || installing) return;
     setInstalling(true);
-    void window.maxApi.updates?.install().catch(() => setInstalling(false));
+    void window.maxApi.updates.install().then(setStatus)
+      .catch(() => setStatus(previous => ({ ...previous, currentVersion: previous?.currentVersion ?? '', state: 'error' })))
+      .finally(() => setInstalling(false));
   };
 
   return (

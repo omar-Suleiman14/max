@@ -1,4 +1,5 @@
 import { isAbsolute, relative, resolve, sep } from 'node:path';
+import { storedAssetPath } from '../assets/asset-path';
 
 function within(root: string, requestedPath: string): string | undefined {
   const absolutePath = resolve(root, requestedPath);
@@ -35,7 +36,7 @@ export function resolveWorkspaceAsset(assetRoot: string, request: string): strin
 
     const name = decodeURIComponent(requestUrl.pathname).replace(/^\/+/, '');
     if (!/^[0-9a-f]{64}\.(png|jpg|gif|webp)$/.test(name)) return undefined;
-    return within(assetRoot, name);
+    return storedAssetPath(assetRoot, name);
   } catch {
     return undefined;
   }

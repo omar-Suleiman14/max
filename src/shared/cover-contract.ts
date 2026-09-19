@@ -174,6 +174,13 @@ export const MET_JAPANESE_PRINTS: readonly CoverArtwork[] = [
   { artist: 'Utagawa Hiroshige', date: 'ca. 1834', id: 'met-36965', objectUrl: 'https://www.metmuseum.org/art/collection/search/36965', title: 'Yokkaichi, Sanchokawa' },
 ];
 
+export const MET_LANDSCAPES: readonly CoverArtwork[] = [
+  { artist: 'Vincent van Gogh', date: '1889', id: 'met-436535', objectUrl: 'https://www.metmuseum.org/art/collection/search/436535', title: 'Wheat Field with Cypresses' },
+  { artist: 'Thomas Cole', date: '1836', id: 'met-10497', objectUrl: 'https://www.metmuseum.org/art/collection/search/10497', title: 'The Oxbow' },
+  { artist: 'Asher Brown Durand', date: '1845', id: 'met-10786', objectUrl: 'https://www.metmuseum.org/art/collection/search/10786', title: 'The Beeches' },
+  { artist: 'Joseph Mallord William Turner', date: 'ca. 1835', id: 'met-437853', objectUrl: 'https://www.metmuseum.org/art/collection/search/437853', title: 'Venice, from the Porch of Madonna della Salute' },
+];
+
 /**
  * The gallery, as the picker draws it: colours and gradients, then the prints.
  *

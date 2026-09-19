@@ -76,7 +76,8 @@ vi.mock('./useDatabaseQuery', () => ({
 
 vi.mock('./DatabaseViewHost', () => ({
   DatabaseViewHost: ({ onCreateRecord }: { onCreateRecord: (draft: { databaseId: string; properties: Record<string, unknown>; title: string }) => Promise<unknown> }) => (
-    <button type="button" onClick={() => void onCreateRecord({ databaseId: 'db-products', properties: {}, title: 'From layout' })}>Create from layout</button>
+    <><button type="button" onClick={() => void onCreateRecord({ databaseId: 'db-products', properties: {}, title: 'From layout' })}>Create from layout</button>
+    <button type="button" onClick={() => void onCreateRecord({ databaseId: 'db-products', properties: {}, title: '' })}>New page</button></>
   ),
 }));
 vi.mock('./RecordDrawer', () => ({
@@ -146,6 +147,44 @@ async function createThenClose() {
 }
 
 describe('DatabasePage record creation', () => {
+  it('uses the same default template and title for bottom New page and toolbar New', async () => {
+    query.activeView = { id: 'view', layoutConfig: { defaultTemplateId: template.id }, propertyState: { columns: [] } };
+    api();
+    render(<DatabasePage databaseId="db-products" />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'New page' }));
+    await waitFor(() => expect(createRecord).toHaveBeenCalledWith(expect.objectContaining({ templateId: template.id, title: template.name })));
+    createRecord.mockClear();
+    await user.click(screen.getByRole('button', { name: 'New' }));
+    await waitFor(() => expect(createRecord).toHaveBeenCalledWith(expect.objectContaining({ templateId: template.id, title: template.name })));
+  });
+
+  it('resolves the default template even before the initial template list loads', async () => {
+    query.activeView = { id: 'view', layoutConfig: { defaultTemplateId: template.id }, propertyState: { columns: [] } };
+    api({ listRecordTemplates: vi.fn().mockImplementationOnce(() => new Promise(() => {})).mockResolvedValue([template]) });
+    render(<DatabasePage databaseId="db-products" />);
+    await userEvent.setup().click(screen.getByRole('button', { name: 'New page' }));
+    await waitFor(() => expect(createRecord).toHaveBeenCalledWith(expect.objectContaining({ templateId: template.id, title: template.name })));
+  });
+
+  it('keeps explicit Empty page separate from the default template', async () => {
+    query.activeView = { id: 'view', layoutConfig: { defaultTemplateId: template.id }, propertyState: { columns: [] } };
+    api();
+    render(<DatabasePage databaseId="db-products" />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Templates' }));
+    await user.click(screen.getByRole('button', { name: 'Empty page' }));
+    await waitFor(() => expect(createRecord).toHaveBeenCalledWith(expect.objectContaining({ templateId: null, title: 'Untitled' })));
+  });
+
+  it('shows a retryable error instead of creating a blank page when template lookup fails', async () => {
+    query.activeView = { id: 'view', layoutConfig: { defaultTemplateId: template.id }, propertyState: { columns: [] } };
+    api({ listRecordTemplates: vi.fn().mockRejectedValue(new Error('failed')) });
+    render(<DatabasePage databaseId="db-products" />);
+    await userEvent.setup().click(screen.getByRole('button', { name: 'New page' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not create the page');
+    expect(createRecord).not.toHaveBeenCalled();
+  });
   it('keeps templates inside the arrow beside New', async () => {
     api();
     const user = userEvent.setup();

@@ -26,7 +26,7 @@ export default defineConfig({
       server.middlewares.use('/__max/asset', (req, res) => {
         const name = (req.url ?? '').replace(/^\/+/, '').split('?')[0];
         if (!/^[0-9a-f]{64}\.(png|jpg|gif|webp)$/.test(name)) { res.statusCode = 404; res.end(); return; }
-        createReadStream(resolve(backend.assetDirectory, name))
+        createReadStream(backend.assetPath(name))
           .on('error', () => { res.statusCode = 404; res.end(); })
           .pipe(res);
       });

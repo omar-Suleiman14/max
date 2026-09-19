@@ -1,7 +1,7 @@
 import { Link2, Upload } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
-import { COVER_GALLERY, MET_JAPANESE_PRINTS, type CoverArtwork, type PageCover } from '../../shared/cover-contract';
+import { COVER_GALLERY, MET_JAPANESE_PRINTS, MET_LANDSCAPES, type CoverArtwork, type PageCover } from '../../shared/cover-contract';
 import type { Locale } from '../app/i18n';
 import { MET_COVER_IMAGES } from './met-cover-images';
 
@@ -134,10 +134,10 @@ export function CoverPicker({ locale, onClose, onPick, onRemove, hasCover }: {
             </div>
           ))}
 
-          <div className="cover-picker__category">
-            <p className="cover-picker__section">{text.prints} <span>{text.publicDomain}</span></p>
+          {[{ title: ar ? 'مناظر طبيعية، متحف المتروبوليتان' : 'Landscapes, The Met', artworks: MET_LANDSCAPES }, { title: text.prints, artworks: MET_JAPANESE_PRINTS }].map(section => <div key={section.title} className="cover-picker__category">
+            <p className="cover-picker__section">{section.title} <span>{text.publicDomain}</span></p>
             <div className="cover-picker__grid cover-picker__grid--photos">
-              {MET_JAPANESE_PRINTS.map((artwork) => (
+              {section.artworks.map((artwork) => (
                 <button
                   key={artwork.id}
                   aria-label={`${artwork.title}, ${artwork.artist}`}
@@ -152,7 +152,7 @@ export function CoverPicker({ locale, onClose, onPick, onRemove, hasCover }: {
                 </button>
               ))}
             </div>
-          </div>
+          </div>)}
         </>}
 
         {tab === 'upload' && <div className="cover-picker__pane">

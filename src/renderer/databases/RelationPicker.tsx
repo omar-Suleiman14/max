@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 
 import type { RelationTargetSummary } from '../../shared/relation-contract';
 import type { Locale } from '../app/i18n';
+import { FocusedOverlay } from '../ui/focused-overlay';
 
 type RelationPickerProps = Readonly<{
   isOpen: boolean;
@@ -79,12 +80,12 @@ export function RelationPicker({
   if (!isOpen) return null;
 
   return (
-    <div className="modal-backdrop" onClick={onClose} onKeyDown={(event) => { if (event.key === 'Escape') { event.stopPropagation(); onClose(); } }} role="dialog" aria-modal="true" aria-label={title}>
-      <div className="modal-container relation-picker-modal" onClick={(e) => e.stopPropagation()}>
+    <FocusedOverlay className="relation-picker-modal" labelId="relation-picker-title" onClose={onClose}>
+      <div className="modal-container">
         <div className="modal-header">
           <div className="modal-header__title">
             <Link2 size={18} className="text-primary" />
-            <h3>{title}</h3>
+            <h3 id="relation-picker-title">{title}</h3>
           </div>
           <button className="btn-icon" onClick={onClose} type="button" aria-label="Close">
             <X size={16} />
@@ -95,6 +96,7 @@ export function RelationPicker({
           <Search size={16} className="text-muted" />
           <input
             ref={searchInputRef}
+            data-autofocus="true"
             type="text"
             placeholder={locale === 'ar' ? 'ابحث عن صفحة لربطها…' : 'Search pages to link…'}
             value={query}
@@ -143,6 +145,6 @@ export function RelationPicker({
           </button>
         </div>
       </div>
-    </div>
+    </FocusedOverlay>
   );
 }
