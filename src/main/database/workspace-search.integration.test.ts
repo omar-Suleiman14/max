@@ -82,6 +82,16 @@ describe('searching the whole workspace', () => {
     expect(db.workspaceSearch.search('screen', 10)[0]?.entityId).toBe(screens.id);
   });
 
+  it('orders exact titles, title prefixes, title contains, then body matches', () => {
+    const db = workspace();
+    const exact = page(db, 'Needle', [{ content: 'Nothing here', id: 'exact', type: 'text' }]);
+    const prefix = page(db, 'Needle notes', [{ content: 'Nothing here', id: 'prefix', type: 'text' }]);
+    const contains = page(db, 'My needle reference', [{ content: 'Nothing here', id: 'contains', type: 'text' }]);
+    const body = page(db, 'Reference', [{ content: 'Needle appears only in the body', id: 'body', type: 'text' }]);
+
+    expect(db.workspaceSearch.search('needle', 10).map((result) => result.entityId)).toEqual([exact.id, prefix.id, contains.id, body.id]);
+  });
+
   it('finds a record by any of its property values', () => {
     const db = workspace();
     const created = db.databases.createDatabase({ title: 'Inventory' });

@@ -79,6 +79,7 @@ describe('ViewsPagesRepository & SearchService', () => {
     expect(normalizeSearchText('شَاشَةٌ')).toBe('شاشه');
     expect(normalizeSearchText('مُصْطَفَى')).toBe('مصطفي');
     expect(normalizeSearchText('  iPhone 15 Pro Max  ')).toBe('iphone 15 pro max');
+    expect(normalizeSearchText('\u0662\u0660\u0662\u0666')).toBe('2026');
   });
 
   it('performs universal search across items, people, accounts, and transactions with normalized matches', () => {

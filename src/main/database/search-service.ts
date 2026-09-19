@@ -1,9 +1,10 @@
 import type { DatabaseSync } from 'node:sqlite';
 
 import type { SearchResult, SearchResultKind } from '../../shared/views-search-contract';
+import { toLatinDigits } from '../../shared/digits';
 
 export function normalizeSearchText(text: string): string {
-  return text
+  return toLatinDigits(text)
     .normalize('NFKD')
     .toLowerCase()
     .replace(/[\u064B-\u065F\u0670]/g, '')

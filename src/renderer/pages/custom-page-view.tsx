@@ -6,6 +6,8 @@ import type { CustomPage } from '../app/app-types';
 import type { Locale } from '../app/i18n';
 import { IconPickerDialog } from '../ui/icon-picker-dialog';
 import { NotionBlockEditor, type NotionBlock } from '../ui/notion-block-editor';
+import { BlockNotePageEditor } from '../ui/blocknote-page-editor';
+import { canUseBlockNote } from '../ui/blocknote-support';
 import { PageIconRenderer } from '../ui/page-icon-renderer';
 import { AddCoverButton, PageCover } from './page-cover';
 import { PageProperties } from './page-properties';
@@ -138,14 +140,16 @@ export function CustomPageView({
           }
         }}
       >
-        <NotionBlockEditor
-          blocks={page.blocks}
-          locale={locale}
-          onChange={handleBlocksChange}
-          onFrontmatterPaste={(entries) => { void import('./page-frontmatter-sync').then(({ applyFrontmatterEntries }) => onUpdatePage(page.id, { properties: applyFrontmatterEntries(page.properties ?? [], entries) })); }}
-          onWorkspaceChange={onWorkspaceChange}
-          parentPageId={page.id}
-        />
+        {canUseBlockNote(page.blocks)
+          ? <BlockNotePageEditor blocks={page.blocks} locale={locale} onChange={handleBlocksChange} />
+          : <NotionBlockEditor
+              blocks={page.blocks}
+              locale={locale}
+              onChange={handleBlocksChange}
+              onFrontmatterPaste={(entries) => { void import('./page-frontmatter-sync').then(({ applyFrontmatterEntries }) => onUpdatePage(page.id, { properties: applyFrontmatterEntries(page.properties ?? [], entries) })); }}
+              onWorkspaceChange={onWorkspaceChange}
+              parentPageId={page.id}
+            />}
       </div>
       {connectionsEnabled && <PageConnections pageId={page.id} locale={locale} />}
     </div>

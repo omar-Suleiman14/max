@@ -1,4 +1,4 @@
-import { MAX_DOCUMENT_VERSION, type MaxBlock, type MaxBlockData, type MaxDocument } from './max-document';
+import { MAX_DOCUMENT_VERSION, type MaxBlock, type MaxDocument } from './max-document';
 
 type LegacyBlock = Readonly<Record<string, unknown>>;
 type PageEnvelope = Readonly<Record<string, unknown>>;
@@ -29,14 +29,22 @@ function toMaxBlock(value: unknown, index: number): MaxBlock {
       type: value.type,
     };
   }
-  const { col1Blocks, col2Blocks, id: _id, type: rawType, ...data } = value;
+  const col1Blocks = value.col1Blocks;
+  const col2Blocks = value.col2Blocks;
+  const rawType = value.type;
+  const data: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (!['col1Blocks', 'col2Blocks', 'id', 'type'].includes(key)) data[key] = item;
+  }
+  const left: readonly unknown[] = Array.isArray(col1Blocks) ? col1Blocks : [];
+  const right: readonly unknown[] = Array.isArray(col2Blocks) ? col2Blocks : [];
   const children = [
-    ...(Array.isArray(col1Blocks) ? col1Blocks : []),
-    ...(Array.isArray(col2Blocks) ? col2Blocks : []),
+    ...left,
+    ...right,
   ].map(toMaxBlock);
   return {
     children: children.length ? children : undefined,
-    data: data as MaxBlockData,
+    data,
     id: idFor(value, index),
     type: typeof rawType === 'string' && rawType ? rawType : 'unknown',
   };

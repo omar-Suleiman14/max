@@ -13,10 +13,11 @@ type FtsRow = Readonly<{
   display_title: string;
   entity_id: string;
   entity_kind: WorkspaceSearchResult['entityKind'];
+  title_text: string;
 }>;
 
 const SELECT_COLUMNS = `
-  SELECT entity_id, entity_kind, database_id, display_title, display_subtitle, display_metadata
+  SELECT entity_id, entity_kind, database_id, display_title, display_subtitle, display_metadata, title_text
   FROM workspace_search_index
 `;
 
@@ -213,15 +214,17 @@ export class WorkspaceSearchService {
 
     try {
       const rows = this.#database
-        .prepare(`${SELECT_COLUMNS} WHERE workspace_search_index MATCH ? ORDER BY ${RANKING} LIMIT ?`)
-        .all(ftsQuery, limit) as FtsRow[];
+        .prepare(`${SELECT_COLUMNS} WHERE workspace_search_index MATCH ?
+          ORDER BY CASE WHEN title_text = ? THEN 0 WHEN title_text LIKE ? THEN 1 WHEN title_text LIKE ? THEN 2 ELSE 3 END, ${RANKING}, display_title COLLATE NOCASE LIMIT ?`)
+        .all(ftsQuery, normalized, `${normalized}%`, `%${normalized}%`, limit) as FtsRow[];
       return rows.map(toResult);
     } catch {
       // A query FTS5 will not parse still has to return something useful.
       const pattern = `%${normalized}%`;
       const rows = this.#database
-        .prepare(`${SELECT_COLUMNS} WHERE title_text LIKE ? OR search_text LIKE ? LIMIT ?`)
-        .all(pattern, pattern, limit) as FtsRow[];
+        .prepare(`${SELECT_COLUMNS} WHERE title_text LIKE ? OR search_text LIKE ?
+          ORDER BY CASE WHEN title_text = ? THEN 0 WHEN title_text LIKE ? THEN 1 WHEN title_text LIKE ? THEN 2 ELSE 3 END, display_title COLLATE NOCASE LIMIT ?`)
+        .all(pattern, pattern, normalized, `${normalized}%`, pattern, limit) as FtsRow[];
       return rows.map(toResult);
     }
   }
