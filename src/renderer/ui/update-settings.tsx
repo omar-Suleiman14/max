@@ -1,5 +1,5 @@
+import { ActivitySpinner } from './activity-spinner';
 import { useEffect, useRef, useState } from 'react';
-import { LoaderCircle } from 'lucide-react';
 import type { UpdateStatus } from '../../shared/update-contract';
 import { Button } from './button';
 
@@ -76,7 +76,7 @@ export function UpdateSettings({ locale }: { locale: string }) {
     </div></div>
     <div className="apple-settings-row-right"><Button
       aria-busy={busy}
-      icon={busy ? <LoaderCircle className="update-spinner" aria-hidden="true" size={16} /> : undefined}
+      icon={busy ? <ActivitySpinner size={16} /> : undefined}
       disabled={!status || busy || status.state === 'unsupported'}
       onClick={() => {
         if (offered?.downloadUrl) {

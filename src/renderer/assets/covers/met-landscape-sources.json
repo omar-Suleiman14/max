@@ -1,0 +1,42 @@
+[
+  {
+    "id": "met-436535",
+    "title": "Wheat Field with Cypresses",
+    "artist": "Vincent van Gogh",
+    "date": "1889",
+    "objectUrl": "https://www.metmuseum.org/art/collection/search/436535",
+    "source": "https://images.metmuseum.org/CRDImages/ep/original/DP-42549-001.jpg",
+    "publicDomain": true,
+    "bytes": 440264
+  },
+  {
+    "id": "met-10497",
+    "title": "View from Mount Holyoke, Northampton, Massachusetts, after a Thunderstorm—The Oxbow",
+    "artist": "Thomas Cole",
+    "date": "1836",
+    "objectUrl": "https://www.metmuseum.org/art/collection/search/10497",
+    "source": "https://images.metmuseum.org/CRDImages/ad/original/DP-12550-001.jpg",
+    "publicDomain": true,
+    "bytes": 153824
+  },
+  {
+    "id": "met-10786",
+    "title": "The Beeches",
+    "artist": "Asher Brown Durand",
+    "date": "1845",
+    "objectUrl": "https://www.metmuseum.org/art/collection/search/10786",
+    "source": "https://images.metmuseum.org/CRDImages/ad/original/DT75.jpg",
+    "publicDomain": true,
+    "bytes": 532975
+  },
+  {
+    "id": "met-437853",
+    "title": "Venice, from the Porch of Madonna della Salute",
+    "artist": "Joseph Mallord William Turner",
+    "date": "ca. 1835",
+    "objectUrl": "https://www.metmuseum.org/art/collection/search/437853",
+    "source": "https://images.metmuseum.org/CRDImages/ep/original/DP169568.jpg",
+    "publicDomain": true,
+    "bytes": 243887
+  }
+]

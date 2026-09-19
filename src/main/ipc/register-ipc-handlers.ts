@@ -1,6 +1,6 @@
 import type { UpdateService } from '../platform/windows/update-service';
 import { TERMS_VERSION } from '../../shared/terms';
-import { app, ipcMain, shell } from 'electron';
+import { app, dialog, ipcMain, shell } from 'electron';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -801,6 +801,18 @@ export function registerIpcHandlers({
           : undefined;
       if (!data) throw new AssetError('No image was supplied.');
       return requireAssets().store(data);
+    });
+  });
+  ipcMain.handle(IPC_CHANNELS.assetsExportImage, (event, url: unknown) => {
+    trust(event);
+    return storing(async () => {
+      if (typeof url !== 'string') throw new AssetError('Invalid image.');
+      const source = requireAssets().imagePath(url);
+      const extension = path.extname(source).slice(1);
+      const result = await dialog.showSaveDialog({ defaultPath: `Max-image.${extension}`, filters: [{ name: 'Image', extensions: [extension] }] });
+      if (result.canceled || !result.filePath) return { canceled: true };
+      if (path.resolve(source) !== path.resolve(result.filePath)) await fs.copyFile(source, result.filePath);
+      return { canceled: false };
     });
   });
   ipcMain.handle(IPC_CHANNELS.assetsImportAttachment, (event, bytes: unknown, name: unknown) => {

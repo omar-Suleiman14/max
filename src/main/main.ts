@@ -74,6 +74,8 @@ async function latestPublishedRelease(): Promise<LatestRelease | null> {
   void app
     .whenReady()
     .then(async () => {
+      const assets = new AssetStore(assetDirectory);
+      await assets.organize();
       // The asset host serves page covers, so it is registered in development
       // too; the renderer host only exists in a packaged build.
       registerAppProtocol(
@@ -103,7 +105,7 @@ async function latestPublishedRelease(): Promise<LatestRelease | null> {
       if (process.env.MAX_SMOKE_TEST !== '1') updates.start();
       registerIpcHandlers({
         updates,
-        assets: new AssetStore(assetDirectory),
+        assets,
         cloudBackups,
         database,
         developmentServerUrl: MAIN_WINDOW_VITE_DEV_SERVER_URL,

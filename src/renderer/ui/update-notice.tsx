@@ -1,4 +1,5 @@
-import { ArrowUpCircle, LoaderCircle, X } from 'lucide-react';
+import { ActivitySpinner } from './activity-spinner';
+import { ArrowUpCircle, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import type { UpdateStatus } from '../../shared/update-contract';
@@ -47,10 +48,10 @@ export function UpdateNotice({ locale, onOpen }: { locale: string; onOpen: () =>
   }
 
   if (status.state === 'installing') {
-    return <span className="update-chip" role="status" aria-busy="true"><LoaderCircle className="update-spinner" aria-hidden="true" size={15} />{ar ? 'جارٍ إعادة التشغيل…' : 'Restarting to install…'}</span>;
+    return <span className="update-chip" role="status" aria-busy="true"><ActivitySpinner size={15} />{ar ? 'جارٍ إعادة التشغيل…' : 'Restarting to install…'}</span>;
   }
   if (status.state === 'checking') {
-    return <span className="update-chip" role="status" aria-busy="true"><LoaderCircle className="update-spinner" aria-hidden="true" size={15} />{ar ? 'جارٍ البحث عن تحديثات…' : 'Checking for updates…'}</span>;
+    return <span className="update-chip" role="status" aria-busy="true"><ActivitySpinner size={15} />{ar ? 'جارٍ البحث عن تحديثات…' : 'Checking for updates…'}</span>;
   }
   if (status.state === 'error') {
     return <button className="update-chip" onClick={onOpen} type="button">{ar ? 'تعذر التحديث · إعادة المحاولة' : 'Update failed · Retry'}</button>;
@@ -58,7 +59,7 @@ export function UpdateNotice({ locale, onOpen }: { locale: string; onOpen: () =>
   if (status.state === 'downloading') {
     return (
       <span className="update-chip update-chip--downloading" role="status">
-        <LoaderCircle className="update-spinner" aria-hidden="true" size={15} />
+        <ActivitySpinner size={15} />
         {ar ? 'جارٍ تنزيل التحديث…' : 'Downloading update…'}
         <progress aria-label={ar ? 'جارٍ تنزيل التحديث' : 'Downloading update'} className="update-progress update-progress--chip" />
       </span>

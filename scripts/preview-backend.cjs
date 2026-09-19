@@ -1,4 +1,5 @@
 const { AssetStore } = require('../src/main/assets/asset-store.ts');
+const { storedAssetPath } = require('../src/main/assets/asset-path.ts');
 const { DatabaseService } = require('../src/main/database/database-service.ts');
 const { PhotoLibrary } = require('../src/main/assets/photo-library.ts');
 const { join } = require('node:path');
@@ -37,6 +38,7 @@ module.exports = function createPreview(databasePath, origin) {
   });
   return {
     assetDirectory,
+    assetPath: (name) => storedAssetPath(assetDirectory, name),
     close: () => database.close(),
     invoke: async (channel, args) => {
       const handler = handlers.get(channel);

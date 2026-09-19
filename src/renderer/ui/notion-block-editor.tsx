@@ -1,3 +1,5 @@
+import { autoScrollDuringDrag, setDragPreview } from './drag-preview';
+import { ActivitySpinner } from './activity-spinner';
 import { BlockActionMenu } from './block-action-menu';
 import { isUnsupportedLegacyBlock } from '../../shared/max-document-legacy';
 import { DatabaseSkeleton } from '../databases/DatabaseSkeleton';
@@ -453,6 +455,9 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
   const [activeSlashBlockId, setActiveSlashBlockId] = useState<string | null>(null);
   const [slashQuery, setSlashQuery] = useState('');
   const [fileError, setFileError] = useState('');
+  const [importingFiles, setImportingFiles] = useState(false);
+  const fileImportLock = useRef(false);
+  const draggedIds = useRef<readonly string[]>([]);
   const [slashIndex, setSlashIndex] = useState(0);
   const [calloutPickerId, setCalloutPickerId] = useState<string>();
   const calloutIconRefs = useRef(new Map<string, HTMLButtonElement>());
@@ -1127,18 +1132,23 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
 
   // Drag-and-drop block reordering
   function handleDragStart(event: React.DragEvent, index: number) {
+    event.stopPropagation();
     event.dataTransfer.effectAllowed = 'move';
-    event.dataTransfer.setData('text/plain', blocks[index]?.id ?? '');
+    event.dataTransfer.setData('application/x-max-block', blocks[index]?.id ?? '');
+    draggedIds.current = selectedLines.includes(index) ? selectedLines.map(line => blocks[line]!.id) : [blocks[index]!.id];
+    const row = event.currentTarget.closest<HTMLElement>('.notion-block-row');
+    if (row) setDragPreview(event.dataTransfer, row, draggedIds.current.length);
     setDraggedIndex(index);
   }
 
   function handleDragOver(e: React.DragEvent, index: number) {
-    const files = e.dataTransfer.types.includes('Files');
+    const files = e.dataTransfer.types.includes('Files') || (draggedIndex === null && e.dataTransfer.types.includes('text/uri-list'));
     // A file dragged in from outside is not a reorder. The insertion line still
     // shows where it will land, but the cursor says copy and the drop below
     // imports the file instead of moving a block that was never picked up.
     if (!files && draggedIndex === null) return;
-    e.preventDefault();
+    e.preventDefault(); e.stopPropagation();
+    autoScrollDuringDrag(e.currentTarget as HTMLElement, e.clientY);
     e.dataTransfer.dropEffect = files ? 'copy' : 'move';
     const rect = e.currentTarget.getBoundingClientRect();
     setDragOverEdge(e.clientY >= rect.top + rect.height / 2 ? 'after' : 'before');
@@ -1147,23 +1157,22 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
     }
   }
 
-  function handleDrop(targetIndex: number) {
-    if (draggedIndex === null || draggedIndex === targetIndex) {
-      if (draggedIndex !== null) signalMoveFailure(blocks[draggedIndex]?.id);
-      setDraggedIndex(null);
-      setDragOverIndex(null);
-      return;
+  function handleDrop(targetIndex: number, after = dragOverEdge === 'after') {
+    const target = blocks[targetIndex];
+    if (draggedIndex === null || !target || draggedIds.current.includes(target.id)) {
+      setDraggedIndex(null); setDragOverIndex(null); return;
     }
-    const next = [...blocks];
-    const [moved] = next.splice(draggedIndex, 1);
-    if (moved) {
-      const adjustedTarget = draggedIndex < targetIndex ? targetIndex - 1 : targetIndex;
-      const insertAt = Math.max(0, adjustedTarget + (dragOverEdge === 'after' ? 1 : 0));
-      next.splice(insertAt, 0, moved);
-      onChange(next);
+    const ids = new Set(draggedIds.current);
+    const existing = currentBlocks.current;
+    const moved = existing.filter(block => ids.has(block.id));
+    const remaining = existing.filter(block => !ids.has(block.id));
+    const targetAt = remaining.findIndex(block => block.id === target.id);
+    if (targetAt >= 0 && moved.length) {
+      remaining.splice(targetAt + (after ? 1 : 0), 0, ...moved);
+      onChange(remaining); setSelectedLines([]);
     }
-    setDraggedIndex(null);
-    setDragOverIndex(null);
+    draggedIds.current = [];
+    setDraggedIndex(null); setDragOverIndex(null);
   }
 
   function moveBlock(index: number, direction: -1 | 1) {
@@ -1178,11 +1187,15 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
   }
 
   async function addDroppedFiles(files: FileList, insertAt?: number) {
+    if (fileImportLock.current) return;
+    fileImportLock.current = true; setImportingFiles(true);
+    const list = Array.from(files);
+    const beforeId = insertAt === undefined ? undefined : currentBlocks.current[insertAt]?.id;
     setFileError('');
     try {
     const additions: NotionBlock[] = [];
-    for (const file of Array.from(files)) {
-      if (file.type.startsWith('image/')) {
+    for (const file of list) {
+      if (file.type.startsWith('image/') || /\.(png|jpe?g|gif|webp)$/i.test(file.name)) {
         const result = await window.maxApi.assets.importImage(new Uint8Array(await file.arrayBuffer()), file.name);
         if (!result.ok) throw new Error(result.error.message);
         additions.push({ caption: file.name, content: '', id: crypto.randomUUID(), type: 'image', url: result.value.url });
@@ -1196,13 +1209,34 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
     // Land the file where the insertion line was drawn, not at the end of the
     // page. Dropping onto the canvas below the last block still appends.
     const existing = currentBlocks.current;
-    const at = Math.max(0, Math.min(existing.length, insertAt ?? existing.length));
+    const anchorIndex = beforeId ? existing.findIndex(block => block.id === beforeId) : -1;
+    const at = anchorIndex >= 0 ? anchorIndex : Math.max(0, Math.min(existing.length, insertAt ?? existing.length));
     const next = [...existing.slice(0, at), ...additions, ...existing.slice(at)];
     // A file dropped last leaves a paragraph under it, so there is somewhere to
     // keep typing without having to reach for the gutter.
     if (at === existing.length) next.push({ content: '', id: crypto.randomUUID(), type: 'text' });
     onChange(next);
-    } catch (error) { setFileError(String(error)); }
+    } catch (error) { setFileError(error instanceof Error ? error.message : String(error)); }
+    finally { fileImportLock.current = false; setImportingFiles(false); }
+  }
+
+  async function addDroppedImage(address: string, at = currentBlocks.current.length) {
+    if (fileImportLock.current) return;
+    fileImportLock.current = true; setImportingFiles(true); setFileError('');
+    try {
+      const result = await window.maxApi.assets.downloadImage(address);
+      if (!result.ok) throw new Error(result.error.message);
+      const next = [...currentBlocks.current];
+      next.splice(at, 0, { id: crypto.randomUUID(), type: 'image', content: '', url: result.value.url });
+      onChange(next);
+    } catch (reason) { setFileError(reason instanceof Error ? reason.message : String(reason)); }
+    finally { fileImportLock.current = false; setImportingFiles(false); }
+  }
+
+  function droppedImageUrl(data: DataTransfer): string | undefined {
+    const html = data.getData('text/html');
+    const source = html ? new DOMParser().parseFromString(html, 'text/html').querySelector('img')?.getAttribute('src') : undefined;
+    return safeWebUrl(source ?? data.getData('text/uri-list').split('\n').find(line => !line.startsWith('#')) ?? '') || undefined;
   }
 
   return (
@@ -1210,8 +1244,16 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
       ref={canvasRef}
       tabIndex={-1}
       className="notion-editor-canvas"
+      aria-busy={importingFiles}
+      onPasteCapture={event => {
+        if (!event.clipboardData.files.length) return;
+        event.preventDefault(); event.stopPropagation();
+        const id = (event.target as Element).closest<HTMLElement>('[data-block-id]')?.dataset.blockId;
+        const index = blocks.findIndex(block => block.id === id);
+        void addDroppedFiles(event.clipboardData.files, index < 0 ? undefined : index + 1);
+      }}
       onDragOver={(event) => {
-        if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; }
+        if (event.dataTransfer.types.includes('Files') || event.dataTransfer.types.includes('text/uri-list')) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; }
       }}
       onDragLeave={(event) => {
         // An external drag never fires dragend here, so the insertion line has
@@ -1220,10 +1262,12 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
         setDragOverIndex(null);
       }}
       onDrop={(event) => {
-        if (!event.dataTransfer.files.length) return;
+        const address = droppedImageUrl(event.dataTransfer);
+        if (!event.dataTransfer.files.length && !address) return;
         event.preventDefault(); event.stopPropagation();
         setDragOverIndex(null); setDraggedIndex(null);
-        void addDroppedFiles(event.dataTransfer.files);
+        if (event.dataTransfer.files.length) void addDroppedFiles(event.dataTransfer.files);
+        else if (address) void addDroppedImage(address);
       }}
       onContextMenu={(event) => {
         const target = event.target as Element;
@@ -1305,10 +1349,11 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
         }}><option value="" disabled>{locale === 'ar' ? 'تحويل إلى…' : 'Turn into…'}</option>{(['text','h1','h2','h3','bullet','number','todo','quote','callout','code'] as const).map(type => <option key={type} value={type}>{({text:'Text',h1:'Heading 1',h2:'Heading 2',h3:'Heading 3',bullet:'Bulleted list',number:'Numbered list',todo:'To-do',quote:'Quote',callout:'Callout',code:'Code'})[type]}</option>)}</select>
       </div>}
       <p className="sr-only" role="status">{failedMoveBlockId ? (locale === 'ar' ? 'لا يمكن نقل الكتلة أبعد من ذلك.' : 'This block cannot move any farther.') : ''}</p>
+      {importingFiles && <p className="workspace-import-status" role="status"><ActivitySpinner />{locale === 'ar' ? 'جارٍ حفظ الملفات…' : 'Saving files…'}</p>}
       {fileError && <p role="alert">{fileError}</p>}
       {blocks.map((block, index) => {
         if (isUnsupportedLegacyBlock(block) || typeof block.content !== 'string' || !['text', 'h1', 'h2', 'h3', 'bullet', 'number', 'todo', 'quote', 'code', 'toggle', 'callout', 'columns', 'database-view', 'divider', 'page-link', 'embed', 'bookmark', 'image', 'video', 'audio', 'file', 'simple-table', 'table-of-contents'].includes(block.type)) return <div key={block.id} role="note">{locale === 'ar' ? 'كتلة غير مدعومة — تم الاحتفاظ بالمحتوى.' : 'Unsupported block — content preserved.'}</div>;
-        const isDragging = draggedIndex === index;
+        const isDragging = draggedIndex !== null && draggedIds.current.includes(block.id);
         const isDragOver = dragOverIndex === index;
         const isSlashActive = activeSlashBlockId === block.id;
         let listNumber = 1;
@@ -1376,10 +1421,18 @@ export function NotionBlockEditor({ blocks, locale, onChange: publish, onWorkspa
             }}
             onDragOver={(e) => handleDragOver(e, index)}
             onDrop={(event) => {
-              if (!event.dataTransfer.files.length) { handleDrop(index); return; }
+              event.preventDefault(); event.stopPropagation();
+              const rect = event.currentTarget.getBoundingClientRect();
+              const after = event.clientY >= rect.top + rect.height / 2;
+              if (!event.dataTransfer.files.length) {
+                const address = droppedImageUrl(event.dataTransfer);
+                if (draggedIndex !== null) handleDrop(index, after);
+                else if (address) void addDroppedImage(address, index + (after ? 1 : 0));
+                return;
+              }
               // An image or a file dropped between two blocks belongs there.
               event.preventDefault(); event.stopPropagation();
-              const at = index + (dragOverEdge === 'after' ? 1 : 0);
+              const at = index + (after ? 1 : 0);
               setDragOverIndex(null); setDraggedIndex(null);
               void addDroppedFiles(event.dataTransfer.files, at);
             }}

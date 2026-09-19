@@ -1,0 +1,19 @@
+/* Activity and direct manipulation feedback. */
+.activity-spinner.update-spinner{position:relative;display:inline-block;flex:none;vertical-align:middle;animation:none}
+.activity-spinner i{position:absolute;left:44%;top:3%;width:12%;height:27%;border-radius:999px;background:currentColor;transform-origin:50% 174%;transform:rotate(calc(var(--spoke)*30deg));animation:activity-fade 1s linear infinite;animation-delay:calc(var(--spoke)*-0.083333s)}
+@keyframes activity-fade{0%{opacity:1}100%{opacity:.15}}
+@media(prefers-reduced-motion:reduce){.activity-spinner i{animation:none;opacity:.55}}
+.workspace-drag-preview{position:fixed;inset:0 auto auto 0;z-index:99999;max-height:240px;overflow:hidden;pointer-events:none;padding:10px;border:1px solid var(--line-strong);border-radius:10px;background:var(--card);color:var(--text);box-shadow:0 10px 32px #0004;opacity:.94}
+.workspace-drag-preview .notion-block-gutter{display:none}
+.workspace-drag-preview__count{position:absolute;inset-block-start:4px;inset-inline-end:4px;border-radius:999px;background:var(--accent);color:var(--accent-contrast);padding:2px 7px}
+.workspace-import-status{display:flex;align-items:center;gap:8px;color:var(--muted)}
+.notion-block-row[data-dragging="true"]{opacity:.3}
+.notion-block-row[data-drag-over="true"]::before,.notion-block-row[data-drag-over="true"]::after{pointer-events:none}
+.page-image-upload{padding:28px 16px;border:1px dashed var(--line-strong);border-radius:10px;text-align:center;background:var(--canvas-subtle)}
+.page-image-upload button{padding:8px 12px;border-radius:7px;border:1px solid var(--line);background:var(--card);color:var(--text)}
+.page-image-block[data-drop-active]{outline:2px solid var(--accent);outline-offset:4px}
+.page-cover__controls{opacity:1;max-width:calc(100% - 24px);flex-wrap:wrap}
+.page-cover[data-repositioning] .page-cover__controls{inset-block-start:12px;inset-block-end:auto}
+.page-cover[data-repositioning] .page-cover__image{touch-action:none;user-select:none}
+.page-cover__reposition{max-width:calc(100% - 32px);flex-wrap:wrap}
+.page-cover__error{position:absolute;inset-block-start:8px;inset-inline-start:12px;padding:6px 10px;border-radius:6px;background:var(--card);color:var(--danger)}

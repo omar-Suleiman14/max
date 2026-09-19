@@ -26,6 +26,7 @@ const API = 'https://collectionapi.metmuseum.org/public/collection/v1/objects';
 
 /** Curated Open Access prints, all landscape oban sheets that crop well. */
 const OBJECT_IDS = [45434, 36493, 36497, 56242, 56395, 57003, 39800, 39798, 54868, 36504, 55049, 36965];
+const LANDSCAPE_IDS = [436535, 10497, 10786, 437853];
 
 /**
  * Wide enough to paint a cover strip on a large window, small enough that
@@ -37,7 +38,9 @@ async function main() {
   await mkdir(OUT, { recursive: true });
   const entries = [];
 
-  for (const id of OBJECT_IDS) {
+  const selected = process.argv.slice(2).map(Number);
+  for (const id of selected.length ? selected : [...OBJECT_IDS, ...LANDSCAPE_IDS]) {
+    if (![...OBJECT_IDS, ...LANDSCAPE_IDS].includes(id)) throw new Error(`Uncurated object ${id}`);
     const object = await (await fetch(`${API}/${id}`)).json();
     if (!object.isPublicDomain) throw new Error(`Object ${id} is not public domain.`);
     if (!object.primaryImage) throw new Error(`Object ${id} has no image.`);
@@ -45,7 +48,8 @@ async function main() {
     // The museum's "web-large" file is only 600px across, which is fine for the
     // grid and too soft for a cover, so the full-size file is what gets resized.
     const bytes = Buffer.from(await (await fetch(object.primaryImage)).arrayBuffer());
-    const cover = await sharp(bytes).resize({ width: COVER_WIDTH, withoutEnlargement: true }).jpeg({ mozjpeg: true, quality: 68 }).toBuffer();
+    const landscape = LANDSCAPE_IDS.includes(id);
+    const cover = await sharp(bytes).resize({ width: landscape ? 1600 : COVER_WIDTH, withoutEnlargement: true }).jpeg({ mozjpeg: true, quality: landscape ? 78 : 68 }).toBuffer();
     await writeFile(join(OUT, `met-${id}.jpg`), cover);
 
     entries.push({

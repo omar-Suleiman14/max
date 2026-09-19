@@ -157,6 +157,7 @@ export const IPC_CHANNELS = {
 
   // Local image store and the photo library that fills it
   assetsImport: 'max:assets:import',
+  assetsExportImage: 'max:assets:image:export',
   assetsImportAttachment: 'max:assets:attachment:import',
   assetsOpenAttachment: 'max:assets:attachment:open',
   assetsDownload: 'max:assets:download',
@@ -338,6 +339,7 @@ export type MaxApi = Readonly<{
    * first, so a page looks the same with the network unplugged.
    */
   assets: Readonly<{
+    exportImage: (url: string) => Promise<MutationResult<{ canceled: boolean }>>;
     importAttachment: (bytes: Uint8Array, fileName: string) => Promise<MutationResult<StoredAsset>>;
     openAttachment: (url: string) => Promise<MutationResult<null>>;
     /** Store bytes chosen from the machine, answering with a `max://asset` URL. */

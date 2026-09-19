@@ -1,3 +1,4 @@
+import { setDragPreview } from '../ui/drag-preview';
 import { OptionValue } from './OptionValue';
 import { normalizeNumericInput, parseNumericInput } from '../../shared/digits';
 import { PageIconRenderer } from '../ui/page-icon-renderer';
@@ -231,7 +232,7 @@ export function TableView({
                     type="button"
                     className="btn-icon p-1 opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity"
                     draggable={canReorder}
-                    onDragStart={(event) => { if (!canReorder) return; setDragRecord(record.id); event.dataTransfer.setData('text/max-record', record.id); event.dataTransfer.effectAllowed = 'move'; }}
+                    onDragStart={(event) => { if (!canReorder) return; setDragRecord(record.id); setDragPreview(event.dataTransfer, event.currentTarget); event.dataTransfer.setData('text/max-record', record.id); event.dataTransfer.effectAllowed = 'move'; }}
                     onDragEnd={() => { setDragRecord(null); setDropTarget(null); }}
                     onClick={() => onOpenRecord(record)}
                     aria-label={locale === 'ar' ? record.title : 'Drag to reorder or click to open'}

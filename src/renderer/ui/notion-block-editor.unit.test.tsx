@@ -15,7 +15,7 @@ function EditorHarness({ initial, parentPageId }: Readonly<{ initial: readonly N
 }
 
 function pastePlainText(target: Element, text: string) {
-  fireEvent.paste(target, { clipboardData: { getData: (type: string) => (type === 'text/plain' ? text : '') } });
+  fireEvent.paste(target, { clipboardData: { files: [], getData: (type: string) => (type === 'text/plain' ? text : '') } });
 }
 
 // jsdom does not implement execCommand at all. This gives `insertText` just
@@ -301,11 +301,10 @@ describe('NotionBlockEditor', () => {
   it('keeps Backspace editing text when the caret is in an image caption', async () => {
     const user = userEvent.setup();
     const { container } = render(<EditorHarness initial={[
-      { caption: 'Shelf', content: '', id: 'picture', type: 'image', url: 'https://example.com/a.png' },
+      { caption: 'Shelf', content: '', id: 'picture', type: 'image', url: 'max://asset/' + 'a'.repeat(64) + '.png' },
     ]} />);
 
-    await user.click(await screen.findByRole('button', { name: /Load image/ }));
-    const caption = screen.getByLabelText('Caption');
+    const caption = screen.getByLabelText('Image caption');
     await user.click(caption);
     await user.keyboard('{Backspace}');
 

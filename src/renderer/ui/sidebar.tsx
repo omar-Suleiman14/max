@@ -1,10 +1,11 @@
+import { autoScrollDuringDrag, setDragPreview } from './drag-preview';
+import { ActivitySpinner } from './activity-spinner';
 import maxLogo from '../assets/max-logo.png';
 import type { UpdateStatus } from '../../shared/update-contract';
 import { revealSetting, searchSettings, settingsEntryLabel } from './settings-index';
 import {
   AlertTriangle,
   ArrowUpCircle,
-  LoaderCircle,
   BadgeDollarSign,
   Archive,
   ArrowLeft,
@@ -223,11 +224,13 @@ export function Sidebar({
   function handleDragStart(event: React.DragEvent, index: number) {
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/plain', rootRows[index]?.id ?? '');
+    setDragPreview(event.dataTransfer, event.currentTarget as HTMLElement);
     setDraggedIndex(index);
   }
 
   function handleDragOver(event: React.DragEvent, index: number) {
     event.preventDefault();
+    autoScrollDuringDrag(event.currentTarget as HTMLElement, event.clientY);
     event.dataTransfer.dropEffect = 'move';
     const rect = event.currentTarget.getBoundingClientRect();
     setDragOverEdge(event.clientY >= rect.top + rect.height / 2 ? 'after' : 'before');
@@ -659,7 +662,7 @@ export function Sidebar({
         {updateState && ['checking', 'available', 'downloading', 'ready', 'installing', 'error'].includes(updateState.state) && onUpdateClick && (
           <button type="button" aria-label={updateLabel} title={updateLabel} aria-busy={updateBusy} className={`sidebar-action sidebar-update${updateState.state === 'ready' ? ' sidebar-update--ready' : ''}`} onClick={onUpdateClick}>
             {updateBusy
-              ? <LoaderCircle className="update-spinner" aria-hidden="true" size={17} />
+              ? <ActivitySpinner size={17} />
               : <ArrowUpCircle aria-hidden="true" size={17} />}
             {!collapsed && <span className="sidebar-action__label">
               {updateLabel}
