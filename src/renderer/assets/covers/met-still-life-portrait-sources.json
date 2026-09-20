@@ -1,0 +1,42 @@
+[
+  {
+    "id": "met-436534",
+    "title": "Roses",
+    "artist": "Vincent van Gogh",
+    "date": "1890",
+    "objectUrl": "https://www.metmuseum.org/art/collection/search/436534",
+    "source": "https://images.metmuseum.org/CRDImages/ep/original/DP346475.jpg",
+    "publicDomain": true,
+    "bytes": 53386
+  },
+  {
+    "id": "met-436528",
+    "title": "Irises",
+    "artist": "Vincent van Gogh",
+    "date": "1890",
+    "objectUrl": "https://www.metmuseum.org/art/collection/search/436528",
+    "source": "https://images.metmuseum.org/CRDImages/ep/original/DP346474.jpg",
+    "publicDomain": true,
+    "bytes": 50386
+  },
+  {
+    "id": "met-437397",
+    "title": "Self-Portrait",
+    "artist": "Rembrandt (Rembrandt van Rijn)",
+    "date": "1660",
+    "objectUrl": "https://www.metmuseum.org/art/collection/search/437397",
+    "source": "https://images.metmuseum.org/CRDImages/ep/original/DP-16323-001.jpg",
+    "publicDomain": true,
+    "bytes": 14940
+  },
+  {
+    "id": "met-436532",
+    "title": "Self-Portrait with a Straw Hat (obverse: The Potato Peeler)",
+    "artist": "Vincent van Gogh",
+    "date": "1887",
+    "objectUrl": "https://www.metmuseum.org/art/collection/search/436532",
+    "source": "https://images.metmuseum.org/CRDImages/ep/original/DT1502_cropped2.jpg",
+    "publicDomain": true,
+    "bytes": 67203
+  }
+]

@@ -6,6 +6,7 @@ import { DatabaseSkeleton } from '../databases/DatabaseSkeleton';
 import { LegacyDatabaseLink } from '../databases/LegacyDatabaseLink';
 import { ExtraBlock } from '../pages/extra-blocks';
 import { renderInline, escapeText } from '../pages/rich-text';
+import { InlinePagePicker } from '../pages/inline-page-picker';
 import { openPage } from '../pages/page-graph-store';
 import { safeWebUrl } from '../../shared/page-links';
 import {
@@ -288,6 +289,7 @@ function RichTextBlock({ blockId, content, index, locale, onBlur, onContentChang
   const [linkEditing, setLinkEditing] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
   const [linkError, setLinkError] = useState('');
+  const [pageLinkRange, setPageLinkRange] = useState<Range | null>(null);
   const composing = useRef(false);
   // Tracks whether we are updating from inside (input) vs outside (prop change)
   const isInternalUpdate = useRef(false);
@@ -331,6 +333,16 @@ function RichTextBlock({ blockId, content, index, locale, onBlur, onContentChang
     const el = divRef.current;
     if (!el) return;
     const md = htmlToMarkdown(el);
+    const selection = window.getSelection();
+    const node = selection?.anchorNode;
+    if (selection?.isCollapsed && node?.nodeType === Node.TEXT_NODE && el.contains(node)) {
+      const offset = selection.anchorOffset;
+      if (node.textContent?.slice(0, offset).endsWith('![[')) {
+        const range = document.createRange();
+        range.setStart(node, offset - 3); range.setEnd(node, offset);
+        setPageLinkRange(range);
+      }
+    }
     isInternalUpdate.current = true;
     onContentChange(blockId, md);
 
@@ -365,7 +377,7 @@ function RichTextBlock({ blockId, content, index, locale, onBlur, onContentChang
       contentEditable
       data-placeholder={placeholder}
       onBlur={(event) => {
-        if ((event.relatedTarget as HTMLElement | null)?.closest('.inline-format-toolbar')) return;
+        if ((event.relatedTarget as HTMLElement | null)?.closest('.inline-format-toolbar,.inline-page-picker')) return;
         // Apply formatting immediately when the block loses focus
         const el = divRef.current;
         if (el) applyFormatting(el, htmlToMarkdown(el));
@@ -389,6 +401,22 @@ function RichTextBlock({ blockId, content, index, locale, onBlur, onContentChang
       role="textbox"
       suppressContentEditableWarning
     />
+    {pageLinkRange && <InlinePagePicker locale={locale} onClose={(restoreFocus = true) => {
+      if (restoreFocus) {
+        divRef.current?.focus();
+        const selection = window.getSelection();
+        pageLinkRange.collapse(false); selection?.removeAllRanges(); selection?.addRange(pageLinkRange);
+      }
+      setPageLinkRange(null);
+    }} onPick={(id, title) => {
+      const el = divRef.current;
+      if (!el || !el.contains(pageLinkRange.startContainer)) { setPageLinkRange(null); return; }
+      el.focus();
+      const selection = window.getSelection();
+      selection?.removeAllRanges(); selection?.addRange(pageLinkRange);
+      document.execCommand('insertHTML', false, `<a href="#" contenteditable="false" data-page-id="${escapeText(id)}">${escapeText(title)}</a> `);
+      setPageLinkRange(null); handleInput();
+    }} />}
     {selectionOpen && <div className="inline-format-toolbar" role="toolbar" aria-label={locale === 'ar' ? 'تنسيق النص' : 'Text formatting'} onMouseDown={(event) => { if (!(event.target instanceof HTMLInputElement)) event.preventDefault(); }}>
       {(['bold', 'italic', 'underline', 'strikeThrough', 'code', 'mark'] as const).map((command) => <button type="button" key={command} title={command} aria-label={command} onClick={() => format(command)}>{({ bold: 'B', italic: 'I', underline: 'U', strikeThrough: 'S̶', code: '</>', mark: 'Highlight' })[command]}</button>)}
       <button type="button" onClick={() => setLinkEditing(!linkEditing)}>{locale === 'ar' ? 'رابط' : 'Link'}</button>

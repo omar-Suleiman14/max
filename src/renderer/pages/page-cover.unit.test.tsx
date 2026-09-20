@@ -12,7 +12,7 @@ const cover = { kind: 'image' as const, value: `max://asset/${'a'.repeat(64)}.pn
 
 it('keeps change, reposition and download available and exports the original image', async () => {
   render(<PageCover cover={cover} locale="en" onChange={vi.fn()} />);
-  expect(screen.getByRole('button', { name: 'Change cover' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Change' })).toBeVisible();
   expect(screen.getByRole('button', { name: 'Reposition' })).toBeVisible();
   await userEvent.setup().click(screen.getByRole('button', { name: 'Download' }));
   expect(exportWorkspaceImage).toHaveBeenCalledWith(cover.value);

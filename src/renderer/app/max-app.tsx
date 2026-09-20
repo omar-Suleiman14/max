@@ -1,4 +1,3 @@
-import { UpdateNotice } from '../ui/update-notice';
 import { useWorkspaceDisplay } from '../pages/workspace-display-preferences';
 import { useAppearance } from './appearance';
 import { readSessionValue, usePagePosition } from './page-session';
@@ -646,7 +645,6 @@ export function MaxApp() {
             {sidebarCollapsed && <button className="topbar-tool sidebar-reopen" type="button" aria-label={translate(locale, 'expandSidebar')} aria-expanded={false} aria-keyshortcuts={`${runtimePlatform === 'macos' ? 'Meta' : 'Control'}+b`} title={`${translate(locale, 'expandSidebar')} (${quickActionModifier(runtimePlatform)} B)`} onClick={toggleSidebar}>
               {locale === 'ar' ? <PanelRight aria-hidden="true" size={17} /> : <PanelLeft aria-hidden="true" size={17} />}
             </button>}
-            <UpdateNotice locale={locale} onOpen={() => navigateSettingsSection('settings-danger')} />
             {graphEnabled && page !== 'settings' && <button type="button" className="topbar-tool" aria-pressed={graphOpen} aria-keyshortcuts={`${runtimePlatform === 'macos' ? 'Meta' : 'Control'}+g`} onClick={() => setGraphOpen(value => !value)}><Waypoints size={17}/><span>{locale === 'ar' ? 'خريطة' : 'Graph'}</span><kbd>{quickActionModifier(runtimePlatform)} G</kbd></button>}
             {page !== 'settings' && (
               <button className="topbar-tool" aria-keyshortcuts={`${runtimePlatform === 'macos' ? 'Meta' : 'Control'}+k`} onClick={() => openPopup('search')} type="button">
@@ -660,7 +658,7 @@ export function MaxApp() {
           </div>
         </header>}
 
-        <main style={{ position: 'relative' }} onClick={(event) => { if (event.target === event.currentTarget) event.currentTarget.querySelector('.notion-editor-canvas')?.dispatchEvent(new Event('max:focus-page-end')); }} aria-label={showPageHeader ? undefined : pageLabel} aria-labelledby={showPageHeader ? 'page-title' : undefined} className="content" data-custom-page={isCustomPage} data-page={page} id="main-content" tabIndex={-1}>
+        <main style={{ position: 'relative' }} aria-label={showPageHeader ? undefined : pageLabel} aria-labelledby={showPageHeader ? 'page-title' : undefined} className="content" data-custom-page={isCustomPage} data-page={page} id="main-content" tabIndex={-1}>
           {graphOpen && <Suspense fallback={<div className="page-loading" />}><WorkspaceGraph locale={locale} onClose={() => setGraphOpen(false)} /></Suspense>}
           <div style={{ display: graphOpen ? 'none' : 'contents' }}>
           {showPageHeader && <header className="page-header">

@@ -1,4 +1,4 @@
-import { ImagePlus } from 'lucide-react';
+import { Download, ImagePlus } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { clampCoverPosition, coverBackground, type PageCover } from '../../shared/cover-contract';
@@ -15,8 +15,8 @@ function displayUrl(value: string): string {
 }
 
 const copy = {
-  ar: { change: 'تغيير الغلاف', cover: 'غلاف الصفحة', done: 'حفظ الموضع', drag: 'اسحب لتغيير الموضع', reposition: 'تغيير الموضع', cancel: 'إلغاء', photoBy: 'تصوير' },
-  en: { change: 'Change cover', cover: 'Page cover', done: 'Save position', drag: 'Drag to reposition', reposition: 'Reposition', cancel: 'Cancel', photoBy: 'Photo by' },
+  ar: { change: 'تغيير الغلاف', cover: 'غلاف الصفحة', done: 'حفظ الموضع', drag: 'اسحب لتغيير الموضع', reposition: 'تغيير الموضع', cancel: 'إلغاء' },
+  en: { change: 'Change', cover: 'Page cover', done: 'Save position', drag: 'Drag to reposition', reposition: 'Reposition', cancel: 'Cancel' },
 } as const;
 
 /**
@@ -73,7 +73,7 @@ export function PageCover({ cover, locale, onChange }: {
   }, [move, repositioning]);
 
   return (
-    <div className="page-cover" data-repositioning={repositioning || undefined}>
+    <div className="page-cover" data-repositioning={repositioning || undefined} data-picking={picking || undefined}>
       <div
         aria-label={text.cover}
         className="page-cover__image"
@@ -119,18 +119,12 @@ export function PageCover({ cover, locale, onChange }: {
         <div className="page-cover__controls">
           <button onClick={() => { setRepositioning(false); setPicking((open) => !open); }} type="button">{text.change}</button>
           {isImage && <button aria-pressed={repositioning} onClick={() => { setDraft(cover.position ?? 50); setRepositioning(!repositioning); setPicking(false); }} type="button">{text.reposition}</button>}
-          {isImage && <button disabled={exporting} onClick={() => {
+          {isImage && <button aria-label={locale === 'ar' ? 'تنزيل' : 'Download'} title={locale === 'ar' ? 'تنزيل' : 'Download'} aria-busy={exporting} disabled={exporting} onClick={() => {
             setExporting(true); setExportError('');
             void exportWorkspaceImage(cover.value).catch(() => setExportError(locale === 'ar' ? 'تعذر تصدير الصورة.' : 'Could not export the image.')).finally(() => setExporting(false));
-          }} type="button">{exporting ? (locale === 'ar' ? 'جارٍ التصدير…' : 'Exporting…') : (locale === 'ar' ? 'تنزيل' : 'Download')}</button>}
+          }} type="button"><Download aria-hidden="true" size={15} /></button>}
         </div>
       {exportError && <p className="page-cover__error" role="alert">{exportError}</p>}
-
-      {cover.credit && !repositioning && (
-        <p className="page-cover__credit">
-          {text.photoBy} <a href={cover.credit.url} rel="noreferrer" target="_blank">{cover.credit.name}</a>
-        </p>
-      )}
 
       {picking && (
         <div className="page-cover__picker">

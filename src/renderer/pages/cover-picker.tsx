@@ -1,7 +1,7 @@
 import { Link2, Upload } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
-import { COVER_GALLERY, MET_JAPANESE_PRINTS, MET_LANDSCAPES, type CoverArtwork, type PageCover } from '../../shared/cover-contract';
+import { COVER_GALLERY, MET_JAPANESE_PRINTS, MET_LANDSCAPES, MET_PORTRAITS, MET_STILL_LIFES, type CoverArtwork, type PageCover } from '../../shared/cover-contract';
 import type { Locale } from '../app/i18n';
 import { MET_COVER_IMAGES } from './met-cover-images';
 
@@ -134,7 +134,12 @@ export function CoverPicker({ locale, onClose, onPick, onRemove, hasCover }: {
             </div>
           ))}
 
-          {[{ title: ar ? 'مناظر طبيعية، متحف المتروبوليتان' : 'Landscapes, The Met', artworks: MET_LANDSCAPES }, { title: text.prints, artworks: MET_JAPANESE_PRINTS }].map(section => <div key={section.title} className="cover-picker__category">
+          {[
+            { title: ar ? 'مناظر طبيعية، متحف المتروبوليتان' : 'Landscapes, The Met', artworks: MET_LANDSCAPES },
+            { title: text.prints, artworks: MET_JAPANESE_PRINTS },
+            { title: ar ? 'طبيعة صامتة، متحف المتروبوليتان' : 'Still life, The Met', artworks: MET_STILL_LIFES },
+            { title: ar ? 'صور شخصية، متحف المتروبوليتان' : 'Portraits, The Met', artworks: MET_PORTRAITS },
+          ].map(section => <div key={section.title} className="cover-picker__category">
             <p className="cover-picker__section">{section.title} <span>{text.publicDomain}</span></p>
             <div className="cover-picker__grid cover-picker__grid--photos">
               {section.artworks.map((artwork) => (

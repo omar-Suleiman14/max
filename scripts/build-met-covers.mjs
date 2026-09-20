@@ -26,6 +26,8 @@ const API = 'https://collectionapi.metmuseum.org/public/collection/v1/objects';
 
 /** Curated Open Access prints, all landscape oban sheets that crop well. */
 const OBJECT_IDS = [45434, 36493, 36497, 56242, 56395, 57003, 39800, 39798, 54868, 36504, 55049, 36965];
+const STILL_LIFE_IDS = [436534, 436528];
+const PORTRAIT_IDS = [437397, 436532];
 const LANDSCAPE_IDS = [436535, 10497, 10786, 437853];
 
 /**
@@ -39,8 +41,8 @@ async function main() {
   const entries = [];
 
   const selected = process.argv.slice(2).map(Number);
-  for (const id of selected.length ? selected : [...OBJECT_IDS, ...LANDSCAPE_IDS]) {
-    if (![...OBJECT_IDS, ...LANDSCAPE_IDS].includes(id)) throw new Error(`Uncurated object ${id}`);
+  for (const id of selected.length ? selected : [...OBJECT_IDS, ...LANDSCAPE_IDS, ...STILL_LIFE_IDS, ...PORTRAIT_IDS]) {
+    if (![...OBJECT_IDS, ...LANDSCAPE_IDS, ...STILL_LIFE_IDS, ...PORTRAIT_IDS].includes(id)) throw new Error(`Uncurated object ${id}`);
     const object = await (await fetch(`${API}/${id}`)).json();
     if (!object.isPublicDomain) throw new Error(`Object ${id} is not public domain.`);
     if (!object.primaryImage) throw new Error(`Object ${id} has no image.`);
@@ -49,7 +51,9 @@ async function main() {
     // grid and too soft for a cover, so the full-size file is what gets resized.
     const bytes = Buffer.from(await (await fetch(object.primaryImage)).arrayBuffer());
     const landscape = LANDSCAPE_IDS.includes(id);
-    const cover = await sharp(bytes).resize({ width: landscape ? 1600 : COVER_WIDTH, withoutEnlargement: true }).jpeg({ mozjpeg: true, quality: landscape ? 78 : 68 }).toBuffer();
+    const compact = STILL_LIFE_IDS.includes(id) || PORTRAIT_IDS.includes(id);
+    const size = compact ? { width: 1000, height: 700, fit: 'cover' } : { width: landscape ? 1600 : COVER_WIDTH, withoutEnlargement: true };
+    const cover = await sharp(bytes).resize(size).jpeg({ mozjpeg: true, quality: compact ? 35 : landscape ? 78 : 68 }).toBuffer();
     await writeFile(join(OUT, `met-${id}.jpg`), cover);
 
     entries.push({

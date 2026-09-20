@@ -3370,21 +3370,21 @@ kbd { display: inline-flex; min-width: 23px; min-height: 20px; align-items: cent
 /* The cover actions are always on the cover, with nothing drawn behind
    them: the picture is the panel. Readability comes from the shadow on the
    text, the way the photo credit in the opposite corner already works. */
-.page-cover__controls { position: absolute; inset-block-end: 12px; inset-inline-end: 16px; display: flex; gap: 2px; }
-.page-cover__controls button { border: 0; border-radius: 6px; padding: 5px 10px; background: transparent; color: #fff; font: inherit; font-size: 12.5px; text-shadow: 0 1px 2px #000, 0 0 4px #000c, 0 0 14px #000a; cursor: pointer; }
-.page-cover__controls button:hover { background: #0000004d; }
-.page-cover__controls button:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
-.page-cover__controls button[aria-pressed=true] { background: #00000066; }
+.page-cover__controls { position:absolute; inset-block-start:12px; inset-inline-end:14px; display:flex; align-items:center; gap:0; padding:3px; border:1px solid #ffffff18; border-radius:6px; background:#252525; opacity:0; pointer-events:none; transition:opacity 120ms ease; }
+.page-cover:hover .page-cover__controls,.page-cover:focus-within .page-cover__controls,.page-cover[data-picking] .page-cover__controls,.page-cover[data-repositioning] .page-cover__controls { opacity:1; pointer-events:auto; }
+.page-cover__controls button { display:flex; align-items:center; min-height:26px; border:0; border-radius:3px; padding:3px 9px; background:transparent; color:#b5b5b5; font:inherit; font-size:12px; cursor:pointer; }
+.page-cover__controls button + button { border-inline-start:1px solid #ffffff12; }
+.page-cover__controls button:hover { background:#ffffff12; color:#fff; }
+.page-cover__controls button:focus-visible { outline:2px solid #fff; outline-offset:-2px; }
+.page-cover__controls button[aria-pressed=true] { background:#ffffff12; }
+@media (hover:none) { .page-cover .page-cover__controls { opacity:1; pointer-events:auto; } }
+@media (prefers-reduced-motion:reduce) { .page-cover__controls { transition:none; } }
 .page-cover__reposition { position: absolute; inset-block-end: 12px; inset-inline-end: 16px; display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 10px; background: color-mix(in srgb, var(--card) 90%, transparent); backdrop-filter: blur(14px); box-shadow: var(--shadow-lg); color: var(--muted); font-size: 12px; }
 .page-cover__reposition input[type=range] { width: 130px; accent-color: var(--accent); }
 .page-cover__reposition button { border: 0; border-radius: 7px; padding: 5px 11px; background: transparent; color: var(--text); font: inherit; font-size: 12.5px; cursor: pointer; }
 .page-cover__primary { background: var(--accent) !important; color: var(--accent-contrast); }
-.page-cover__credit { position: absolute; inset-block-end: 10px; inset-inline-start: 16px; margin: 0; color: #fff; font-size: 11px; text-shadow: 0 1px 3px #0008; opacity: 0; transition: opacity 140ms ease; }
-.page-cover:hover .page-cover__credit { opacity: .9; }
-.page-cover__credit a { color: inherit; text-decoration: underline; }
 .page-cover__picker { position: absolute; inset-block-start: calc(100% - 6px); inset-inline-end: 16px; z-index: 120; }
 .page-cover__picker--inline { inset-block-start: calc(100% + 4px); inset-inline-start: 0; inset-inline-end: auto; }
-@media (prefers-reduced-motion: reduce) { .page-cover .page-cover__credit { transition: none; } }
 
 /* "Add cover" only shows itself when the page header is under the pointer. */
 .page-cover-add { position: relative; align-self: flex-start; height: 24px; }

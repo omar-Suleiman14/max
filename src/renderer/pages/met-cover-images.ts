@@ -1,4 +1,8 @@
 import met_36493 from '../assets/covers/met-36493.jpg';
+import met_436534 from '../assets/covers/met-436534.jpg';
+import met_436528 from '../assets/covers/met-436528.jpg';
+import met_437397 from '../assets/covers/met-437397.jpg';
+import met_436532 from '../assets/covers/met-436532.jpg';
 import met_436535 from '../assets/covers/met-436535.jpg';
 import met_10497 from '../assets/covers/met-10497.jpg';
 import met_10786 from '../assets/covers/met-10786.jpg';
@@ -26,6 +30,10 @@ import met_57003 from '../assets/covers/met-57003.jpg';
  * Regenerate the files with `node scripts/build-met-covers.mjs`.
  */
 export const MET_COVER_IMAGES: Readonly<Record<string, string>> = {
+  'met-436534': met_436534,
+  'met-436528': met_436528,
+  'met-437397': met_437397,
+  'met-436532': met_436532,
   'met-436535': met_436535,
   'met-10497': met_10497,
   'met-10786': met_10786,

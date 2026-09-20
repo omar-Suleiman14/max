@@ -174,6 +174,16 @@ export const MET_JAPANESE_PRINTS: readonly CoverArtwork[] = [
   { artist: 'Utagawa Hiroshige', date: 'ca. 1834', id: 'met-36965', objectUrl: 'https://www.metmuseum.org/art/collection/search/36965', title: 'Yokkaichi, Sanchokawa' },
 ];
 
+export const MET_STILL_LIFES: readonly CoverArtwork[] = [
+  { artist: 'Vincent van Gogh', date: '1890', id: 'met-436534', objectUrl: 'https://www.metmuseum.org/art/collection/search/436534', title: 'Roses' },
+  { artist: 'Vincent van Gogh', date: '1890', id: 'met-436528', objectUrl: 'https://www.metmuseum.org/art/collection/search/436528', title: 'Irises' },
+];
+
+export const MET_PORTRAITS: readonly CoverArtwork[] = [
+  { artist: 'Rembrandt (Rembrandt van Rijn)', date: '1660', id: 'met-437397', objectUrl: 'https://www.metmuseum.org/art/collection/search/437397', title: 'Self-Portrait' },
+  { artist: 'Vincent van Gogh', date: '1887', id: 'met-436532', objectUrl: 'https://www.metmuseum.org/art/collection/search/436532', title: 'Self-Portrait with a Straw Hat' },
+];
+
 export const MET_LANDSCAPES: readonly CoverArtwork[] = [
   { artist: 'Vincent van Gogh', date: '1889', id: 'met-436535', objectUrl: 'https://www.metmuseum.org/art/collection/search/436535', title: 'Wheat Field with Cypresses' },
   { artist: 'Thomas Cole', date: '1836', id: 'met-10497', objectUrl: 'https://www.metmuseum.org/art/collection/search/10497', title: 'The Oxbow' },

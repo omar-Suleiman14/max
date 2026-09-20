@@ -53,11 +53,7 @@ export function CustomPageView({
       : 'Untitled';
 
   return (
-    <div className="custom-page-view" data-database-page={page.blocks.some((block) => block.type === 'database-view' && !!block.databaseId)} onClick={(event) => {
-      const target = event.target as HTMLElement;
-      if (!target.matches('.custom-page-view,.custom-page-content,.custom-page-header')) return;
-      event.currentTarget.querySelector('.notion-editor-canvas')?.dispatchEvent(new Event('max:focus-page-end'));
-    }}>
+    <div className="custom-page-view" data-database-page={page.blocks.some((block) => block.type === 'database-view' && !!block.databaseId)}>
       {page.cover && (
         <PageCover
           cover={page.cover}

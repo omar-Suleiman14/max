@@ -25,12 +25,12 @@ if (typeof document.execCommand !== 'function') {
   Object.defineProperty(document, 'execCommand', {
     configurable: true,
     value: (command: string, _showUI?: boolean, value?: string) => {
-      if (command === 'insertText') {
+      if (command === 'insertText' || command === 'insertHTML') {
         const selection = window.getSelection();
         if (selection && selection.rangeCount) {
           const range = selection.getRangeAt(0);
           range.deleteContents();
-          range.insertNode(document.createTextNode(value ?? ''));
+          range.insertNode(command === 'insertHTML' ? range.createContextualFragment(value ?? '') : document.createTextNode(value ?? ''));
           range.collapse(false);
         }
       }
@@ -52,6 +52,50 @@ function placeCaretAtStart(element: HTMLElement) {
 afterEach(() => cleanup());
 
 describe('NotionBlockEditor', () => {
+  it('inserts a typed ![[ link inline, preserving surrounding text and navigation', async () => {
+    Object.defineProperty(window, 'maxApi', { configurable: true, value: { workspace: {
+      getPageGraph: () => Promise.resolve({ pages: [{ id: 'target', title: 'Linked page' }], links: [] }),
+      getNavigation: () => Promise.resolve({ pages: [], databases: [] }),
+    } } });
+    const user = userEvent.setup();
+    const { container } = render(<EditorHarness initial={[{ id: 'one', type: 'text', content: 'Before  after' }]} />);
+    const block = screen.getByRole('textbox', { name: 'Text block' });
+    block.focus(); block.textContent = 'Before ![[ after';
+    const range = document.createRange(); range.setStart(block.firstChild!, 10); range.collapse(true);
+    window.getSelection()!.removeAllRanges(); window.getSelection()!.addRange(range);
+    fireEvent.input(block);
+    await screen.findByRole('button', { name: 'Linked page' });
+    await user.type(screen.getByRole('textbox', { name: 'Find a page' }), 'Linked');
+    await user.keyboard('{Enter}');
+    expect(container.querySelectorAll('.notion-block-row')).toHaveLength(1);
+    const link = container.querySelector('a[data-page-id="target"]')!;
+    expect(link).toHaveTextContent('Linked page');
+    expect(block).toHaveTextContent('Before Linked page after');
+    const navigate = vi.fn(); window.addEventListener('max:open-page', navigate);
+    await user.click(link);
+    expect(navigate).toHaveBeenCalledWith(expect.objectContaining({ detail: 'target' }));
+    window.removeEventListener('max:open-page', navigate);
+  });
+
+  it('cancels an inline page picker without removing the typed text', async () => {
+    Object.defineProperty(window, 'maxApi', { configurable: true, value: { workspace: {
+      getPageGraph: () => Promise.resolve({ pages: [], links: [] }),
+      getNavigation: () => Promise.resolve({ pages: [], databases: [] }),
+    } } });
+    render(<EditorHarness initial={[{ id: 'one', type: 'text', content: '' }]} />);
+    const block = screen.getByRole('textbox', { name: 'Text block' });
+    block.focus(); block.textContent = '![[';
+    const range = document.createRange(); range.selectNodeContents(block); range.collapse(false);
+    // A native caret sits in the text node after typing.
+    range.setStart(block.firstChild!, 3); range.collapse(true);
+    window.getSelection()!.removeAllRanges(); window.getSelection()!.addRange(range);
+    fireEvent.input(block);
+    await screen.findByRole('textbox', { name: 'Find a page' });
+    await userEvent.setup().keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: 'Link to page' })).not.toBeInTheDocument();
+    expect(block).toHaveTextContent('![[');
+    expect(block).toHaveFocus();
+  });
   it.each([
     ['Control', 'Backspace'], ['Meta', 'Delete'],
   ])('selects page links with %s+A from a text block and supports %s and undo', async (modifier, key) => {
