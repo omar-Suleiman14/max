@@ -199,7 +199,7 @@ export function RecordDrawer({
             </div>
           </div>
 
-          <div className="drawer-body" onClick={(event) => { if (event.target === event.currentTarget) event.currentTarget.querySelector('.notion-editor-canvas')?.dispatchEvent(new Event('max:focus-page-end')); }}>
+          <div className="drawer-body">
             {saveError && <p className="form-error" role="alert">{saveError} {failedPatch.current && <button type="button" className="btn" onClick={() => { if (failedPatch.current) void save(failedPatch.current); }}>{locale === 'ar' ? 'إعادة المحاولة' : 'Retry'}</button>}</p>}
             {templateName !== null && <form className="template-save-form" onSubmit={(event) => {
               event.preventDefault();
@@ -398,7 +398,7 @@ export function RecordDrawer({
             <hr className="divider my-6" />
 
             {/* Notion Block Page Body */}
-            <div className="record-drawer__notes">
+            <div className="record-drawer__notes" onClick={(event) => { if (event.target === event.currentTarget) event.currentTarget.querySelector('.notion-editor-canvas')?.dispatchEvent(new Event('max:focus-page-end')); }}>
               <NotionBlockEditor blocks={blocks} locale={locale} onChange={handleBlocksChange} />
             </div>
           </div>

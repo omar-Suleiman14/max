@@ -722,11 +722,11 @@ describe('Max shell', () => {
     render(<MaxApp />);
     await screen.findByRole('button', { name: 'Settings' });
     const handle = screen.getByRole('separator', { name: 'Resize sidebar' });
-    expect(handle).toHaveAttribute('aria-valuenow', '238');
+    expect(handle).toHaveAttribute('aria-valuenow', '270');
     handle.focus();
     await user.keyboard('{ArrowRight}');
-    expect(handle).toHaveAttribute('aria-valuenow', '250');
-    await waitFor(() => expect(window.localStorage.getItem('max.ui.sidebar-width')).toBe('250'));
+    expect(handle).toHaveAttribute('aria-valuenow', '282');
+    await waitFor(() => expect(window.localStorage.getItem('max.ui.sidebar-width')).toBe('282'));
   });
 
   it('dismisses search outside and keeps its keyboard footer without redundant buttons', async () => {

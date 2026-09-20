@@ -18,7 +18,8 @@ it('keeps colours in their own submenu and applies the selected colour', async (
   const { user, onChange, onClose } = setup();
   expect(screen.queryByText('Red text')).not.toBeInTheDocument();
   await user.click(screen.getByRole('menuitem', { name: 'Colour' }));
-  expect(screen.queryByText('Duplicate')).not.toBeInTheDocument();
+  expect(screen.getByRole('menuitem', { name: 'Duplicate' })).toBeVisible();
+  expect(screen.getAllByRole('menu')).toHaveLength(2);
   await user.click(screen.getByRole('menuitemradio', { name: 'Blue background' }));
   expect(onChange).toHaveBeenCalledWith({ backgroundColor: 'blue_bg' });
   expect(onClose).toHaveBeenCalledOnce();

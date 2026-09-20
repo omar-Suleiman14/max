@@ -40,9 +40,11 @@ export function readSidebarCollapsed(storage: Storage): boolean {
 
 export function readSidebarWidth(storage: Storage): number {
   const raw = storage.getItem(preferenceKeys.sidebarWidth);
-  if (raw === null) return 238;
+  if (raw === null) return 270;
   const persisted = Number(raw);
-  return Number.isFinite(persisted) ? Math.min(420, Math.max(180, persisted)) : 238;
+  // Earlier versions persisted the default on first launch as well as resizes.
+  if (persisted === 238) return 270;
+  return Number.isFinite(persisted) ? Math.min(420, Math.max(180, persisted)) : 270;
 }
 
 export function resolveTheme(preference: ThemePreference, systemUsesDark: boolean): EffectiveTheme {

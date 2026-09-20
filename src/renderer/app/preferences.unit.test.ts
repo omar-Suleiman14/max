@@ -19,10 +19,11 @@ describe('shell preferences', () => {
     expect(readLocale(storage)).toBe('en');
     expect(readTheme(storage)).toBe('light');
     expect(readSidebarCollapsed(storage)).toBe(false);
-    expect(readSidebarWidth(storage)).toBe(238);
+    expect(readSidebarWidth(storage)).toBe(270);
   });
 
   it('clamps a persisted sidebar width to usable bounds', () => {
+    expect(readSidebarWidth(storageWith({ 'max.ui.sidebar-width': '238' }))).toBe(270);
     expect(readSidebarWidth(storageWith({ 'max.ui.sidebar-width': '312' }))).toBe(312);
     expect(readSidebarWidth(storageWith({ 'max.ui.sidebar-width': '50' }))).toBe(180);
     expect(readSidebarWidth(storageWith({ 'max.ui.sidebar-width': '900' }))).toBe(420);

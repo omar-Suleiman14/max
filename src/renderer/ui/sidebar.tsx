@@ -686,7 +686,7 @@ export function Sidebar({
           aria-valuemin={180}
           aria-valuenow={Math.round(width)}
           className="sidebar__resize-handle"
-          onDoubleClick={() => onResize(238)}
+          onDoubleClick={() => onResize(270)}
           onKeyDown={handleResizeKeyDown}
           onPointerDown={handleResizePointerDown}
           onPointerMove={handleResizePointerMove}
