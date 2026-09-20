@@ -18,7 +18,7 @@ None. Updates are served from the repository's own releases using the built-in `
 
 ## Application behavior
 
-Installed Squirrel Windows copies check 60 seconds after startup and every four hours. A check downloads an available update, and when one is ready the workspace raises a notification naming the version, with **Restart and install** and **Later**. Dismissing it is remembered for that version only, so the next release asks again. Settings → Danger still offers **Check for updates** and **Restart and install**. Restart is always explicit; checking never closes the workspace.
+Installed Squirrel Windows copies check 60 seconds after startup and every four hours. A check downloads an available update, and the sidebar reports where that check has reached: checking, downloading, ready, restarting, or failed with a retry. The status is a button, and it opens Settings → Danger, which offers **Check for updates** and **Restart and install**. Update status lives in the sidebar and nowhere else. Restart is always explicit; checking never closes the workspace.
 
 Development/portable builds and macOS/Linux report that this updater is unavailable. Users of older Max builds that do not contain this updater must install the first updater-enabled release manually once.
 
