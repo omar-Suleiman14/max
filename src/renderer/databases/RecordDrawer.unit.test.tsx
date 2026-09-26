@@ -7,7 +7,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../ui/notion-block-editor', () => ({ NotionBlockEditor: () => <div>Page content</div> }));
+vi.mock('../editor/max-block-editor', () => ({ MaxBlockEditor: () => <div>Page content</div> }));
 
 import { RecordDrawer } from './RecordDrawer';
 

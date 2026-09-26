@@ -664,7 +664,7 @@ describe('Max shell', () => {
     const duplicatedLayout = JSON.parse(duplicateCall?.[1].contentJson ?? '{}') as { blocks?: readonly { id: string }[] };
     expect(duplicatedLayout.blocks?.[0]?.id).not.toBe('source-block');
     expect(screen.getByRole('main', { name: 'Client notes copy' })).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Change icon or emoji' })).toHaveLength(1);
+    expect(await screen.findAllByRole('button', { name: 'Change icon or emoji' }, { timeout: 5000 })).toHaveLength(1);
     expect(screen.queryByRole('heading', { name: 'Client notes copy' })).not.toBeInTheDocument();
   });
 

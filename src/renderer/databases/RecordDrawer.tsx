@@ -31,7 +31,8 @@ import { useState, useEffect, useRef } from 'react';
 import type { Locale } from '../app/i18n';
 import type { DatabaseSchema } from '../../shared/database-contract';
 import type { WorkspaceRecord, WorkspaceRecordPatch } from '../../shared/property-contract';
-import { NotionBlockEditor, type NotionBlock } from '../ui/notion-block-editor';
+import type { NotionBlock } from '../editor/page-blocks';
+import { MaxBlockEditor } from '../editor/max-block-editor';
 
 type RecordDrawerProps = Readonly<{
   isOpen: boolean;
@@ -398,8 +399,8 @@ export function RecordDrawer({
             <hr className="divider my-6" />
 
             {/* Notion Block Page Body */}
-            <div className="record-drawer__notes" onClick={(event) => { if (event.target === event.currentTarget) event.currentTarget.querySelector('.notion-editor-canvas')?.dispatchEvent(new Event('max:focus-page-end')); }}>
-              <NotionBlockEditor blocks={blocks} locale={locale} onChange={handleBlocksChange} />
+            <div className="record-drawer__notes" onClick={(event) => { if (event.target === event.currentTarget) event.currentTarget.querySelector('.max-block-editor')?.dispatchEvent(new Event('max:focus-page-end')); }}>
+              <MaxBlockEditor blocks={blocks} locale={locale} onChange={handleBlocksChange} />
             </div>
           </div>
         </div>

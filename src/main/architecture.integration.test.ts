@@ -39,6 +39,18 @@ describe('architecture boundaries', () => {
     expect(violations).toEqual([]);
   });
 
+  it('keeps BlockNote inside the desktop editor adapter', () => {
+    // MaxDocument is the persisted page format. BlockNote is one editing
+    // surface for it, and must stay replaceable without touching anything else.
+    const editorRoot = join(sourceRoot, 'renderer', 'editor');
+    const violations = sourceFiles(sourceRoot).flatMap((filename) => {
+      if (filename.startsWith(editorRoot)) return [];
+      return /from ['"]@blocknote\//.test(readFileSync(filename, 'utf8')) ? [relative(sourceRoot, filename)] : [];
+    });
+
+    expect(violations).toEqual([]);
+  });
+
   it('isolates process.platform checks in the platform adapter', () => {
     const mainRoot = join(sourceRoot, 'main');
     const adapter = join(mainRoot, 'platform', 'platform-adapter.ts');

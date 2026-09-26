@@ -5,7 +5,8 @@ import { PageConnections } from './page-connections';
 import type { CustomPage } from '../app/app-types';
 import type { Locale } from '../app/i18n';
 import { IconPickerDialog } from '../ui/icon-picker-dialog';
-import { NotionBlockEditor, type NotionBlock } from '../ui/notion-block-editor';
+import type { NotionBlock } from '../editor/page-blocks';
+import { MaxBlockEditor } from '../editor/max-block-editor';
 import { PageIconRenderer } from '../ui/page-icon-renderer';
 import { AddCoverButton, PageCover } from './page-cover';
 import { PageProperties } from './page-properties';
@@ -103,7 +104,7 @@ export function CustomPageView({
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault();
-                const firstInput = document.querySelector('.notion-editor-canvas input, .notion-editor-canvas textarea, .notion-editor-canvas [contenteditable="true"]');
+                const firstInput = e.currentTarget.closest('.custom-page-view')?.querySelector('.max-block-editor [contenteditable="true"]');
                 if (firstInput instanceof HTMLElement) {
                   firstInput.focus();
                 }
@@ -123,12 +124,12 @@ export function CustomPageView({
         onClick={(e) => {
           // Clicking the empty space around/below the editor focuses the last block
           if (e.target === e.currentTarget) {
-            const canvas = e.currentTarget.querySelector('.notion-editor-canvas');
+            const canvas = e.currentTarget.querySelector('.max-block-editor');
             if (canvas instanceof HTMLElement) canvas.click();
           }
         }}
       >
-        {page.readOnlySource !== undefined ? <p role="alert">{locale === 'ar' ? 'تعذر فتح محتوى هذه الصفحة بأمان. تم الاحتفاظ بالمحتوى الأصلي دون تغيير.' : 'This page content cannot be opened safely. Its original content has been preserved unchanged.'}</p> : <NotionBlockEditor
+        {page.readOnlySource !== undefined ? <p role="alert">{locale === 'ar' ? 'تعذر فتح محتوى هذه الصفحة بأمان. تم الاحتفاظ بالمحتوى الأصلي دون تغيير.' : 'This page content cannot be opened safely. Its original content has been preserved unchanged.'}</p> : <MaxBlockEditor
               blocks={page.blocks}
               locale={locale}
               onChange={handleBlocksChange}

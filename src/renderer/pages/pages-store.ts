@@ -1,5 +1,5 @@
 import type { CustomPage } from '../app/app-types';
-import type { NotionBlock } from '../ui/notion-block-editor';
+import type { NotionBlock } from '../editor/page-blocks';
 import { parseCover } from '../../shared/cover-contract';
 import { legacyBlocksToMaxDocument, maxDocumentToLegacyBlocks, parsePageDocument, serializePageDocument } from '../../shared/max-document-legacy';
 import type { WorkspaceNode } from '../../shared/workspace-contract';

@@ -1,12 +1,10 @@
 import { useState } from 'react';
-import { ExternalLink, FileText, Link2, Plus, X } from 'lucide-react';
-import type { NotionBlock } from '../ui/notion-block-editor';
+import { ExternalLink, FileText, Link2 } from 'lucide-react';
+import type { NotionBlock } from '../editor/page-blocks';
 import type { Locale } from '../app/i18n';
 import { safeWebUrl } from '../../shared/page-links';
 import { openPage, usePageGraph } from './page-graph-store';
 import { PageIconRenderer } from '../ui/page-icon-renderer';
-import { ImageBlock } from './image-block';
-import { ResizableImage } from './resizable-image';
 
 function PageLinkBlock({ block, locale, onChange }: { block: NotionBlock; locale: Locale; onChange: (patch: Partial<NotionBlock>) => void }) {
   const { graph, error } = usePageGraph();
@@ -24,28 +22,14 @@ function PageLinkBlock({ block, locale, onChange }: { block: NotionBlock; locale
   </div>;
 }
 
-export function ExtraBlock({ block, blocks, locale, onChange }: { block: NotionBlock; blocks: readonly NotionBlock[]; locale: Locale; onChange: (patch: Partial<NotionBlock>) => void }) {
+/** Page link, embed and bookmark blocks, rendered inside the BlockNote editor. */
+export function ExtraBlock({ block, locale, onChange }: { block: NotionBlock; locale: Locale; onChange: (patch: Partial<NotionBlock>) => void }) {
   const ar = locale === 'ar';
   const [url, setUrl] = useState(block.url ?? '');
   const [editing, setEditing] = useState(!block.url);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState('');
-  if (block.type === 'image') return <ImageBlock block={block} locale={locale} onChange={onChange} />;
-  const localImage = /^max:\/\/asset\/[0-9a-f]{64}\.(png|jpg|gif|webp)$/.test(block.url ?? '');
-  const localFile = /^max:\/\/attachment\/[0-9a-f]{64}\.[a-z0-9]{1,10}$/.test(block.url ?? '');
-  if (localImage || localFile) return <figure className="page-media-block">
-    {localImage ? <ResizableImage alt={block.caption || ''} ar={ar} onResize={(width) => onChange({ width })} src={location.protocol.startsWith('http') ? block.url!.replace('max://asset/', '/__max/asset/') : block.url!} width={block.width} /> : <button className="page-bookmark" type="button" onClick={() => { void window.maxApi.assets.openAttachment(block.url!).then(result => { if (!result.ok) setError(result.error.message); }); }}><FileText size={24}/><span>{block.caption || (ar ? 'ملف مرفق' : 'Attachment')}</span><ExternalLink size={16}/></button>}
-    <figcaption>{block.caption}</figcaption>{error && <p role="alert">{error}</p>}
-  </figure>;
   if (block.type === 'page-link') return <PageLinkBlock block={block} locale={locale} onChange={onChange} />;
-  if (block.type === 'table-of-contents') {
-    const headings = blocks.filter((b) => ['h1', 'h2', 'h3'].includes(b.type));
-    return <nav className="page-toc" aria-label={ar ? 'محتويات الصفحة' : 'Table of contents'}>{headings.length ? headings.map((heading) => <button type="button" key={heading.id} style={{ paddingInlineStart: `${(Number(heading.type.slice(1)) - 1) * 14 + 8}px` }} onClick={(event) => { const root = event.currentTarget.closest('.notion-editor-canvas'); const target = [...(root?.querySelectorAll<HTMLElement>('[data-block-id]') ?? [])].find((element) => element.dataset.blockId === heading.id); target?.scrollIntoView({ behavior: 'smooth', block: 'start' }); target?.querySelector<HTMLElement>('input,[contenteditable]')?.focus({ preventScroll: true }); }}>{heading.content || (ar ? 'عنوان' : 'Heading')}</button>) : <p>{ar ? 'أضف عناوين لتظهر هنا.' : 'Add headings to build a table of contents.'}</p>}</nav>;
-  }
-  if (block.type === 'simple-table') {
-    const cells = block.cells ?? [['', ''], ['', '']];
-    return <div className="page-simple-table"><table><thead><tr>{cells[0]?.map((_, column) => <th key={column}><button type="button" disabled={(cells[0]?.length ?? 0) <= 1} aria-label={ar ? `حذف العمود ${column + 1}` : `Remove column ${column + 1}`} onClick={() => onChange({ cells: cells.map((row) => row.filter((_, c) => c !== column)) })}><X size={12} /></button></th>)}</tr></thead><tbody>{cells.map((row, r) => <tr key={r}>{row.map((value, c) => <td key={c}><input aria-label={ar ? `صف ${r + 1} عمود ${c + 1}` : `Row ${r + 1}, column ${c + 1}`} value={value} onChange={(event) => onChange({ cells: cells.map((row, ri) => ri === r ? row.map((cell, ci) => ci === c ? event.target.value : cell) : row) })} /></td>)}<td><button type="button" disabled={cells.length <= 1} aria-label={ar ? 'حذف الصف' : 'Remove row'} onClick={() => onChange({ cells: cells.filter((_, ri) => ri !== r) })}><X size={12} /></button></td></tr>)}</tbody></table><div className="extra-block-actions"><button type="button" disabled={cells.length >= 100} onClick={() => onChange({ cells: [...cells, (cells[0] ?? ['']).map(() => '')] })}><Plus size={14} />{ar ? 'صف' : 'Row'}</button><button type="button" disabled={(cells[0]?.length ?? 0) >= 20} onClick={() => onChange({ cells: cells.map((row) => [...row, '']) })}><Plus size={14} />{ar ? 'عمود' : 'Column'}</button></div></div>;
-  }
   const savedUrl = safeWebUrl(block.url ?? '');
   const open = () => { if (savedUrl) void window.maxApi.workspace.openExternal(savedUrl).then((result) => { if (!result.ok) setError(result.error.message); }).catch(() => setError(ar ? 'تعذر فتح الرابط.' : 'Could not open link.')); };
   return <figure className="page-media-block">

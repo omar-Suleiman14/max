@@ -26,30 +26,16 @@ describe('ScrollOutline & findContentSections', () => {
 
   it('discovers the exact number of sections on a structured Notion page', () => {
     containerEl.innerHTML = `
-      <div class="notion-editor-canvas">
-        <div class="notion-block-row" data-scroll-kind="callout">
-          <p>Welcome to Max</p>
-        </div>
-        <div class="notion-block-row" data-scroll-kind="divider"></div>
-        <div class="notion-block-row" data-scroll-kind="h1">
-          <h2>Main Chapter 1</h2>
-        </div>
-        <div class="notion-block-row" data-scroll-kind="text">
-          <p>Some paragraph text here that should not be a separate section.</p>
-        </div>
-        <div class="notion-block-row" data-scroll-kind="bullet">
-          <p>Bullet item 1</p>
-        </div>
-        <div class="notion-block-row" data-scroll-kind="h2">
-          <h3>Sub-chapter 1.1</h3>
-        </div>
-        <div class="notion-block-row" data-scroll-kind="database-view" data-scroll-label="Sales Database">
-          <div>Embedded Table</div>
-        </div>
-        <div class="notion-block-row" data-scroll-kind="h2">
-          <h3>Conclusion</h3>
-        </div>
-      </div>
+      <div class="max-block-editor"><div class="bn-editor"><div class="bn-block-group">
+        <div class="bn-block-outer"><div class="bn-block"><div class="bn-block-content" data-content-type="callout"><p>Welcome to Max</p></div></div></div>
+        <div class="bn-block-outer"><div class="bn-block"><div class="bn-block-content" data-content-type="divider"></div></div></div>
+        <div class="bn-block-outer"><div class="bn-block"><div class="bn-block-content" data-content-type="heading"><h2>Main Chapter 1</h2></div></div></div>
+        <div class="bn-block-outer"><div class="bn-block"><div class="bn-block-content" data-content-type="paragraph"><p>Some paragraph text here that should not be a separate section.</p></div></div></div>
+        <div class="bn-block-outer"><div class="bn-block"><div class="bn-block-content" data-content-type="bulletListItem"><p>Bullet item 1</p></div></div></div>
+        <div class="bn-block-outer"><div class="bn-block"><div class="bn-block-content" data-content-type="heading"><h3>Sub-chapter 1.1</h3></div></div></div>
+        <div class="bn-block-outer" data-scroll-label="Sales Database"><div class="bn-block"><div class="bn-block-content" data-content-type="database"><div>Embedded Table</div></div></div></div>
+        <div class="bn-block-outer"><div class="bn-block"><div class="bn-block-content" data-content-type="heading"><h3>Conclusion</h3></div></div></div>
+      </div></div></div>
     `;
 
     const sections = findContentSections(containerEl, 'en');
@@ -98,24 +84,16 @@ describe('ScrollOutline & findContentSections', () => {
     const user = userEvent.setup();
 
     containerEl.innerHTML = `
-      <div class="notion-editor-canvas">
-        <div class="notion-block-row" data-scroll-kind="h1">
-          <h2>Overview</h2>
-        </div>
-        <div class="notion-block-row" data-scroll-kind="h2">
-          <h3>Methodology</h3>
-        </div>
-        <div class="notion-block-row" data-scroll-kind="h2">
-          <h3>Results</h3>
-        </div>
-        <div class="notion-block-row" data-scroll-kind="h2">
-          <h3>Next Steps</h3>
-        </div>
-      </div>
+      <div class="max-block-editor"><div class="bn-editor"><div class="bn-block-group">
+        <div class="bn-block-outer"><div class="bn-block"><div class="bn-block-content" data-content-type="heading"><h2>Overview</h2></div></div></div>
+        <div class="bn-block-outer"><div class="bn-block"><div class="bn-block-content" data-content-type="heading"><h3>Methodology</h3></div></div></div>
+        <div class="bn-block-outer"><div class="bn-block"><div class="bn-block-content" data-content-type="heading"><h3>Results</h3></div></div></div>
+        <div class="bn-block-outer"><div class="bn-block"><div class="bn-block-content" data-content-type="heading"><h3>Next Steps</h3></div></div></div>
+      </div></div></div>
     `;
 
     const scrollIntoViewMocks: ReturnType<typeof vi.fn>[] = [];
-    containerEl.querySelectorAll('.notion-block-row').forEach((el) => {
+    containerEl.querySelectorAll('.bn-block-outer').forEach((el) => {
       const mock = vi.fn();
       el.scrollIntoView = mock;
       scrollIntoViewMocks.push(mock);
@@ -142,11 +120,11 @@ describe('ScrollOutline & findContentSections', () => {
 
   it('lights every section that is on screen, not only the one being read', async () => {
     containerEl.innerHTML = `
-      <div class="notion-editor-canvas">
-        <div class="notion-block-row" data-scroll-kind="h2"><h3>One</h3></div>
-        <div class="notion-block-row" data-scroll-kind="h2"><h3>Two</h3></div>
-        <div class="notion-block-row" data-scroll-kind="h2"><h3>Three</h3></div>
-      </div>
+      <div class="max-block-editor"><div class="bn-editor"><div class="bn-block-group">
+        <div class="bn-block-outer"><div class="bn-block"><div class="bn-block-content" data-content-type="heading"><h3>One</h3></div></div></div>
+        <div class="bn-block-outer"><div class="bn-block"><div class="bn-block-content" data-content-type="heading"><h3>Two</h3></div></div></div>
+        <div class="bn-block-outer"><div class="bn-block"><div class="bn-block-content" data-content-type="heading"><h3>Three</h3></div></div></div>
+      </div></div></div>
     `;
     // jsdom lays nothing out, so the window and the rows say where they are:
     // a 600px window holding the first two rows, with the third below it.
@@ -154,7 +132,7 @@ describe('ScrollOutline & findContentSections', () => {
       el.getBoundingClientRect = () => ({ bottom, height: bottom - top, left: 0, right: 900, toJSON: () => ({}), top, width: 900, x: 0, y: top });
     };
     place(containerEl, 0, 600);
-    const rows = [...containerEl.querySelectorAll('.notion-block-row')];
+    const rows = [...containerEl.querySelectorAll('.bn-block-outer')];
     place(rows[0]!, 0, 300);
     place(rows[1]!, 300, 560);
     place(rows[2]!, 700, 900);

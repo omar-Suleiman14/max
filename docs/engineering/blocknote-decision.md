@@ -1,24 +1,69 @@
-# BlockNote evaluation: production migration is not approved
+# BlockNote as the desktop page editor
 
-The current prototype is not safe to use for persisted pages. Its adapter drops
-inline styles, links and nested content, and changes quote/code blocks to text.
-Custom blocks have no adapter. CustomPageView therefore uses the existing
-desktop editor while the prototype is kept outside the production import path.
-This is a no-go for the current implementation, not a completed migration.
+Status: implemented for review in #42. The licence question in #171 still needs
+an owner decision before a release ships it.
 
-The installed prototype packages are @blocknote/core, @blocknote/react and
-@blocknote/mantine 0.54.2, each declaring MPL-2.0 in package metadata. No XL
-package is installed. These declarations alone do not establish distribution
-compatibility with Max's GPL-2.0-only licence. That decision remains open in
-#171; this document does not approve a licence change or distribution.
+## What changed since the prototype
 
-Before enabling the adapter, #171 requires an exact dependency/notice review,
-representative round-trip fixtures, a demonstrated Max custom block extension,
-and measured bundle/runtime impact. Then #42 requires every supported block,
-editing interaction, unknown-block preservation, RTL, accessibility and narrow
-layout checks. The previous document incorrectly treated package-lock size as
-a bundle measurement and did not establish these acceptance criteria.
+The earlier prototype dropped inline styles, links and nested content, turned
+quotes and code blocks into text, and had no custom blocks. It was a no-go. The
+editor that replaces it is built around a lossless adapter instead:
 
-Tiptap remains the fallback candidate if BlockNote fails that evaluation.
-Neither editor may become Max's persisted format. Shared contracts, persistence,
-mobile, publishing and sync remain independent of BlockNote types.
+- `src/shared/max-inline.ts` parses and serialises Max's inline format (bold,
+  italic, underline, strike, highlight, code, web links and `max-page:` links)
+  into runs. It is editor-neutral and lives in `shared`.
+- `src/renderer/editor/blocknote-adapter.ts` maps every MaxBlock kind to a
+  BlockNote block and back. On the way back it merges each block into the
+  original MaxBlock by id, so fields BlockNote does not own survive an edit.
+  A block of an unknown kind or a future version becomes an `unsupported`
+  block that carries the original JSON and is written back unchanged.
+- `src/renderer/editor/max-blocknote-schema.tsx` adds Max's own blocks:
+  callout, two columns (nested editors), database view, page link, embed,
+  bookmark, table of contents, unsupported, a page mention inline and a
+  highlight style.
+- `src/renderer/editor/max-block-editor.tsx` is the one editor component used
+  by pages, the record drawer and record templates. It carries Max's Backspace
+  rules, the slash menu additions, `@` page mentions, file uploads through the
+  existing asset IPC, Arabic and English dictionaries and RTL.
+
+`src/main/architecture.integration.test.ts` fails if anything outside
+`src/renderer/editor` imports `@blocknote/*`. MaxDocument stays the persisted
+format; BlockNote types never reach storage, IPC, publishing or sync.
+
+## Evidence for #171
+
+Round trips: `blocknote-adapter.unit.test.ts` converts a fixture of every
+block kind (including nested toggles, columns, tables, colours, alignment,
+page links and extension fields) to BlockNote and back and compares it with
+the original. Unknown kinds, future versions and type conversions are covered.
+
+Custom blocks: callout, columns, database, page link, embed, bookmark, table
+of contents and the page mention are all Max extensions running in production
+code, not a demonstration.
+
+Bundle: in the production build BlockNote, ProseMirror and Mantine land in one
+lazily loaded shared chunk of 1,007 KB (303 KB gzip). It loads when a page or a
+record opens, not at startup; the startup `index` chunk does not contain the
+editor.
+
+Dependencies and licences:
+
+| Package | Licence |
+| --- | --- |
+| @blocknote/core, @blocknote/react, @blocknote/mantine 0.54.2 | MPL-2.0 |
+| @tiptap/*, prosemirror-* | MIT |
+| @mantine/core | MIT |
+
+No BlockNote XL package is installed. Columns are Max's own block for that
+reason.
+
+## Open decision
+
+MPL-2.0 is file-level copyleft. Its section 3.3 lists GPL-2.0 as a Secondary
+Licence, which allows a larger work under GPL-2.0 unless a file is marked
+"Incompatible With Secondary Licenses"; none of the installed BlockNote files
+carry that notice. Even so, whether shipping these files unmodified inside
+Max's GPL-2.0-only application is acceptable is the owner's call in #171. This
+document does not approve a licence change or a distribution. Tiptap (MIT)
+remains the fallback if the answer is no; the adapter boundary means only
+`src/renderer/editor` would change.

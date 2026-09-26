@@ -12,34 +12,27 @@ export type SectionMarker = {
  * so the indicator rail accurately reflects the page structure and section count.
  */
 export function findContentSections(root: HTMLElement, locale: Locale): SectionMarker[] {
-  // 1. Notion Block Editor Canvas
-  const canvas = root.querySelector('.notion-editor-canvas');
-  if (canvas) {
-    // Collect heading blocks, embedded database views, and top-level callouts
-    const sectionBlocks = [...canvas.querySelectorAll<HTMLElement>(
-      ':scope > .notion-block-row[data-scroll-kind="h1"], ' +
-      ':scope > .notion-block-row[data-scroll-kind="h2"], ' +
-      ':scope > .notion-block-row[data-scroll-kind="h3"], ' +
-      ':scope > .notion-block-row[data-scroll-kind="database-view"], ' +
-      ':scope > .notion-block-row[data-scroll-kind="callout"]'
-    )].filter((el) => !el.closest('[role="dialog"]') && !el.classList.contains('sr-only'));
-
-    // If the page has structured headings/views, use them; otherwise use all visible content blocks
-    const targets = sectionBlocks.length > 0
-      ? sectionBlocks
-      : [...canvas.querySelectorAll<HTMLElement>(':scope > .notion-block-row')]
-          .filter((el) => el.dataset.scrollKind !== 'divider' && !el.closest('[role="dialog"]'));
+  // 1. The page editor: its top-level blocks, not those nested in columns.
+  const editor = root.querySelector<HTMLElement>('.max-block-editor');
+  if (editor) {
+    const kindOf = (row: HTMLElement) => row.querySelector<HTMLElement>(':scope > .bn-block > .bn-block-content')?.dataset.contentType ?? '';
+    const rows = [...editor.querySelectorAll<HTMLElement>('.bn-block-outer')]
+      .filter((row) => row.parentElement?.parentElement?.classList.contains('bn-editor') && row.closest('.max-block-editor') === editor)
+      .filter((row) => !row.closest('[role="dialog"]'));
+    const sectionRows = rows.filter((row) => ['heading', 'database', 'callout'].includes(kindOf(row)));
+    // A page without headings, views or callouts is outlined line by line.
+    const targets = sectionRows.length > 0 ? sectionRows : rows.filter((row) => kindOf(row) !== 'divider');
 
     return targets.map((el) => {
-      const heading = el.querySelector<HTMLElement>('h1, h2, h3, [contenteditable="true"]');
-      const label = (el.dataset.scrollLabel || heading?.textContent || el.textContent || '').trim().replace(/\s+/g, ' ');
-      const isDb = el.dataset.scrollKind === 'database-view';
+      const isDb = kindOf(el) === 'database';
+      const text = (el.textContent ?? '').trim().replace(/\s+/g, ' ');
+      const label = el.dataset.scrollLabel || (isDb ? el.querySelector('h1, h2, h3')?.textContent?.trim() : text) || '';
       return {
         element: el,
         preview: isDb
           ? (locale === 'ar' ? 'الانتقال إلى قاعدة بيانات هذه الصفحة' : "Jump to this page's database")
-          : (el.textContent ?? '').trim().slice(0, 180),
-        title: label.slice(0, 80) || (locale === 'ar' ? 'قسم' : 'Section'),
+          : text.slice(0, 180),
+        title: label.slice(0, 80) || (isDb ? (locale === 'ar' ? 'قاعدة بيانات' : 'Database') : (locale === 'ar' ? 'قسم' : 'Section')),
       };
     });
   }

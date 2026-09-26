@@ -7,5 +7,6 @@ export default defineConfig({
     maxWorkers: 4,
     passWithNoTests: false,
     pool: 'threads',
+    setupFiles: ['tests/setup/dom-polyfills.ts'],
   },
 });
