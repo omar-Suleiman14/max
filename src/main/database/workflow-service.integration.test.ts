@@ -49,6 +49,18 @@ function scenario(db: DatabaseService) {
 }
 
 describe('Generic workspace actions', () => {
+  it('persists action presentation, defaults older definitions, and rejects shortcut collisions', () => {
+    const db = workspace();
+    const legacy = db.workflows.createWorkflow({ name: 'Legacy', inputSchema: { fields: [] }, steps: [] });
+    expect(db.workflows.getWorkflow(legacy.id)).toMatchObject({ color: null, shortcut: null });
+    const updated = db.workflows.updateWorkflow(legacy.id, { name: 'Colored', color: '#112233', shortcut: 'Digit2' });
+    expect(db.workflows.getWorkflow(legacy.id)).toMatchObject({ name: 'Colored', color: '#112233', shortcut: 'Digit2' });
+    expect(updated.positionKey).toBe(legacy.positionKey);
+    expect(() => db.workflows.createWorkflow({ name: 'Collision', shortcut: 'Digit2', inputSchema: { fields: [] }, steps: [] })).toThrow('already used');
+    expect(db.workflows.listWorkflows()).toHaveLength(1);
+    expect(db.workflows.updateWorkflow(legacy.id, { shortcut: null }).shortcut).toBeNull();
+    expect(db.workflows.createWorkflow({ name: 'Reuse', shortcut: 'Digit2', inputSchema: { fields: [] }, steps: [] }).shortcut).toBe('Digit2');
+  });
   it('starts empty and persists serializable definitions without defaults', () => {
     const db = workspace();
     expect(db.workflows.listWorkflows()).toEqual([]);

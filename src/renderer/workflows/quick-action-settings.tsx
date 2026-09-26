@@ -5,7 +5,7 @@ import { IconPickerDialog } from '../ui/icon-picker-dialog';
 import { PageIconRenderer } from '../ui/page-icon-renderer';
 import { scalarText } from '../../shared/scalar-text';
 import { generateOrderKey } from '../../shared/order-key';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { WorkspaceWorkflow, WorkspaceWorkflowDraft, WorkflowStep, WorkflowStepType, WorkflowValue } from '../../shared/workflow-contract';
 import type { WorkspaceProperty } from '../../shared/property-contract';
 import type { PropertyFilterNode, FilterOperator } from '../../shared/query-contract';
@@ -44,6 +44,10 @@ export function QuickActionSettings({ locale }: { locale: Locale }) {
   }, [ar]);
   const save = async () => {
     if (!draft || saving) return;
+    if (draft.shortcut && actions.some((action) => action.id !== draft.id && action.shortcut === draft.shortcut)) {
+      setError(ar ? 'هذا الاختصار مستخدم لإجراء آخر.' : 'This shortcut is already used by another action.');
+      return;
+    }
     setSaving(true); setError('');
     try {
       const definition = JSON.parse(JSON.stringify(draft)) as WorkspaceWorkflowDraft;
@@ -131,18 +135,22 @@ export function QuickActionSettings({ locale }: { locale: Locale }) {
       })}<button type="button" onClick={() => { const id = crypto.randomUUID(); setSteps([...steps, { id, type: 'CREATE_RECORD', config: { outputVariable: id } }]); }}>{ar ? '+ خطوة' : '+ Step'}</button></div>;
   };
   return <div className="quick-action-settings">
-    {error && <p role="alert">{error}</p>}
+    {!draft && error && <p role="alert">{error}</p>}
     {!draft ? <>
       {!actions.length && <p>{ar ? 'لا توجد إجراءات سريعة بعد.' : 'No quick actions yet.'}</p>}
-      {actions.map((action, index) => <div className="action-list-row" key={action.id} role="group" aria-label={action.name}>
+      {actions.map((action, index) => <div className="action-list-row" key={action.id} role="group" aria-label={action.name} style={{ '--action-color': action.color ?? undefined } as CSSProperties}>
         <button type="button" aria-label={ar ? 'سجل التنفيذ' : 'Run history'} aria-expanded={historyId === action.id} onClick={() => setHistoryId(historyId === action.id ? undefined : action.id)}>{ar ? 'السجل' : 'History'}</button>
         <button type="button" onClick={() => { setDraft(action); setError(''); }}><strong><PageIconRenderer icon={action.icon || 'lucide:Zap'} size={16} /> {action.name}</strong><small>{action.inputSchema.fields.length} {ar ? 'مدخلات' : 'inputs'} · {action.steps.length} {ar ? 'خطوات' : 'steps'}{!action.enabled && (ar ? ' · معطل' : ' · Disabled')}</small></button>
         <button type="button" disabled={index === 0 || saving} aria-label={ar ? 'تحريك لأعلى' : 'Move up'} onClick={() => { const previous = actions[index - 1]; if (!previous) return; setSaving(true); void window.maxApi.workspace.updateWorkflow(action.id, { positionKey: generateOrderKey(actions[index - 2]?.positionKey, previous.positionKey) }).then(async (result) => { if (!result.ok) setError(result.error.message); await reload(); }).finally(() => setSaving(false)); }}>↑</button>
+        <button type="button" disabled={index === actions.length - 1 || saving} aria-label={ar ? 'تحريك لأسفل' : 'Move down'} onClick={() => { const next = actions[index + 1]; if (!next) return; setSaving(true); void window.maxApi.workspace.updateWorkflow(action.id, { positionKey: generateOrderKey(next.positionKey, actions[index + 2]?.positionKey) }).then(async (result) => { if (!result.ok) setError(result.error.message); await reload(); }).finally(() => setSaving(false)); }}>↓</button>
       </div>)}
       {historyId && actions.find((action) => action.id === historyId) && <WorkflowRunHistory key={historyId} workflow={actions.find((action) => action.id === historyId)!} locale={locale} />}
       <button type="button" className="btn btn-secondary" onClick={() => { setDraft(empty()); setError(''); }}>{ar ? '+ إجراء سريع' : '+ Quick action'}</button>
     </> : <>
       <div className="action-row">
+        <label>{ar ? 'اللون' : 'Color'}<input aria-label={ar ? 'لون الإجراء' : 'Action color'} type="color" value={draft.color ?? '#5965d7'} onChange={(event) => setDraft({ ...draft, color: event.target.value })} /></label>
+        <button type="button" onClick={() => setDraft({ ...draft, color: null })}>{ar ? 'اللون الافتراضي' : 'Default color'}</button>
+        <label>{ar ? 'الاختصار' : 'Shortcut'}<Select aria-label={ar ? 'اختصار الإجراء' : 'Action shortcut'} value={draft.shortcut ?? ''} onChange={(event) => setDraft({ ...draft, shortcut: event.target.value || null })}><option value="">{ar ? 'بدون اختصار' : 'No shortcut'}</option>{Array.from({ length: 9 }, (_, index) => <option key={index + 1} value={`Digit${index + 1}`}>{`Ctrl/⌘ Alt ${index + 1}`}</option>)}</Select></label>
         <label>{ar ? 'الأيقونة' : 'Icon'}<div><button ref={iconButtonRef} type="button" aria-label={ar ? 'اختر أيقونة' : 'Choose icon'} onClick={() => setPickingIcon((open) => !open)}><PageIconRenderer icon={draft.icon || 'lucide:Zap'} size={20} /></button>{pickingIcon && <IconPickerDialog anchor={iconButtonRef.current} locale={locale} currentIcon={draft.icon ?? undefined} onClose={() => setPickingIcon(false)} onSelect={(icon) => { setDraft({ ...draft, icon }); setPickingIcon(false); }} />}</div></label>
         <label>{ar ? 'الاسم' : 'Name'}<input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></label>
         <label><input type="checkbox" checked={draft.enabled !== false} onChange={(e) => setDraft({ ...draft, enabled: e.target.checked })} />{ar ? 'مفعل' : 'Enabled'}</label>

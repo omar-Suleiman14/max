@@ -35,6 +35,8 @@ type WorkflowRow = Readonly<{
   archived_at: string | null;
   created_at: string;
   icon: string | null;
+  color: string | null;
+  shortcut: string | null;
   id: string;
   input_schema_json: string;
   kind: WorkspaceWorkflow['kind'];
@@ -52,6 +54,8 @@ function workflowFromRow(row: WorkflowRow): WorkspaceWorkflow {
     archivedAt: row.archived_at,
     createdAt: row.created_at,
     icon: row.icon,
+    color: row.color,
+    shortcut: row.shortcut,
     id: row.id,
     inputSchema: parseStoredJson<WorkflowInputSchema>(row.input_schema_json, { fields: [] }),
     kind: row.kind,
@@ -126,14 +130,16 @@ export class WorkflowService {
     const stepsJson = JSON.stringify(steps);
     const resultSchemaJson = draft.resultSchema ? JSON.stringify(draft.resultSchema) : null;
     const kind = draft.kind ?? 'custom';
+    this.#validatePresentation(draft.color, draft.shortcut);
+    this.#assertShortcutAvailable(draft.shortcut);
 
     this.#database
       .prepare(`
         INSERT INTO workspace_workflows (
-          id, name, icon, kind, input_schema_json, steps_json, result_schema_json, version, position_key, created_at, updated_at, enabled, archived_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, NULL)
+          id, name, icon, color, shortcut, kind, input_schema_json, steps_json, result_schema_json, version, position_key, created_at, updated_at, enabled, archived_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, NULL)
       `)
-      .run(id, name, draft.icon ?? null, kind, inputSchemaJson, stepsJson, resultSchemaJson, positionKey, now, now, draft.enabled === false ? 0 : 1);
+      .run(id, name, draft.icon ?? null, draft.color ?? null, draft.shortcut ?? null, kind, inputSchemaJson, stepsJson, resultSchemaJson, positionKey, now, now, draft.enabled === false ? 0 : 1);
 
     // Save initial revision
     this.#database
@@ -148,6 +154,8 @@ export class WorkflowService {
       archivedAt: null,
       createdAt: now,
       icon: draft.icon ?? null,
+      color: draft.color ?? null,
+      shortcut: draft.shortcut ?? null,
       id,
       inputSchema: draft.inputSchema ?? { fields: [] },
       kind,
@@ -210,12 +218,16 @@ export class WorkflowService {
     }
 
     this.validate({ ...current, ...patch });
+    this.#validatePresentation(patch.color ?? current.color, patch.shortcut ?? current.shortcut);
+    this.#assertShortcutAvailable(patch.shortcut ?? current.shortcut, id);
     const name = patch.name !== undefined ? patch.name.trim() : current.name;
     if (!name || name.length > 120) {
       throw new WorkspaceDomainError('invalid-input', 'Workflow name must be 1–120 characters.');
     }
 
     const icon = patch.icon !== undefined ? patch.icon : current.icon;
+    const color = patch.color !== undefined ? patch.color : current.color;
+    const shortcut = patch.shortcut !== undefined ? patch.shortcut : current.shortcut;
     const kind = patch.kind !== undefined ? patch.kind : current.kind;
     const inputSchemaJson = patch.inputSchema !== undefined ? JSON.stringify(patch.inputSchema) : JSON.stringify(current.inputSchema);
     const stepsJson = patch.steps !== undefined ? JSON.stringify(patch.steps) : JSON.stringify(current.steps);
@@ -227,11 +239,11 @@ export class WorkflowService {
     this.#database
       .prepare(`
         UPDATE workspace_workflows
-        SET name = ?, icon = ?, kind = ?, input_schema_json = ?, steps_json = ?, result_schema_json = ?,
+        SET name = ?, icon = ?, color = ?, shortcut = ?, kind = ?, input_schema_json = ?, steps_json = ?, result_schema_json = ?,
             version = ?, position_key = ?, updated_at = ?, enabled = ?
         WHERE id = ?
       `)
-      .run(name, icon ?? null, kind, inputSchemaJson, stepsJson, resultSchemaJson, nextVersion, positionKey, now, (patch.enabled ?? current.enabled) ? 1 : 0, id);
+      .run(name, icon ?? null, color ?? null, shortcut ?? null, kind, inputSchemaJson, stepsJson, resultSchemaJson, nextVersion, positionKey, now, (patch.enabled ?? current.enabled) ? 1 : 0, id);
 
     // Save revision
     this.#database
@@ -249,6 +261,18 @@ export class WorkflowService {
     this.#database
       .prepare('UPDATE workspace_workflows SET archived_at = ?, updated_at = ? WHERE id = ?')
       .run(now, now, id);
+  }
+
+  #validatePresentation(color: string | null | undefined, shortcut: string | null | undefined): void {
+    if (color != null && !/^#[0-9a-fA-F]{6}$/.test(color)) throw new WorkspaceDomainError('invalid-input', 'Choose a valid action color.');
+    if (shortcut != null && !/^Digit[1-9]$/.test(shortcut)) throw new WorkspaceDomainError('invalid-input', 'Choose a valid action shortcut.');
+  }
+
+  #assertShortcutAvailable(shortcut: string | null | undefined, exceptId?: string): void {
+    if (!shortcut) return;
+    const row = this.#database.prepare('SELECT id FROM workspace_workflows WHERE shortcut = ? AND archived_at IS NULL AND id != ? LIMIT 1')
+      .get(shortcut, exceptId ?? '') as { id: string } | undefined;
+    if (row) throw new WorkspaceDomainError('constraint-violation', 'This shortcut is already used by another action.');
   }
 
   #hasFormBehavior(schema: WorkflowInputSchema): boolean {

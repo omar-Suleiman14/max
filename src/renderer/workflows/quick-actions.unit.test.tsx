@@ -74,6 +74,34 @@ describe('running one quick action', () => {
 });
 
 describe('Workspace Quick Actions settings', () => {
+  it('saves label, visibility, color and shortcut and reports a collision', async () => {
+    const other = { ...action, id: 'other', name: 'Other action', positionKey: 'b0', shortcut: 'Digit1' };
+    const workspace = api([action, other]); const user = userEvent.setup();
+    render(<QuickActionSettings locale="en" />);
+    await user.click(await screen.findByRole('button', { name: /Record attendance/ }));
+    await user.clear(screen.getByLabelText('Name'));
+    await user.type(screen.getByLabelText('Name'), 'Record visit');
+    await user.click(screen.getByLabelText('Enabled'));
+    fireEvent.change(screen.getByLabelText('Action color'), { target: { value: '#123456' } });
+    await user.click(screen.getByRole('combobox', { name: 'Action shortcut' }));
+    await user.click(screen.getByRole('option', { name: 'Ctrl/⌘ Alt 1' }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('already used');
+    expect(workspace.updateWorkflow).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('combobox', { name: 'Action shortcut' }));
+    await user.click(screen.getByRole('option', { name: 'Ctrl/⌘ Alt 2' }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(workspace.updateWorkflow).toHaveBeenCalledWith(action.id, expect.objectContaining({ name: 'Record visit', enabled: false, color: '#123456', shortcut: 'Digit2' }));
+  });
+
+  it('moves an action down and persists its new position', async () => {
+    const workspace = api([action, { ...action, id: 'other', name: 'Other', positionKey: 'b0' }]);
+    render(<QuickActionSettings locale="en" />);
+    await screen.findAllByRole('button', { name: 'Move down' });
+    await userEvent.setup().click(screen.getAllByRole('button', { name: 'Move down' })[0]!);
+    expect(workspace.updateWorkflow.mock.calls[0]?.[0]).toBe(action.id);
+    expect(typeof workspace.updateWorkflow.mock.calls[0]?.[1].positionKey).toBe('string');
+  });
   it('opens recent runs for an action without editing its definition', async () => {
     const workspace = api([action]);
     render(<QuickActionSettings locale="en" />);

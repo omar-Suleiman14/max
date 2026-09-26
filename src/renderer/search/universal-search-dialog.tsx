@@ -93,7 +93,7 @@ function toActionResult(workflow: WorkspaceWorkflow, locale: Locale): UniversalS
     kind: 'action' as const,
     matchScore: 2,
     metadata: workflow.enabled ? undefined : (locale === 'ar' ? 'موقوف' : 'Turned off'),
-    subtitle: undefined,
+    subtitle: workflow.shortcut ? `Ctrl/⌘ Alt ${workflow.shortcut.slice(-1)}` : undefined,
     title: workflow.name,
   };
 }
@@ -231,7 +231,7 @@ export function UniversalSearchDialog({
     } else if (event.key === 'Enter') {
       event.preventDefault();
       if (!loading) choose(flat[safeIndex]);
-    } else if (!trimmed && (event.ctrlKey || event.metaKey || event.altKey)) {
+    } else if (!trimmed && !event.altKey && !event.shiftKey && (event.ctrlKey || event.metaKey)) {
       // Digits run the listed actions, on Arabic keyboards too.
       const digit = shortcutDigit(event);
       const action = digit === null ? undefined : sections[0]?.items[digit - 1];
@@ -351,7 +351,7 @@ export function UniversalSearchDialog({
                       onMouseEnter={() => setActiveIndex(index)}
                       role="option"
                     >
-                      <span className="search-row__icon">{blocked ? <Ban aria-hidden="true" size={15} /> : resultIcon(item.kind)}</span>
+                      <span className="search-row__icon" style={{ color: item.kind === 'action' ? actions.find((action) => action.id === item.id)?.color ?? undefined : undefined }}>{blocked ? <Ban aria-hidden="true" size={15} /> : item.kind === 'action' ? <PageIconRenderer icon={actions.find((action) => action.id === item.id)?.icon || 'lucide:Zap'} size={15} /> : resultIcon(item.kind)}</span>
                       <span className="search-row__text">
                         <span className="search-row__title">{item.title}</span>
                         {item.subtitle && <span className="search-row__subtitle">{item.subtitle}</span>}

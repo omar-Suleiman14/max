@@ -8,6 +8,7 @@ import { cleanup, configure, fireEvent, render, screen, waitFor, within } from '
 configure({ asyncUtilTimeout: 5000 });
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { WorkspaceWorkflow } from '../../shared/workflow-contract';
 
 import { MaxApp } from './max-app';
 vi.stubGlobal('IntersectionObserver', class { observe() {} unobserve() {} disconnect() {} });
@@ -312,7 +313,7 @@ const workspaceApi = {
   getNode: vi.fn<(id: string) => Promise<WorkspaceNode | null>>(() => Promise.resolve(null)),
   listRecordTemplates: vi.fn(() => Promise.resolve([])),
   listViews: vi.fn<() => Promise<readonly WorkspaceView[]>>(() => Promise.resolve([])),
-  listWorkflows: vi.fn(() => Promise.resolve([])),
+  listWorkflows: vi.fn<() => Promise<readonly WorkspaceWorkflow[]>>(() => Promise.resolve([])),
   migrateV01: vi.fn(() => Promise.resolve({
     ok: true as const,
     value: { accountsMigrated: 0, inventoryMovementsMigrated: 0, itemsMigrated: 0, moneyMovementsMigrated: 0, pagesMigrated: 0, parityCheckPassed: true, peopleMigrated: 0, transactionsMigrated: 0, viewsMigrated: 0 },
@@ -421,6 +422,8 @@ beforeEach(() => {
   workspaceApi.getNode.mockResolvedValue(null);
   workspaceApi.listViews.mockReset();
   workspaceApi.listViews.mockResolvedValue([]);
+  workspaceApi.listWorkflows.mockReset();
+  workspaceApi.listWorkflows.mockResolvedValue([]);
   workspaceApi.updateNode.mockClear();
   resetWorkspace.mockClear();
   scrollIntoView.mockClear();
@@ -753,6 +756,18 @@ describe('Max shell', () => {
     }
     fireEvent.keyDown(document, { ctrlKey: true, key: 'k', code: 'KeyK' });
     expect(await screen.findByRole('combobox', { name: 'Universal Search' })).toBeInTheDocument();
+  });
+
+  it('opens an assigned action with its distinct shortcut', async () => {
+    window.localStorage.setItem('max.quick-actions.enabled', 'true');
+    workspaceApi.listWorkflows.mockResolvedValue([{ id: 'stock-check', name: 'Check stock', enabled: true, shortcut: 'Digit2', color: '#334455', createdAt: '', updatedAt: '', version: 1, kind: 'custom', positionKey: 'a', steps: [], inputSchema: { fields: [] } }]);
+    render(<MaxApp />);
+    await screen.findByRole('button', { name: 'Settings' });
+    await waitFor(() => expect(workspaceApi.listWorkflows).toHaveBeenCalled());
+    const shortcut = new KeyboardEvent('keydown', { ctrlKey: true, altKey: true, code: 'Digit2', key: '2', bubbles: true, cancelable: true });
+    fireEvent(document, shortcut);
+    expect(shortcut.defaultPrevented).toBe(true);
+    expect(await screen.findByText('Check stock')).toBeInTheDocument();
   });
 
   it('persists appearance sliders and restores their defaults', async () => {

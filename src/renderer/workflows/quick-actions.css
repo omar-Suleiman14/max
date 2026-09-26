@@ -9,6 +9,7 @@
 .action-list-row { display: flex; border-bottom: 1px solid var(--border-color, #8884); }
 .action-list-row > button:nth-child(2) { flex: 1; display: grid; text-align: start; gap: 4px; padding: 10px 0; }
 .action-list-row small { opacity: .65; }
+.action-list-row strong svg { color: var(--action-color, inherit); }
 .action-expression { display: grid; gap: 8px; width: 100%; }
 .action-footer { padding-top: 12px; }
 /* One quick action, running inside the command popup. */

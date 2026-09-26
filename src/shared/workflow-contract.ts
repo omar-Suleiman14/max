@@ -70,6 +70,8 @@ export type WorkspaceWorkflow = Readonly<{
   archivedAt?: string | null;
   createdAt: string;
   icon?: string | null;
+  color?: string | null;
+  shortcut?: string | null;
   id: string;
   inputSchema: WorkflowInputSchema;
   kind: 'built_in' | 'custom';
@@ -84,6 +86,8 @@ export type WorkspaceWorkflow = Readonly<{
 export type WorkspaceWorkflowDraft = Readonly<{
   enabled?: boolean;
   icon?: string | null;
+  color?: string | null;
+  shortcut?: string | null;
   id?: string;
   inputSchema: WorkflowInputSchema;
   kind?: 'built_in' | 'custom';
