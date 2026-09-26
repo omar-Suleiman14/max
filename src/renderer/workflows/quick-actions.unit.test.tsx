@@ -14,6 +14,7 @@ function api(actions: readonly WorkspaceWorkflow[] = []) {
   const executeWorkflow = vi.fn(() => Promise.resolve({ ok: true, value: { status: 'completed' } }));
   const workspace = {
     listWorkflows: vi.fn(() => Promise.resolve(rows)),
+    listWorkflowRuns: vi.fn(() => Promise.resolve([])),
     executeWorkflow,
     getNavigation: vi.fn(() => Promise.resolve({ databases: [], pages: [] })),
     createWorkflow: vi.fn((draft: WorkspaceWorkflowDraft) => Promise.resolve({ ok: true, value: { ...action, ...draft } })),
@@ -73,6 +74,14 @@ describe('running one quick action', () => {
 });
 
 describe('Workspace Quick Actions settings', () => {
+  it('opens recent runs for an action without editing its definition', async () => {
+    const workspace = api([action]);
+    render(<QuickActionSettings locale="en" />);
+    await userEvent.setup().click(await screen.findByRole('button', { name: 'Run history' }));
+    expect(await screen.findByText('No runs yet.')).toBeInTheDocument();
+    expect(workspace.listWorkflowRuns).toHaveBeenCalledWith(action.id);
+    expect(workspace.updateWorkflow).not.toHaveBeenCalled();
+  });
   it('configures calculations, conditions, messages and summaries without JSON', async () => {
     const workspace = api(); const user = userEvent.setup();
     render(<QuickActionSettings locale="en"/>);

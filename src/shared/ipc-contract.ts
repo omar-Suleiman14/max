@@ -79,6 +79,7 @@ import type {
   WorkflowExecutionInput,
   WorkflowExecutionResult,
   WorkflowFormEvaluation,
+  WorkflowRunSummary,
   WorkspaceWorkflow,
   WorkspaceWorkflowDraft,
 } from './workflow-contract';
@@ -214,6 +215,7 @@ export const IPC_CHANNELS = {
   workspaceArchiveView: 'max:workspace:views:archive',
   workspaceQueryDatabase: 'max:workspace:queries:execute',
   workspaceListWorkflows: 'max:workspace:workflows:list',
+  workspaceListWorkflowRuns: 'max:workspace:workflows:runs:list',
   workspaceGetWorkflow: 'max:workspace:workflows:get',
   workspaceCreateWorkflow: 'max:workspace:workflows:create',
   workspaceUpdateWorkflow: 'max:workspace:workflows:update',
@@ -438,6 +440,7 @@ export type MaxApi = Readonly<{
     listRelations: (databaseId: string) => Promise<readonly WorkspaceRelation[]>;
     listViews: (ownerId: string, ownerType?: 'database' | 'block') => Promise<readonly WorkspaceView[]>;
     listWorkflows: () => Promise<readonly WorkspaceWorkflow[]>;
+    listWorkflowRuns: (workflowId: string) => Promise<readonly WorkflowRunSummary[]>;
     migrateV01: (locale?: 'ar' | 'en') => Promise<WorkspaceMutationResult<MigrationSummary>>;
     previewTypeConversion: (propertyId: string, targetType: PropertyType) => Promise<TypeConversionPreview>;
     queryDatabase: (params: DatabaseQueryParams) => Promise<DatabaseQueryResult>;

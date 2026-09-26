@@ -7,7 +7,7 @@
 .quick-action-settings label { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .action-step, .action-input-row { display: grid; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--border-color, #8884); }
 .action-list-row { display: flex; border-bottom: 1px solid var(--border-color, #8884); }
-.action-list-row > button:first-child { flex: 1; display: grid; text-align: start; gap: 4px; padding: 10px 0; }
+.action-list-row > button:nth-child(2) { flex: 1; display: grid; text-align: start; gap: 4px; padding: 10px 0; }
 .action-list-row small { opacity: .65; }
 .action-expression { display: grid; gap: 8px; width: 100%; }
 .action-footer { padding-top: 12px; }
@@ -94,4 +94,13 @@
 .quick-action-form__result div { display: flex; justify-content: space-between; gap: 12px; }
 .quick-action-form__result dt { color: var(--muted); }
 .quick-action-form__result dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.quick-action-form__history-button { justify-self: start; padding: 4px 0; border: 0; background: none; color: var(--accent); cursor: pointer; }
+.workflow-run-history { min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; }
+.workflow-run-history h3 { margin: 0 0 10px; }
+.workflow-run-history ol { margin: 0; padding-inline-start: 22px; }
+.workflow-run-history li { padding: 10px 0; border-top: 1px solid var(--line); }
+.workflow-run-history li:first-child { border-top: 0; }
+.workflow-run-history li strong, .workflow-run-history li time { display: block; }
+.workflow-run-history li time, .workflow-run-history li p { color: var(--muted); font-size: 12px; }
+.workflow-run-history li p { margin: 5px 0 0; }
 .action-json { width: 100%; box-sizing: border-box; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; padding: 10px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--canvas-subtle); color: var(--text); }

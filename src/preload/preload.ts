@@ -306,6 +306,8 @@ const maxApi: MaxApi = Object.freeze({
       ipcRenderer.invoke(IPC_CHANNELS.workspaceListViews, ownerId, ownerType) as ReturnType<MaxApi['workspace']['listViews']>,
     listWorkflows: () =>
       ipcRenderer.invoke(IPC_CHANNELS.workspaceListWorkflows) as ReturnType<MaxApi['workspace']['listWorkflows']>,
+    listWorkflowRuns: (workflowId: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceListWorkflowRuns, workflowId) as ReturnType<MaxApi['workspace']['listWorkflowRuns']>,
     migrateV01: (locale?: 'ar' | 'en') =>
       ipcRenderer.invoke(IPC_CHANNELS.workspaceMigrateV01, locale) as ReturnType<MaxApi['workspace']['migrateV01']>,
     previewTypeConversion: (propertyId: string, targetType: WorkspacePropertyType) =>

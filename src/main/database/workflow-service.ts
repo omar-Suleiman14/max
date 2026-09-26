@@ -11,6 +11,7 @@ import type {
   WorkflowFieldState,
   WorkflowInputSchema,
   WorkflowInputField,
+  WorkflowRunSummary,
   WorkflowStep,
   WorkspaceWorkflow,
   WorkspaceWorkflowDraft,
@@ -61,6 +62,15 @@ function workflowFromRow(row: WorkflowRow): WorkspaceWorkflow {
     updatedAt: row.updated_at,
     version: row.version,
   };
+}
+
+function safeRunMessage(message: string): string {
+  const detail = message.slice(0, 240);
+  // Configured validation messages are arbitrary author text. Do not echo a
+  // credential-shaped value in run history or an execution error.
+  return /\b(?:token|secret|password|credential|authorization|api[_ -]?key|bearer|private[_ -]?key)\b/i.test(detail)
+    || /[A-Za-z0-9_-]{32,}/.test(detail)
+    ? 'The run failed. Details were hidden to protect sensitive data.' : detail;
 }
 
 export class WorkflowService {
@@ -164,6 +174,29 @@ export class WorkflowService {
       .all() as WorkflowRow[];
 
     return rows.map(workflowFromRow);
+  }
+
+  listWorkflowRuns(workflowId: string): readonly WorkflowRunSummary[] {
+    if (!this.getWorkflow(workflowId)) throw new WorkspaceDomainError('not-found', 'Workflow not found.');
+    type RunRow = { id: string; workflow_id: string; workflow_version: number; status: WorkflowRunSummary['status']; started_at: string; completed_at: string | null; error_json: string | null };
+    const rows = this.#database.prepare(`
+      SELECT id, workflow_id, workflow_version, status, started_at, completed_at, error_json
+      FROM workspace_workflow_runs WHERE workflow_id = ? ORDER BY started_at DESC, rowid DESC LIMIT 20
+    `).all(workflowId) as RunRow[];
+    return rows.map((row) => {
+      const error = parseStoredJson<unknown>(row.error_json, {});
+      const raw = error && typeof error === 'object' && 'message' in error && typeof error.message === 'string' ? error.message : '';
+      const step = /^Step (\d+):\s*/.exec(raw);
+      // Never send input_json, result_json, or a message resembling a credential
+      // across IPC. A workflow author can set their own validation message.
+      const detail = raw.replace(/^Step \d+:\s*/, '');
+      return {
+        id: row.id, workflowId: row.workflow_id, workflowVersion: row.workflow_version,
+        status: row.status, startedAt: row.started_at, completedAt: row.completed_at,
+        ...(step ? { stepNumber: Number(step[1]) } : {}),
+        ...(raw ? { message: safeRunMessage(detail) } : {}),
+      };
+    });
   }
 
   updateWorkflow(id: string, patch: Partial<WorkspaceWorkflowDraft>): WorkspaceWorkflow {
@@ -358,7 +391,9 @@ export class WorkflowService {
       return this.#unitOfWork.run(() => perform(true));
     } catch (error) {
       const completedAt = new Date().toISOString();
-      const errMessage = error instanceof WorkspaceDomainError ? error.message : 'Action failed. No changes were saved.';
+      const rawError = error instanceof WorkspaceDomainError ? error.message : 'Action failed. No changes were saved.';
+      const failedStep = /^(Step \d+:\s*)/.exec(rawError)?.[1] ?? '';
+      const errMessage = failedStep + safeRunMessage(rawError.slice(failedStep.length));
       this.#database.prepare(`
         INSERT INTO workspace_workflow_runs (
           id, workflow_id, workflow_version, status, input_json, result_json, actor_id, started_at, completed_at, error_json

@@ -8,6 +8,7 @@ import { hasReactiveFields } from './reactive-config';
 import { listMissing, missingRequiredInputs } from './required-inputs';
 import { WorkflowInputForm } from './workflow-input-form';
 import { resultOutputs } from './result-outputs';
+import { WorkflowRunHistory } from './workflow-run-history';
 import './quick-actions.css';
 
 export type QuickActionFormProps = Readonly<{
@@ -41,6 +42,7 @@ export function QuickActionForm({ action, locale, onBusyChange, onEnabled, onOpe
   const [outputs, setOutputs] = useState<readonly (readonly [string, string])[]>([]);
   const [running, setRunning] = useState(false);
   const [enabling, setEnabling] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [formInstance, setFormInstance] = useState(0);
   const lock = useRef(false);
   const blocked = !action.enabled;
@@ -86,7 +88,7 @@ export function QuickActionForm({ action, locale, onBusyChange, onEnabled, onOpe
     setDone(false);
     try {
       const result = await window.maxApi.workspace.executeWorkflow({ workflowId: action.id, inputs: values });
-      if (!result.ok) setError(result.error.message);
+      if (!result.ok) { setError(result.error.message); setShowHistory(false); }
       else {
         rememberInputs(action.id, values);
         window.dispatchEvent(new Event('max:workspace-changed'));
@@ -136,6 +138,8 @@ export function QuickActionForm({ action, locale, onBusyChange, onEnabled, onOpe
     <div className="quick-action-form">
       <p aria-live="polite" className="quick-action-form__done" data-shown={done || undefined}>{done ? (ar ? 'تم · جاهز للتالي' : 'Done · ready for the next one') : ''}</p>
       {outputs.length > 0 && <dl aria-label={ar ? 'النتيجة' : 'Result'} className="quick-action-form__result">{outputs.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>}
+      <button type="button" className="quick-action-form__history-button" aria-expanded={showHistory} onClick={() => setShowHistory((open) => !open)}>{ar ? 'سجل التنفيذ' : 'Run history'}</button>
+      {showHistory && <WorkflowRunHistory key={`${action.id}:${formInstance}`} workflow={action} locale={locale} />}
       {hasReactiveFields(action.inputSchema) ? (
         <ReactiveActionForm
           key={`${action.id}:${formInstance}`}

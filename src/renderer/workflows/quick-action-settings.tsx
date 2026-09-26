@@ -14,6 +14,7 @@ import { Select } from '../ui/select';
 import { ActionValueEditor, type ValueChoice } from './action-value-editor';
 import './quick-actions.css';
 import { configFor, draftFromJson, draftToJson, stepLabels, stepTypes } from './workflow-draft';
+import { WorkflowRunHistory } from './workflow-run-history';
 
 const empty = (): WorkspaceWorkflowDraft => ({ name: '', enabled: true, icon: '', inputSchema: { fields: [] }, steps: [] });
 const literal = (value: unknown): WorkflowValue => ({ source: 'literal', value });
@@ -30,6 +31,7 @@ export function QuickActionSettings({ locale }: { locale: Locale }) {
   // The JSON view is for developers; ordinary authoring never needs it.
   const [json, setJson] = useState<string>();
   const [jsonError, setJsonError] = useState('');
+  const [historyId, setHistoryId] = useState<string>();
   const iconButtonRef = useRef<HTMLButtonElement>(null);
   const reload = () => window.maxApi.workspace.listWorkflows().then(setActions);
   useEffect(() => {
@@ -132,10 +134,12 @@ export function QuickActionSettings({ locale }: { locale: Locale }) {
     {error && <p role="alert">{error}</p>}
     {!draft ? <>
       {!actions.length && <p>{ar ? 'لا توجد إجراءات سريعة بعد.' : 'No quick actions yet.'}</p>}
-      {actions.map((action, index) => <div className="action-list-row" key={action.id}>
+      {actions.map((action, index) => <div className="action-list-row" key={action.id} role="group" aria-label={action.name}>
+        <button type="button" aria-label={ar ? 'سجل التنفيذ' : 'Run history'} aria-expanded={historyId === action.id} onClick={() => setHistoryId(historyId === action.id ? undefined : action.id)}>{ar ? 'السجل' : 'History'}</button>
         <button type="button" onClick={() => { setDraft(action); setError(''); }}><strong><PageIconRenderer icon={action.icon || 'lucide:Zap'} size={16} /> {action.name}</strong><small>{action.inputSchema.fields.length} {ar ? 'مدخلات' : 'inputs'} · {action.steps.length} {ar ? 'خطوات' : 'steps'}{!action.enabled && (ar ? ' · معطل' : ' · Disabled')}</small></button>
         <button type="button" disabled={index === 0 || saving} aria-label={ar ? 'تحريك لأعلى' : 'Move up'} onClick={() => { const previous = actions[index - 1]; if (!previous) return; setSaving(true); void window.maxApi.workspace.updateWorkflow(action.id, { positionKey: generateOrderKey(actions[index - 2]?.positionKey, previous.positionKey) }).then(async (result) => { if (!result.ok) setError(result.error.message); await reload(); }).finally(() => setSaving(false)); }}>↑</button>
       </div>)}
+      {historyId && actions.find((action) => action.id === historyId) && <WorkflowRunHistory key={historyId} workflow={actions.find((action) => action.id === historyId)!} locale={locale} />}
       <button type="button" className="btn btn-secondary" onClick={() => { setDraft(empty()); setError(''); }}>{ar ? '+ إجراء سريع' : '+ Quick action'}</button>
     </> : <>
       <div className="action-row">

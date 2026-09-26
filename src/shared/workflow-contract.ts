@@ -108,6 +108,18 @@ export type WorkspaceWorkflowRun = Readonly<{
   workflowVersion: number;
 }>;
 
+/** Safe, bounded run metadata for the renderer. Inputs and raw JSON stay in main. */
+export type WorkflowRunSummary = Readonly<{
+  id: string;
+  workflowId: string;
+  workflowVersion: number;
+  status: WorkflowRunStatus;
+  startedAt: string;
+  completedAt?: string | null;
+  stepNumber?: number;
+  message?: string;
+}>;
+
 export type WorkflowExecutionInput = Readonly<{
   actorId?: string;
   inputs: Readonly<Record<string, unknown>>;

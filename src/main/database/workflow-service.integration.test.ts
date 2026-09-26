@@ -83,6 +83,20 @@ describe('Generic workspace actions', () => {
     expect(db.records.getRecord(s.b.id)?.properties[s.capacity.id]).toBe(20);
     expect(db.relations.getRelatedRecords(s.a.id, s.relation.id)).toEqual([]);
     expect(db.workspaceSearch.search('Event').filter((r) => r.entityKind === 'record')).toEqual([]);
+    const [run] = db.workflows.listWorkflowRuns(action.id);
+    expect(run).toMatchObject({ status: 'failed', stepNumber: 8, message: 'Forced failure' });
+    expect(run).not.toHaveProperty('inputJson');
+    expect(run).not.toHaveProperty('resultJson');
+  });
+
+  it('returns only safe run summaries when a configured error resembles a credential', () => {
+    const db = workspace();
+    const action = db.workflows.createWorkflow({ name: 'Check', inputSchema: { fields: [] }, steps: [{ type: 'VALIDATE', config: { condition: 'false', errorMessage: 'token: abcdefghijklmnopqrstuvwxyz0123456789' } }] });
+    expect(() => db.workflows.execute({ workflowId: action.id, inputs: { password: 'hidden input' } })).toThrow('Details were hidden');
+    const [run] = db.workflows.listWorkflowRuns(action.id);
+    expect(run?.message).toBe('The run failed. Details were hidden to protect sensitive data.');
+    expect(JSON.stringify(run)).not.toContain('hidden input');
+    expect(JSON.stringify(run)).not.toContain('abcdefghijklmnopqrstuvwxyz');
   });
 
   it('isolates definitions, inputs, lookups and updates from other workspace files', () => {
