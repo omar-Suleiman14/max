@@ -331,6 +331,10 @@ export class WorkspaceRepository {
     const pages = this.listPages();
     const activeIds = new Set(pages.map((page) => page.id));
     const pagesById = new Map(pages.map((page) => [page.id, page] as const));
+    const targetsBySource = pages.map((page) => ({ sourceId: page.id, targets: pageLinkTargets(page.contentJson) }));
+    const archivedTitles = new Map((this.#database
+      .prepare("SELECT id, title FROM workspace_nodes WHERE kind = 'page' AND archived_at IS NOT NULL")
+      .all() as { id: string; title: string }[]).map((row) => [row.id, row.title] as const));
     const workspacePath = (page: WorkspaceNode): string => {
       const parts = [page.title];
       const visited = new Set([page.id]);
@@ -358,7 +362,11 @@ export class WorkspaceRepository {
           text,
         };
       }),
-      links: pages.flatMap((page) => pageLinkTargets(page.contentJson).filter((id) => activeIds.has(id)).map((targetId) => ({ sourceId: page.id, targetId }))),
+      links: targetsBySource.flatMap(({ sourceId, targets }) => targets.filter((id) => activeIds.has(id)).map((targetId) => ({ sourceId, targetId }))),
+      brokenLinks: targetsBySource.flatMap(({ sourceId, targets }) => targets.filter((id) => !activeIds.has(id)).map((targetId) => {
+        const archived = archivedTitles.get(targetId);
+        return archived === undefined ? { sourceId, state: 'deleted' as const, targetId } : { sourceId, state: 'archived' as const, targetId, title: archived };
+      })),
     };
   }
 

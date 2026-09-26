@@ -13,7 +13,14 @@ export type PageGraph = Readonly<{
     text?: string;
   }>[];
   links: readonly Readonly<{ sourceId: string; targetId: string }>[];
+  /**
+   * Links from an active page to a page that is in Trash or no longer exists.
+   * They are reported rather than dropped so the page can show them as such.
+   */
+  brokenLinks?: readonly BrokenPageLink[];
 }>;
+
+export type BrokenPageLink = Readonly<{ sourceId: string; targetId: string; state: 'archived' | 'deleted'; title?: string }>;
 
 export function pageGraphMetadata(contentJson: string): Readonly<{ properties: readonly Readonly<{ name: string; value: string }>[]; text: string }> {
   try {
