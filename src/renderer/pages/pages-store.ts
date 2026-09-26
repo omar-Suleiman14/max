@@ -9,7 +9,7 @@ const LEGACY_TRASHED_PAGES_KEY = 'max:trashed_pages';
 
 function fromWorkspacePage(page: WorkspaceNode): CustomPage {
   const { document, metadata, readOnlySource } = parsePageDocument(page.contentJson);
-  const layout = metadata as { cover?: unknown; favorite?: boolean; wiki?: boolean; properties?: CustomPage['properties'] };
+  const layout = metadata as { cover?: unknown; favorite?: boolean; favoriteKey?: unknown; wiki?: boolean; properties?: CustomPage['properties'] };
   return {
     documentMetadata: metadata,
     documentEnvelope: document,
@@ -19,6 +19,7 @@ function fromWorkspacePage(page: WorkspaceNode): CustomPage {
     cover: parseCover(layout.cover),
     createdAt: page.createdAt,
     favorite: layout.favorite,
+    favoriteKey: typeof layout.favoriteKey === 'string' ? layout.favoriteKey : undefined,
     icon: page.icon ?? 'lucide:FileText',
     id: page.id,
     parentNodeId: page.parentNodeId,
@@ -33,7 +34,7 @@ function toWorkspacePatch(page: CustomPage) {
   return {
     contentJson: page.readOnlySource ?? serializePageDocument({
       document: { ...page.documentEnvelope, ...legacyBlocksToMaxDocument(page.blocks) },
-      metadata: { ...page.documentMetadata, cover: page.cover, favorite: page.favorite ?? false, properties: page.properties ?? [], wiki: page.wiki ?? false },
+      metadata: { ...page.documentMetadata, cover: page.cover, favorite: page.favorite ?? false, favoriteKey: page.favorite ? page.favoriteKey : undefined, properties: page.properties ?? [], wiki: page.wiki ?? false },
     }),
     icon: page.icon,
     parentNodeId: page.parentNodeId,

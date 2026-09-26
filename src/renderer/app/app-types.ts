@@ -28,6 +28,8 @@ export type CustomPage = Readonly<{
   icon: string;
   id: string;
   favorite?: boolean;
+  /** Order among favourites; a fractional order key kept in the page metadata. */
+  favoriteKey?: string;
   parentNodeId?: string | null;
   positionKey?: string;
   title: string;
