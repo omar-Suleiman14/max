@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- BlockNote block specs, the schema, the editor context and the keyboard extension are module-level objects, not components. */
 /**
  * The BlockNote schema Max edits pages with.
  *
