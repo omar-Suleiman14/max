@@ -272,17 +272,19 @@ function PageMention({ label, pageId }: { label: string; pageId: string }) {
   const page = graph.pages.find((candidate) => candidate.id === pageId);
   const loaded = graph.pages.length > 0;
   const missing = loaded && !page;
+  const archived = missing && graph.brokenLinks?.some((link) => link.targetId === pageId && link.state === 'archived');
   const ar = locale === 'ar';
   const text = page?.title || inlinePlainText(label) || (ar ? 'صفحة' : 'Page');
+  const status = archived ? (ar ? 'في سلة المهملات' : 'in Trash') : (ar ? 'محذوفة' : 'deleted');
   return <a
-    aria-label={missing ? (ar ? `${text}، صفحة غير متاحة` : `${text}, page unavailable`) : undefined}
+    aria-label={missing ? `${text}${ar ? '، ' : ', '}${status}` : undefined}
     className="max-page-mention"
     contentEditable={false}
-    data-missing={missing || undefined}
+    data-missing={missing ? (archived ? 'archived' : 'deleted') : undefined}
     data-page-id={pageId}
     href="#"
     onClick={(event) => { event.preventDefault(); if (!missing) openPage(pageId); }}
-    title={missing ? (ar ? 'هذه الصفحة محذوفة أو مؤرشفة' : 'This page was deleted or archived') : undefined}
+    title={missing ? (archived ? (ar ? 'هذه الصفحة في سلة المهملات' : 'This page is in Trash') : (ar ? 'هذه الصفحة محذوفة' : 'This page was deleted')) : undefined}
   >
     {missing ? <FileText aria-hidden="true" size={13} /> : <Link2 aria-hidden="true" size={13} />}
     {text}

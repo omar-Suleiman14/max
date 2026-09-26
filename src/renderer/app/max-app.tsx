@@ -1,4 +1,5 @@
 import { useWorkspaceDisplay } from '../pages/workspace-display-preferences';
+import { NavigationHistory } from '../pages/navigation-history';
 import { useAppearance } from './appearance';
 import { readSessionValue, usePagePosition } from './page-session';
 import { LegacyDatabaseLink } from '../databases/LegacyDatabaseLink';
@@ -645,6 +646,7 @@ export function MaxApp() {
             {sidebarCollapsed && <button className="topbar-tool sidebar-reopen" type="button" aria-label={translate(locale, 'expandSidebar')} aria-expanded={false} aria-keyshortcuts={`${runtimePlatform === 'macos' ? 'Meta' : 'Control'}+b`} title={`${translate(locale, 'expandSidebar')} (${quickActionModifier(runtimePlatform)} B)`} onClick={toggleSidebar}>
               {locale === 'ar' ? <PanelRight aria-hidden="true" size={17} /> : <PanelLeft aria-hidden="true" size={17} />}
             </button>}
+            {page !== 'settings' && <NavigationHistory locale={locale} page={page} onNavigate={(next) => navigate(next)} />}
             {graphEnabled && page !== 'settings' && <button type="button" className="topbar-tool" aria-pressed={graphOpen} aria-keyshortcuts={`${runtimePlatform === 'macos' ? 'Meta' : 'Control'}+g`} onClick={() => setGraphOpen(value => !value)}><Waypoints size={17}/><span>{locale === 'ar' ? 'خريطة' : 'Graph'}</span><kbd>{quickActionModifier(runtimePlatform)} G</kbd></button>}
             {page !== 'settings' && (
               <button className="topbar-tool" aria-keyshortcuts={`${runtimePlatform === 'macos' ? 'Meta' : 'Control'}+k`} onClick={() => openPopup('search')} type="button">
