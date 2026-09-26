@@ -3,7 +3,8 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createNavigationHistory, NavigationHistory } from './navigation-history';
+import { NavigationHistory } from './navigation-history';
+import { createNavigationHistory } from './navigation-history-store';
 
 afterEach(cleanup);
 
