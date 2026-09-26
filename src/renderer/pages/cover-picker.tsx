@@ -1,5 +1,6 @@
 import { Link2, Upload } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
+import { useOverlayFocus, useOverlayLayer } from '../ui/overlay-stack';
 
 import { COVER_GALLERY, MET_JAPANESE_PRINTS, MET_LANDSCAPES, MET_PORTRAITS, MET_STILL_LIFES, type CoverArtwork, type PageCover } from '../../shared/cover-contract';
 import type { Locale } from '../app/i18n';
@@ -51,13 +52,8 @@ export function CoverPicker({ locale, onClose, onPick, onRemove, hasCover }: {
   const file = useRef<HTMLInputElement>(null);
   const root = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const dismiss = (event: PointerEvent) => {
-      if (event.target instanceof Node && !root.current?.contains(event.target)) onClose();
-    };
-    document.addEventListener('pointerdown', dismiss);
-    return () => document.removeEventListener('pointerdown', dismiss);
-  }, [onClose]);
+  useOverlayLayer(root, { onClose });
+  useOverlayFocus(root);
 
   const settle = async (work: () => Promise<{ ok: true; value: { url: string } } | { ok: false; error: { message: string } }>, credit?: PageCover['credit']) => {
     if (busy) return;
@@ -99,7 +95,7 @@ export function CoverPicker({ locale, onClose, onPick, onRemove, hasCover }: {
   ];
 
   return (
-    <div className="cover-picker" ref={root} role="dialog" aria-label={ar ? 'اختيار الغلاف' : 'Choose a cover'} onKeyDown={(event) => { if (event.key === 'Escape') { event.stopPropagation(); onClose(); } }}>
+    <div className="cover-picker" ref={root} role="dialog" aria-label={ar ? 'اختيار الغلاف' : 'Choose a cover'}>
       <header className="cover-picker__tabs">
         <div role="tablist" aria-label={ar ? 'مصدر الغلاف' : 'Cover source'}>
           {tabs.map((entry) => (
