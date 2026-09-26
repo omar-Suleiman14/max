@@ -101,6 +101,54 @@ Astra should return incomplete work to Opus or Terra rather than fixing large
 implementation problems itself. Use Astra's expensive context for review and
 release decisions, not routine coding.
 
+## Working through a task
+
+These practices adapt the owner-supplied article
+[Getting the most out of Opus 5.5](https://claude.dev/blog/getting-the-most-out-of-opus-5-5/).
+They apply across agents without changing model authority or release permissions.
+
+- Start with the whole requested outcome, the acceptance criteria, the scope
+  boundaries and the conditions that genuinely require owner input. For an
+  implementation agent, done means ready for Review, not merged or released.
+- Keep going when the next authorized step needs no input. Pair a short status
+  update with the next action; do not stop at a plan, an offer to continue or a
+  choice that does not block the work. Respect explicit review handoffs.
+- Ask when a missing decision blocks safe progress, or before an unapproved
+  destructive action such as deleting user data, force-pushing or making an
+  irreversible production change. Do not infer permission to change another
+  repository or service. Previously authorized issue, branch and PR operations
+  remain authorized within their scope.
+- Treat mid-run follow-ups as refinements of the active task unless the owner
+  explicitly replaces it. Preserve accepted constraints and completed work.
+- For long work, maintain a task-scoped checklist in the GitHub issue or PR.
+  If a local checkpoint is needed, keep it temporary and include source links,
+  completed steps, evidence, blockers and the next action. It is execution state,
+  never a competing roadmap or a permanent repository TASKS.md.
+- Split large audits, migrations and reviews into bounded subagent tasks when
+  supported. Use the permitted model roles, avoid overlapping edits and verify
+  each agent's evidence before accepting its report. If a required model is
+  unavailable, state that limitation rather than impersonating it.
+- Follow the established Max design system. Honor concrete design exclusions
+  supplied by the owner; do not import the article's example aesthetic bans as
+  universal Max rules. Inspect supplied screenshots and diagrams directly.
+- Do not add ritual prompts such as "think hard" or requests for private
+  internal reasoning. Ask for concise decisions, evidence and tradeoffs instead.
+- Review the diff before handoff. Report actionable merge-blocking defects with
+  file and line, impact and a reproduction or test. An implementation self-review
+  does not replace Astra's final acceptance review or the required checks.
+- Distinguish implemented, tested, inferred and unconfirmed claims. Say what
+  could not be verified and where you looked. An open issue can already have
+  merged work; inspect it before proposing duplicate implementation.
+- Report owner decisions or blockers first when present, followed by changes,
+  findings, checks actually run and incomplete acceptance criteria. Deliver the
+  requested artifact, not merely an outline or an offer to create it.
+- Treat settled answers as settled unless new evidence, a contradiction or an
+  owner correction requires revisiting them. Do not repeatedly restart research.
+
+Model-picker, effort, fast-mode and safeguard settings are user-controlled.
+This contract does not authorize changing them, increasing paid usage or
+bypassing safeguards.
+
 ## Branch workflow
 
 Use feature branches. Do not group unrelated issues into one branch.
