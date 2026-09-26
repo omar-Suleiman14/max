@@ -259,7 +259,8 @@ a:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 68%, trans
 .nav-item__expand { display: none; width: 19px; height: 22px; place-items: center; border-radius: 4px; color: var(--muted); }
 .nav-item__expand:hover { color: var(--text); background: color-mix(in srgb, var(--text) 8%, transparent); }
 .nav-item:hover .nav-item__icon-slot:has(.nav-item__expand) .nav-item__custom-icon { display: none; }
-.nav-item:hover .nav-item__expand { display: grid; }
+.nav-item:is(:hover, :focus-visible) .nav-item__expand { display: grid; }
+.nav-item:focus-visible .nav-item__icon-slot:has(.nav-item__expand) .nav-item__custom-icon { display: none; }
 .nav-item__menu-trigger { position: absolute; inset-block-start: 4px; inset-inline-end: 4px; display: grid; width: 25px; height: 25px; place-items: center; padding: 0; border: 0; border-radius: 4px; opacity: 0; color: var(--muted); background: var(--sidebar); cursor: pointer; }
 .sidebar-page-tree:hover > .nav-item__menu-trigger,
 .nav-item__menu-trigger:focus-visible { opacity: 1; }
@@ -2334,8 +2335,8 @@ kbd { display: inline-flex; min-width: 23px; min-height: 20px; align-items: cent
 .nav-item[data-drag-over="true"] {
   background: var(--canvas-subtle);
 }
-.sidebar-page-tree[data-drop-edge="before"]::before,
-.sidebar-page-tree[data-drop-edge="after"]::after {
+:is(.sidebar-page-tree, .sidebar-favorite-row)[data-drop-edge="before"]::before,
+:is(.sidebar-page-tree, .sidebar-favorite-row)[data-drop-edge="after"]::after {
   content: '';
   position: absolute;
   z-index: 4;
@@ -2345,8 +2346,14 @@ kbd { display: inline-flex; min-width: 23px; min-height: 20px; align-items: cent
   background: var(--accent);
   pointer-events: none;
 }
-.sidebar-page-tree[data-drop-edge="before"]::before { inset-block-start: -1px; }
-.sidebar-page-tree[data-drop-edge="after"]::after { inset-block-end: -1px; }
+:is(.sidebar-page-tree, .sidebar-favorite-row)[data-drop-edge="before"]::before { inset-block-start: -1px; }
+:is(.sidebar-page-tree, .sidebar-favorite-row)[data-drop-edge="after"]::after { inset-block-end: -1px; }
+/* Dropping on the middle of a page nests the dragged row inside it. */
+.sidebar-page-tree[data-drop-edge="inside"] > .nav-item { background: color-mix(in srgb, var(--accent) 14%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent); }
+.sidebar-trash-notice { display: flex; align-items: center; gap: 6px; margin: 8px 6px 0; padding: 7px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--canvas-subtle); color: var(--text-soft); font-size: 12px; }
+.sidebar-trash-notice span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar-trash-notice button { border: 0; background: transparent; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; padding: 2px 4px; border-radius: 4px; }
+.sidebar-trash-notice button:last-child { color: var(--muted); display: inline-grid; place-items: center; }
 
 /* Notion Stacked Group Sections */
 .database-stacked-groups {

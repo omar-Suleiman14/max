@@ -715,7 +715,9 @@ describe('Max shell', () => {
     const user = userEvent.setup();
     render(<MaxApp />);
 
-    await user.click(await screen.findByRole('button', { name: 'Show Phone shop contents' }));
+    // The row carries aria-expanded; Right opens it, as the chevron does for a pointer.
+    (await screen.findByRole('button', { expanded: false, name: 'Phone shop' })).focus();
+    await user.keyboard('{ArrowRight}');
     // The database belongs to the page it was created in, so it is listed under
     // that page rather than as a top-level sidebar entry.
     expect(await screen.findByRole('button', { name: 'Products' })).toBeInTheDocument();

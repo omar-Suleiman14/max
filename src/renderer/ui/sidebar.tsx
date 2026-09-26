@@ -13,6 +13,7 @@ import {
   PanelLeft,
   PanelRight,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Copy,
   Database,
@@ -25,14 +26,17 @@ import {
   Star,
   LayoutGrid,
   Trash2,
+  X,
   type LucideIcon,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 
 import type { AppPage, CustomPage, SettingsSectionId } from '../app/app-types';
 import { type Locale, translate } from '../app/i18n';
 import type { NavigationItem } from '../../shared/workspace-contract';
 import { PageIconRenderer } from './page-icon-renderer';
+import { byKey, orderFavorites, planFavoriteMove, planMove, planStep, type DropEdge, type NodeMove, type TreeNode } from '../../shared/tree-order';
+import { readSidebarExpanded, writeSidebarExpanded } from '../app/preferences';
 
 type SidebarProps = Readonly<{
   collapsed: boolean;
@@ -43,16 +47,20 @@ type SidebarProps = Readonly<{
   onAddCustomPage: () => void;
   onAddSubpage: (parentId: string) => void;
   onCollapse: () => void;
-  onDeletePage: (id: string) => void;
+  onDeletePage: (id: string) => void | Promise<boolean>;
   onDuplicatePage: (id: string) => void;
   onNavigate: (page: AppPage) => void;
   onNavigateView: (databaseId: string, viewId: string) => void;
   onOpenSettings: () => void;
+  /** Renames a page or a database. */
   onRenamePage: (id: string, title: string) => void;
+  onRestoreNode?: (id: string) => void | Promise<unknown>;
+  onReorderFavorites?: (keys: ReadonlyMap<string, string>) => void;
   onResize: (width: number) => void;
   onSettingsSectionChange: (section: SettingsSectionId) => void;
   onToggleFavorite: (id: string, favorite: boolean) => void;
-  onReorderNodes: (orderedIds: string[], movedId?: string, parentNodeId?: string | null) => void;
+  /** Writes planned position changes; usually one node with a fractional key. */
+  onMoveNodes: (moves: readonly NodeMove[]) => void;
   onUpdateClick?: () => void;
   page: AppPage;
   settingsSection: SettingsSectionId;
@@ -133,7 +141,9 @@ export function Sidebar({
   onResize,
   onSettingsSectionChange,
   onToggleFavorite,
-  onReorderNodes,
+  onMoveNodes,
+  onReorderFavorites,
+  onRestoreNode,
   onUpdateClick,
   page,
   settingsSection,
@@ -141,11 +151,12 @@ export function Sidebar({
   width,
   runtimePlatform,
 }: SidebarProps) {
-  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
-  const [dragOverEdge, setDragOverEdge] = useState<'after' | 'before'>('before');
-  const [expandedPageIds, setExpandedPageIds] = useState<ReadonlySet<string>>(new Set());
-  const [menuPageId, setMenuPageId] = useState<string>();
+  const [dragged, setDragged] = useState<Readonly<{ id: string; list: 'favorites' | 'tree' }>>();
+  const [dropTarget, setDropTarget] = useState<Readonly<{ edge: DropEdge; id: string }>>();
+  const [expandedPageIds, setExpandedPageIds] = useState<ReadonlySet<string>>(() => readSidebarExpanded(window.localStorage));
+  // The menu is keyed by list as well as id: a favourite and its tree row are two places.
+  const [menu, setMenu] = useState<Readonly<{ id: string; list: 'favorites' | 'tree' }>>();
+  const [trashed, setTrashed] = useState<Readonly<{ id: string; title: string }>>();
   // Renaming happens in the row itself. It used to call window.prompt, which
   // Electron does not implement: the dialog never appeared, the call returned
   // null, and the menu item looked like it simply did nothing.
@@ -153,10 +164,9 @@ export function Sidebar({
   const [renameDraft, setRenameDraft] = useState('');
   const [legacyViewNames, setLegacyViewNames] = useState<Readonly<Record<string, readonly { id: string; name: string }[]>>>({});
   const [databaseViewNames, setDatabaseViewNames] = useState<Readonly<Record<string, readonly { id: string; name: string }[]>>>({});
-  const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const resizeStartRef = useRef<{ pointerId: number; startWidth: number; startX: number } | undefined>(undefined);
 
-  const favoritePages = customPages.filter((candidate) => candidate.favorite);
+  const favoritePages = orderFavorites(customPages.filter((candidate) => candidate.favorite));
   const updateBusy = updateState && ['checking', 'downloading', 'installing'].includes(updateState.state);
   const updateLabel = updateState?.state === 'checking' ? (locale === 'ar' ? 'جارٍ البحث…' : 'Checking for updates…')
     : updateState?.state === 'installing' ? (locale === 'ar' ? 'جارٍ إعادة التشغيل…' : 'Restarting to install…')
@@ -189,27 +199,48 @@ export function Sidebar({
   }, [databases]);
 
   useEffect(() => {
-    if (!menuPageId) return;
+    if (!menu) return;
     const closeOnPointerDown = (event: MouseEvent) => {
       if (event.target instanceof Element && event.target.closest('.sidebar-page-menu, .nav-item__menu-trigger')) return;
-      setMenuPageId(undefined);
-    };
-    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
-      if (event.key === 'Escape') setMenuPageId(undefined);
+      setMenu(undefined);
     };
     document.addEventListener('mousedown', closeOnPointerDown);
-    document.addEventListener('keydown', closeOnEscape);
-    return () => {
-      document.removeEventListener('mousedown', closeOnPointerDown);
-      document.removeEventListener('keydown', closeOnEscape);
-    };
-  }, [menuPageId]);
+    return () => document.removeEventListener('mousedown', closeOnPointerDown);
+  }, [menu]);
+
+  useEffect(() => { writeSidebarExpanded(window.localStorage, expandedPageIds); }, [expandedPageIds]);
+
+  function toggleExpanded(id: string, open?: boolean) {
+    setExpandedPageIds((current) => {
+      const isOpen = current.has(id);
+      if (open === isOpen) return current;
+      const next = new Set(current);
+      if (isOpen) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function focusRow(selector: string) {
+    requestAnimationFrame(() => document.querySelector<HTMLElement>(selector)?.focus());
+  }
+
+  function closeMenu(returnFocus: boolean) {
+    const current = menu;
+    setMenu(undefined);
+    if (returnFocus && current) focusRow(current.list === 'favorites' ? `[data-sidebar-favorite="${current.id}"]` : `[data-sidebar-row="${current.id}"]`);
+  }
+
+  async function moveToTrash(id: string, title: string) {
+    const moved = await onDeletePage(id);
+    if (moved !== false) setTrashed({ id, title });
+  }
 
 
 
-  function moveFocus(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+  function moveFocus(event: KeyboardEvent<HTMLButtonElement>) {
     if (!['ArrowDown', 'ArrowUp', 'End', 'Home'].includes(event.key)) return;
-    const items = itemRefs.current.filter((item): item is HTMLButtonElement => item !== null);
+    const items = [...(event.currentTarget.closest('.sidebar__scroll')?.querySelectorAll<HTMLButtonElement>('[data-sidebar-row], [data-sidebar-favorite]') ?? [])];
+    const index = items.indexOf(event.currentTarget);
     if (items.length === 0) return;
     const lastIndex = items.length - 1;
     let nextIndex = index;
@@ -221,57 +252,83 @@ export function Sidebar({
     items[nextIndex]?.focus();
   }
 
-  function handleDragStart(event: React.DragEvent, index: number) {
-    event.dataTransfer.effectAllowed = 'move';
-    event.dataTransfer.setData('text/plain', rootRows[index]?.id ?? '');
-    setDragPreview(event.dataTransfer, event.currentTarget as HTMLElement);
-    setDraggedIndex(index);
+  function dropEdge(event: React.DragEvent, allowInside: boolean): DropEdge {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const offset = (event.clientY - rect.top) / Math.max(1, rect.height);
+    if (allowInside && offset > .25 && offset < .75) return 'inside';
+    return offset >= .5 ? 'after' : 'before';
   }
 
-  function handleDragOver(event: React.DragEvent, index: number) {
+  function handleDragStart(event: React.DragEvent, id: string, list: 'favorites' | 'tree') {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', id);
+    setDragPreview(event.dataTransfer, event.currentTarget as HTMLElement);
+    setDragged({ id, list });
+  }
+
+  function handleDragOver(event: React.DragEvent, id: string, list: 'favorites' | 'tree', allowInside: boolean) {
+    if (dragged?.list !== list) return;
     event.preventDefault();
     autoScrollDuringDrag(event.currentTarget as HTMLElement, event.clientY);
     event.dataTransfer.dropEffect = 'move';
-    const rect = event.currentTarget.getBoundingClientRect();
-    setDragOverEdge(event.clientY >= rect.top + rect.height / 2 ? 'after' : 'before');
-    if (dragOverIndex !== index) {
-      setDragOverIndex(index);
-    }
+    const edge = dropEdge(event, allowInside && list === 'tree');
+    if (dropTarget?.id !== id || dropTarget.edge !== edge) setDropTarget({ edge, id });
   }
 
-  function handleDrop(targetIndex: number) {
-    if (draggedIndex === null || draggedIndex === targetIndex) {
-      setDraggedIndex(null);
-      setDragOverIndex(null);
+  function endDrag() { setDragged(undefined); setDropTarget(undefined); }
+
+  function handleDrop(targetId: string) {
+    const source = dragged;
+    const target = dropTarget;
+    endDrag();
+    if (!source || !target || source.id === targetId) return;
+    if (source.list === 'favorites') {
+      if (target.edge === 'inside') return;
+      const keys = planFavoriteMove(favoritePages, source.id, targetId, target.edge);
+      if (keys.size) onReorderFavorites?.(keys);
       return;
     }
-    const next = [...rootRows];
-    const [moved] = next.splice(draggedIndex, 1);
-    if (moved) {
-      const adjustedTarget = draggedIndex < targetIndex ? targetIndex - 1 : targetIndex;
-      const insertAt = Math.max(0, adjustedTarget + (dragOverEdge === 'after' ? 1 : 0));
-      next.splice(insertAt, 0, moved);
-      const destination = rootRows[targetIndex];
-      let parentNodeId: string | null = null;
-      if (destination && destination.depth > 0) {
-        for (let i = targetIndex - 1; i >= 0; i--) {
-          if (rootRows[i]!.depth < destination.depth) { parentNodeId = rootRows[i]!.id; break; }
-        }
-      }
-      if (parentNodeId !== moved.id) onReorderNodes(next.map(r => r.id), moved.id, parentNodeId);
+    const moves = planMove(treeNodes, source.id, targetId, target.edge);
+    if (moves.length) {
+      if (target.edge === 'inside') toggleExpanded(targetId, true);
+      onMoveNodes(moves);
     }
-    setDraggedIndex(null);
-    setDragOverIndex(null);
   }
 
-  function moveNode(index: number, direction: -1 | 1) {
-    const target = index + direction;
-    if (target < 0 || target >= rootRows.length) return;
-    const next = [...rootRows];
-    const [moved] = next.splice(index, 1);
-    if (!moved) return;
-    next.splice(target, 0, moved);
-    onReorderNodes(next.map(r => r.id));
+  function stepNode(id: string, direction: -1 | 1) {
+    const moves = planStep(treeNodes, id, direction);
+    if (moves.length) onMoveNodes(moves);
+    focusRow(`[data-sidebar-row="${id}"]`);
+  }
+
+  function stepFavorite(id: string, direction: -1 | 1) {
+    const index = favoritePages.findIndex((favorite) => favorite.id === id);
+    const neighbour = favoritePages[index + direction];
+    if (!neighbour) return;
+    const keys = planFavoriteMove(favoritePages, id, neighbour.id, direction < 0 ? 'before' : 'after');
+    if (keys.size) onReorderFavorites?.(keys);
+    focusRow(`[data-sidebar-favorite="${id}"]`);
+  }
+
+  /** Up and Down walk the rows, Right and Left open and close a row (mirrored in Arabic), Alt+Up and Alt+Down move it. */
+  function rowKeyDown(event: KeyboardEvent<HTMLButtonElement>, row: Readonly<{ id: string; hasChildren?: boolean; list: 'favorites' | 'tree' }>) {
+    if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+      event.preventDefault();
+      const direction = event.key === 'ArrowUp' ? -1 : 1;
+      if (row.list === 'favorites') stepFavorite(row.id, direction); else stepNode(row.id, direction);
+      return;
+    }
+    if ((event.shiftKey && event.key === 'F10') || event.key === 'ContextMenu') {
+      event.preventDefault();
+      setMenu({ id: row.id, list: row.list });
+      return;
+    }
+    if (row.list === 'tree' && (event.key === 'ArrowRight' || event.key === 'ArrowLeft')) {
+      const opening = (event.key === 'ArrowRight') !== (locale === 'ar');
+      if (row.hasChildren) { event.preventDefault(); toggleExpanded(row.id, opening); }
+      return;
+    }
+    moveFocus(event);
   }
 
   const workspaceRows = useMemo<readonly WorkspaceRow[]>(() => {
@@ -311,9 +368,7 @@ export function Sidebar({
       children.push(node);
       childrenByParent.set(node.parentNodeId, children);
     }
-    const sortNodes = (candidates: typeof nodes) => candidates.sort((left, right) => {
-      return left.positionKey.localeCompare(right.positionKey);
-    });
+    const sortNodes = (candidates: typeof nodes) => candidates.sort(byKey);
     for (const children of childrenByParent.values()) sortNodes(children);
 
     const rows: WorkspaceRow[] = [];
@@ -360,7 +415,29 @@ export function Sidebar({
   // session would hide most of the settings behind a filter nobody typed.
   const [settingsSearch, setSettingsSearch] = useState('');
 
-  const rootRows = useMemo(() => workspaceRows.filter((r): r is WorkspaceNodeRow => r.kind !== 'view'), [workspaceRows]);
+  /** Every page and owned database with its effective parent, for planning moves. */
+  const treeNodes = useMemo<readonly TreeNode[]>(() => {
+    const pageIds = new Set(customPages.map(({ id }) => id));
+    const owners = new Map<string, string>();
+    for (const candidate of customPages) for (const block of candidate.blocks) if (block.type === 'database-view' && block.databaseId) owners.set(block.databaseId, candidate.id);
+    return [
+      ...customPages.map((candidate) => ({ id: candidate.id, kind: 'page' as const, parentNodeId: candidate.parentNodeId ?? null, positionKey: candidate.positionKey ?? candidate.id })),
+      ...databases.flatMap((database) => {
+        const owner = owners.get(database.id) ?? (pageIds.has(database.parentNodeId ?? '') ? database.parentNodeId : undefined);
+        return owner ? [{ id: database.id, kind: 'database' as const, parentNodeId: owner, positionKey: database.positionKey }] : [];
+      }),
+    ];
+  }, [customPages, databases]);
+
+  // Opening a nested page reveals it: its ancestors expand.
+  useEffect(() => {
+    const parentOf = new Map(treeNodes.map((node) => [node.id, node.parentNodeId ?? null] as const));
+    const ancestors: string[] = [];
+    for (let current = parentOf.get(page) ?? null; current && !ancestors.includes(current); current = parentOf.get(current) ?? null) ancestors.push(current);
+    if (ancestors.some((id) => !expandedPageIds.has(id))) setExpandedPageIds((current) => new Set([...current, ...ancestors]));
+    // Only a change of page should reveal it; collapsing afterwards is the reader's choice.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, treeNodes]);
 
   const isRtl = locale === 'ar';
   const isSettings = page === 'settings';
@@ -408,6 +485,45 @@ export function Sidebar({
   const SettingsActionIcon = isSettings ? (isRtl ? ArrowRight : ArrowLeft) : Settings;
   const settingsActionLabel = translate(locale, isSettings ? 'back' : 'settings');
   const handleSettingsClick = isSettings ? onExitSettings : onOpenSettings;
+
+  /**
+   * One menu for every sidebar row. Pages, favourites and databases share it
+   * and show the actions that apply to them.
+   */
+  function renderMenu(item: Readonly<{ id: string; kind: 'database' | 'page'; page?: CustomPage; title: string }>) {
+    const ar = locale === 'ar';
+    const p = item.page;
+    const actions = [
+      ...(p ? [{ icon: Plus, id: 'subpage', label: ar ? 'إضافة صفحة فرعية' : 'Add sub-page', run: () => { toggleExpanded(item.id, true); onAddSubpage(item.id); } }] : []),
+      ...(p ? [{ icon: Star, id: 'favorite', label: p.favorite ? (ar ? 'إزالة من المفضلة' : 'Remove from favorites') : (ar ? 'إضافة للمفضلة' : 'Add to favorites'), run: () => onToggleFavorite(item.id, !p.favorite) }] : []),
+      { icon: Pencil, id: 'rename', label: ar ? 'إعادة تسمية' : 'Rename', run: () => { setRenameDraft(item.kind === 'page' ? (p?.title ?? '') : item.title); setRenamingPageId(item.id); } },
+      ...(p ? [{ icon: Copy, id: 'duplicate', label: ar ? 'إنشاء نسخة' : 'Duplicate', run: () => onDuplicatePage(item.id) }] : []),
+      { danger: true, icon: Trash2, id: 'trash', label: ar ? 'نقل إلى المهملات' : 'Move to Trash', run: () => { void moveToTrash(item.id, item.title); } },
+    ];
+    return (
+      <div
+        aria-label={item.title}
+        className="sidebar-page-menu"
+        onKeyDown={(event) => {
+          const items = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role=menuitem]')];
+          const index = items.indexOf(document.activeElement as HTMLButtonElement);
+          if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeMenu(true); }
+          else if (event.key === 'Tab') closeMenu(false);
+          else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); items[(index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length]?.focus(); }
+          else if (event.key === 'Home' || event.key === 'End') { event.preventDefault(); items[event.key === 'Home' ? 0 : items.length - 1]?.focus(); }
+        }}
+        ref={(element) => { if (element && !element.contains(document.activeElement)) element.querySelector<HTMLButtonElement>('[role=menuitem]')?.focus(); }}
+        role="menu"
+      >
+        {actions.map(({ danger, icon: Icon, id, label, run }) => <Fragment key={id}>
+          {danger && <div className="sidebar-page-menu__separator" role="separator" />}
+          <button className={danger ? 'danger' : undefined} onClick={() => { closeMenu(id !== 'rename'); run(); }} role="menuitem" tabIndex={-1} type="button">
+            <Icon fill={id === 'favorite' && p?.favorite ? 'currentColor' : 'none'} size={14} />{label}
+          </button>
+        </Fragment>)}
+      </div>
+    );
+  }
 
   return (
     <aside className="sidebar" data-collapsed={collapsed} style={collapsed ? undefined : { width }}>
@@ -487,37 +603,56 @@ export function Sidebar({
               <>
                 {!collapsed && <p className="sidebar__section-label">{locale === 'ar' ? 'المفضلة' : 'Favorites'}</p>}
                 <nav aria-label={locale === 'ar' ? 'المفضلة' : 'Favorites'} className="sidebar__nav sidebar__nav--favorites">
-                  {favoritePages.map((favorite) => (
-                    <div className="sidebar-favorite-row" key={`favorite-${favorite.id}`}>
-                      <button
-                        aria-current={page === favorite.id ? 'page' : undefined}
-                        aria-label={favorite.title.trim() || translate(locale, 'untitledPage')}
-                        className="nav-item nav-item--favorite"
-                        onClick={() => onNavigate(favorite.id)}
-                        type="button"
+                  {favoritePages.map((favorite) => {
+                    const favoriteTitle = favorite.title.trim() || translate(locale, 'untitledPage');
+                    const isDragOver = dragged?.list === 'favorites' && dropTarget?.id === favorite.id;
+                    return (
+                      <div
+                        className="sidebar-favorite-row"
+                        data-drop-edge={isDragOver ? dropTarget.edge : undefined}
+                        draggable
+                        key={`favorite-${favorite.id}`}
+                        onContextMenu={(event) => { event.preventDefault(); setMenu({ id: favorite.id, list: 'favorites' }); }}
+                        onDragEnd={endDrag}
+                        onDragOver={(event) => handleDragOver(event, favorite.id, 'favorites', false)}
+                        onDragStart={(event) => handleDragStart(event, favorite.id, 'favorites')}
+                        onDrop={(event) => { event.preventDefault(); event.stopPropagation(); handleDrop(favorite.id); }}
                       >
-                        <PageIconRenderer className="nav-item__custom-icon" fallback="lucide:Star" icon={favorite.icon || 'lucide:Star'} size={17} />
-                        {!collapsed && <span className="nav-item__title">{favorite.title.trim() || translate(locale, 'untitledPage')}</span>}
-                      </button>
-                      {!collapsed && (
                         <button
-                          aria-label={locale === 'ar' ? `إزالة ${favorite.title || 'الصفحة'} من المفضلة` : `Remove ${favorite.title || 'page'} from favorites`}
-                          className="sidebar-favorite-remove"
-                          onClick={() => onToggleFavorite(favorite.id, false)}
-                          title={locale === 'ar' ? 'إزالة من المفضلة' : 'Remove from favorites'}
+                          aria-current={page === favorite.id ? 'page' : undefined}
+                          aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown Shift+F10"
+                          aria-label={favoriteTitle}
+                          className="nav-item nav-item--favorite"
+                          data-dragging={dragged?.id === favorite.id && dragged.list === 'favorites'}
+                          data-sidebar-favorite={favorite.id}
+                          onClick={() => onNavigate(favorite.id)}
+                          onKeyDown={(event) => rowKeyDown(event, { id: favorite.id, list: 'favorites' })}
                           type="button"
                         >
-                          <Star aria-hidden="true" fill="currentColor" size={13} />
+                          <PageIconRenderer className="nav-item__custom-icon" fallback="lucide:Star" icon={favorite.icon || 'lucide:Star'} size={17} />
+                          {!collapsed && <span className="nav-item__title">{favoriteTitle}</span>}
                         </button>
-                      )}
-                    </div>
-                  ))}
+                        {!collapsed && (
+                          <button
+                            aria-label={locale === 'ar' ? `إزالة ${favorite.title || 'الصفحة'} من المفضلة` : `Remove ${favorite.title || 'page'} from favorites`}
+                            className="sidebar-favorite-remove"
+                            onClick={() => onToggleFavorite(favorite.id, false)}
+                            title={locale === 'ar' ? 'إزالة من المفضلة' : 'Remove from favorites'}
+                            type="button"
+                          >
+                            <Star aria-hidden="true" fill="currentColor" size={13} />
+                          </button>
+                        )}
+                        {menu?.list === 'favorites' && menu.id === favorite.id && renderMenu({ id: favorite.id, kind: 'page', page: favorite, title: favoriteTitle })}
+                      </div>
+                    );
+                  })}
                 </nav>
               </>
             )}
             {!collapsed && <p className="sidebar__section-label">{translate(locale, 'workspace')}</p>}
             <nav aria-label={translate(locale, 'workspace')} className="sidebar__nav">
-              {workspaceRows.map((row, visibleIndex) => {
+              {workspaceRows.map((row) => {
                 if (row.kind === 'view') {
                   return (
                     <button
@@ -536,108 +671,84 @@ export function Sidebar({
                 const p = row.page;
                 const database = row.database;
                 const isCurrent = page === row.id;
-                const rootIndex = rootRows.findIndex(({ id }) => id === row.id);
-                const isDragging = rootIndex >= 0 && draggedIndex === rootIndex;
-                const isDragOver = rootIndex >= 0 && dragOverIndex === rootIndex;
+                const isDragging = dragged?.list === 'tree' && dragged.id === row.id;
+                const isDragOver = dragged?.list === 'tree' && dropTarget?.id === row.id;
                 const title = database?.title ?? p?.title.trim() ?? '';
                 const pageTitle = title || translate(locale, 'untitledPage');
                 const icon = database?.icon ?? p?.icon ?? (row.kind === 'database' ? 'lucide:Database' : 'lucide:FileText');
+                const expanded = expandedPageIds.has(row.id);
+                const renaming = renamingPageId === row.id;
 
                 return (
                   <div
                     className="sidebar-page-tree"
-                    data-drop-edge={isDragOver ? dragOverEdge : undefined}
-                    draggable={rootIndex >= 0}
-                    title={locale === 'ar' ? 'اسحب لإعادة الترتيب' : 'Drag to reorder'}
+                    data-drop-edge={isDragOver ? dropTarget.edge : undefined}
+                    draggable={!renaming}
+                    title={locale === 'ar' ? 'اسحب لإعادة الترتيب أو إلى داخل صفحة' : 'Drag to reorder, or onto a page to nest it'}
                     key={row.id}
-                    onDragEnd={() => { setDraggedIndex(null); setDragOverIndex(null); }}
-                    onDragOver={rootIndex >= 0 ? (event) => handleDragOver(event, rootIndex) : undefined}
-                    onDragStart={(event) => { if (rootIndex >= 0) handleDragStart(event, rootIndex); }}
-                    onDrop={rootIndex >= 0 ? (event) => { event.preventDefault(); event.stopPropagation(); handleDrop(rootIndex); } : undefined}
+                    onContextMenu={(event) => { event.preventDefault(); setMenu({ id: row.id, list: 'tree' }); }}
+                    onDragEnd={endDrag}
+                    onDragOver={(event) => handleDragOver(event, row.id, 'tree', row.kind === 'page')}
+                    onDragStart={(event) => handleDragStart(event, row.id, 'tree')}
+                    onDrop={(event) => { event.preventDefault(); event.stopPropagation(); handleDrop(row.id); }}
                     style={{ '--sidebar-tree-depth': row.depth } as React.CSSProperties}
                   >
                     <button
                       aria-current={isCurrent ? 'page' : undefined}
+                      aria-expanded={row.hasChildren ? expanded : undefined}
+                      aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown Shift+F10"
                       aria-label={pageTitle}
                       className="nav-item nav-item--custom-page"
                       data-drag-over={isDragOver}
                       data-dragging={isDragging}
+                      data-sidebar-row={row.id}
                       onClick={() => onNavigate(row.id)}
-                      onKeyDown={(event) => {
-                        if (rootIndex >= 0 && event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
-                          event.preventDefault();
-                          moveNode(rootIndex, event.key === 'ArrowUp' ? -1 : 1);
-                          return;
-                        }
-                        moveFocus(event, visibleIndex);
-                      }}
-                      ref={(element) => { itemRefs.current[visibleIndex] = element; }}
+                      onKeyDown={(event) => rowKeyDown(event, { hasChildren: row.hasChildren, id: row.id, list: 'tree' })}
                       type="button"
                     >
                       <span className="nav-item__icon-slot">
                         <PageIconRenderer className="nav-item__custom-icon" fallback={row.kind === 'database' ? 'lucide:Database' : 'lucide:FileText'} icon={icon} size={18} />
                         {row.hasChildren && (
+                          // Pointer shortcut only: the row button carries aria-expanded and answers Right and Left.
                           <span
-                            aria-label={locale === 'ar' ? `إظهار محتويات ${pageTitle}` : `Show ${pageTitle} contents`}
-                            aria-expanded={expandedPageIds.has(row.id)}
+                            aria-hidden="true"
                             className="nav-item__expand"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setExpandedPageIds((current) => {
-                                const next = new Set(current);
-                                if (next.has(row.id)) next.delete(row.id); else next.add(row.id);
-                                return next;
-                              });
-                            }}
-                            onKeyDown={(event) => {
-                              if (event.key !== 'Enter' && event.key !== ' ') return;
-                              event.preventDefault();
-                              event.stopPropagation();
-                              setExpandedPageIds((current) => {
-                                const next = new Set(current);
-                                if (next.has(row.id)) next.delete(row.id); else next.add(row.id);
-                                return next;
-                              });
-                            }}
-                            role="button"
-                            tabIndex={0}
+                            onClick={(event) => { event.stopPropagation(); toggleExpanded(row.id); }}
                           >
-                            {expandedPageIds.has(row.id) ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                            {expanded ? <ChevronDown size={15} /> : (locale === 'ar' ? <ChevronLeft size={15} /> : <ChevronRight size={15} />)}
                           </span>
                         )}
                       </span>
-                      {!collapsed && (p && renamingPageId === p.id
+                      {!collapsed && (renaming
                         ? <input
-                            aria-label={locale === 'ar' ? 'اسم الصفحة' : 'Page name'}
+                            aria-label={row.kind === 'database' ? (locale === 'ar' ? 'اسم قاعدة البيانات' : 'Database name') : (locale === 'ar' ? 'اسم الصفحة' : 'Page name')}
                             autoFocus
                             className="nav-item__rename"
-                            onBlur={() => { onRenamePage(p.id, renameDraft.trim() || p.title); setRenamingPageId(undefined); }}
+                            onBlur={() => { onRenamePage(row.id, renameDraft.trim() || title); setRenamingPageId(undefined); }}
                             onChange={(event) => setRenameDraft(event.target.value)}
                             onClick={(event) => { event.stopPropagation(); event.preventDefault(); }}
                             onKeyDown={(event) => {
                               event.stopPropagation();
-                              if (event.key === 'Enter') { event.preventDefault(); onRenamePage(p.id, renameDraft.trim() || p.title); setRenamingPageId(undefined); }
-                              if (event.key === 'Escape') { event.preventDefault(); setRenamingPageId(undefined); }
+                              if (event.key === 'Enter') { event.preventDefault(); onRenamePage(row.id, renameDraft.trim() || title); setRenamingPageId(undefined); focusRow(`[data-sidebar-row="${row.id}"]`); }
+                              if (event.key === 'Escape') { event.preventDefault(); setRenamingPageId(undefined); focusRow(`[data-sidebar-row="${row.id}"]`); }
                             }}
                             value={renameDraft}
                           />
                         : <span className="nav-item__title">{pageTitle}</span>)}
                     </button>
-                    {!collapsed && p && (
-                      <button aria-label={locale === 'ar' ? 'إعدادات الصفحة' : 'Page settings'} className="nav-item__menu-trigger" onClick={() => setMenuPageId(menuPageId === p.id ? undefined : p.id)} type="button">
+                    {!collapsed && (
+                      <button
+                        aria-expanded={menu?.list === 'tree' && menu.id === row.id}
+                        aria-haspopup="menu"
+                        aria-label={row.kind === 'database' ? (locale === 'ar' ? `خيارات ${pageTitle}` : `${pageTitle} options`) : (locale === 'ar' ? 'إعدادات الصفحة' : 'Page settings')}
+                        className="nav-item__menu-trigger"
+                        onClick={() => setMenu(menu?.list === 'tree' && menu.id === row.id ? undefined : { id: row.id, list: 'tree' })}
+                        type="button"
+                      >
                         <MoreHorizontal size={15} />
                       </button>
                     )}
-                    {p && menuPageId === p.id && (
-                      <div className="sidebar-page-menu" role="menu">
-                        <button onClick={() => { setMenuPageId(undefined); setExpandedPageIds((current) => new Set(current).add(p.id)); onAddSubpage(p.id); }} role="menuitem" type="button"><Plus size={14} />{locale === 'ar' ? 'إضافة صفحة فرعية' : 'Add sub-page'}</button>
-                        <button onClick={() => { setMenuPageId(undefined); onToggleFavorite(p.id, !p.favorite); }} role="menuitem" type="button"><Star fill={p.favorite ? 'currentColor' : 'none'} size={14} />{p.favorite ? (locale === 'ar' ? 'إزالة من المفضلة' : 'Remove from favorites') : (locale === 'ar' ? 'إضافة للمفضلة' : 'Add to favorites')}</button>
-                        <button onClick={() => { setMenuPageId(undefined); setRenameDraft(p.title); setRenamingPageId(p.id); }} role="menuitem" type="button"><Pencil size={15} />{locale === 'ar' ? 'إعادة تسمية' : 'Rename'}</button>
-                        <button onClick={() => { setMenuPageId(undefined); onDuplicatePage(p.id); }} role="menuitem" type="button"><Copy size={15} />{locale === 'ar' ? 'إنشاء نسخة' : 'Duplicate'}</button>
-                        <div className="sidebar-page-menu__separator" />
-                        <button className="danger" onClick={() => { setMenuPageId(undefined); onDeletePage(p.id); }} role="menuitem" type="button"><Trash2 size={15} />{locale === 'ar' ? 'نقل إلى المهملات' : 'Move to trash'}</button>
-                      </div>
-                    )}
+                    {menu?.list === 'tree' && menu.id === row.id && renderMenu({ id: row.id, kind: row.kind, page: p, title: pageTitle })}
                   </div>
                 );
               })}
@@ -654,6 +765,13 @@ export function Sidebar({
                 {!collapsed && <span>{translate(locale, 'addPage')}</span>}
               </button>
             </nav>
+            {trashed && (
+              <div className="sidebar-trash-notice" role="status">
+                <span>{locale === 'ar' ? `نُقلت «${trashed.title}» إلى المهملات` : `"${trashed.title}" moved to Trash`}</span>
+                {onRestoreNode && <button type="button" onClick={() => { const { id } = trashed; setTrashed(undefined); void onRestoreNode(id); }}>{locale === 'ar' ? 'تراجع' : 'Undo'}</button>}
+                <button type="button" aria-label={locale === 'ar' ? 'إغلاق' : 'Dismiss'} onClick={() => setTrashed(undefined)}><X aria-hidden="true" size={13} /></button>
+              </div>
+            )}
           </>
         )}
       </div>

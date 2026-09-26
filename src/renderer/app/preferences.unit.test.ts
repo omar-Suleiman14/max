@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { readLocale, readSidebarCollapsed, readSidebarWidth, readTheme, resolveTheme } from './preferences';
+import { preferenceKeys, readLocale, readSidebarCollapsed, readSidebarExpanded, readSidebarWidth, readTheme, resolveTheme, writeSidebarExpanded } from './preferences';
 
 function storageWith(values: Readonly<Record<string, string>>): Storage {
   return {
@@ -33,5 +33,19 @@ describe('shell preferences', () => {
     expect(resolveTheme('system', true)).toBe('dark');
     expect(resolveTheme('system', false)).toBe('light');
     expect(resolveTheme('light', true)).toBe('light');
+  });
+});
+
+describe('sidebar expanded rows', () => {
+  it('reads back what was written, as after a restart, and ignores damaged values', () => {
+    const values: Record<string, string> = {};
+    const storage = { ...storageWith(values), setItem: (key: string, value: string) => { values[key] = value; } };
+    storage.getItem = (key) => values[key] ?? null;
+    writeSidebarExpanded(storage, new Set(['a', 'b']));
+    expect([...readSidebarExpanded(storage)]).toEqual(['a', 'b']);
+    values[preferenceKeys.sidebarCollapsed] = 'true';
+    expect(readSidebarCollapsed(storage)).toBe(true);
+    values[preferenceKeys.sidebarExpanded] = 'not json';
+    expect(readSidebarExpanded(storage).size).toBe(0);
   });
 });
