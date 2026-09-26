@@ -10,3 +10,8 @@ export function useGraphState<T>(key: string, fallback: T): [T, (value: T | ((pr
   useEffect(() => { try { localStorage.setItem(`max.graph.${key}`, JSON.stringify(value)); } catch { /* Optional device storage. */ } }, [key, value]);
   return [value, setValue];
 }
+
+/** Search text, the options panel and the camera used to be kept; they are per visit now. */
+export function forgetTransientGraphState() {
+  try { ['options', 'query', 'view'].forEach((key) => localStorage.removeItem(`max.graph.${key}`)); } catch { /* Optional device storage. */ }
+}
