@@ -3,7 +3,7 @@
 import '@testing-library/jest-dom/vitest';
 import axe from 'axe-core';
 
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -52,12 +52,12 @@ const record = {
 
 type DrawerProps = Parameters<typeof RecordDrawer>[0];
 
-function drawer() {
+function drawer(onClose = vi.fn()) {
   return render(
     <RecordDrawer
       isOpen
       onArchive={() => Promise.resolve()}
-      onClose={vi.fn()}
+      onClose={onClose}
       record={record as unknown as DrawerProps['record']}
       schema={schema as unknown as DrawerProps['schema']}
     />,
@@ -130,6 +130,18 @@ describe('a record with unanswered required properties', () => {
     await user.type(input, 'saved');
     await user.keyboard('{Enter}');
     expect(window.maxApi.workspace.updateRecord).toHaveBeenCalled();
+  });
+
+  it('closes on the next Escape once the field has let go of its draft', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    drawer(onClose);
+    const row = [...document.querySelectorAll('.record-drawer__prop-row')].find((candidate) => candidate.textContent?.includes('Note'))!;
+    await user.type(row.querySelector('input')!, 'draft');
+    await user.keyboard('{Escape}');
+    expect(onClose).not.toHaveBeenCalled();
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
   });
 
   it('has no detectable accessibility violations in the drawer editing surface', async () => {
