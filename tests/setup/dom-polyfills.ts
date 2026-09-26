@@ -27,3 +27,8 @@ if (typeof Range !== 'undefined') {
   Range.prototype.getBoundingClientRect ??= empty;
 }
 if (typeof document !== 'undefined') document.elementFromPoint ??= () => null;
+if (typeof Element !== 'undefined') {
+  Element.prototype.setPointerCapture ??= () => undefined;
+  Element.prototype.releasePointerCapture ??= () => undefined;
+  Element.prototype.hasPointerCapture ??= () => false;
+}
