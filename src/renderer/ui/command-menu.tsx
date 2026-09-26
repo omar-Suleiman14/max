@@ -4,6 +4,8 @@ import { useMemo, useState, type KeyboardEvent } from 'react';
 import { type Locale, translate } from '../app/i18n';
 import { FocusedOverlay } from './focused-overlay';
 import { normalizeSearchText } from '../../shared/search-text';
+import { matchTier } from '../search/result-ranking';
+import { handleListboxKey, resultCountMessage } from './listbox-keys';
 
 export type Command = Readonly<{
   id: string;
@@ -22,14 +24,17 @@ export function CommandMenu({ commands, locale, onClose }: CommandMenuProps) {
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
   const normalizedQuery = normalizeSearchText(query);
+  // The same rule as workspace search: exact label, label prefix, label
+  // containing the query, then a keyword-only match. Ties keep the given order.
   const visibleCommands = useMemo(
     () =>
       normalizedQuery.length === 0
         ? commands
-        : commands.filter((command) =>
-            normalizeSearchText([command.label, ...command.keywords].join(' '))
-              .includes(normalizedQuery),
-          ),
+        : commands
+          .filter((command) => normalizeSearchText([command.label, ...command.keywords].join(' ')).includes(normalizedQuery))
+          .map((command, index) => ({ command, index, tier: matchTier(command.label, normalizedQuery) }))
+          .sort((left, right) => left.tier - right.tier || left.index - right.index)
+          .map(({ command }) => command),
     [commands, normalizedQuery],
   );
   const safeActiveIndex = Math.min(activeIndex, Math.max(visibleCommands.length - 1, 0));
@@ -42,16 +47,7 @@ export function CommandMenu({ commands, locale, onClose }: CommandMenuProps) {
   }
 
   function handleInputKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      setActiveIndex((safeActiveIndex + 1) % Math.max(visibleCommands.length, 1));
-    } else if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      setActiveIndex((safeActiveIndex - 1 + Math.max(visibleCommands.length, 1)) % Math.max(visibleCommands.length, 1));
-    } else if (event.key === 'Enter') {
-      event.preventDefault();
-      runCommand(safeActiveIndex);
-    }
+    handleListboxKey(event, { activeIndex: safeActiveIndex, count: visibleCommands.length, onActiveChange: setActiveIndex, onChoose: runCommand });
   }
 
   return (
@@ -63,6 +59,7 @@ export function CommandMenu({ commands, locale, onClose }: CommandMenuProps) {
           data-autofocus="true"
           aria-activedescendant={visibleCommands[safeActiveIndex] ? `command-${visibleCommands[safeActiveIndex].id}` : undefined}
           aria-controls="command-results"
+          aria-autocomplete="list"
           aria-expanded="true"
           aria-label={translate(locale, 'commandSearch')}
           onChange={(event) => {
@@ -77,7 +74,8 @@ export function CommandMenu({ commands, locale, onClose }: CommandMenuProps) {
         <kbd>Esc</kbd>
       </div>
       <p className="command-menu__hint">{translate(locale, 'commandHint')}</p>
-      <div className="command-menu__results" id="command-results" role="listbox">
+      <p aria-live="polite" className="sr-only" role="status">{normalizedQuery ? resultCountMessage(visibleCommands.length, locale) : ''}</p>
+      <div aria-label={translate(locale, 'commandLabel')} className="command-menu__results" id="command-results" role="listbox">
         {visibleCommands.length === 0 && <p className="command-menu__empty">{translate(locale, 'commandNoResults')}</p>}
         {visibleCommands.map((command, index) => (
           <button
