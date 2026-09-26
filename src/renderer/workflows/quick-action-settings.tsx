@@ -13,14 +13,11 @@ import type { Locale } from '../app/i18n';
 import { Select } from '../ui/select';
 import { ActionValueEditor, type ValueChoice } from './action-value-editor';
 import './quick-actions.css';
+import { configFor, draftFromJson, draftToJson, stepLabels, stepTypes } from './workflow-draft';
 
 const empty = (): WorkspaceWorkflowDraft => ({ name: '', enabled: true, icon: '', inputSchema: { fields: [] }, steps: [] });
 const literal = (value: unknown): WorkflowValue => ({ source: 'literal', value });
 const variable = (key: string): WorkflowValue => ({ source: 'variable', key });
-const stepTypes: WorkflowStepType[] = ['FIND_RECORD', 'COMPUTE', 'CREATE_RECORD', 'UPDATE_RECORD', 'FOR_EACH', 'SUM'];
-const en = ['Find record', 'Calculate value', 'Create record', 'Update record', 'For each row', 'Sum rows'];
-const arabic = ['بحث عن سجل', 'حساب قيمة', 'إنشاء سجل', 'تحديث سجل', 'لكل صف', 'مجموع الصفوف'];
-
 export function QuickActionSettings({ locale }: { locale: Locale }) {
   const ar = locale === 'ar';
   const [actions, setActions] = useState<readonly WorkspaceWorkflow[]>([]);
@@ -30,6 +27,9 @@ export function QuickActionSettings({ locale }: { locale: Locale }) {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [pickingIcon, setPickingIcon] = useState(false);
+  // The JSON view is for developers; ordinary authoring never needs it.
+  const [json, setJson] = useState<string>();
+  const [jsonError, setJsonError] = useState('');
   const iconButtonRef = useRef<HTMLButtonElement>(null);
   const reload = () => window.maxApi.workspace.listWorkflows().then(setActions);
   useEffect(() => {
@@ -68,14 +68,15 @@ export function QuickActionSettings({ locale }: { locale: Locale }) {
   };
   const outputChoices = (steps: WorkspaceWorkflowDraft['steps']): ValueChoice[] => steps.flatMap((step, i) => {
     const key = scalarText(step.config.outputVariable ?? ''); if (!key) return [];
-    const value = variable(key); const label = 'Step ' + (i + 1);
+    const value = variable(key); const label = (ar ? 'الخطوة ' : 'Step ') + (i + 1);
     return [{ label, value }, ...(['CREATE_RECORD','UPDATE_RECORD','FIND_RECORD'].includes(step.type) && !step.config.multiple ? properties(step.config.databaseId).map(p => ({ label: label + ' · ' + p.name, value: { source: 'property' as const, record: value, databaseId: String(step.config.databaseId), propertyId: p.id } })) : [])];
   });
   const itemChoices = (collection: unknown): ValueChoice[] => {
     const ref = collection as WorkflowValue; const field = ref?.source === 'variable' ? draft?.inputSchema.fields.find(f => (f.key ?? f.id) === ref.key) : undefined;
-    return [{ label: 'Current item', value: { source: 'item' } }, { label: 'Current index (0 based)', value: { source: 'index' } }, ...(field?.fields ?? []).flatMap((f, i) => {
+    return [{ label: ar ? 'الصف الحالي' : 'Current item', value: { source: 'item' } }, { label: ar ? 'رقم الصف الحالي (يبدأ من 0)' : 'Current index (0 based)', value: { source: 'index' } }, ...(field?.fields ?? []).flatMap((f, i) => {
       const value: WorkflowValue = { source: 'item', field: f.key ?? f.id ?? 'input_' + (i + 1) };
-      return [{ label: 'Row · ' + f.label, value }, ...(f.type === 'record' ? properties(f.databaseId).map(p => ({ label: 'Row · ' + f.label + ' · ' + p.name, value: { source: 'property' as const, record: value, databaseId: f.databaseId!, propertyId: p.id } })) : [])];
+      const row = ar ? 'الصف · ' : 'Row · ';
+      return [{ label: row + f.label, value }, ...(f.type === 'record' ? properties(f.databaseId).map(p => ({ label: row + f.label + ' · ' + p.name, value: { source: 'property' as const, record: value, databaseId: f.databaseId!, propertyId: p.id } })) : [])];
     })];
   };
   const renderSteps = (steps: WorkspaceWorkflowDraft['steps'], setSteps: (steps: WorkspaceWorkflowDraft['steps']) => void, inherited: ValueChoice[], depth = 0): React.ReactNode => {
@@ -92,7 +93,7 @@ export function QuickActionSettings({ locale }: { locale: Locale }) {
         </div>;
         const filters = (c.filter as { conditions?: PropertyFilterNode[] } | undefined)?.conditions ?? [];
         return <div className="action-step" key={step.id ?? index}>
-          <div className="action-row"><strong>{index + 1}</strong><Select aria-label={ar ? 'العملية' : 'Operation'} value={step.type} onChange={(e) => setSteps(steps.map((s, i) => i === index ? { ...s, type: e.target.value as WorkflowStepType, config: { outputVariable: s.config.outputVariable, ...(['FOR_EACH', 'SUM'].includes(e.target.value) ? { collection: variable(draft?.inputSchema.fields.find(f => f.type === 'collection')?.key ?? 'rows'), ...(e.target.value === 'FOR_EACH' ? { steps: [], yield: { source: 'item' } } : { value: literal(0) }) } : {}) } } : s))}>{stepTypes.filter(type => depth < 3 || type !== 'FOR_EACH').map((type) => <option key={type} value={type}>{(ar ? arabic : en)[stepTypes.indexOf(type)]}</option>)}</Select><button type="button" disabled={index === 0} aria-label={ar ? 'تحريك الخطوة لأعلى' : 'Move step up'} onClick={() => { const reordered = [...steps]; [reordered[index - 1], reordered[index]] = [reordered[index]!, reordered[index - 1]!]; setSteps(reordered); }}>↑</button><button type="button" aria-label={ar ? 'حذف الخطوة' : 'Remove step'} onClick={() => setSteps(steps.filter((_, i) => i !== index))}>×</button></div>
+          <div className="action-row"><strong>{index + 1}</strong><Select aria-label={ar ? 'العملية' : 'Operation'} value={step.type} onChange={(e) => setSteps(steps.map((s, i) => i === index ? { ...s, type: e.target.value as WorkflowStepType, config: configFor(e.target.value as WorkflowStepType, s.config, draft?.inputSchema.fields.find(f => f.type === 'collection')?.key ?? 'rows') } : s))}>{stepTypes.filter(type => depth < 3 || type !== 'FOR_EACH').map((type) => <option key={type} value={type}>{stepLabels(ar)[stepTypes.indexOf(type)]}</option>)}</Select><button type="button" disabled={index === 0} aria-label={ar ? 'تحريك الخطوة لأعلى' : 'Move step up'} onClick={() => { const reordered = [...steps]; [reordered[index - 1], reordered[index]] = [reordered[index]!, reordered[index - 1]!]; setSteps(reordered); }}>↑</button><button type="button" disabled={index === steps.length - 1} aria-label={ar ? 'تحريك الخطوة لأسفل' : 'Move step down'} onClick={() => { const reordered = [...steps]; [reordered[index + 1], reordered[index]] = [reordered[index]!, reordered[index + 1]!]; setSteps(reordered); }}>↓</button><button type="button" aria-label={ar ? 'حذف الخطوة' : 'Remove step'} onClick={() => setSteps(steps.filter((_, i) => i !== index))}>×</button></div>
           {['CREATE_RECORD', 'UPDATE_RECORD', 'FIND_RECORD'].includes(step.type) && dbSelect(c.databaseId, (databaseId) => patchStep(index, { databaseId, properties: {}, increments: {}, filter: undefined }))}
           {['FOR_EACH', 'SUM'].includes(step.type) && <>
             <label>{ar ? 'الصفوف' : 'Collection'}{valueEditor(c.collection ?? literal([]), collection => patchStep(index, { collection }))}</label>
@@ -102,6 +103,18 @@ export function QuickActionSettings({ locale }: { locale: Locale }) {
             </>}
           </>}
           {step.type === 'COMPUTE' && valueEditor(c.value ?? literal(0), (value) => patchStep(index, { value }))}
+          {step.type === 'VALIDATE' && <>
+            <label>{ar ? 'يستمر الإجراء فقط عندما' : 'Continue only when'}{valueEditor(c.condition ?? literal(true), (condition) => patchStep(index, { condition }))}</label>
+            <label>{ar ? 'الرسالة عند الفشل' : 'Message when it fails'}<input value={scalarText(c.errorMessage ?? '')} onChange={(e) => patchStep(index, { errorMessage: e.target.value })} placeholder={ar ? 'مثال: الكمية غير كافية' : 'For example: not enough stock'} /></label>
+          </>}
+          {step.type === 'RETURN_RESULT' && <div className="action-outputs">
+            {((c.outputs ?? []) as { label: string; value: WorkflowValue }[]).map((output, i, outputs) => <div className="action-row" key={i}>
+              <input aria-label={ar ? 'اسم النتيجة' : 'Result name'} placeholder={ar ? 'اسم النتيجة' : 'Result name'} value={output.label} onChange={(e) => patchStep(index, { outputs: outputs.map((o, j) => i === j ? { ...o, label: e.target.value } : o) })} />
+              {valueEditor(output.value, (value) => patchStep(index, { outputs: outputs.map((o, j) => i === j ? { ...o, value } : o) }))}
+              <button type="button" aria-label={ar ? 'حذف النتيجة' : 'Remove result'} onClick={() => patchStep(index, { outputs: outputs.filter((_, j) => i !== j) })}>×</button>
+            </div>)}
+            <button type="button" onClick={() => patchStep(index, { outputs: [...((c.outputs ?? []) as unknown[]), { label: '', value: literal('') }] })}>{ar ? '+ نتيجة تظهر بعد التشغيل' : '+ Result shown after running'}</button>
+          </div>}
           {step.type === 'CREATE_RECORD' && <label>{ar ? 'عنوان السجل' : 'Record title'}{valueEditor(c.title ?? literal(''), (title) => patchStep(index, { title }))}</label>}
           {step.type === 'UPDATE_RECORD' && <label>{ar ? 'السجل' : 'Record'}{valueEditor(c.record ?? literal(''), (record) => patchStep(index, { record }))}</label>}
           {['CREATE_RECORD', 'UPDATE_RECORD'].includes(step.type) && mapping('properties')}
@@ -113,7 +126,7 @@ export function QuickActionSettings({ locale }: { locale: Locale }) {
             <label><input type="checkbox" checked={Boolean(c.multiple)} onChange={(e) => patchStep(index, { multiple: e.target.checked })} />{ar ? 'إرجاع كل النتائج' : 'Return all matches'}</label>
           </>}
         </div>;
-      })}<button type="button" onClick={() => { const id = crypto.randomUUID(); setSteps([...steps, { id, type: 'CREATE_RECORD', config: { outputVariable: id } }]); }}>+ Step</button></div>;
+      })}<button type="button" onClick={() => { const id = crypto.randomUUID(); setSteps([...steps, { id, type: 'CREATE_RECORD', config: { outputVariable: id } }]); }}>{ar ? '+ خطوة' : '+ Step'}</button></div>;
   };
   return <div className="quick-action-settings">
     {error && <p role="alert">{error}</p>}
@@ -130,14 +143,20 @@ export function QuickActionSettings({ locale }: { locale: Locale }) {
         <label>{ar ? 'الاسم' : 'Name'}<input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></label>
         <label><input type="checkbox" checked={draft.enabled !== false} onChange={(e) => setDraft({ ...draft, enabled: e.target.checked })} />{ar ? 'مفعل' : 'Enabled'}</label>
       </div>
+      <div className="action-row"><button type="button" aria-pressed={json !== undefined} onClick={() => { if (json === undefined) { setJson(draftToJson(draft)); setJsonError(''); return; } const next = draftFromJson(json, draft, ar); if (typeof next === 'string') { setJsonError(next); return; } setDraft(next); setJson(undefined); }}>{json === undefined ? (ar ? 'عرض JSON' : 'Edit as JSON') : (ar ? 'تطبيق والعودة للمحرر' : 'Apply and return to the editor')}</button>{json !== undefined && <button type="button" onClick={() => { setJson(undefined); setJsonError(''); }}>{ar ? 'تجاهل تغييرات JSON' : 'Discard JSON changes'}</button>}</div>
+      {json !== undefined ? <>
+        <textarea aria-label={ar ? 'تعريف الإجراء بصيغة JSON' : 'Action definition as JSON'} className="action-json" dir="ltr" rows={18} spellCheck={false} value={json} onChange={(e) => { setJson(e.target.value); setJsonError(''); }} />
+        {jsonError && <p className="action-save-error" role="alert">{jsonError}</p>}
+      </> : <>
       <h3>{ar ? 'المدخلات' : 'Inputs'}</h3>
       <ActionInputsEditor fields={draft.inputSchema.fields} onChange={fields => setDraft({ ...draft, inputSchema: { ...draft.inputSchema, fields } })} databases={databases} schemas={schemas} locale={locale}/>
-      <ActionFormBehavior schema={draft.inputSchema} onChange={inputSchema => setDraft({ ...draft, inputSchema })} choices={formChoices(draft.inputSchema.fields, schemas)} schemas={schemas} locale={locale}/>
+      <ActionFormBehavior schema={draft.inputSchema} onChange={inputSchema => setDraft({ ...draft, inputSchema })} choices={formChoices(draft.inputSchema.fields, schemas, false, locale)} schemas={schemas} locale={locale}/>
       <h3>{ar ? 'الخطوات' : 'Steps'}</h3>
       {renderSteps(draft.steps, steps => setDraft({ ...draft, steps }), choicesAt(0))}
+      </>}
 
       {error && <p className="action-save-error" role="alert">{error}</p>}
-      <div className="action-row action-footer"><button className="btn btn-primary" disabled={saving || !draft.name.trim()} type="button" onClick={() => void save()}>{ar ? 'حفظ' : 'Save'}</button><button type="button" disabled={saving} onClick={() => setDraft(undefined)}>{ar ? 'إلغاء' : 'Cancel'}</button>{draft.id && <button type="button" disabled={saving} onClick={() => { setSaving(true); void window.maxApi.workspace.archiveWorkflow(draft.id!).then(async (result) => { if (!result.ok) setError(result.error.message); else { setDraft(undefined); await reload(); } }).finally(() => setSaving(false)); }}>{ar ? 'أرشفة الإجراء' : 'Archive action'}</button>}</div>
+      <div className="action-row action-footer"><button className="btn btn-primary" disabled={saving || !draft.name.trim() || json !== undefined} type="button" onClick={() => void save()}>{ar ? 'حفظ' : 'Save'}</button><button type="button" disabled={saving} onClick={() => setDraft(undefined)}>{ar ? 'إلغاء' : 'Cancel'}</button>{draft.id && <button type="button" disabled={saving} onClick={() => { setSaving(true); void window.maxApi.workspace.archiveWorkflow(draft.id!).then(async (result) => { if (!result.ok) setError(result.error.message); else { setDraft(undefined); await reload(); } }).finally(() => setSaving(false)); }}>{ar ? 'أرشفة الإجراء' : 'Archive action'}</button>}</div>
     </>}
   </div>;
 }
