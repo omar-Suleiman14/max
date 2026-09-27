@@ -1118,18 +1118,6 @@ export const migrations: readonly Migration[] = [
   },
   {
     id: 19,
-    name: 'workflow_presentation',
-    up(database) {
-      database.exec(`
-        ALTER TABLE workspace_workflows ADD COLUMN color TEXT;
-        ALTER TABLE workspace_workflows ADD COLUMN shortcut TEXT;
-        CREATE UNIQUE INDEX workspace_workflows_shortcut_active ON workspace_workflows(shortcut)
-          WHERE shortcut IS NOT NULL AND archived_at IS NULL;
-      `);
-    },
-  },
-  {
-    id: 20,
     name: 'chaos_linked_items',
     up(database) {
       // Chaos owns forms, quizzes and responses. Max keeps the connection's
@@ -1203,6 +1191,18 @@ export const migrations: readonly Migration[] = [
 
         CREATE INDEX chaos_pending_operations_page
           ON chaos_pending_operations (page_id, created_at);
+      `);
+    },
+  },
+  {
+    id: 20,
+    name: 'workflow_presentation',
+    up(database) {
+      database.exec(`
+        ALTER TABLE workspace_workflows ADD COLUMN color TEXT;
+        ALTER TABLE workspace_workflows ADD COLUMN shortcut TEXT;
+        CREATE UNIQUE INDEX workspace_workflows_shortcut_active ON workspace_workflows(shortcut)
+          WHERE shortcut IS NOT NULL AND archived_at IS NULL;
       `);
     },
   },
