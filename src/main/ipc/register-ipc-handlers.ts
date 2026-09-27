@@ -1271,6 +1271,10 @@ export function registerIpcHandlers({
     trust(event);
     return database.workflows.inspectWorkflows();
   });
+  ipcMain.handle(IPC_CHANNELS.workspaceWorkflowsUsingProperty, (event, propertyId: unknown) => {
+    trust(event);
+    return database.workflows.listWorkflowsUsingProperty(parseId(propertyId));
+  });
   ipcMain.handle(IPC_CHANNELS.workspaceGetWorkflow, (event, id: unknown) => {
     trust(event);
     return database.workflows.getWorkflow(parseId(id));

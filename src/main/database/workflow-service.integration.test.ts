@@ -89,6 +89,42 @@ describe('Generic workspace actions', () => {
     expect(db.workflows.listWorkflows()).toHaveLength(0);
     expect(db.records.listRecords(database.id)).toHaveLength(0);
   });
+  it('names workflows affected by archiving a referenced property', () => {
+    const db = workspace();
+    const database = db.databases.createDatabase({ title: 'Tasks' });
+    const property = db.properties.createProperty({ databaseId: database.id, name: 'Priority', type: 'number' });
+    const using = db.workflows.createWorkflow({ name: 'Set priority', inputSchema: { fields: [] }, steps: [
+      { type: 'CREATE_RECORD', config: { databaseId: database.id, properties: { [property.id]: literal(1) } } },
+    ] });
+    db.workflows.createWorkflow({ name: 'Unrelated literal', inputSchema: { fields: [] }, steps: [
+      { type: 'RETURN_RESULT', config: { outputs: [{ label: 'ID', value: literal(property.id) }] } },
+    ] });
+    expect(db.workflows.listWorkflowsUsingProperty(property.id)).toEqual([{ id: using.id, name: using.name }]);
+    db.properties.archiveProperty(property.id);
+    expect(db.workflows.listWorkflowsUsingProperty(property.id)).toEqual([{ id: using.id, name: using.name }]);
+  });
+  it('marks a saved workflow when its database is archived', () => {
+    const db = workspace();
+    const database = db.databases.createDatabase({ title: 'Tasks' });
+    const workflow = db.workflows.createWorkflow({ name: 'Create task', inputSchema: { fields: [] }, steps: [
+      { type: 'CREATE_RECORD', config: { databaseId: database.id, title: literal('Task') } },
+    ] });
+    db.databases.archiveDatabase(database.id);
+    expect(db.workflows.inspectWorkflow(workflow)).toMatchObject({ canRun: false, issues: [{ code: 'missing_database', location: 'Step 1' }] });
+    expect(db.workflows.getWorkflow(workflow.id)).toEqual(workflow);
+  });
+  it('names invalid mappings, missing inputs, unsupported properties and impossible references at save time', () => {
+    const db = workspace();
+    const database = db.databases.createDatabase({ title: 'Tasks' });
+    const computed = db.properties.createProperty({ databaseId: database.id, name: 'Computed', type: 'formula', config: { formula: { expression: '1' } } });
+    const save = (type: WorkspaceWorkflowDraft['steps'][number]['type'], config: Record<string, unknown>) =>
+      db.workflows.createWorkflow({ name: 'Invalid', inputSchema: { fields: [] }, steps: [{ type, config }] });
+    expect(() => save('CREATE_RECORD', { databaseId: database.id, properties: [] })).toThrow('Property mappings must be an object.');
+    expect(() => save('COMPUTE', { value: literal(1) })).toThrow('outputVariable is required.');
+    expect(() => save('CREATE_RECORD', { databaseId: database.id, properties: { [computed.id]: literal(1) } })).toThrow('does not support this operation.');
+    expect(() => save('COMPUTE', { outputVariable: 'result', value: variable('missing') })).toThrow('Referenced value is unavailable at this step.');
+    expect(db.workflows.listWorkflows()).toHaveLength(0);
+  });
   it('leaves records and run history unchanged after a dry run', () => {
     const db = workspace();
     const database = db.databases.createDatabase({ title: 'Tasks' });

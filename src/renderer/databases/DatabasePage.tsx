@@ -459,6 +459,12 @@ export function DatabasePage({ databaseId, embedded = false, initialViewId, loca
           setPropertyModalOpen(false);
           setEditingProperty(null);
         }}
+        onArchive={async (propertyId) => {
+          const result = await window.maxApi.workspace.archiveProperty(propertyId);
+          if (!result.ok) throw new Error(result.error.message);
+          await refresh();
+          window.dispatchEvent(new Event('max:workspace-changed'));
+        }}
         onSave={async (draftOrPatch) => {
           if ('databaseId' in draftOrPatch) {
             return createProperty(draftOrPatch);

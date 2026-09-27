@@ -87,6 +87,20 @@ function safeRunMessage(message: string): string {
   return trusted.has(message) ? message : 'Action step failed. Review its configuration and inputs.';
 }
 
+function referencesProperty(value: unknown, propertyId: string): boolean {
+  if (Array.isArray(value)) return value.some((entry) => referencesProperty(entry, propertyId));
+  if (!value || typeof value !== 'object') return false;
+  const entry = value as Record<string, unknown>;
+  if (entry.source === 'literal') return false;
+  if (entry.propertyId === propertyId) return true;
+  if (Array.isArray(entry.displayPropertyIds) && entry.displayPropertyIds.includes(propertyId)) return true;
+  for (const key of ['properties', 'propertyValues', 'increments'] as const) {
+    const mapping = entry[key];
+    if (mapping && typeof mapping === 'object' && !Array.isArray(mapping) && Object.hasOwn(mapping, propertyId)) return true;
+  }
+  return Object.values(entry).some((child) => referencesProperty(child, propertyId));
+}
+
 export class WorkflowService {
   readonly #database: DatabaseSync;
   readonly #unitOfWork: DatabaseUnitOfWork;
@@ -192,6 +206,12 @@ export class WorkflowService {
       .all() as WorkflowRow[];
 
     return rows.map(workflowFromRow);
+  }
+
+  listWorkflowsUsingProperty(propertyId: string): readonly Readonly<{ id: string; name: string }>[] {
+    return this.listWorkflows()
+      .filter((workflow) => referencesProperty(workflow.inputSchema, propertyId) || referencesProperty(workflow.steps, propertyId))
+      .map(({ id, name }) => ({ id, name }));
   }
 
   inspectWorkflows(): readonly WorkflowValidationReport[] {
