@@ -16,6 +16,49 @@ afterEach(() => {
 });
 
 describe('BackupService', () => {
+  it('refuses to publish a backup when SQLite cannot make a consistent snapshot', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'max-backup-damaged-'));
+    temporaryDirectories.push(dir);
+    const dbPath = join(dir, 'max.sqlite');
+    writeFileSync(dbPath, 'not a sqlite database');
+    const service = new BackupService(dbPath, join(dir, 'backups'));
+    expect(() => service.createBackup('manual')).toThrow();
+    expect(service.listBackups()).toEqual([]);
+  });
+
+  it('includes committed WAL data while the workspace connection remains open', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'max-backup-wal-'));
+    temporaryDirectories.push(dir);
+    const dbPath = join(dir, 'max.sqlite');
+    const db = new DatabaseService(dbPath);
+    db.initialize();
+    db.objects.createRecord({ label: 'Committed in WAL', objectKind: 'item', values: {} });
+    const service = new BackupService(dbPath, join(dir, 'backups'));
+    const backup = service.createBackup('manual');
+    const snapshot = new DatabaseSync(backup.filePath, { readOnly: true });
+    try {
+      expect(snapshot.prepare("SELECT label FROM object_records WHERE label = 'Committed in WAL'").get()).toBeDefined();
+    } finally {
+      snapshot.close();
+      db.close();
+    }
+  });
+
+  it('backs up a workspace whose file path contains an apostrophe', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'max-backup-quoted-path-'));
+    temporaryDirectories.push(dir);
+    const dbPath = join(dir, "owner's workspace.sqlite");
+    const db = new DatabaseService(dbPath);
+    db.initialize();
+    const service = new BackupService(dbPath, join(dir, "owner's backups"));
+    try {
+      const backup = service.createBackup('manual');
+      expect(service.verifyBackup(backup.id).valid).toBe(true);
+    } finally {
+      db.close();
+    }
+  });
+
   it('keeps an optional scheduled failure status and clears it after recovery', () => {
     const dir = mkdtempSync(join(tmpdir(), 'max-backup-status-'));
     temporaryDirectories.push(dir);

@@ -72,7 +72,7 @@ export class BackupService {
       // In-memory support for testing
       const id = randomUUID();
       const now = new Date().toISOString();
-      const filename = `max-backup-${now.replace(/[:.]/g, '-')}-${trigger}.maxbak`;
+      const filename = `max-backup-${now.replace(/[:.]/g, '-')}-${trigger}-${id}.maxbak`;
       const filePath = join(this.#backupDir, filename);
 
       const memDb = new DatabaseSync(':memory:');
@@ -80,7 +80,7 @@ export class BackupService {
         CREATE TABLE system_migrations (id INTEGER PRIMARY KEY, name TEXT, applied_at TEXT);
         INSERT INTO system_migrations VALUES (1, 'foundation', '${now}');
       `);
-      memDb.exec(`VACUUM INTO '${filePath.replace(/\\/g, '/')}'`);
+      memDb.prepare('VACUUM INTO ?').run(filePath);
       memDb.close();
 
       const buffer = readFileSync(filePath);
@@ -108,17 +108,23 @@ export class BackupService {
 
     const id = randomUUID();
     const now = new Date().toISOString();
-    const filename = `max-backup-${now.replace(/[:.]/g, '-')}-${trigger}.maxbak`;
+    const filename = `max-backup-${now.replace(/[:.]/g, '-')}-${trigger}-${id}.maxbak`;
     const filePath = join(this.#backupDir, filename);
+    const existedBefore = existsSync(filePath);
 
-    // Use clean SQLite VACUUM INTO to produce a consistent, unfragmented snapshot
+    // A plain file copy can omit committed writes in the WAL. If SQLite cannot
+    // produce a consistent snapshot, fail without publishing a backup.
+    let live: DatabaseSync | undefined;
     try {
-      const live = new DatabaseSync(this.#dbPath, { readOnly: true });
-      live.exec(`VACUUM INTO '${filePath.replace(/\\/g, '/')}'`);
-      live.close();
-    } catch {
-      // Fallback to atomic copy if VACUUM fails
-      copyFileSync(this.#dbPath, filePath);
+      live = new DatabaseSync(this.#dbPath, { readOnly: true });
+      live.prepare('VACUUM INTO ?').run(filePath);
+    } catch (error) {
+      live?.close();
+      live = undefined;
+      if (!existedBefore && existsSync(filePath)) unlinkSync(filePath);
+      throw error;
+    } finally {
+      live?.close();
     }
 
     const buffer = readFileSync(filePath);
