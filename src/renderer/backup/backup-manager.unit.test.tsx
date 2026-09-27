@@ -37,7 +37,7 @@ describe('local backup details', () => {
     fireEvent.click(screen.getAllByText(/Daily/).at(-1)!);
     expect(screen.getByText(/C:\\Backups\\workspace.maxbak/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Verify Integrity' }));
-    expect(verify).toHaveBeenCalledWith(backup.filePath);
+    expect(verify).toHaveBeenCalledWith(backup.id);
     expect(await screen.findByText('Checksum: Passed')).toBeInTheDocument();
     expect(screen.getByText('SQLite integrity: Failed')).toBeInTheDocument();
   });
@@ -50,6 +50,7 @@ describe('local backup details', () => {
     fireEvent.click(screen.getAllByText(/Daily/).at(-1)!);
     fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
     expect(screen.getByText(/A safety snapshot of your current data/)).toBeInTheDocument();
+    expect(screen.getByText('Max will restart to open the restored workspace.')).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole('button', { name: 'Restore' }).at(-1)!);
     expect(await screen.findByText(/Protective backup saved at: C:\\Backups\\safety.maxbak/)).toBeInTheDocument();
   });
@@ -70,6 +71,14 @@ describe('local backup details', () => {
     fireEvent.click(screen.getAllByText(/Daily/).at(-1)!);
     expect(screen.getByText(/newer Max version/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Restore' })).toBeDisabled();
+  });
+
+  it('keeps the protective backup location visible after a restart', async () => {
+    const { status } = setup();
+    status.mockResolvedValue({ currentSchemaVersion: 19, lastRestoreSafetyPath: 'C:\\Backups\\safety.maxbak' });
+    window.dispatchEvent(new Event('max:backups-changed'));
+    expect(await screen.findByText(/Protective backup saved at:/)).toBeInTheDocument();
+    expect(screen.getByText(/C:\\Backups\\safety.maxbak/)).toBeInTheDocument();
   });
 
   it('has no accessibility violations in the backup summary', async () => {

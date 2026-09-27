@@ -24,7 +24,7 @@ Scheduled backups run while Max is open. If one fails, the Backup screen shows a
 
 ## Restore a local backup
 
-Open **Settings → Backup → Backup Snapshots**, expand the snapshot and choose **Restore**. Review the date and filename in the confirmation dialog. Max creates a protective snapshot of the current workspace before restoration; after a successful restore, the Backup screen shows its location. A snapshot made by a newer Max database version cannot be restored by an older version of Max.
+Open **Settings → Backup → Backup Snapshots**, expand the snapshot and choose **Restore**. Review the date and filename in the confirmation dialog. Max creates a protective snapshot of the current workspace before restoration and restarts to open the restored workspace. After restart, the Backup screen shows the protective snapshot's location. A snapshot made by a newer Max database version cannot be restored by an older version of Max.
 
 Restoration of the active database is undergoing further reliability work. Keep a separate copy of important backup files and verify the restored pages and records before relying on them. If restoration fails, keep the original backup file and the protective snapshot while you seek help.
 

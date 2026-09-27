@@ -162,7 +162,8 @@ describe('BackupService', () => {
 
     // Restore to State 1
     const restoreResult = service.restoreBackup(backupState1.id);
-    expect(restoreResult.restored).toBe(true);
+    expect(restoreResult.error).toBeUndefined();
+    expect(restoreResult).toMatchObject({ restored: true });
     expect(restoreResult.preRestoreBackupId).toBeDefined();
     expect(restoreResult.safetyRollbackOccurred).toBe(false);
 
@@ -178,5 +179,38 @@ describe('BackupService', () => {
     const allBackups = service.listBackups();
     const preRestore = allBackups.find((b) => b.trigger === 'pre-restore');
     expect(preRestore).toBeDefined();
+    expect(service.getStatus().lastRestoreSafetyPath).toBe(preRestore?.filePath);
+  });
+
+  it('refuses to replace a database while its WAL still has active writes', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'max-backup-open-'));
+    temporaryDirectories.push(dir);
+    const dbPath = join(dir, 'max.sqlite');
+    const db = new DatabaseService(dbPath);
+    db.initialize();
+    const service = new BackupService(dbPath, join(dir, 'backups'));
+    const backup = service.createBackup('manual');
+    db.objects.createRecord({ label: 'Keep this live record', objectKind: 'item', values: {} });
+    try {
+      expect(service.restoreBackup(backup.id)).toMatchObject({ restored: false, safetyRollbackOccurred: false });
+      expect(db.objects.listRecords('item')).toHaveLength(1);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('does not prune the selected backup while making its protective snapshot', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'max-backup-retention-'));
+    temporaryDirectories.push(dir);
+    const dbPath = join(dir, 'max.sqlite');
+    const db = new DatabaseService(dbPath);
+    db.initialize();
+    db.close();
+    const service = new BackupService(dbPath, join(dir, 'backups'));
+    const oldest = service.createBackup('manual');
+    for (let index = 0; index < 14; index++) service.createBackup('manual');
+    expect(service.listBackups()).toHaveLength(15);
+    expect(service.restoreBackup(oldest.id)).toMatchObject({ restored: true });
+    expect(service.verifyBackup(oldest.id).valid).toBe(true);
   });
 });

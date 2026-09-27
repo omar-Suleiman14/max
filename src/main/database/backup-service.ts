@@ -44,11 +44,16 @@ export class BackupService {
 
   getStatus(): LocalBackupStatus {
     let lastScheduledFailureAt: string | undefined;
+    let lastRestoreSafetyPath: string | undefined;
     try {
       const value = JSON.parse(readFileSync(join(this.#backupDir, 'schedule-failure.state'), 'utf8')) as { at?: unknown };
       if (typeof value.at === 'string' && Number.isFinite(Date.parse(value.at))) lastScheduledFailureAt = value.at;
     } catch { /* Optional status must never prevent local work. */ }
-    return { currentSchemaVersion: migrations.at(-1)?.id ?? 0, ...(lastScheduledFailureAt ? { lastScheduledFailureAt } : {}) };
+    try {
+      const value = JSON.parse(readFileSync(join(this.#backupDir, 'restore-status.state'), 'utf8')) as { safetyPath?: unknown };
+      if (typeof value.safetyPath === 'string' && existsSync(value.safetyPath)) lastRestoreSafetyPath = value.safetyPath;
+    } catch { /* Optional status must never prevent local work. */ }
+    return { currentSchemaVersion: migrations.at(-1)?.id ?? 0, ...(lastScheduledFailureAt ? { lastScheduledFailureAt } : {}), ...(lastRestoreSafetyPath ? { lastRestoreSafetyPath } : {}) };
   }
 
   recordScheduledFailure(): void {
@@ -98,7 +103,7 @@ export class BackupService {
       };
 
       writeFileSync(`${filePath}.json`, JSON.stringify(meta, null, 2), 'utf-8');
-      this.#pruneOldBackups();
+      if (trigger !== 'pre-restore' && trigger !== 'pre-migration') this.#pruneOldBackups();
       return meta;
     }
 
@@ -154,7 +159,7 @@ export class BackupService {
     };
 
     writeFileSync(`${filePath}.json`, JSON.stringify(meta, null, 2), 'utf-8');
-    this.#pruneOldBackups();
+    if (trigger !== 'pre-restore' && trigger !== 'pre-migration') this.#pruneOldBackups();
     return meta;
   }
 
@@ -281,6 +286,10 @@ export class BackupService {
       return { restored: true, safetyRollbackOccurred: false };
     }
 
+    if (existsSync(`${this.#dbPath}-wal`) && statSync(`${this.#dbPath}-wal`).size > 0) {
+      return { error: 'Close the active database before restoring.', restored: false, safetyRollbackOccurred: false };
+    }
+
     // 3. Take safety snapshot of CURRENT database before restoring
     let safetyBackup: BackupMetadata | undefined;
     try {
@@ -293,18 +302,28 @@ export class BackupService {
       };
     }
 
-    // 4. Overwrite active database file with target backup
+    // 4. Stage and verify beside the database so replacement is a single
+    // filesystem rename. The caller must close its SQLite connection first.
+    const stagedPath = join(dirname(this.#dbPath), `.max-restore-${randomUUID()}.sqlite`);
+    let replaced = false;
     try {
-      copyFileSync(targetPath, this.#dbPath);
+      copyFileSync(targetPath, stagedPath);
+      const stagedVerification = this.verifyBackup(stagedPath);
+      if (!stagedVerification.valid) throw new Error(stagedVerification.error ?? 'Staged backup failed verification.');
+      renameSync(stagedPath, this.#dbPath);
+      replaced = true;
 
-      // Verify active db after copy
       const check = new DatabaseSync(this.#dbPath, { readOnly: true });
-      const row = check.prepare('PRAGMA integrity_check').get();
-      check.close();
-
-      if (!row) {
-        throw new Error('Integrity check returned empty');
-      }
+      let integrity: string | undefined;
+      try { integrity = (check.prepare('PRAGMA integrity_check').get() as { integrity_check?: string } | undefined)?.integrity_check; }
+      finally { check.close(); }
+      if (integrity !== 'ok') throw new Error('Restored database failed integrity verification.');
+      try {
+        const statusPath = join(this.#backupDir, 'restore-status.state');
+        const temporaryPath = `${statusPath}.tmp`;
+        writeFileSync(temporaryPath, JSON.stringify({ safetyPath: safetyBackup.filePath }), 'utf8');
+        renameSync(temporaryPath, statusPath);
+      } catch { /* Optional status cannot invalidate a completed restore. */ }
 
       return {
         preRestoreBackupId: safetyBackup.id,
@@ -312,18 +331,27 @@ export class BackupService {
         safetyRollbackOccurred: false,
       };
     } catch (restoreErr) {
-      // 5. Automatic rollback on failure!
-      try {
-        copyFileSync(safetyBackup.filePath, this.#dbPath);
-      } catch {
-        // rollback copy failed
+      let rolledBack = false;
+      if (replaced) {
+        const rollbackPath = join(dirname(this.#dbPath), `.max-rollback-${randomUUID()}.sqlite`);
+        try {
+          copyFileSync(safetyBackup.filePath, rollbackPath);
+          renameSync(rollbackPath, this.#dbPath);
+          rolledBack = true;
+        } catch {
+          // The verified protective backup remains available for manual recovery.
+        } finally {
+          try { if (existsSync(rollbackPath)) unlinkSync(rollbackPath); } catch { /* Preserve the result. */ }
+        }
       }
       return {
-        error: `Restore failed and was rolled back to previous state: ${restoreErr instanceof Error ? restoreErr.message : String(restoreErr)}`,
+        error: `${rolledBack ? 'Restore failed and was rolled back' : 'Restore failed; the protective backup remains available'}: ${restoreErr instanceof Error ? restoreErr.message : String(restoreErr)}`,
         preRestoreBackupId: safetyBackup.id,
         restored: false,
-        safetyRollbackOccurred: true,
+        safetyRollbackOccurred: rolledBack,
       };
+    } finally {
+      try { if (existsSync(stagedPath)) unlinkSync(stagedPath); } catch { /* Preserve the result. */ }
     }
   }
 

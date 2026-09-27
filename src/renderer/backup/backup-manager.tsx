@@ -78,7 +78,7 @@ export function BackupManager({ locale, schedule: configuredSchedule }: BackupMa
   async function handleVerify(backup: BackupMetadata) {
     setVerifyingId(backup.id);
     try {
-      const result = await window.maxApi.backups.verify(backup.filePath);
+      const result = await window.maxApi.backups.verify(backup.id);
       setVerificationResults((prev) => ({ ...prev, [backup.id]: result }));
     } catch {
       // ignore
@@ -91,7 +91,7 @@ export function BackupManager({ locale, schedule: configuredSchedule }: BackupMa
     setRestoring(true);
     setNotice(undefined);
     try {
-      const res = await window.maxApi.backups.restore(backup.filePath);
+      const res = await window.maxApi.backups.restore(backup.id);
       if (res.ok && res.value.restored) {
         let safety: BackupMetadata | undefined;
         try {
@@ -100,6 +100,7 @@ export function BackupManager({ locale, schedule: configuredSchedule }: BackupMa
           safety = list.find((entry) => entry.id === res.value.preRestoreBackupId);
         } catch { /* Restoration succeeded even if refreshing the list fails. */ }
         setNotice({ message: `${backupCopy(locale, 'restoreSuccess')} ${safety ? `${backupCopy(locale, 'protectiveBackup')}: ${safety.filePath}` : ''}`, type: 'success' });
+        void window.maxApi.backups.status().then(setStatus).catch(() => undefined);
         setRestoreConfirmBackup(undefined);
       } else {
         setNotice({
@@ -158,6 +159,7 @@ export function BackupManager({ locale, schedule: configuredSchedule }: BackupMa
 
       <p role="status">{backupCopy(locale, 'latestBackup')}: {latest ? dateTime(latest.createdAt) : backupCopy(locale, 'noLatestBackup')}</p>
       {status?.lastScheduledFailureAt && <p role="alert" className="badge badge--danger">{backupCopy(locale, 'scheduledFailure')} {dateTime(status.lastScheduledFailureAt)}</p>}
+      {status?.lastRestoreSafetyPath && <p role="status">{backupCopy(locale, 'protectiveBackup')}: <span dir="auto">{status.lastRestoreSafetyPath}</span></p>}
       <p>{backupCopy(locale, 'backupSchedule')}: {backupCopy(locale, activeSchedule)}{activeSchedule !== 'manual' && <> · {backupCopy(locale, 'nextBackup')}: {nextScheduledAt ? dateTime(nextScheduledAt) : backupCopy(locale, 'scheduledBackup')}</>}</p>
 
       <details className="backup-history-disclosure">
@@ -192,6 +194,7 @@ export function BackupManager({ locale, schedule: configuredSchedule }: BackupMa
               <AlertTriangle aria-hidden="true" size={18} style={{ flexShrink: 0 }} />
               <span>{backupCopy(locale, 'confirmRestore')}</span>
             </div>
+            <p>{locale === 'ar' ? 'سيُعاد تشغيل ماكس لفتح مساحة العمل المستعادة.' : 'Max will restart to open the restored workspace.'}</p>
 
             <p style={{ fontSize: '13px', color: 'var(--text-soft)' }}>
               {backupCopy(locale, 'targetSnapshot')}: <strong>{restoreConfirmBackup.filename}</strong> (

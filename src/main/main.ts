@@ -7,6 +7,7 @@ import { AssetStore } from './assets/asset-store';
 import { PhotoLibrary } from './assets/photo-library';
 import { CloudBackupService } from './cloud/cloud-backup-service';
 import { DatabaseService } from './database/database-service';
+import type { RestoreResult } from '../shared/backup-contract';
 import { registerIpcHandlers, removeIpcHandlers } from './ipc/register-ipc-handlers';
 import { StaticMapProvider } from './maps/map-provider';
 import { getPlatformAdapter } from './platform/platform-adapter';
@@ -40,6 +41,7 @@ if (handledInstallerLifecycle) {
   const assetDirectory = join(app.getPath('userData'), 'assets');
   let database: DatabaseService | undefined;
   let updates: UpdateService | undefined;
+  let restoreInProgress = false;
 
 /**
  * What the release page says is newest, for the builds that cannot replace
@@ -108,6 +110,21 @@ async function latestPublishedRelease(): Promise<LatestRelease | null> {
         assets,
         cloudBackups,
         database,
+        restoreLocalBackup: (backupIdOrPath): RestoreResult => {
+          if (restoreInProgress) return { error: 'A restore is already in progress.', restored: false, safetyRollbackOccurred: false };
+          const verification = database!.backups.verifyBackup(backupIdOrPath);
+          if (!verification.valid) return { error: verification.error ?? 'Backup failed verification.', restored: false, safetyRollbackOccurred: false };
+          restoreInProgress = true;
+          if (backupTimer) clearInterval(backupTimer);
+          try {
+            database!.close();
+            return database!.backups.restoreBackup(backupIdOrPath);
+          } finally {
+            // All repositories hold the old connection. Reopen the restored
+            // workspace only in a fresh process after the IPC reply is sent.
+            setTimeout(() => { app.relaunch(); app.quit(); }, 500);
+          }
+        },
         developmentServerUrl: MAIN_WINDOW_VITE_DEV_SERVER_URL,
         maps: new StaticMapProvider(),
         photos: new PhotoLibrary(join(app.getPath('userData'), 'integrations.json'), MAX_UNSPLASH_ACCESS_KEY),

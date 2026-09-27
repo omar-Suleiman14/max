@@ -22,6 +22,7 @@ export type BackupVerificationResult = Readonly<{
 export type LocalBackupStatus = Readonly<{
   currentSchemaVersion: number;
   lastScheduledFailureAt?: string;
+  lastRestoreSafetyPath?: string;
 }>;
 
 export type RestoreResult = Readonly<{
