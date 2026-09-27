@@ -15,6 +15,8 @@ const graph: PageGraph = {
 
 beforeEach(() => {
   localStorage.clear();
+  // jsdom omits pointer capture; Chromium supplies it on the SVG canvas.
+  Object.defineProperty(SVGElement.prototype, 'setPointerCapture', { configurable: true, value: () => undefined });
   Object.defineProperty(window, 'maxApi', { configurable: true, value: { workspace: { getPageGraph: () => Promise.resolve(graph) } } });
 });
 afterEach(cleanup);
