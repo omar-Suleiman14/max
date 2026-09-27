@@ -38,6 +38,19 @@ export function QuickActionSettings({ locale }: { locale: Locale }) {
   const [jsonError, setJsonError] = useState('');
   const [historyId, setHistoryId] = useState<string>();
   const [previewId, setPreviewId] = useState<string>();
+  const openDraft = (next: WorkspaceWorkflowDraft) => {
+    setDraft(next);
+    setJson(undefined);
+    setJsonError('');
+    setError('');
+    setPickingIcon(false);
+  };
+  const closeDraft = () => {
+    setDraft(undefined);
+    setJson(undefined);
+    setJsonError('');
+    setPickingIcon(false);
+  };
   const iconButtonRef = useRef<HTMLButtonElement>(null);
   const reload = () => Promise.all([window.maxApi.workspace.listWorkflows(), window.maxApi.workspace.inspectWorkflows()]).then(([rows, findings]) => { setActions(rows); setReports(findings); window.dispatchEvent(new Event('max:workspace-changed')); });
   useEffect(() => {
@@ -59,7 +72,7 @@ export function QuickActionSettings({ locale }: { locale: Locale }) {
       const definition = JSON.parse(JSON.stringify(draft)) as WorkspaceWorkflowDraft;
       const result = draft.id ? await window.maxApi.workspace.updateWorkflow(draft.id, definition) : await window.maxApi.workspace.createWorkflow(definition);
       if (!result.ok) { setError(result.error.message); return; }
-      setDraft(undefined); await reload();
+      closeDraft(); await reload();
       window.dispatchEvent(new Event('max:workspace-changed'));
     } catch { setError(ar ? 'تعذر حفظ الإجراء.' : 'Could not save action.'); }
     finally { setSaving(false); }
@@ -148,7 +161,7 @@ export function QuickActionSettings({ locale }: { locale: Locale }) {
       {!actions.length && <p>{ar ? 'لا توجد إجراءات سريعة بعد.' : 'No quick actions yet.'}</p>}
       {actions.map((action, index) => <div className="action-list-row" key={action.id} role="group" aria-label={action.name} style={{ '--action-color': action.color ?? undefined } as CSSProperties}>
         <button type="button" aria-label={ar ? 'سجل التنفيذ' : 'Run history'} aria-expanded={historyId === action.id} onClick={() => setHistoryId(historyId === action.id ? undefined : action.id)}>{ar ? 'السجل' : 'History'}</button>
-        <button type="button" onClick={() => { setDraft(action); setError(''); }}><strong><PageIconRenderer icon={action.icon || 'lucide:Zap'} size={16} /> {action.name}</strong><small>{action.inputSchema.fields.length} {ar ? 'مدخلات' : 'inputs'} · {action.steps.length} {ar ? 'خطوات' : 'steps'}{!action.enabled && (ar ? ' · معطل' : ' · Disabled')}</small></button>
+        <button type="button" onClick={() => openDraft(action)}><strong><PageIconRenderer icon={action.icon || 'lucide:Zap'} size={16} /> {action.name}</strong><small>{action.inputSchema.fields.length} {ar ? 'مدخلات' : 'inputs'} · {action.steps.length} {ar ? 'خطوات' : 'steps'}{!action.enabled && (ar ? ' · معطل' : ' · Disabled')}</small></button>
         {reports.find((report) => report.workflowId === action.id && !report.canRun)?.issues[0] && <span className="action-validation-error" role="status">{ar ? 'يحتاج إصلاحًا' : 'Needs repair'}: {ar ? reports.find((report) => report.workflowId === action.id)!.issues[0]!.location.replace(/^Step (\d+)/, 'الخطوة $1').replace('Property ', 'الخاصية ') : reports.find((report) => report.workflowId === action.id)!.issues[0]!.location} · {validationLabel(reports.find((report) => report.workflowId === action.id)!.issues[0]!, ar)}</span>}
         <button type="button" disabled={!action.enabled} onClick={() => setPreviewId((id) => id === action.id ? undefined : action.id)}>{ar ? 'معاينة' : 'Preview'}</button>
         <button type="button" disabled={index === 0 || saving} aria-label={ar ? 'تحريك لأعلى' : 'Move up'} onClick={() => { const previous = actions[index - 1]; if (!previous) return; setSaving(true); void window.maxApi.workspace.updateWorkflow(action.id, { positionKey: generateOrderKey(actions[index - 2]?.positionKey, previous.positionKey) }).then(async (result) => { if (!result.ok) setError(result.error.message); await reload(); }).finally(() => setSaving(false)); }}>↑</button>
@@ -156,7 +169,7 @@ export function QuickActionSettings({ locale }: { locale: Locale }) {
       </div>)}
       {historyId && actions.find((action) => action.id === historyId) && <WorkflowRunHistory key={historyId} workflow={actions.find((action) => action.id === historyId)!} locale={locale} />}
       {previewId && actions.find((action) => action.id === previewId) && <QuickActionForm key={previewId} action={actions.find((action) => action.id === previewId)!} locale={locale} onOpenSettings={() => setPreviewId(undefined)} />}
-      <button type="button" className="btn btn-secondary" onClick={() => { setDraft(empty()); setError(''); }}>{ar ? '+ إجراء سريع' : '+ Quick action'}</button>
+      <button type="button" className="btn btn-secondary" onClick={() => openDraft(empty())}>{ar ? '+ إجراء سريع' : '+ Quick action'}</button>
     </> : <>
       <div className="action-row">
         <label>{ar ? 'اللون' : 'Color'}<input aria-label={ar ? 'لون الإجراء' : 'Action color'} type="color" value={draft.color ?? '#5965d7'} onChange={(event) => setDraft({ ...draft, color: event.target.value })} /></label>
@@ -179,7 +192,7 @@ export function QuickActionSettings({ locale }: { locale: Locale }) {
       </>}
 
       {error && <p className="action-save-error" role="alert">{error}</p>}
-      <div className="action-row action-footer"><button className="btn btn-primary" disabled={saving || !draft.name.trim() || json !== undefined} type="button" onClick={() => void save()}>{ar ? 'حفظ' : 'Save'}</button><button type="button" disabled={saving} onClick={() => setDraft(undefined)}>{ar ? 'إلغاء' : 'Cancel'}</button>{draft.id && <button type="button" disabled={saving} onClick={() => { setSaving(true); void window.maxApi.workspace.archiveWorkflow(draft.id!).then(async (result) => { if (!result.ok) setError(result.error.message); else { setDraft(undefined); await reload(); } }).finally(() => setSaving(false)); }}>{ar ? 'أرشفة الإجراء' : 'Archive action'}</button>}</div>
+      <div className="action-row action-footer"><button className="btn btn-primary" disabled={saving || !draft.name.trim() || json !== undefined} type="button" onClick={() => void save()}>{ar ? 'حفظ' : 'Save'}</button><button type="button" disabled={saving} onClick={closeDraft}>{ar ? 'إلغاء' : 'Cancel'}</button>{draft.id && <button type="button" disabled={saving} onClick={() => { setSaving(true); void window.maxApi.workspace.archiveWorkflow(draft.id!).then(async (result) => { if (!result.ok) setError(result.error.message); else { closeDraft(); await reload(); } }).finally(() => setSaving(false)); }}>{ar ? 'أرشفة الإجراء' : 'Archive action'}</button>}</div>
     </>}
   </div>;
 }
