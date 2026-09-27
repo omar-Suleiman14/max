@@ -7,7 +7,9 @@ const ROOT = resolve(__dirname, '..');
 const OUT_ROOT = join(ROOT, 'out');
 
 const BUDGETS = {
-  appAsarBytes: 5 * 1024 * 1024,
+  // The linked Chaos integration adds a small offline-capable main-process
+  // client and page UI. Keep a measured cap with room for this bundled code.
+  appAsarBytes: 5.25 * 1024 * 1024,
   electronLocalesBytesPerPackage: 3 * 1024 * 1024,
   rendererEntryBytes: 450 * 1024,
   rendererEntryGzipBytes: 130 * 1024,
