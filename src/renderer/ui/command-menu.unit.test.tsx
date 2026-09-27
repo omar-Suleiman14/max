@@ -89,6 +89,8 @@ describe('CommandMenu', () => {
     expect((await axe.run(document.body, { rules: { 'color-contrast': { enabled: false } } })).violations).toEqual([]);
     await user.type(input, 'zzz');
     expect(screen.getByRole('status')).toHaveTextContent('No results');
+    expect(screen.getByRole('listbox')).toBeEmptyDOMElement();
+    expect((await axe.run(document.body, { rules: { 'color-contrast': { enabled: false } } })).violations).toEqual([]);
   });
 });
 
