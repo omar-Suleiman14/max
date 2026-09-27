@@ -1,4 +1,4 @@
-import { copyFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { BackupService } from './backup-service';
 import { DatabaseService } from './database-service';
+import { migrations } from './migrations';
+import { normalizeSearchText } from './search-service';
 
 const temporaryDirectories: string[] = [];
 
@@ -68,6 +70,64 @@ describe('BackupService', () => {
     expect(service.getStatus().lastScheduledFailureAt).toBeDefined();
     service.clearScheduledFailure();
     expect(service.getStatus().lastScheduledFailureAt).toBeUndefined();
+  });
+
+  it('refuses a future backup format without changing the active database', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'max-backup-format-future-'));
+    temporaryDirectories.push(dir);
+    const dbPath = join(dir, 'max.sqlite');
+    const db = new DatabaseService(dbPath); db.initialize(); db.close();
+    const service = new BackupService(dbPath, join(dir, 'backups'));
+    const backup = service.createBackup('manual');
+    const before = readFileSync(dbPath);
+    writeFileSync(`${backup.filePath}.json`, JSON.stringify({ ...backup, formatVersion: 999 }));
+    expect(service.verifyBackup(backup.id)).toMatchObject({ valid: false, error: 'Unsupported backup format version: 999.' });
+    expect(service.restoreBackup(backup.id)).toMatchObject({ restored: false, safetyRollbackOccurred: false });
+    expect(readFileSync(dbPath).equals(before)).toBe(true);
+    expect(service.listBackups()).toHaveLength(1);
+  });
+
+  it('restores a versionless backup made before format versioning', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'max-backup-format-legacy-'));
+    temporaryDirectories.push(dir);
+    const dbPath = join(dir, 'max.sqlite');
+    const db = new DatabaseService(dbPath); db.initialize(); db.close();
+    const service = new BackupService(dbPath, join(dir, 'backups'));
+    const backup = service.createBackup('manual');
+    const legacy: Record<string, unknown> = { ...backup };
+    delete legacy.formatVersion;
+    writeFileSync(`${backup.filePath}.json`, JSON.stringify(legacy));
+    expect(service.verifyBackup(backup.id)).toMatchObject({ valid: true, formatVersion: 1 });
+    expect(service.restoreBackup(backup.id)).toMatchObject({ restored: true });
+    expect(service.listBackups().some(({ trigger }) => trigger === 'pre-restore')).toBe(true);
+  });
+
+  it('restores an older supported schema and upgrades it when Max reopens', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'max-backup-old-schema-'));
+    temporaryDirectories.push(dir);
+    const dbPath = join(dir, 'max.sqlite');
+    const current = new DatabaseService(dbPath); current.initialize(); current.close();
+    const oldPath = join(dir, 'old.maxbak');
+    const old = new DatabaseSync(oldPath);
+    old.function('max_search_normalize', { deterministic: true }, (value: unknown) =>
+      normalizeSearchText(typeof value === 'string' ? value : typeof value === 'number' || typeof value === 'bigint' ? value.toString() : ''));
+    old.exec('PRAGMA foreign_keys = ON; CREATE TABLE system_migrations (id INTEGER PRIMARY KEY NOT NULL, name TEXT NOT NULL UNIQUE, applied_at TEXT NOT NULL) STRICT;');
+    for (const migration of migrations.filter(({ id }) => id <= 18)) {
+      migration.up(old);
+      old.prepare('INSERT INTO system_migrations (id, name, applied_at) VALUES (?, ?, ?)').run(migration.id, migration.name, new Date().toISOString());
+    }
+    old.close();
+    const service = new BackupService(dbPath, join(dir, 'backups'));
+    expect(service.verifyBackup(oldPath)).toMatchObject({ valid: true, schemaVersion: 18 });
+    expect(service.restoreBackup(oldPath)).toMatchObject({ restored: true });
+    const reopened = new DatabaseService(dbPath);
+    try {
+      reopened.initialize();
+      expect(reopened.getHealth().schemaVersion).toBe(19);
+      expect(reopened.backups.listBackups().some(({ trigger }) => trigger === 'pre-migration')).toBe(true);
+    } finally {
+      reopened.close();
+    }
   });
 
   it('refuses a backup made with a newer database schema before replacing live data', () => {

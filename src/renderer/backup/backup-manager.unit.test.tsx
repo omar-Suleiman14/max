@@ -35,6 +35,7 @@ describe('local backup details', () => {
     expect(screen.getByText(/Next scheduled backup:/)).toBeInTheDocument();
     fireEvent.click(screen.getByText('Backup Snapshots'));
     fireEvent.click(screen.getAllByText(/Daily/).at(-1)!);
+    expect(screen.getByText(/Format v1/)).toBeInTheDocument();
     expect(screen.getByText(/C:\\Backups\\workspace.maxbak/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Verify Integrity' }));
     expect(verify).toHaveBeenCalledWith(backup.id);
@@ -79,6 +80,18 @@ describe('local backup details', () => {
     window.dispatchEvent(new Event('max:backups-changed'));
     expect(await screen.findByText(/Protective backup saved at:/)).toBeInTheDocument();
     expect(screen.getByText(/C:\\Backups\\safety.maxbak/)).toBeInTheDocument();
+  });
+
+  it('labels and blocks a backup with a future format version', async () => {
+    const { list } = setup();
+    list.mockResolvedValue([{ ...backup, formatVersion: 999 }]);
+    window.dispatchEvent(new Event('max:backups-changed'));
+    await screen.findByText(/Last successful local backup:/);
+    fireEvent.click(screen.getByText('Backup Snapshots'));
+    fireEvent.click(screen.getAllByText(/Daily/).at(-1)!);
+    expect(screen.getByText(/Format v999/)).toBeInTheDocument();
+    expect(screen.getByText(/backup format is not supported/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Restore' })).toBeDisabled();
   });
 
   it('has no accessibility violations in the backup summary', async () => {

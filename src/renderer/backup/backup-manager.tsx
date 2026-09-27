@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
-import type { BackupMetadata, BackupVerificationResult, LocalBackupStatus } from '../../shared/backup-contract';
+import { BACKUP_FORMAT_VERSION, type BackupMetadata, type BackupVerificationResult, type LocalBackupStatus } from '../../shared/backup-contract';
 import type { BackupSchedule } from '../../shared/blueprint-contract';
 import type { Locale } from '../app/i18n';
 import { Button } from '../ui/button';
@@ -167,11 +167,11 @@ export function BackupManager({ locale, schedule: configuredSchedule }: BackupMa
         {loading && <p role="status">{locale === 'ar' ? 'جارٍ التحميل…' : 'Loading backups…'}</p>}
         {!loading && backups.length === 0 && <div className="backup-empty"><Archive size={22} /><p>{backupCopy(locale, 'emptyBackups')}</p></div>}
         {backups.map((backup) => <details className="backup-snapshot" key={backup.id}>
-          <summary><span>{dateTime(backup.createdAt)} · {triggerLabel(backup)}</span><small>{formatBytes(backup.sizeBytes)}</small></summary>
+          <summary><span>{dateTime(backup.createdAt)} · {triggerLabel(backup)} · {locale === 'ar' ? 'صيغة النسخة' : 'Format'} v{backup.formatVersion ?? 1}</span><small>{formatBytes(backup.sizeBytes)}</small></summary>
           <div className="backup-snapshot-body"><small>{backupCopy(locale, 'location')}: <span dir="auto">{backup.filePath}</span></small><div className="backup-snapshot-actions">
             <Button disabled={verifyingId === backup.id} icon={<ShieldCheck size={14} />} onClick={() => void handleVerify(backup)}>{backupCopy(locale, verifyingId === backup.id ? 'verifying' : 'verify')}</Button>
-            <Button disabled={status !== undefined && backup.schemaVersion > status.currentSchemaVersion} icon={<RotateCcw size={14} />} onClick={() => setRestoreConfirmBackup(backup)}>{backupCopy(locale, 'restore')}</Button>
-          </div>{status !== undefined && backup.schemaVersion > status.currentSchemaVersion && <p role="alert">{backupCopy(locale, 'newerSchema')}</p>}{verificationResults[backup.id] && <div role="status"><p>{backupCopy(locale, 'checksumResult')}: {backupCopy(locale, verificationResults[backup.id]!.checksumMatch ? 'passed' : 'failed')}</p><p>{backupCopy(locale, 'sqliteResult')}: {backupCopy(locale, verificationResults[backup.id]!.sqliteIntegrityPassed ? 'passed' : 'failed')}</p>{verificationResults[backup.id]!.error && <p>{verificationResults[backup.id]!.error}</p>}</div>}</div>
+            <Button disabled={(backup.formatVersion ?? 1) !== BACKUP_FORMAT_VERSION || (status !== undefined && backup.schemaVersion > status.currentSchemaVersion)} icon={<RotateCcw size={14} />} onClick={() => setRestoreConfirmBackup(backup)}>{backupCopy(locale, 'restore')}</Button>
+          </div>{(backup.formatVersion ?? 1) !== BACKUP_FORMAT_VERSION && <p role="alert">{locale === 'ar' ? 'صيغة النسخة الاحتياطية غير مدعومة في هذا الإصدار من ماكس.' : 'This backup format is not supported by this Max version.'}</p>}{status !== undefined && backup.schemaVersion > status.currentSchemaVersion && <p role="alert">{backupCopy(locale, 'newerSchema')}</p>}{verificationResults[backup.id] && <div role="status"><p>{backupCopy(locale, 'checksumResult')}: {backupCopy(locale, verificationResults[backup.id]!.checksumMatch ? 'passed' : 'failed')}</p><p>{backupCopy(locale, 'sqliteResult')}: {backupCopy(locale, verificationResults[backup.id]!.sqliteIntegrityPassed ? 'passed' : 'failed')}</p>{verificationResults[backup.id]!.error && <p>{verificationResults[backup.id]!.error}</p>}</div>}</div>
         </details>)}
       </details>
 

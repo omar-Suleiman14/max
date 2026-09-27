@@ -20,6 +20,7 @@ import type {
   LocalBackupStatus,
   RestoreResult,
 } from '../../shared/backup-contract';
+import { BACKUP_FORMAT_VERSION } from '../../shared/backup-contract';
 import { ObjectDomainError } from './object-repository';
 import { migrations } from './migrations';
 
@@ -53,7 +54,7 @@ export class BackupService {
       const value = JSON.parse(readFileSync(join(this.#backupDir, 'restore-status.state'), 'utf8')) as { safetyPath?: unknown };
       if (typeof value.safetyPath === 'string' && existsSync(value.safetyPath)) lastRestoreSafetyPath = value.safetyPath;
     } catch { /* Optional status must never prevent local work. */ }
-    return { currentSchemaVersion: migrations.at(-1)?.id ?? 0, ...(lastScheduledFailureAt ? { lastScheduledFailureAt } : {}), ...(lastRestoreSafetyPath ? { lastRestoreSafetyPath } : {}) };
+    return { currentBackupFormatVersion: BACKUP_FORMAT_VERSION, currentSchemaVersion: migrations.at(-1)?.id ?? 0, ...(lastScheduledFailureAt ? { lastScheduledFailureAt } : {}), ...(lastRestoreSafetyPath ? { lastRestoreSafetyPath } : {}) };
   }
 
   recordScheduledFailure(): void {
@@ -96,6 +97,7 @@ export class BackupService {
         createdAt: now,
         filePath,
         filename,
+        formatVersion: BACKUP_FORMAT_VERSION,
         id,
         schemaVersion: 1,
         sizeBytes: buffer.length,
@@ -152,6 +154,7 @@ export class BackupService {
       createdAt: now,
       filePath,
       filename,
+      formatVersion: BACKUP_FORMAT_VERSION,
       id,
       schemaVersion,
       sizeBytes: stats.size,
@@ -188,6 +191,7 @@ export class BackupService {
   verifyBackup(backupIdOrPath: string): BackupVerificationResult {
     let filePath = backupIdOrPath;
     let expectedChecksum: string | undefined;
+    let formatVersion: unknown;
 
     if (!existsSync(filePath)) {
       const found = this.listBackups().find((b) => b.id === backupIdOrPath || b.filename === backupIdOrPath);
@@ -196,16 +200,24 @@ export class BackupService {
       }
       filePath = found.filePath;
       expectedChecksum = found.checksum;
+      formatVersion = found.formatVersion;
     } else {
       const jsonPath = `${filePath}.json`;
       if (existsSync(jsonPath)) {
         try {
           const meta = JSON.parse(readFileSync(jsonPath, 'utf-8')) as BackupMetadata;
           expectedChecksum = meta.checksum;
+          formatVersion = meta.formatVersion;
         } catch {
-          // ignore
+          return { checksumMatch: false, error: 'Backup metadata could not be read.', sqliteIntegrityPassed: false, valid: false };
         }
       }
+    }
+
+    const declaredVersion = formatVersion === undefined ? 1 : formatVersion;
+    if (typeof declaredVersion !== 'number' || !Number.isInteger(declaredVersion) || declaredVersion !== BACKUP_FORMAT_VERSION) {
+      const label = typeof declaredVersion === 'number' || typeof declaredVersion === 'string' ? String(declaredVersion) : 'invalid';
+      return { checksumMatch: false, error: `Unsupported backup format version: ${label}.`, sqliteIntegrityPassed: false, valid: false };
     }
 
     const fileBuffer = readFileSync(filePath);
@@ -247,6 +259,7 @@ export class BackupService {
 
       return {
         checksumMatch: true,
+        formatVersion: declaredVersion,
         schemaVersion,
         sqliteIntegrityPassed: true,
         valid: true,
@@ -381,6 +394,7 @@ export class BackupService {
       createdAt: input.createdAt,
       filePath,
       filename,
+      formatVersion: BACKUP_FORMAT_VERSION,
       id: input.id,
       schemaVersion: 0,
       sizeBytes: input.bytes.byteLength,

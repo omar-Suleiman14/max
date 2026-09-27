@@ -28,6 +28,8 @@ Open **Settings → Backup → Backup Snapshots**, expand the snapshot and choos
 
 Restoration of the active database is undergoing further reliability work. Keep a separate copy of important backup files and verify the restored pages and records before relying on them. If restoration fails, keep the original backup file and the protective snapshot while you seek help.
 
+New backup files declare format version 1. Backups made before this field existed are treated as format 1. Max can restore format 1 when its SQLite schema is supported; older schemas upgrade through Max's migrations. A newer schema or unknown backup format is refused without replacing the current workspace.
+
 ## What is available now
 
 Max Blueprint files can move supported workspace content between installations. A Blueprint is not a replacement for a full local backup. Max Cloud backup is present, but is still being repaired and should not be your only copy. GitHub and self-hosted backup destinations, sync, public publishing, and mobile access are planned features; they are not required for local work.
