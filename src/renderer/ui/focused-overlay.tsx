@@ -1,6 +1,6 @@
 import { createPortal } from 'react-dom';
 import { useRef, type KeyboardEvent, type ReactNode } from 'react';
-import { containTab, useOverlayFocus, useOverlayLayer } from './overlay-stack';
+import { containTab, isTopmostOverlay, useOverlayFocus, useOverlayLayer } from './overlay-stack';
 
 type FocusedOverlayProps = Readonly<{
   children: ReactNode;
@@ -27,8 +27,8 @@ export function FocusedOverlay({ children, className = '', labelId, onClose }: F
   return createPortal(
     <div
       className="overlay"
-      onMouseDown={(event) => {
-        if (event.currentTarget === event.target) onClose();
+      onPointerDown={(event) => {
+        if (!event.defaultPrevented && event.currentTarget === event.target && isTopmostOverlay(panelRef.current)) onClose();
       }}
     >
       <div

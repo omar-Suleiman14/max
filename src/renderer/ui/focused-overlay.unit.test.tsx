@@ -2,9 +2,11 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { afterEach, expect, it } from 'vitest';
 import { FocusedOverlay } from './focused-overlay';
+import { useOverlayLayer } from './overlay-stack';
 
 afterEach(cleanup);
 
@@ -30,6 +32,34 @@ it('closes only the innermost dialog and restores focus in order', async () => {
   expect(screen.getByText('Open inner')).toHaveFocus();
   await user.keyboard('{Escape}');
   expect(screen.getByText('Open')).toHaveFocus();
+});
+
+function Picker({ onClose }: { onClose: () => void }) {
+  const root = useRef<HTMLDivElement>(null);
+  useOverlayLayer(root, { onClose });
+  return createPortal(<div aria-label="Picker" ref={root} role="dialog">Picker content</div>, document.body);
+}
+
+function DialogWithPicker() {
+  const [outer, setOuter] = useState(true);
+  const [picker, setPicker] = useState(false);
+  return outer && <FocusedOverlay labelId="outer" onClose={() => setOuter(false)}>
+    <h2 id="outer">Outer</h2><button onClick={() => setPicker(true)}>Open picker</button>
+    {picker && <Picker onClose={() => setPicker(false)} />}
+  </FocusedOverlay>;
+}
+
+it('dismisses only the picker when its parent backdrop is pressed', async () => {
+  const user = userEvent.setup();
+  render(<DialogWithPicker />);
+  await user.click(screen.getByText('Open picker'));
+  expect(screen.getByRole('dialog', { name: 'Picker' })).toBeInTheDocument();
+  const backdrop = screen.getByRole('dialog', { name: 'Outer' }).parentElement!;
+  await user.pointer({ keys: '[MouseLeft]', target: backdrop });
+  expect(screen.queryByRole('dialog', { name: 'Picker' })).not.toBeInTheDocument();
+  expect(screen.getByRole('dialog', { name: 'Outer' })).toBeInTheDocument();
+  await user.pointer({ keys: '[MouseLeft]', target: backdrop });
+  expect(screen.queryByRole('dialog', { name: 'Outer' })).not.toBeInTheDocument();
 });
 
 it('contains forward and backward tab navigation', async () => {
