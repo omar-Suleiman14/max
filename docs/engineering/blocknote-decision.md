@@ -1,7 +1,7 @@
 # BlockNote as the desktop page editor
 
-Status: implemented for review in #42. The licence question in #171 still needs
-an owner decision before a release ships it.
+Status: implemented for review in #42. Astra reviewed the package licence path
+for #171; final distribution and release checks remain required.
 
 ## What changed since the prototype
 
@@ -57,13 +57,16 @@ Dependencies and licences:
 No BlockNote XL package is installed. Columns are Max's own block for that
 reason.
 
-## Open decision
+## Licence decision and distribution requirements
 
 MPL-2.0 is file-level copyleft. Its section 3.3 lists GPL-2.0 as a Secondary
 Licence, which allows a larger work under GPL-2.0 unless a file is marked
-"Incompatible With Secondary Licenses"; none of the installed BlockNote files
-carry that notice. Even so, whether shipping these files unmodified inside
-Max's GPL-2.0-only application is acceptable is the owner's call in #171. This
-document does not approve a licence change or a distribution. Tiptap (MIT)
-remains the fallback if the answer is no; the adapter boundary means only
-`src/renderer/editor` would change.
+"Incompatible With Secondary Licenses"; none of the inspected 0.54.2 package
+files carry that notice. Astra's source review found this route compatible in
+principle with Max's GPL-2.0-only declaration, without changing Max's licence.
+This is not final distribution clearance. Packaged builds must include the
+MPL-2.0 text, BlockNote notice, GPL-2.0 text and a notice directing recipients
+to the corresponding source. The release process must verify that source,
+including Max's build scripts and any BlockNote modifications, is available.
+Tiptap (MIT) remains the fallback if a later review finds a blocker; the
+adapter boundary means only `src/renderer/editor` would change.
