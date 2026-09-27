@@ -33,7 +33,7 @@ export function QuickActionSettings({ locale }: { locale: Locale }) {
   const [jsonError, setJsonError] = useState('');
   const [historyId, setHistoryId] = useState<string>();
   const iconButtonRef = useRef<HTMLButtonElement>(null);
-  const reload = () => window.maxApi.workspace.listWorkflows().then(setActions);
+  const reload = () => window.maxApi.workspace.listWorkflows().then((rows) => { setActions(rows); window.dispatchEvent(new Event('max:workspace-changed')); });
   useEffect(() => {
     let active = true;
     void Promise.all([window.maxApi.workspace.listWorkflows(), window.maxApi.workspace.getNavigation()]).then(async ([rows, nav]) => {
