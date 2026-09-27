@@ -40,6 +40,9 @@ function onPointerDown(event: PointerEvent) {
   const top = layers.at(-1);
   if (!top?.clickAway || !(event.target instanceof Node)) return;
   if (top.root.current?.contains(event.target) || top.anchor()?.contains(event.target)) return;
+  // The same pointerdown can reach a parent modal backdrop after this layer
+  // closes. Mark it consumed so one press dismisses only this layer.
+  event.preventDefault();
   top.close();
 }
 
