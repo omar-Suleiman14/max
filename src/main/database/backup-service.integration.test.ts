@@ -1,8 +1,9 @@
-import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { RestoreResult } from '../../shared/backup-contract';
 
 import { BackupService } from './backup-service';
 import { DatabaseService } from './database-service';
@@ -70,6 +71,74 @@ describe('BackupService', () => {
     expect(service.getStatus().lastScheduledFailureAt).toBeDefined();
     service.clearScheduledFailure();
     expect(service.getStatus().lastScheduledFailureAt).toBeUndefined();
+  });
+
+  it('ignores damaged optional backup status files', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'max-backup-damaged-status-'));
+    temporaryDirectories.push(dir);
+    const dbPath = join(dir, 'max.sqlite');
+    const db = new DatabaseService(dbPath); db.initialize(); db.close();
+    const service = new BackupService(dbPath, join(dir, 'backups'));
+    writeFileSync(join(dir, 'backups', 'schedule-failure.state'), '{broken');
+    writeFileSync(join(dir, 'backups', 'restore-status.state'), '{broken');
+    expect(service.getStatus()).toMatchObject({ currentSchemaVersion: 19, currentBackupFormatVersion: 1 });
+    expect(service.getStatus().lastScheduledFailureAt).toBeUndefined();
+    expect(service.getStatus().lastRestoreSafetyPath).toBeUndefined();
+    const reopened = new DatabaseService(dbPath);
+    try { reopened.initialize(); expect(reopened.getHealth().status).toBe('ready'); }
+    finally { reopened.close(); }
+  });
+
+  it('keeps the active database unchanged if the target disappears during restoration', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'max-backup-missing-during-restore-'));
+    temporaryDirectories.push(dir);
+    const dbPath = join(dir, 'max.sqlite');
+    const db = new DatabaseService(dbPath); db.initialize();
+    db.objects.createRecord({ label: 'Keep after rollback', objectKind: 'item', values: {} });
+    db.close();
+    const service = new BackupService(dbPath, join(dir, 'backups'));
+    const target = service.createBackup('manual');
+    const before = readFileSync(dbPath);
+    const create = service.createBackup.bind(service);
+    const injected = vi.spyOn(service, 'createBackup').mockImplementation((trigger) => {
+      const snapshot = create(trigger);
+      if (trigger === 'pre-restore') unlinkSync(target.filePath);
+      return snapshot;
+    });
+    let result: RestoreResult;
+    try { result = service.restoreBackup(target.id); }
+    finally { injected.mockRestore(); }
+    expect(result).toMatchObject({ restored: false, safetyRollbackOccurred: false });
+    expect(result.preRestoreBackupId).toBeDefined();
+    expect(readFileSync(dbPath).equals(before)).toBe(true);
+    expect(service.verifyBackup(result.preRestoreBackupId!).valid).toBe(true);
+  });
+
+  it('rolls back from the protective snapshot if a staged file is damaged after verification', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'max-backup-rollback-'));
+    temporaryDirectories.push(dir);
+    const dbPath = join(dir, 'max.sqlite');
+    const db = new DatabaseService(dbPath); db.initialize();
+    db.objects.createRecord({ label: 'Keep after rollback', objectKind: 'item', values: {} });
+    db.close();
+    const service = new BackupService(dbPath, join(dir, 'backups'));
+    const target = service.createBackup('manual');
+    const verify = service.verifyBackup.bind(service);
+    const injected = vi.spyOn(service, 'verifyBackup').mockImplementation((path) => {
+      const result = verify(path);
+      if (path.includes('.max-restore-') && result.valid) writeFileSync(path, 'damaged after verification');
+      return result;
+    });
+    let result: RestoreResult;
+    try { result = service.restoreBackup(target.id); }
+    finally { injected.mockRestore(); }
+    expect(result).toMatchObject({ restored: false, safetyRollbackOccurred: true });
+    expect(service.verifyBackup(result.preRestoreBackupId!).valid).toBe(true);
+    const reopened = new DatabaseService(dbPath);
+    try {
+      reopened.initialize();
+      expect(reopened.objects.listRecords('item').map(({ label }) => label)).toEqual(['Keep after rollback']);
+    } finally { reopened.close(); }
   });
 
   it('refuses a future backup format without changing the active database', () => {
