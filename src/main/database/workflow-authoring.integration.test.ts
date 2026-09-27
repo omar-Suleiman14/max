@@ -80,5 +80,12 @@ describe('workflows authored in the editor', () => {
     });
     expect(db.workflows.execute({ inputs: { x: 4 }, workflowId: action.id }).result).toEqual({ doubled: 8, note: 'fixed' });
     expect(() => db.workflows.execute({ inputs: { x: -1 }, workflowId: action.id })).toThrow('Must be positive');
+    const edited = db.workflows.updateWorkflow(action.id, { steps: action.steps.map((step) =>
+      step.type === 'VALIDATE' ? { ...step, config: { ...step.config, condition: 'y > 10' } } : step,
+    ) });
+    expect(edited.steps[1]?.config.condition).toBe('y > 10');
+    expect(() => db.workflows.execute({ inputs: { x: -1 }, workflowId: action.id })).toThrow('Must be positive');
+    expect(() => db.workflows.execute({ inputs: { x: 4 }, workflowId: action.id })).toThrow('Must be positive');
+    expect(db.workflows.execute({ inputs: { x: 6 }, workflowId: action.id }).status).toBe('completed');
   });
 });
