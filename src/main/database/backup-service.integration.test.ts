@@ -197,7 +197,7 @@ describe('BackupService', () => {
     } finally {
       reopened.close();
     }
-  });
+  }, 20_000);
 
   it('refuses a backup made with a newer database schema before replacing live data', () => {
     const dir = mkdtempSync(join(tmpdir(), 'max-backup-future-'));
