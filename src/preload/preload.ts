@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 import type { AccountDraft } from '../shared/account-contract';
+import type { ChaosDraftRequest, ChaosItemKind, ChaosLocalDefinition } from '../shared/chaos-integration-contract';
 import type { BackupTrigger } from '../shared/backup-contract';
 import type { Blueprint, CompleteOnboardingDraft, ShopMetadata } from '../shared/blueprint-contract';
 import { IPC_CHANNELS, type MaxApi } from '../shared/ipc-contract';
@@ -75,6 +76,37 @@ const maxApi: MaxApi = Object.freeze({
       ipcRenderer.invoke(IPC_CHANNELS.cloudBackupRestore, sessionToken, backupId) as ReturnType<MaxApi['cloudBackups']['restore']>,
     runScheduled: (sessionToken: string, schedule: 'daily' | 'manual' | 'weekly') =>
       ipcRenderer.invoke(IPC_CHANNELS.cloudBackupRunScheduled, sessionToken, schedule) as ReturnType<MaxApi['cloudBackups']['runScheduled']>,
+  }),
+  chaos: Object.freeze({
+    getStatus: () => ipcRenderer.invoke(IPC_CHANNELS.chaosStatus) as ReturnType<MaxApi['chaos']['getStatus']>,
+    testConnection: (apiOrigin: string, token: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.chaosTestConnection, apiOrigin, token) as ReturnType<MaxApi['chaos']['testConnection']>,
+    saveConnection: (apiOrigin: string, token: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.chaosSaveConnection, apiOrigin, token) as ReturnType<MaxApi['chaos']['saveConnection']>,
+    disconnect: () => ipcRenderer.invoke(IPC_CHANNELS.chaosDisconnect) as ReturnType<MaxApi['chaos']['disconnect']>,
+    listItems: (kind?: ChaosItemKind, cursor?: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.chaosListItems, kind, cursor) as ReturnType<MaxApi['chaos']['listItems']>,
+    listLinks: (pageId: string) => ipcRenderer.invoke(IPC_CHANNELS.chaosListLinks, pageId) as ReturnType<MaxApi['chaos']['listLinks']>,
+    refreshLinks: (pageId: string, force?: boolean) =>
+      ipcRenderer.invoke(IPC_CHANNELS.chaosRefreshLinks, pageId, force) as ReturnType<MaxApi['chaos']['refreshLinks']>,
+    linkExisting: (pageId: string, itemId: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.chaosLinkExisting, pageId, itemId) as ReturnType<MaxApi['chaos']['linkExisting']>,
+    unlink: (linkId: string) => ipcRenderer.invoke(IPC_CHANNELS.chaosUnlink, linkId) as ReturnType<MaxApi['chaos']['unlink']>,
+    createDraft: (pageId: string, request: ChaosDraftRequest) =>
+      ipcRenderer.invoke(IPC_CHANNELS.chaosCreateDraft, pageId, request) as ReturnType<MaxApi['chaos']['createDraft']>,
+    saveLocalDefinition: (linkId: string, definition: ChaosLocalDefinition) =>
+      ipcRenderer.invoke(IPC_CHANNELS.chaosSaveLocalDefinition, linkId, definition) as ReturnType<MaxApi['chaos']['saveLocalDefinition']>,
+    adoptChaosDefinition: (linkId: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.chaosAdoptDefinition, linkId) as ReturnType<MaxApi['chaos']['adoptChaosDefinition']>,
+    updateDraft: (linkId: string, definition: ChaosLocalDefinition, expectedRevision?: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.chaosUpdateDraft, linkId, definition, expectedRevision) as ReturnType<MaxApi['chaos']['updateDraft']>,
+    listPendingOperations: (pageId: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.chaosListPendingOperations, pageId) as ReturnType<MaxApi['chaos']['listPendingOperations']>,
+    retryOperation: (operationId: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.chaosRetryOperation, operationId) as ReturnType<MaxApi['chaos']['retryOperation']>,
+    discardOperation: (operationId: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.chaosDiscardOperation, operationId) as ReturnType<MaxApi['chaos']['discardOperation']>,
+    copyTemplate: (itemId: string) => ipcRenderer.invoke(IPC_CHANNELS.chaosCopyTemplate, itemId) as ReturnType<MaxApi['chaos']['copyTemplate']>,
   }),
   objects: Object.freeze({
     archiveProperty: (id: string) =>

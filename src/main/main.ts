@@ -6,6 +6,9 @@ import { dirname, join } from 'node:path';
 import { AssetStore } from './assets/asset-store';
 import { PhotoLibrary } from './assets/photo-library';
 import { CloudBackupService } from './cloud/cloud-backup-service';
+import { ChaosService } from './integrations/chaos/chaos-service';
+import { ChaosTokenStore } from './integrations/chaos/chaos-token-store';
+import { electronSecretCipher } from './integrations/chaos/electron-secret-cipher';
 import { DatabaseService } from './database/database-service';
 import type { RestoreResult } from '../shared/backup-contract';
 import { registerIpcHandlers, removeIpcHandlers } from './ipc/register-ipc-handlers';
@@ -105,9 +108,16 @@ async function latestPublishedRelease(): Promise<LatestRelease | null> {
         installedWindows ? undefined : latestPublishedRelease,
       );
       if (process.env.MAX_SMOKE_TEST !== '1') updates.start();
+      // The token file sits beside the database, never inside it, so backups and exports cannot carry it.
+      const chaos = new ChaosService({
+        fetchImpl: (input, init) => net.fetch(input instanceof URL ? input.toString() : input, init),
+        repository: database.chaosLinks,
+        tokens: new ChaosTokenStore(join(app.getPath('userData'), 'chaos-credentials.json'), electronSecretCipher),
+      });
       registerIpcHandlers({
         updates,
         assets,
+        chaos,
         cloudBackups,
         database,
         restoreLocalBackup: (backupIdOrPath): RestoreResult => {

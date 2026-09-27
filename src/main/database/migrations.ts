@@ -1128,4 +1128,82 @@ export const migrations: readonly Migration[] = [
       `);
     },
   },
+  {
+    id: 20,
+    name: 'chaos_linked_items',
+    up(database) {
+      // Chaos owns forms, quizzes and responses. Max keeps the connection's
+      // public details (never its token, which lives in OS-encrypted storage
+      // outside this file), which page links to which Chaos item, allow-listed
+      // item metadata and aggregate summaries with the time they were fetched,
+      // Max's own copy of a field list it authored, and create/update requests
+      // that have not been confirmed yet so a retry reuses the same key.
+      database.exec(`
+        CREATE TABLE chaos_connections (
+          id TEXT PRIMARY KEY NOT NULL,
+          api_origin TEXT NOT NULL CHECK (length(api_origin) BETWEEN 8 AND 2000),
+          workspace_id TEXT NOT NULL,
+          workspace_name TEXT NOT NULL,
+          remote_connection_id TEXT NOT NULL,
+          connection_label TEXT NOT NULL DEFAULT '',
+          access_mode TEXT NOT NULL CHECK (access_mode IN ('all', 'selected')),
+          scopes_json TEXT NOT NULL CHECK (json_valid(scopes_json)),
+          capabilities_json TEXT NOT NULL CHECK (json_valid(capabilities_json)),
+          state TEXT NOT NULL CHECK (state IN ('connected', 'disconnected')),
+          last_checked_at TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        ) STRICT;
+
+        CREATE UNIQUE INDEX chaos_connections_workspace
+          ON chaos_connections (api_origin, workspace_id);
+
+        CREATE TABLE chaos_links (
+          id TEXT PRIMARY KEY NOT NULL,
+          connection_id TEXT NOT NULL REFERENCES chaos_connections(id) ON DELETE CASCADE,
+          page_id TEXT NOT NULL REFERENCES workspace_nodes(id) ON DELETE CASCADE,
+          item_id TEXT NOT NULL CHECK (length(item_id) BETWEEN 6 AND 220),
+          kind TEXT NOT NULL CHECK (kind IN ('form', 'quiz')),
+          item_json TEXT CHECK (item_json IS NULL OR json_valid(item_json)),
+          item_fetched_at TEXT,
+          summary_json TEXT CHECK (summary_json IS NULL OR json_valid(summary_json)),
+          summary_fetched_at TEXT,
+          last_state TEXT NOT NULL DEFAULT 'ok',
+          last_error_code TEXT,
+          last_attempt_at TEXT,
+          local_definition_json TEXT CHECK (local_definition_json IS NULL OR json_valid(local_definition_json)),
+          local_changes INTEGER NOT NULL DEFAULT 0 CHECK (local_changes IN (0, 1)),
+          synced_definition_json TEXT CHECK (synced_definition_json IS NULL OR json_valid(synced_definition_json)),
+          synced_revision TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        ) STRICT;
+
+        CREATE UNIQUE INDEX chaos_links_page_item
+          ON chaos_links (page_id, connection_id, item_id);
+        CREATE INDEX chaos_links_page
+          ON chaos_links (page_id, created_at);
+
+        CREATE TABLE chaos_pending_operations (
+          id TEXT PRIMARY KEY NOT NULL,
+          connection_id TEXT NOT NULL REFERENCES chaos_connections(id) ON DELETE CASCADE,
+          page_id TEXT NOT NULL REFERENCES workspace_nodes(id) ON DELETE CASCADE,
+          link_id TEXT REFERENCES chaos_links(id) ON DELETE CASCADE,
+          operation TEXT NOT NULL CHECK (operation IN ('create_draft', 'update_draft')),
+          item_id TEXT,
+          idempotency_key TEXT NOT NULL UNIQUE CHECK (length(idempotency_key) BETWEEN 1 AND 200),
+          if_match TEXT,
+          request_json TEXT NOT NULL CHECK (json_valid(request_json)),
+          attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+          last_error_code TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          CHECK ((operation = 'create_draft' AND item_id IS NULL) OR (operation = 'update_draft' AND item_id IS NOT NULL AND if_match IS NOT NULL))
+        ) STRICT;
+
+        CREATE INDEX chaos_pending_operations_page
+          ON chaos_pending_operations (page_id, created_at);
+      `);
+    },
+  },
 ];

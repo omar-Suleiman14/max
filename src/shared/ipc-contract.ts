@@ -86,6 +86,7 @@ import type {
   WorkspaceWorkflowDraft,
 } from './workflow-contract';
 import type { TemplateImportResult, WorkspaceTemplateV2 } from './template-v2-contract';
+import type { ChaosApi } from './chaos-integration-contract';
 
 export const IPC_CHANNELS = {
   updateStatus: 'max:update:status',
@@ -235,6 +236,25 @@ export const IPC_CHANNELS = {
   workspaceExportTemplate: 'max:workspace:templates:export',
   workspaceImportFile: 'max:workspace:files:import',
   workspaceMigrateV01: 'max:workspace:migration:v01-to-v02',
+
+  // Chaos integration (API v1). The token goes in once and never comes back out.
+  chaosStatus: 'max:chaos:status',
+  chaosTestConnection: 'max:chaos:connection:test',
+  chaosSaveConnection: 'max:chaos:connection:save',
+  chaosDisconnect: 'max:chaos:connection:disconnect',
+  chaosListItems: 'max:chaos:items:list',
+  chaosListLinks: 'max:chaos:links:list',
+  chaosRefreshLinks: 'max:chaos:links:refresh',
+  chaosLinkExisting: 'max:chaos:links:link-existing',
+  chaosUnlink: 'max:chaos:links:unlink',
+  chaosCreateDraft: 'max:chaos:drafts:create',
+  chaosSaveLocalDefinition: 'max:chaos:links:save-local-definition',
+  chaosAdoptDefinition: 'max:chaos:links:adopt-definition',
+  chaosUpdateDraft: 'max:chaos:drafts:update',
+  chaosListPendingOperations: 'max:chaos:operations:list',
+  chaosRetryOperation: 'max:chaos:operations:retry',
+  chaosDiscardOperation: 'max:chaos:operations:discard',
+  chaosCopyTemplate: 'max:chaos:templates:copy',
 } as const;
 
 export type DatabaseHealth = Readonly<{
@@ -335,6 +355,8 @@ export type MaxApi = Readonly<{
     getStatement: (personId: string) => Promise<PersonFinancialStatement>;
     repayDebt: (draft: RepaymentDraft) => Promise<MutationResult<TransactionRecord>>;
   }>;
+  /** Chaos forms and quizzes linked to pages. Every call answers with a result; nothing requires a connection. */
+  chaos: ChaosApi;
   reconciliation: Readonly<{
     closeSession: (draft: CloseSessionDraft) => Promise<MutationResult<DailySession>>;
     getCurrentSession: (accountId?: string) => Promise<DailySession | null>;

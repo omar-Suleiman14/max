@@ -28,6 +28,7 @@ import { BlueprintDialog } from '../blueprints/blueprint-dialog';
 import { loadTrashedPages, restoreTrashedPage } from '../pages/pages-store';
 import { Button } from './button';
 import { FocusedOverlay } from './focused-overlay';
+import { ChaosConnectionSettings } from '../integrations/chaos/chaos-connection-settings';
 import { readQuickActionsEnabled, saveQuickActionsEnabled } from '../workflows/quick-actions-preferences';
 
 export type SettingsPageProps = Readonly<{
@@ -205,7 +206,7 @@ export function SettingsPage({
 
           <div className="apple-settings-row" data-setting="connections"><div className="apple-settings-row-left"><div className="apple-settings-content"><span className="apple-settings-title">{locale === 'ar' ? 'روابط الصفحات' : 'Page connections'}</span><span className="apple-settings-description">{locale === 'ar' ? 'إظهار الروابط الواردة والصادرة أسفل الصفحات.' : 'Show backlinks and outgoing links below your pages.'}</span></div></div><div className="apple-settings-row-right"><button type="button" className="settings-switch" role="switch" aria-label={locale === 'ar' ? 'روابط الصفحات' : 'Page connections'} aria-checked={connectionsEnabled} data-checked={connectionsEnabled} onClick={() => setConnectionsEnabled(!connectionsEnabled)}><span aria-hidden="true" /></button></div></div>
 
-
+          <ChaosConnectionSettings locale={locale} />
         </div>
 
         {/* Workspace actions */}

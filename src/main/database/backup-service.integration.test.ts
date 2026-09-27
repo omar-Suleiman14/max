@@ -66,7 +66,7 @@ describe('BackupService', () => {
     const dir = mkdtempSync(join(tmpdir(), 'max-backup-status-'));
     temporaryDirectories.push(dir);
     const service = new BackupService(':memory:', join(dir, 'backups'));
-    expect(service.getStatus()).toMatchObject({ currentSchemaVersion: 19 });
+    expect(service.getStatus()).toMatchObject({ currentSchemaVersion: 20 });
     service.recordScheduledFailure();
     expect(service.getStatus().lastScheduledFailureAt).toBeDefined();
     service.clearScheduledFailure();
@@ -81,7 +81,7 @@ describe('BackupService', () => {
     const service = new BackupService(dbPath, join(dir, 'backups'));
     writeFileSync(join(dir, 'backups', 'schedule-failure.state'), '{broken');
     writeFileSync(join(dir, 'backups', 'restore-status.state'), '{broken');
-    expect(service.getStatus()).toMatchObject({ currentSchemaVersion: 19, currentBackupFormatVersion: 1 });
+    expect(service.getStatus()).toMatchObject({ currentSchemaVersion: 20, currentBackupFormatVersion: 1 });
     expect(service.getStatus().lastScheduledFailureAt).toBeUndefined();
     expect(service.getStatus().lastRestoreSafetyPath).toBeUndefined();
     const reopened = new DatabaseService(dbPath);
@@ -192,7 +192,7 @@ describe('BackupService', () => {
     const reopened = new DatabaseService(dbPath);
     try {
       reopened.initialize();
-      expect(reopened.getHealth().schemaVersion).toBe(19);
+      expect(reopened.getHealth().schemaVersion).toBe(20);
       expect(reopened.backups.listBackups().some(({ trigger }) => trigger === 'pre-migration')).toBe(true);
     } finally {
       reopened.close();
@@ -232,7 +232,7 @@ describe('BackupService', () => {
     expect(backup.id).toBeDefined();
     expect(backup.trigger).toBe('manual');
     expect(backup.checksum).toHaveLength(64); // SHA-256 hex
-    expect(backup.schemaVersion).toBe(19);
+    expect(backup.schemaVersion).toBe(20);
     expect(backup.sizeBytes).toBeGreaterThan(0);
 
     const list = service.listBackups();
@@ -258,7 +258,7 @@ describe('BackupService', () => {
     expect(healthyCheck.valid).toBe(true);
     expect(healthyCheck.checksumMatch).toBe(true);
     expect(healthyCheck.sqliteIntegrityPassed).toBe(true);
-    expect(healthyCheck.schemaVersion).toBe(19);
+    expect(healthyCheck.schemaVersion).toBe(20);
 
     // 2. Tampered file verification
     writeFileSync(backup.filePath, 'TAMPERED_RANDOM_CORRUPT_BYTES', 'utf-8');

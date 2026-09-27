@@ -46,6 +46,7 @@ import { WorkspaceSearchService } from './workspace-search-service';
 import { WorkspaceTemplateService } from './workspace-template-service';
 import { V020MigrationService } from './v020-migration-service';
 import { RecordTemplateRepository } from './record-template-repository';
+import { ChaosLinkRepository } from './chaos-link-repository';
 
 export class DatabaseService {
   readonly #database: DatabaseSync;
@@ -80,6 +81,8 @@ export class DatabaseService {
   readonly workspaceSearch: WorkspaceSearchService;
   readonly workspaceTemplates: WorkspaceTemplateService;
   readonly v020Migration: V020MigrationService;
+  /** Links from pages to Chaos items, and the cached metadata shown for them. */
+  readonly chaosLinks: ChaosLinkRepository;
 
   #initialized = false;
 
@@ -184,6 +187,8 @@ export class DatabaseService {
       this.backups,
       filename !== ':memory:',
     );
+
+    this.chaosLinks = new ChaosLinkRepository(this.#database);
 
     if (filename !== ':memory:') {
       this.#database.exec('PRAGMA journal_mode = WAL;');
@@ -351,6 +356,9 @@ export class DatabaseService {
 
   #clearWorkspace(): void {
     const tables = [
+      'chaos_pending_operations',
+      'chaos_links',
+      'chaos_connections',
       'workspace_migration_issues',
       'workspace_migration_map',
       'workspace_search_index',
