@@ -75,6 +75,22 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('a record with unanswered required properties', () => {
+  it('dismisses the icon picker before closing the drawer on backdrop presses', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    drawer(onClose);
+    await user.click(screen.getByRole('button', { name: 'Change page icon' }));
+    expect(screen.getByRole('dialog', { name: 'Select icon' })).toBeInTheDocument();
+
+    const backdrop = screen.getByRole('dialog', { name: 'Nokia 3310' });
+    await user.pointer({ target: backdrop, keys: '[MouseLeft]' });
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Select icon' })).not.toBeInTheDocument());
+    expect(onClose).not.toHaveBeenCalled();
+
+    await user.pointer({ target: backdrop, keys: '[MouseLeft]' });
+    await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+  });
+
   it('marks the outstanding ones instead of refusing to show the record', () => {
     drawer();
 
