@@ -28,6 +28,7 @@ export const SETTINGS_ENTRIES: readonly SettingsEntry[] = [
   { id: 'language', keywords: ['language', 'arabic', 'english', 'locale', 'translation'], keywordsAr: ['لغة', 'عربية', 'إنجليزية'], label: 'Language', labelAr: 'اللغة', section: 'settings-general' },
   { id: 'graph', keywords: ['graph', 'map', 'pages', 'view'], keywordsAr: ['خريطة', 'رسم'], label: 'Graph view', labelAr: 'خريطة الصفحات', section: 'settings-general' },
   { id: 'connections', keywords: ['connections', 'backlinks', 'links', 'related'], keywordsAr: ['روابط', 'صلات'], label: 'Page connections', labelAr: 'روابط الصفحات', section: 'settings-general' },
+  { id: 'chaos-connection', keywords: ['chaos', 'forms', 'quiz', 'survey', 'integration', 'token', 'connect'], keywordsAr: ['نماذج', 'اختبار', 'تكامل', 'ربط'], label: 'Chaos forms connection', labelAr: 'الاتصال بـ Chaos', section: 'settings-general' },
   { id: 'quick-actions', keywords: ['quick', 'actions', 'shortcut', 'keyboard', 'command'], keywordsAr: ['إجراءات', 'سريعة', 'اختصار'], label: 'Quick action shortcut', labelAr: 'اختصار الإجراءات السريعة', section: 'settings-quick-actions' },
   { id: 'quick-action-list', keywords: ['saved', 'actions', 'forms', 'fields'], keywordsAr: ['إجراءات', 'محفوظة'], label: 'Saved actions', labelAr: 'الإجراءات المحفوظة', section: 'settings-quick-actions' },
   { id: 'theme', keywords: ['theme', 'dark', 'light', 'system', 'appearance', 'colour', 'color'], keywordsAr: ['مظهر', 'داكن', 'فاتح'], label: 'Theme', labelAr: 'السمة', section: 'settings-appearance' },

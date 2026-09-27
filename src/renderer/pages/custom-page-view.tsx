@@ -1,6 +1,7 @@
 import { useWorkspaceDisplay } from './workspace-display-preferences';
 import { useRef, useState } from 'react';
 import { PageConnections } from './page-connections';
+import { ChaosPagePanel } from '../integrations/chaos/chaos-page-panel';
 
 import type { CustomPage } from '../app/app-types';
 import type { Locale } from '../app/i18n';
@@ -136,6 +137,7 @@ export function CustomPageView({
               parentPageId={page.id}
             />}
       </div>
+      {page.readOnlySource === undefined && <ChaosPagePanel pageId={page.id} pageTitle={page.title || defaultTitlePlaceholder} locale={locale} />}
       {connectionsEnabled && <PageConnections pageId={page.id} locale={locale} />}
     </div>
   );

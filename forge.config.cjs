@@ -62,7 +62,12 @@ const config = {
     executableName: process.platform === 'linux' ? 'max-shop-os' : 'max',
     // Runtime dependencies are bundled by Vite. Ship only the app payload,
     // never downloaded releases, workspace files, scratch scripts, or build logs.
-    ignore: [/^\/(?!(?:\.vite|assets)(?:\/|$)|package\.json$)/],
+    ignore: [
+      /^\/(?!(?:\.vite|assets)(?:\/|$)|package\.json$)/,
+      // Installer icons and DMG artwork are read during packaging; only
+      // max.png is needed by the running app for its window icon.
+      /^\/assets\/(?:max\.icns|max\.ico|max-logo\.png|max-256\.png|dmg-background(?:@2x)?\.png)$/,
+    ],
   },
   rebuildConfig: {},
   makers: [

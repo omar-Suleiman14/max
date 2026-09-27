@@ -60,6 +60,8 @@ import { PhotoLibraryError, type PhotoLibrary } from '../assets/photo-library';
 import { MapProviderError, type StaticMapProvider } from '../maps/map-provider';
 import type { MapPoint } from '../../shared/map-contract';
 import type { CloudBackupService } from '../cloud/cloud-backup-service';
+import type { ChaosService } from '../integrations/chaos/chaos-service';
+import { registerChaosHandlers } from './register-chaos-handlers';
 import { ObjectDomainError } from '../database/object-repository';
 import { WorkspaceDomainError, type MutationResult as WorkspaceMutationResult } from '../../shared/workspace-contract';
 import type { PlatformAdapter } from '../platform/platform-adapter';
@@ -91,6 +93,8 @@ type RegisterIpcHandlersOptions = Readonly<{
   updates?: UpdateService;
   /** Absent in test harnesses that do not exercise image storage. */
   assets?: AssetStore;
+  /** Absent where Chaos is not offered (the browser preview); calls then answer as unavailable. */
+  chaos?: ChaosService;
   cloudBackups: CloudBackupService;
   database: DatabaseService;
   developmentServerUrl?: string;
@@ -485,6 +489,7 @@ async function asyncMutation<T>(work: () => Promise<T>): Promise<MutationResult<
 export function registerIpcHandlers({
   updates,
   assets,
+  chaos,
   cloudBackups,
   database,
   developmentServerUrl,
@@ -1327,6 +1332,8 @@ export function registerIpcHandlers({
       return { ok: false, error: { code: 'internal-error', message: String(e) } };
     }
   });
+  registerChaosHandlers(trust, chaos);
+
   ipcMain.handle(IPC_CHANNELS.workspaceMigrateV01, (event, locale: unknown) => {
     trust(event);
     return workspaceMutationResult(() => database.v020Migration.migrate(locale === 'ar' ? 'ar' : 'en'));
