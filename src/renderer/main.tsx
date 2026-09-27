@@ -4,7 +4,10 @@ import { createRoot } from 'react-dom/client';
 import { MaxApp } from './app/max-app';
 import { AppAuthProvider } from './auth/auth-provider';
 import { CloudBackupScheduler } from './backup/cloud-backup-scheduler';
+import { installOpenLinkAdapter } from './app/open-links';
 import './styles.css';
+
+installOpenLinkAdapter();
 
 const root = document.getElementById('root');
 

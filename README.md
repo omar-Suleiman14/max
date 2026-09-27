@@ -119,4 +119,7 @@ release.
 
 Max is free software released under the GNU General Public License, version 2,
 the same licence the Linux kernel uses. See [LICENSE](LICENSE) for the full
-text. Every runtime dependency is MIT or ISC licensed, which GPLv2 permits.
+text. The BlockNote editor packages are distributed under MPL-2.0; their
+licence, notices and exact source location are in `assets/licenses/`. Other
+dependencies retain their own licences. See `package-lock.json` for the exact
+versions used to build Max.

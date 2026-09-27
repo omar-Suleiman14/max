@@ -6,7 +6,8 @@ import type { Locale } from '../app/i18n';
 import { FocusedOverlay } from '../ui/focused-overlay';
 import { IconPickerDialog } from '../ui/icon-picker-dialog';
 import { PageIconRenderer } from '../ui/page-icon-renderer';
-import { NotionBlockEditor, type NotionBlock } from '../ui/notion-block-editor';
+import type { NotionBlock } from '../editor/page-blocks';
+import { MaxBlockEditor } from '../editor/max-block-editor';
 
 export function RecordTemplateEditor({ databaseId, template, locale, onClose }: { databaseId: string; template?: WorkspaceRecordTemplate; locale: Locale; onClose: () => void }) {
   const ar = locale === 'ar';
@@ -25,7 +26,7 @@ export function RecordTemplateEditor({ databaseId, template, locale, onClose }: 
     <h2 id="record-template-title" className="template-edit-banner">{ar ? 'تعديل قالب في' : 'Editing a template in'} <strong>{schema?.database.title}</strong></h2>
     <div className="record-template-name"><button ref={iconButtonRef} type="button" aria-label={ar ? 'اختر أيقونة' : 'Choose icon'} onClick={() => setPickIcon((open) => !open)}><PageIconRenderer icon={icon} size={24} /></button><input data-autofocus="true" aria-label={ar ? 'اسم القالب' : 'Template name'} placeholder={ar ? 'اسم القالب' : 'Template name'} value={name} onChange={(e) => setName(e.target.value)} /></div>
     <div className="template-property-preview">{schema?.properties.filter(p => p.type !== 'title').map(p => <div key={p.id}><span><PropertyIcon type={p.type}/>{p.name}</span><span>{template?.defaults[p.id] == null ? (ar ? 'فارغ' : 'Empty') : String(template.defaults[p.id])}</span></div>)}</div>
-    <NotionBlockEditor blocks={blocks} locale={locale} onChange={setBlocks} />
+    <MaxBlockEditor blocks={blocks} locale={locale} onChange={setBlocks} />
     {error && <p role="alert">{error}</p>}
     <footer><button type="button" disabled={busy || !name.trim()} onClick={() => { setBusy(true); setError(''); void window.maxApi.workspace.editRecordTemplate(databaseId, template?.id ?? null, { title: name, icon, contentJson: JSON.stringify(blocks) }).then((result) => { if (!result.ok) { setError(result.error.message); return; } window.dispatchEvent(new Event('max:workspace-changed')); onClose(); }).catch(() => setError(ar ? 'تعذر حفظ القالب.' : 'Could not save template.')).finally(() => setBusy(false)); }}>{ar ? 'حفظ القالب' : 'Save template'}</button><button type="button" disabled={busy} onClick={onClose}>{ar ? 'إلغاء' : 'Cancel'}</button></footer>
     {pickIcon && <IconPickerDialog anchor={iconButtonRef.current} locale={locale} currentIcon={icon} onClose={() => setPickIcon(false)} onSelect={(next) => { setIcon(next); setPickIcon(false); }} />}

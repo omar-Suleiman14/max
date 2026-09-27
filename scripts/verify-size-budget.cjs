@@ -7,7 +7,9 @@ const ROOT = resolve(__dirname, '..');
 const OUT_ROOT = join(ROOT, 'out');
 
 const BUDGETS = {
-  appAsarBytes: 5 * 1024 * 1024,
+  // BlockNote adds a 1,007 KiB lazy editor chunk. Keep startup entry budgets
+  // unchanged and allow the measured editor payload plus licence notices.
+  appAsarBytes: 7 * 1024 * 1024,
   electronLocalesBytesPerPackage: 3 * 1024 * 1024,
   rendererEntryBytes: 450 * 1024,
   rendererEntryGzipBytes: 130 * 1024,
@@ -86,6 +88,10 @@ async function main() {
   }
 
   const rendererContents = extractFile(asarFiles[0], join(rendererRoot, ...entryMatch[1].split('/')));
+  for (const notice of ['BLOCKNOTE-MPL-2.0.txt', 'MPL-2.0.txt', 'MAX-GPL-2.0.txt', 'THIRD-PARTY-NOTICES.txt']) {
+    const contents = extractFile(asarFiles[0], join('assets', 'licenses', notice));
+    if (!contents || contents.length === 0) throw new Error(`Missing packaged licence notice: ${notice}`);
+  }
   const rendererGzipBytes = gzipSync(rendererContents).byteLength;
   const localeResources = await findLocaleResources(OUT_ROOT);
 

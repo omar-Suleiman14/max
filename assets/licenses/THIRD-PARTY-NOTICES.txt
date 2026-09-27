@@ -1,0 +1,21 @@
+Max source and third-party notices
+==================================
+
+Max is licensed under GPL-2.0-only. The full terms are in MAX-GPL-2.0.txt.
+Corresponding Max source, including build and installation scripts, is at
+https://github.com/omar-Suleiman14/max. Use the source commit associated with
+the version of Max you received; request that commit from the distributor if
+it was not provided with your copy.
+
+The bundled editor uses @blocknote/core, @blocknote/react and
+@blocknote/mantine, version 0.54.2. Their source is available at
+https://github.com/TypeCellOS/BlockNote/tree/v0.54.2/packages/core
+https://github.com/TypeCellOS/BlockNote/tree/v0.54.2/packages/react
+https://github.com/TypeCellOS/BlockNote/tree/v0.54.2/packages/mantine
+
+These BlockNote packages are governed by MPL-2.0. The full terms are in
+MPL-2.0.txt; the upstream package notice is in BLOCKNOTE-MPL-2.0.txt.
+Max does not bundle BlockNote XL packages or modify BlockNote source files.
+The exact dependency versions and integrity hashes are in package-lock.json
+in the corresponding Max source commit. Copyright and licence notices in
+BlockNote's source files remain in that source.

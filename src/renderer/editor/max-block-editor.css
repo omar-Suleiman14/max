@@ -1,0 +1,45 @@
+/* BlockNote inherits Max's page typography and colours rather than its own. */
+.max-block-editor { position: relative; min-height: 240px; flex-grow: 1; }
+.max-block-editor .bn-container { --bn-font-family: inherit; font-family: inherit; }
+.max-block-editor .bn-container[data-color-scheme] {
+  --bn-colors-editor-background: transparent;
+  --bn-colors-editor-text: var(--text);
+  --bn-colors-menu-background: var(--card);
+  --bn-colors-menu-text: var(--text);
+  --bn-colors-tooltip-background: var(--surface);
+  --bn-colors-tooltip-text: var(--text);
+  --bn-colors-hovered-background: var(--hover);
+  --bn-colors-selected-background: var(--hover);
+  --bn-colors-border: var(--border);
+  --bn-colors-side-menu: var(--muted);
+  --bn-colors-highlights-gray-background: color-mix(in srgb, var(--muted) 18%, transparent);
+}
+.max-block-editor .bn-editor { padding-inline: 0; background: transparent; color: var(--text); }
+.max-block-editor[dir=rtl] .bn-editor { font-family: Cairo, sans-serif; }
+.max-block-editor .bn-block-content[data-content-type=codeBlock] { direction: ltr; text-align: start; }
+.max-block-editor .bn-block-content[data-content-type=codeBlock] > pre { background: var(--canvas-subtle, var(--surface)); color: var(--text); border: 1px solid var(--line, var(--border)); }
+.max-block-editor .bn-editor a:not(.max-page-mention) { color: var(--accent); }
+
+/* A page link reads as a link to Max, and says so when its page is gone. */
+.max-page-mention { display: inline-flex; align-items: center; gap: 3px; color: var(--accent); text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); cursor: pointer; }
+.max-page-mention:hover { background: var(--hover); }
+.max-page-mention[data-missing] { color: var(--muted); text-decoration: line-through; border-bottom-style: dashed; cursor: default; }
+
+.max-callout { display: flex; align-items: flex-start; gap: 12px; width: 100%; padding: 12px 14px; border-radius: 8px; background: var(--canvas-subtle, var(--surface)); border: 1px solid var(--line, var(--border)); }
+.max-callout__icon { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 6px; background: transparent; cursor: pointer; }
+.max-callout__icon:hover, .max-callout__icon:focus-visible { background: var(--hover); }
+.max-callout__content { flex: 1; min-width: 0; }
+
+.max-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; width: 100%; }
+.max-columns__column { min-width: 0; }
+.max-block-editor[data-nested] { min-height: 0; }
+@media (max-width: 720px) { .max-columns { grid-template-columns: minmax(0, 1fr); } }
+
+.max-void-block { width: 100%; }
+.max-unsupported-block { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px dashed var(--border); border-radius: 8px; color: var(--muted); font-size: 13px; }
+
+.max-database-setup { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: start; padding: 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); }
+.max-database-setup__choices, .max-database-setup form { display: flex; flex-wrap: wrap; gap: 8px; }
+.max-database-setup__list { display: grid; gap: 4px; }
+.max-database-setup__list > button { display: flex; align-items: center; gap: 8px; text-align: start; }
+.max-database-setup .form-error { grid-column: 1 / -1; }

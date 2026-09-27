@@ -4,7 +4,7 @@ export const EMPTY_WORKSPACE_PAGE = 'workspace-empty';
 import type { LucideIcon } from 'lucide-react';
 import type { MaxDocument } from '../../shared/max-document';
 import type { PageCover } from '../../shared/cover-contract';
-import type { NotionBlock } from '../ui/notion-block-editor';
+import type { NotionBlock } from '../editor/page-blocks';
 import type { PageProperty } from '../pages/page-properties';
 
 export type AppPage =
