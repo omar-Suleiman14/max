@@ -3,6 +3,7 @@ import type { Locale } from '../app/i18n';
 const copy = {
   en: {
     backupCreated: 'Backup created successfully.',
+    assetsNotIncluded: 'Database snapshots do not include images or attachments stored in Max’s assets folder. Copy that folder separately when moving to another computer.',
     backupHistory: 'Backup Snapshots',
     latestBackup: 'Last successful local backup',
     noLatestBackup: 'No local backup yet',
@@ -37,7 +38,7 @@ const copy = {
     restoreFailed: 'Restore failed; safely rolled back to previous state.',
     restoreSuccess: 'Database restored successfully from backup.',
     restoring: 'Restoring...',
-    safetyGuarantee: 'Max takes an automatic safety snapshot before every restore to prevent accidental data loss.',
+    safetyGuarantee: 'Max takes a database safety snapshot before every restore.',
     size: 'Size',
     time: 'Created At',
     targetSnapshot: 'Target snapshot',
@@ -49,6 +50,7 @@ const copy = {
   },
   ar: {
     backupCreated: 'تم إنشاء النسخة الاحتياطية بنجاح.',
+    assetsNotIncluded: 'نسخ قاعدة البيانات لا تتضمن الصور أو المرفقات المحفوظة في مجلد أصول ماكس. انسخ هذا المجلد بصورة مستقلة عند الانتقال إلى كمبيوتر آخر.',
     backupHistory: 'النسخ الاحتياطية المحفوظة',
     latestBackup: 'آخر نسخة احتياطية محلية ناجحة',
     noLatestBackup: 'لا توجد نسخة احتياطية محلية بعد',
@@ -83,7 +85,7 @@ const copy = {
     restoreFailed: 'فشلت الاستعادة؛ وتم التراجع بأمان إلى الحالة السابقة.',
     restoreSuccess: 'تمت استعادة قاعدة البيانات بنجاح من النسخة الاحتياطية.',
     restoring: 'جارٍ الاستعادة...',
-    safetyGuarantee: 'يأخذ ماكس نسخة أمان تلقائية قبل كل عملية استعادة لحماية بياناتك من أي فقدان.',
+    safetyGuarantee: 'يأخذ ماكس نسخة أمان لقاعدة البيانات قبل كل عملية استعادة.',
     size: 'الحجم',
     time: 'تاريخ الإنشاء',
     targetSnapshot: 'النسخة المطلوب استعادتها',

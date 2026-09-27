@@ -18,7 +18,7 @@ Use **Settings → Appearance** to change the theme or language. Use **Ctrl+K** 
 1. Open **Settings → Backup**. The local backup section shows the schedule and the last successful backup.
 2. Choose **Create Local Backup Now**. Open **Backup Snapshots** to see the new snapshot's time, type, size and file location.
 3. Open that snapshot and choose **Verify Integrity**. Check both the **Checksum** and **SQLite integrity** results.
-4. Copy the backup file to another drive if you want protection against loss of this computer. Keep the file location somewhere you can find later.
+4. Copy the backup file to another drive if you want protection against loss of this computer. The file contains the SQLite database; images and attachments are stored separately in Max's `assets` directory beside the database. Copy that directory too when moving to another computer. Keep both locations somewhere you can find later.
 
 Scheduled backups run while Max is open. If one fails, the Backup screen shows a warning. You can create a backup manually while you investigate.
 

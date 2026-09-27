@@ -147,6 +147,8 @@ export function BackupManager({ locale, schedule: configuredSchedule }: BackupMa
         </div>
       </div>
 
+      <p role="note">{backupCopy(locale, 'assetsNotIncluded')}</p>
+
       {notice && (
         <div
           className={`badge ${notice.type === 'success' ? 'badge--success' : 'badge--danger'}`}

@@ -32,6 +32,7 @@ describe('local backup details', () => {
   it('shows the latest backup, schedule, location, trigger and split verification results', async () => {
     const { verify } = setup();
     expect(await screen.findByText(/Last successful local backup:/)).toBeInTheDocument();
+    expect(screen.getByRole('note')).toHaveTextContent('do not include images or attachments');
     expect(screen.getByText(/Next scheduled backup:/)).toBeInTheDocument();
     fireEvent.click(screen.getByText('Backup Snapshots'));
     fireEvent.click(screen.getAllByText(/Daily/).at(-1)!);
@@ -58,6 +59,7 @@ describe('local backup details', () => {
 
   it('renders the backup information in Arabic', async () => {
     setup('ar');
+    expect(screen.getByRole('note')).toHaveTextContent('الصور أو المرفقات');
     expect(await screen.findByText(/آخر نسخة احتياطية محلية/)).toBeInTheDocument();
     expect(screen.getByText(/النسخة المجدولة القادمة/)).toBeInTheDocument();
   });
