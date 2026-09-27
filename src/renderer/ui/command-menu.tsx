@@ -76,7 +76,6 @@ export function CommandMenu({ commands, locale, onClose }: CommandMenuProps) {
       <p className="command-menu__hint">{translate(locale, 'commandHint')}</p>
       <p aria-live="polite" className="sr-only" role="status">{normalizedQuery ? resultCountMessage(visibleCommands.length, locale) : ''}</p>
       <div aria-label={translate(locale, 'commandLabel')} className="command-menu__results" id="command-results" role="listbox">
-        {visibleCommands.length === 0 && <p className="command-menu__empty">{translate(locale, 'commandNoResults')}</p>}
         {visibleCommands.map((command, index) => (
           <button
             key={command.id}
@@ -94,6 +93,7 @@ export function CommandMenu({ commands, locale, onClose }: CommandMenuProps) {
           </button>
         ))}
       </div>
+      {visibleCommands.length === 0 && <p className="command-menu__empty">{translate(locale, 'commandNoResults')}</p>}
     </FocusedOverlay>
   );
 }
