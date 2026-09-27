@@ -314,6 +314,7 @@ const workspaceApi = {
   listRecordTemplates: vi.fn(() => Promise.resolve([])),
   listViews: vi.fn<() => Promise<readonly WorkspaceView[]>>(() => Promise.resolve([])),
   listWorkflows: vi.fn<() => Promise<readonly WorkspaceWorkflow[]>>(() => Promise.resolve([])),
+  inspectWorkflows: vi.fn(() => Promise.resolve([])),
   migrateV01: vi.fn(() => Promise.resolve({
     ok: true as const,
     value: { accountsMigrated: 0, inventoryMovementsMigrated: 0, itemsMigrated: 0, moneyMovementsMigrated: 0, pagesMigrated: 0, parityCheckPassed: true, peopleMigrated: 0, transactionsMigrated: 0, viewsMigrated: 0 },

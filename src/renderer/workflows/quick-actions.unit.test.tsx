@@ -3,7 +3,7 @@ import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { WorkspaceWorkflow, WorkspaceWorkflowDraft } from '../../shared/workflow-contract';
+import type { WorkspaceWorkflow, WorkspaceWorkflowDraft, WorkflowValidationReport } from '../../shared/workflow-contract';
 import { QuickActionForm } from './quick-action-form';
 import { QuickActionSettings } from './quick-action-settings';
 
@@ -14,6 +14,7 @@ function api(actions: readonly WorkspaceWorkflow[] = []) {
   const executeWorkflow = vi.fn(() => Promise.resolve({ ok: true, value: { status: 'completed' } }));
   const workspace = {
     listWorkflows: vi.fn(() => Promise.resolve(rows)),
+    inspectWorkflows: vi.fn<() => Promise<readonly WorkflowValidationReport[]>>(() => Promise.resolve([])),
     listWorkflowRuns: vi.fn(() => Promise.resolve([])),
     executeWorkflow,
     getNavigation: vi.fn(() => Promise.resolve({ databases: [], pages: [] })),
@@ -74,6 +75,13 @@ describe('running one quick action', () => {
 });
 
 describe('Workspace Quick Actions settings', () => {
+  it('marks a saved action whose schema references no longer validate', async () => {
+    const workspace = api([action]);
+    workspace.inspectWorkflows.mockResolvedValue([{ workflowId: action.id, canRun: false, issues: [{ code: 'missing_property', location: 'Step 1', message: 'Step 1: Referenced property was deleted.', severity: 'error' }] }]);
+    render(<QuickActionSettings locale="en" />);
+    expect(await screen.findByText(/Needs repair: Step 1/)).toBeInTheDocument();
+    expect(workspace.updateWorkflow).not.toHaveBeenCalled();
+  });
   it('saves label, visibility, color and shortcut and reports a collision', async () => {
     const other = { ...action, id: 'other', name: 'Other action', positionKey: 'b0', shortcut: 'Digit1' };
     const workspace = api([action, other]); const user = userEvent.setup();

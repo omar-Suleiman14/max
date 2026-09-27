@@ -124,6 +124,19 @@ export type WorkflowRunSummary = Readonly<{
   message?: string;
 }>;
 
+export type WorkflowValidationIssue = Readonly<{
+  code: 'missing_database' | 'missing_property' | 'invalid_mapping' | 'incompatible_value' | 'missing_input' | 'unsupported_conversion' | 'impossible_reference' | 'invalid_definition';
+  location: string;
+  message: string;
+  severity: 'error' | 'warning';
+}>;
+
+export type WorkflowValidationReport = Readonly<{
+  workflowId: string;
+  issues: readonly WorkflowValidationIssue[];
+  canRun: boolean;
+}>;
+
 export type WorkflowExecutionInput = Readonly<{
   actorId?: string;
   inputs: Readonly<Record<string, unknown>>;

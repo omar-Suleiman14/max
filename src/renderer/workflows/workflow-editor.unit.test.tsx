@@ -28,6 +28,7 @@ function api(actions: readonly WorkspaceWorkflow[] = []) {
     executeWorkflow: vi.fn(() => Promise.resolve({ ok: true, value: { result: { Total: 22 }, status: 'completed' } })),
     getNavigation: vi.fn(() => Promise.resolve({ databases: [], pages: [] })),
     listWorkflows: vi.fn(() => Promise.resolve(actions)),
+    inspectWorkflows: vi.fn(() => Promise.resolve([])),
     updateWorkflow: vi.fn((_id: string, draft: WorkspaceWorkflowDraft) => Promise.resolve({ ok: true, value: draft })),
   };
   Object.defineProperty(window, 'maxApi', { configurable: true, value: { workspace } });

@@ -49,6 +49,32 @@ function scenario(db: DatabaseService) {
 }
 
 describe('Generic workspace actions', () => {
+  it('keeps an invalid saved action and reports its failed step after a property is archived', () => {
+    const db = workspace();
+    const database = db.databases.createDatabase({ title: 'Tasks' });
+    const property = db.properties.createProperty({ databaseId: database.id, name: 'Priority', type: 'number' });
+    const workflow = db.workflows.createWorkflow({ name: 'Set priority', inputSchema: { fields: [] }, steps: [{ id: 'update', type: 'CREATE_RECORD', config: { databaseId: database.id, title: literal('Task'), properties: { [property.id]: literal(1) } } }] });
+    const original = db.workflows.getWorkflow(workflow.id);
+    db.properties.archiveProperty(property.id);
+    const report = db.workflows.inspectWorkflows().find((entry) => entry.workflowId === workflow.id);
+    expect(report).toMatchObject({ canRun: false, issues: [{ code: 'missing_property', location: `Step 1: Property ${property.id}`, severity: 'error' }] });
+    expect(db.workflows.getWorkflow(workflow.id)).toEqual(original);
+    expect(() => db.workflows.execute({ workflowId: workflow.id, inputs: {} })).toThrow('Step 1');
+    expect(db.records.listRecords(database.id)).toHaveLength(0);
+  });
+  it('blocks a broken later step before an earlier step can write', () => {
+    const db = workspace();
+    const database = db.databases.createDatabase({ title: 'Tasks' });
+    const property = db.properties.createProperty({ databaseId: database.id, name: 'Priority', type: 'number' });
+    const workflow = db.workflows.createWorkflow({ name: 'Create two', inputSchema: { fields: [] }, steps: [
+      { type: 'CREATE_RECORD', config: { databaseId: database.id, title: literal('First') } },
+      { type: 'CREATE_RECORD', config: { databaseId: database.id, title: literal('Second'), properties: { [property.id]: literal(1) } } },
+    ] });
+    db.properties.archiveProperty(property.id);
+    expect(() => db.workflows.execute({ workflowId: workflow.id, inputs: {} })).toThrow('Step 2');
+    expect(db.records.listRecords(database.id)).toHaveLength(0);
+    expect(db.workflows.listWorkflowRuns(workflow.id)).toHaveLength(0);
+  });
   it('persists action presentation, defaults older definitions, and rejects shortcut collisions', () => {
     const db = workspace();
     const legacy = db.workflows.createWorkflow({ name: 'Legacy', inputSchema: { fields: [] }, steps: [] });

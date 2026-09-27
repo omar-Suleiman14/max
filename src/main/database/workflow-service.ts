@@ -12,6 +12,8 @@ import type {
   WorkflowInputSchema,
   WorkflowInputField,
   WorkflowRunSummary,
+  WorkflowValidationReport,
+  WorkflowValidationIssue,
   WorkflowStep,
   WorkspaceWorkflow,
   WorkspaceWorkflowDraft,
@@ -190,6 +192,29 @@ export class WorkflowService {
       .all() as WorkflowRow[];
 
     return rows.map(workflowFromRow);
+  }
+
+  inspectWorkflows(): readonly WorkflowValidationReport[] {
+    return this.listWorkflows().map((workflow) => this.inspectWorkflow(workflow));
+  }
+
+  inspectWorkflow(workflow: WorkspaceWorkflow): WorkflowValidationReport {
+    try {
+      this.validate(workflow);
+      return { workflowId: workflow.id, issues: [], canRun: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Action configuration is invalid.';
+      const location = /^(?:(?:Step \d+: )+|Input \d+ \([^)]*\): )?(?:Property [^:]+: )?/.exec(message)?.[0]?.replace(/: $/, '') || 'Action';
+      const code: WorkflowValidationIssue['code'] = message.includes('Referenced database') ? 'missing_database'
+        : message.includes('Referenced property') ? 'missing_property'
+          : message.includes('mappings must') ? 'invalid_mapping'
+            : message.includes('finite number') || message.includes('numeric adjustment') ? 'incompatible_value'
+              : message.includes('is required') ? 'missing_input'
+                : message.includes('does not support') ? 'unsupported_conversion'
+                  : message.includes('unavailable') || message.includes('Unknown current item') ? 'impossible_reference'
+                    : 'invalid_definition';
+      return { workflowId: workflow.id, issues: [{ code, location, message, severity: 'error' }], canRun: false };
+    }
   }
 
   listWorkflowRuns(workflowId: string): readonly WorkflowRunSummary[] {
@@ -696,6 +721,7 @@ export class WorkflowService {
     const forbidden = (key: string) => ['__proto__', 'constructor', 'prototype', '__item', '__index'].includes(key);
     const checkFields = (fields: readonly WorkflowInputField[], names: Set<string>) => {
       for (const [index, field] of fields.entries()) {
+        try {
         const key = field.key ?? field.id ?? 'input_' + (index + 1);
         if (names.has(key) || forbidden(key)) throw new WorkspaceDomainError('invalid-input', 'Input identifiers must be unique and safe.');
         if (field.prefill) {
@@ -708,6 +734,10 @@ export class WorkflowService {
         if (field.propertySource) this.#property(field.propertySource.databaseId, field.propertySource.propertyId);
         if (field.defaultValue !== undefined && !field.derived && !field.requiredWhen) this.#inputs([{ ...field, key, required: false }], { [key]: field.defaultValue });
         if (field.type === 'collection') checkFields(field.fields ?? [], new Set());
+        } catch (error) {
+          if (error instanceof WorkspaceDomainError) throw new WorkspaceDomainError(error.code, `Input ${index + 1} (${field.label}): ${error.message}`, error.entityId);
+          throw error;
+        }
       }
     };
     checkFields(draft.inputSchema.fields, keys);
@@ -737,12 +767,13 @@ export class WorkflowService {
       let stepCount = 0;
       const checkSteps = (steps: WorkspaceWorkflowDraft['steps'], depth = 0): void => {
       if (depth > 3) throw new WorkspaceDomainError('invalid-input', 'Iteration nesting exceeds three levels.');
-      for (const step of steps) {
+      for (const [stepIndex, step] of steps.entries()) {
+        try {
         if (++stepCount > 100) throw new WorkspaceDomainError('invalid-input', 'An action supports at most 100 configured steps.');
         if (step.id && ids.has(step.id)) throw new WorkspaceDomainError('invalid-input', 'Step identifiers must be unique.');
         if (step.id) ids.add(step.id);
         const c = step.config;
-        const required = (key: string) => { if (c[key] === undefined || c[key] === null || c[key] === '') throw new WorkspaceDomainError('invalid-input', 'Step ' + (draft.steps.indexOf(step) + 1) + ': ' + key + ' is required.'); };
+        const required = (key: string) => { if (c[key] === undefined || c[key] === null || c[key] === '') throw new WorkspaceDomainError('invalid-input', key + ' is required.'); };
         if (['FIND_RECORD', 'COMPUTE', 'SUM'].includes(step.type) && !c.assignments) required('outputVariable');
         if (step.type === 'FOR_EACH' || step.type === 'SUM') {
           required('collection'); checkValue(c.collection);
@@ -764,7 +795,7 @@ export class WorkflowService {
         if (step.type === 'RETURN_RESULT' && Array.isArray(c.outputs)) {
           for (const output of c.outputs as unknown[]) {
             const entry = output as { label?: unknown; value?: unknown } | null;
-            if (!entry || typeof entry.label !== 'string' || !entry.label.trim()) throw new WorkspaceDomainError('invalid-input', 'Step ' + (draft.steps.indexOf(step) + 1) + ': every result needs a name.');
+            if (!entry || typeof entry.label !== 'string' || !entry.label.trim()) throw new WorkspaceDomainError('invalid-input', 'Every result needs a name.');
             checkValue(entry.value);
           }
         } else if (step.type === 'RETURN_RESULT') { if (c.resultExpression) checkValue(c.resultExpression); else for (const value of Object.values(c)) if (typeof value === 'string' && value.charCodeAt(0) === 36) checkValue(value); }
@@ -772,16 +803,26 @@ export class WorkflowService {
         for (const key of ['multiple', 'required']) if (c[key] !== undefined && typeof c[key] !== 'boolean') throw new WorkspaceDomainError('invalid-input', 'Lookup options must be boolean.');
         if (['CREATE_RECORD', 'FIND_RECORD', 'UPDATE_RECORD'].includes(step.type)) this.#databaseExists(c.databaseId);
         if (step.type === 'CREATE_RECORD' || step.type === 'UPDATE_RECORD') {
-          const mappings = (c.propertyValues ?? c.properties ?? {}) as Record<string, unknown>;
-          for (const [id, value] of Object.entries(mappings)) {
-            const property = this.#property(String(c.databaseId), id);
-            if (['formula', 'rollup', 'created_time', 'created_by', 'last_edited_time', 'last_edited_by', 'auto_id', 'button'].includes(property.type)) throw new WorkspaceDomainError('invalid-input', 'Selected property does not support this operation.');
-            checkValue(value);
-          }
-          for (const [id, value] of Object.entries((c.increments ?? {}) as Record<string, unknown>)) {
-            if (this.#property(String(c.databaseId), id).type !== 'number') throw new WorkspaceDomainError('invalid-input', 'Selected property does not support numeric adjustment.');
-            checkValue(value);
-          }
+        const mappings = (c.propertyValues ?? c.properties ?? {}) as Record<string, unknown>;
+        for (const [id, value] of Object.entries(mappings)) {
+            try {
+              const property = this.#property(String(c.databaseId), id);
+              if (['formula', 'rollup', 'created_time', 'created_by', 'last_edited_time', 'last_edited_by', 'auto_id', 'button'].includes(property.type)) throw new WorkspaceDomainError('invalid-input', 'Selected property does not support this operation.');
+              checkValue(value);
+            } catch (error) {
+              if (error instanceof WorkspaceDomainError) throw new WorkspaceDomainError(error.code, `Property ${id}: ${error.message}`, error.entityId);
+              throw error;
+            }
+        }
+        for (const [id, value] of Object.entries((c.increments ?? {}) as Record<string, unknown>)) {
+            try {
+              if (this.#property(String(c.databaseId), id).type !== 'number') throw new WorkspaceDomainError('invalid-input', 'Selected property does not support numeric adjustment.');
+              checkValue(value);
+            } catch (error) {
+              if (error instanceof WorkspaceDomainError) throw new WorkspaceDomainError(error.code, `Property ${id}: ${error.message}`, error.entityId);
+              throw error;
+            }
+        }
           if (step.type === 'CREATE_RECORD') checkValue(c.titleExpression ?? c.title ?? "'Untitled'");
           else checkValue(c.record);
         }
@@ -802,6 +843,10 @@ export class WorkflowService {
           else for (const [key, expr] of Object.entries((c.assignments ?? {}) as Record<string, unknown>)) { if (forbidden(key)) throw new WorkspaceDomainError('invalid-input', 'Reserved output identifier.'); checkValue(expr); keys.add(key); }
         }
         if (typeof c.outputVariable === 'string') { if (keys.has(c.outputVariable) || forbidden(c.outputVariable)) throw new WorkspaceDomainError('invalid-input', 'Output identifiers must be unique.'); keys.add(c.outputVariable); }
+        } catch (error) {
+          if (error instanceof WorkspaceDomainError) throw new WorkspaceDomainError(error.code, `Step ${stepIndex + 1}: ${error.message}`, error.entityId);
+          throw error;
+        }
       }
       };
       assertDerivedOrder(draft.inputSchema.fields);

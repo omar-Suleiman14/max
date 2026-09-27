@@ -64,7 +64,7 @@ describe('workflows authored in the editor', () => {
 
   it('refuses a result without a name', () => {
     const db = workspace();
-    expect(() => db.workflows.createWorkflow({ inputSchema: { fields: [] }, name: 'Nameless', steps: [{ config: { outputs: [{ label: ' ', value: literal(1) }] }, type: 'RETURN_RESULT' }] })).toThrow('every result needs a name');
+    expect(() => db.workflows.createWorkflow({ inputSchema: { fields: [] }, name: 'Nameless', steps: [{ config: { outputs: [{ label: ' ', value: literal(1) }] }, type: 'RETURN_RESULT' }] })).toThrow('Step 1: Every result needs a name');
   });
 
   it('still loads and runs a Max 1.x action with formula checks and $ results', () => {

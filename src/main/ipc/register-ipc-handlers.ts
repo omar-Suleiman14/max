@@ -1263,6 +1263,10 @@ export function registerIpcHandlers({
     trust(event);
     return database.workflows.listWorkflowRuns(parseId(workflowId));
   });
+  ipcMain.handle(IPC_CHANNELS.workspaceInspectWorkflows, (event) => {
+    trust(event);
+    return database.workflows.inspectWorkflows();
+  });
   ipcMain.handle(IPC_CHANNELS.workspaceGetWorkflow, (event, id: unknown) => {
     trust(event);
     return database.workflows.getWorkflow(parseId(id));

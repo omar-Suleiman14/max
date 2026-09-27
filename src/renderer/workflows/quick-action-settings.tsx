@@ -6,7 +6,7 @@ import { PageIconRenderer } from '../ui/page-icon-renderer';
 import { scalarText } from '../../shared/scalar-text';
 import { generateOrderKey } from '../../shared/order-key';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import type { WorkspaceWorkflow, WorkspaceWorkflowDraft, WorkflowStep, WorkflowStepType, WorkflowValue } from '../../shared/workflow-contract';
+import type { WorkspaceWorkflow, WorkspaceWorkflowDraft, WorkflowStep, WorkflowStepType, WorkflowValue, WorkflowValidationReport, WorkflowValidationIssue } from '../../shared/workflow-contract';
 import type { WorkspaceProperty } from '../../shared/property-contract';
 import type { PropertyFilterNode, FilterOperator } from '../../shared/query-contract';
 import type { Locale } from '../app/i18n';
@@ -19,9 +19,13 @@ import { WorkflowRunHistory } from './workflow-run-history';
 const empty = (): WorkspaceWorkflowDraft => ({ name: '', enabled: true, icon: '', inputSchema: { fields: [] }, steps: [] });
 const literal = (value: unknown): WorkflowValue => ({ source: 'literal', value });
 const variable = (key: string): WorkflowValue => ({ source: 'variable', key });
+const validationLabel = (issue: WorkflowValidationIssue, ar: boolean) => ar ? ({
+  missing_database: 'قاعدة بيانات مفقودة', missing_property: 'خاصية مفقودة', invalid_mapping: 'تعيين غير صالح', incompatible_value: 'قيمة غير متوافقة', missing_input: 'مدخل مطلوب مفقود', unsupported_conversion: 'تحويل غير مدعوم', impossible_reference: 'مرجع غير متاح', invalid_definition: 'تعريف غير صالح',
+} as const)[issue.code] : issue.message;
 export function QuickActionSettings({ locale }: { locale: Locale }) {
   const ar = locale === 'ar';
   const [actions, setActions] = useState<readonly WorkspaceWorkflow[]>([]);
+  const [reports, setReports] = useState<readonly WorkflowValidationReport[]>([]);
   const [draft, setDraft] = useState<WorkspaceWorkflowDraft>();
   const [databases, setDatabases] = useState<readonly { id: string; title: string }[]>([]);
   const [schemas, setSchemas] = useState<Record<string, readonly WorkspaceProperty[]>>({});
@@ -33,12 +37,12 @@ export function QuickActionSettings({ locale }: { locale: Locale }) {
   const [jsonError, setJsonError] = useState('');
   const [historyId, setHistoryId] = useState<string>();
   const iconButtonRef = useRef<HTMLButtonElement>(null);
-  const reload = () => window.maxApi.workspace.listWorkflows().then((rows) => { setActions(rows); window.dispatchEvent(new Event('max:workspace-changed')); });
+  const reload = () => Promise.all([window.maxApi.workspace.listWorkflows(), window.maxApi.workspace.inspectWorkflows()]).then(([rows, findings]) => { setActions(rows); setReports(findings); window.dispatchEvent(new Event('max:workspace-changed')); });
   useEffect(() => {
     let active = true;
-    void Promise.all([window.maxApi.workspace.listWorkflows(), window.maxApi.workspace.getNavigation()]).then(async ([rows, nav]) => {
+    void Promise.all([window.maxApi.workspace.listWorkflows(), window.maxApi.workspace.getNavigation(), window.maxApi.workspace.inspectWorkflows()]).then(async ([rows, nav, findings]) => {
       const entries = await Promise.all(nav.databases.map(async (db) => [db.id, (await window.maxApi.workspace.getDatabaseSchema(db.id)).properties] as const));
-      if (active) { setActions(rows); setDatabases(nav.databases); setSchemas(Object.fromEntries(entries)); }
+      if (active) { setActions(rows); setReports(findings); setDatabases(nav.databases); setSchemas(Object.fromEntries(entries)); }
     }).catch(() => setError(ar ? 'تعذر تحميل الإجراءات.' : 'Could not load actions.'));
     return () => { active = false; };
   }, [ar]);
@@ -141,6 +145,7 @@ export function QuickActionSettings({ locale }: { locale: Locale }) {
       {actions.map((action, index) => <div className="action-list-row" key={action.id} role="group" aria-label={action.name} style={{ '--action-color': action.color ?? undefined } as CSSProperties}>
         <button type="button" aria-label={ar ? 'سجل التنفيذ' : 'Run history'} aria-expanded={historyId === action.id} onClick={() => setHistoryId(historyId === action.id ? undefined : action.id)}>{ar ? 'السجل' : 'History'}</button>
         <button type="button" onClick={() => { setDraft(action); setError(''); }}><strong><PageIconRenderer icon={action.icon || 'lucide:Zap'} size={16} /> {action.name}</strong><small>{action.inputSchema.fields.length} {ar ? 'مدخلات' : 'inputs'} · {action.steps.length} {ar ? 'خطوات' : 'steps'}{!action.enabled && (ar ? ' · معطل' : ' · Disabled')}</small></button>
+        {reports.find((report) => report.workflowId === action.id && !report.canRun)?.issues[0] && <span className="action-validation-error" role="status">{ar ? 'يحتاج إصلاحًا' : 'Needs repair'}: {ar ? reports.find((report) => report.workflowId === action.id)!.issues[0]!.location.replace(/^Step (\d+)/, 'الخطوة $1').replace('Property ', 'الخاصية ') : reports.find((report) => report.workflowId === action.id)!.issues[0]!.location} · {validationLabel(reports.find((report) => report.workflowId === action.id)!.issues[0]!, ar)}</span>}
         <button type="button" disabled={index === 0 || saving} aria-label={ar ? 'تحريك لأعلى' : 'Move up'} onClick={() => { const previous = actions[index - 1]; if (!previous) return; setSaving(true); void window.maxApi.workspace.updateWorkflow(action.id, { positionKey: generateOrderKey(actions[index - 2]?.positionKey, previous.positionKey) }).then(async (result) => { if (!result.ok) setError(result.error.message); await reload(); }).finally(() => setSaving(false)); }}>↑</button>
         <button type="button" disabled={index === actions.length - 1 || saving} aria-label={ar ? 'تحريك لأسفل' : 'Move down'} onClick={() => { const next = actions[index + 1]; if (!next) return; setSaving(true); void window.maxApi.workspace.updateWorkflow(action.id, { positionKey: generateOrderKey(next.positionKey, actions[index + 2]?.positionKey) }).then(async (result) => { if (!result.ok) setError(result.error.message); await reload(); }).finally(() => setSaving(false)); }}>↓</button>
       </div>)}
