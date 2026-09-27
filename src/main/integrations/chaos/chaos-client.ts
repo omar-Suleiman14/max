@@ -145,6 +145,7 @@ export class ChaosClient {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.#timeoutMs);
     let response: Response;
+    let responseText: string;
     try {
       response = await this.#fetch(`${this.apiOrigin}${CHAOS_API_BASE_PATH}${path}`, {
         body,
@@ -153,24 +154,33 @@ export class ChaosClient {
         redirect: 'error',
         signal: controller.signal,
       });
+      const reader = response.body?.getReader() as ReadableStreamDefaultReader<Uint8Array> | undefined;
+      const chunks: Uint8Array[] = [];
+      let bytes = 0;
+      if (reader) {
+        for (;;) {
+          const part = await reader.read();
+          if (part.done) break;
+          bytes += part.value.byteLength;
+          if (bytes > MAX_RESPONSE_BYTES) {
+            controller.abort();
+            throw new ChaosApiError('INVALID_RESPONSE', 'Chaos sent a response larger than Max accepts.');
+          }
+          chunks.push(part.value);
+        }
+      }
+      responseText = new TextDecoder().decode(Buffer.concat(chunks));
     } catch (error) {
+      if (error instanceof ChaosApiError) throw error;
       if (controller.signal.aborted) throw new ChaosApiError('TIMEOUT', 'Chaos did not answer in time. Showing the last saved information.');
-      void error;
-      throw new ChaosApiError('NETWORK', 'Could not reach Chaos. Check the internet connection. Showing the last saved information.');
+      throw new ChaosApiError('NETWORK', 'Could not reach Chaos, or the response was interrupted. Check the connection. Showing the last saved information.');
     } finally {
       clearTimeout(timer);
     }
 
-    let text: string;
-    try {
-      text = await response.text();
-    } catch {
-      throw new ChaosApiError('NETWORK', 'The connection to Chaos was interrupted.');
-    }
-    if (text.length > MAX_RESPONSE_BYTES) throw new ChaosApiError('INVALID_RESPONSE', 'Chaos sent a response larger than Max accepts.');
     let parsed: unknown = null;
-    if (text) {
-      try { parsed = JSON.parse(text); } catch { parsed = null; }
+    if (responseText) {
+      try { parsed = JSON.parse(responseText); } catch { parsed = null; }
     }
 
     if (!response.ok) {
