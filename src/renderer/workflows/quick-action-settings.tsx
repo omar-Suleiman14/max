@@ -116,7 +116,9 @@ export function QuickActionSettings({ locale }: { locale: Locale }) {
           </>}
           {step.type === 'COMPUTE' && valueEditor(c.value ?? literal(0), (value) => patchStep(index, { value }))}
           {step.type === 'VALIDATE' && <>
-            <label>{ar ? 'يستمر الإجراء فقط عندما' : 'Continue only when'}{valueEditor(c.condition ?? literal(true), (condition) => patchStep(index, { condition }))}</label>
+            <label>{ar ? 'يستمر الإجراء فقط عندما' : 'Continue only when'}{typeof c.condition === 'string'
+              ? <input aria-label={ar ? 'تعبير الشرط القديم' : 'Legacy condition expression'} dir="ltr" value={c.condition} onChange={(e) => patchStep(index, { condition: e.target.value })} />
+              : valueEditor(c.condition ?? literal(true), (condition) => patchStep(index, { condition }))}</label>
             <label>{ar ? 'الرسالة عند الفشل' : 'Message when it fails'}<input value={scalarText(c.errorMessage ?? '')} onChange={(e) => patchStep(index, { errorMessage: e.target.value })} placeholder={ar ? 'مثال: الكمية غير كافية' : 'For example: not enough stock'} /></label>
           </>}
           {step.type === 'RETURN_RESULT' && <div className="action-outputs">

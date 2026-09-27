@@ -130,6 +130,22 @@ describe('Workspace Quick Actions settings', () => {
     expect(workspace.listWorkflowRuns).toHaveBeenCalledWith(action.id);
     expect(workspace.updateWorkflow).not.toHaveBeenCalled();
   });
+  it('keeps legacy formula conditions as formulas when edited', async () => {
+    const legacy: WorkspaceWorkflow = { ...action, name: 'Legacy check', steps: [
+      { id: 'check', type: 'VALIDATE', config: { condition: 'count > 0', errorMessage: 'Must be positive' } },
+    ] };
+    const workspace = api([legacy]);
+    const user = userEvent.setup();
+    render(<QuickActionSettings locale="en" />);
+    await user.click(await screen.findByRole('button', { name: /Legacy check/ }));
+    const condition = screen.getByRole('textbox', { name: 'Legacy condition expression' });
+    await user.clear(condition);
+    await user.type(condition, 'count > 10');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(workspace.updateWorkflow.mock.calls[0]?.[0]).toBe('configured');
+    expect(workspace.updateWorkflow.mock.calls[0]?.[1].steps?.[0]?.config.condition).toBe('count > 10');
+  });
+
   it('configures calculations, conditions, messages and summaries without JSON', async () => {
     const workspace = api(); const user = userEvent.setup();
     render(<QuickActionSettings locale="en"/>);
