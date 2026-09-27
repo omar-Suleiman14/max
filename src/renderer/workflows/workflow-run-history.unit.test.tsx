@@ -19,10 +19,10 @@ const run = (status: WorkflowRunSummary['status'], message?: string): WorkflowRu
 });
 
 it('explains failed, rolled-back, and completed runs without exposing inputs', async () => {
-  const listWorkflowRuns = vi.fn().mockResolvedValue([run('failed', 'Stock is unavailable'), run('rolled_back'), run('completed')]);
+  const listWorkflowRuns = vi.fn().mockResolvedValue([run('failed', 'Lookup returned no record.'), run('rolled_back'), run('completed')]);
   Object.defineProperty(window, 'maxApi', { configurable: true, value: { workspace: { listWorkflowRuns } } });
   const { container } = render(<WorkflowRunHistory workflow={workflow} locale="en" />);
-  expect(await screen.findByText('Stock is unavailable')).toBeInTheDocument();
+  expect(await screen.findByText('Lookup returned no record.')).toBeInTheDocument();
   expect(screen.getByText('Step 1 · Check a condition')).toBeInTheDocument();
   expect(screen.getByText('Failed; changes rolled back', { exact: false })).toBeInTheDocument();
   expect(screen.getByText('Preview rolled back', { exact: false })).toBeInTheDocument();
@@ -33,8 +33,9 @@ it('explains failed, rolled-back, and completed runs without exposing inputs', a
 });
 
 it('uses Arabic for run state and recovery text', async () => {
-  Object.defineProperty(window, 'maxApi', { configurable: true, value: { workspace: { listWorkflowRuns: vi.fn().mockResolvedValue([run('failed')]) } } });
+  Object.defineProperty(window, 'maxApi', { configurable: true, value: { workspace: { listWorkflowRuns: vi.fn().mockResolvedValue([run('failed', 'Action step failed. Review its configuration and inputs.')]) } } });
   render(<div dir="rtl"><WorkflowRunHistory workflow={workflow} locale="ar" /></div>);
   expect(await screen.findByText('لم تُحفظ أي تغييرات. راجع الإجراء والمدخلات قبل إعادة المحاولة.')).toBeInTheDocument();
+  expect(screen.getByText('فشلت خطوة. راجع إعدادات الإجراء ومدخلاته.')).toBeInTheDocument();
   expect(screen.getByRole('region', { name: 'سجل تنفيذ الإجراء' })).toBeInTheDocument();
 });

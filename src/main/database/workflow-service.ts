@@ -69,12 +69,20 @@ function workflowFromRow(row: WorkflowRow): WorkspaceWorkflow {
 }
 
 function safeRunMessage(message: string): string {
-  const detail = message.slice(0, 240);
-  // Configured validation messages are arbitrary author text. Do not echo a
-  // credential-shaped value in run history or an execution error.
-  return /\b(?:token|secret|password|credential|authorization|api[_ -]?key|bearer|private[_ -]?key)\b/i.test(detail)
-    || /[A-Za-z0-9_-]{32,}/.test(detail)
-    ? 'The run failed. Details were hidden to protect sensitive data.' : detail;
+  // Validation messages and expression errors can contain arbitrary author
+  // text, including short secrets. Only fixed engine copy is safe to return.
+  const trusted = new Set([
+    'Lookup returned no record.',
+    'Workflow validation failed.',
+    'Iteration requires a collection of at most 100 items.',
+    'Sum requires finite numeric values.',
+    'Sum is too large.',
+    'A finite number is required.',
+    'Action exceeds 1,000 executed steps.',
+    'Action failed. Check the configured values.',
+    'Action failed. No changes were saved.',
+  ]);
+  return trusted.has(message) ? message : 'Action step failed. Review its configuration and inputs.';
 }
 
 export class WorkflowService {
@@ -415,9 +423,7 @@ export class WorkflowService {
       return this.#unitOfWork.run(() => perform(true));
     } catch (error) {
       const completedAt = new Date().toISOString();
-      const rawError = error instanceof WorkspaceDomainError ? error.message : 'Action failed. No changes were saved.';
-      const failedStep = /^(Step \d+:\s*)/.exec(rawError)?.[1] ?? '';
-      const errMessage = failedStep + safeRunMessage(rawError.slice(failedStep.length));
+      const errMessage = error instanceof WorkspaceDomainError ? error.message : 'Action failed. No changes were saved.';
       this.#database.prepare(`
         INSERT INTO workspace_workflow_runs (
           id, workflow_id, workflow_version, status, input_json, result_json, actor_id, started_at, completed_at, error_json
