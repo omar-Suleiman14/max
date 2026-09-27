@@ -121,8 +121,11 @@ async function latestPublishedRelease(): Promise<LatestRelease | null> {
           if (!metadata.onboardingCompleted || metadata.backupSchedule === 'manual') return;
           const interval = (metadata.backupSchedule === 'weekly' ? 7 : 1) * 86400000;
           const latest = database.backups.listBackups().filter(b => b.trigger === 'daily' || b.trigger === 'weekly').reduce((last, b) => Math.max(last, Date.parse(b.createdAt) || 0), 0);
-          if (Date.now() - latest >= interval) database.backups.createBackup(metadata.backupSchedule);
-        } catch (error) { console.error('Scheduled local backup failed:', error); }
+          if (Date.now() - latest >= interval) {
+            database.backups.createBackup(metadata.backupSchedule);
+            database.backups.clearScheduledFailure();
+          }
+        } catch (error) { database?.backups.recordScheduledFailure(); console.error('Scheduled local backup failed:', error); }
       };
       if (process.env.MAX_SMOKE_TEST !== '1') { checkBackup(); backupTimer = setInterval(checkBackup, 60000); }
       const mainWindow = await createMainWindow();

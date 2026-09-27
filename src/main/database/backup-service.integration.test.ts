@@ -1,6 +1,7 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { BackupService } from './backup-service';
@@ -15,6 +16,33 @@ afterEach(() => {
 });
 
 describe('BackupService', () => {
+  it('keeps an optional scheduled failure status and clears it after recovery', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'max-backup-status-'));
+    temporaryDirectories.push(dir);
+    const service = new BackupService(':memory:', join(dir, 'backups'));
+    expect(service.getStatus()).toMatchObject({ currentSchemaVersion: 19 });
+    service.recordScheduledFailure();
+    expect(service.getStatus().lastScheduledFailureAt).toBeDefined();
+    service.clearScheduledFailure();
+    expect(service.getStatus().lastScheduledFailureAt).toBeUndefined();
+  });
+
+  it('refuses a backup made with a newer database schema before replacing live data', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'max-backup-future-'));
+    temporaryDirectories.push(dir);
+    const dbPath = join(dir, 'max.sqlite');
+    const db = new DatabaseService(dbPath); db.initialize(); db.close();
+    const service = new BackupService(dbPath, join(dir, 'backups'));
+    const backup = service.createBackup('manual');
+    const futurePath = join(dir, 'future.maxbak');
+    copyFileSync(backup.filePath, futurePath);
+    const future = new DatabaseSync(futurePath);
+    future.prepare("INSERT INTO system_migrations (id, name, applied_at) VALUES (999, 'future', ?)").run(new Date().toISOString());
+    future.close();
+    expect(service.verifyBackup(futurePath)).toMatchObject({ valid: false, schemaVersion: 999, sqliteIntegrityPassed: true });
+    expect(service.restoreBackup(futurePath)).toMatchObject({ restored: false, safetyRollbackOccurred: false });
+    expect(service.verifyBackup(backup.filePath).valid).toBe(true);
+  });
   it('creates timestamped SQLite snapshots with SHA-256 checksum and correct schema version', () => {
     const dir = mkdtempSync(join(tmpdir(), 'max-backup-test-'));
     temporaryDirectories.push(dir);

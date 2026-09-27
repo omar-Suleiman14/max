@@ -48,6 +48,8 @@ const maxApi: MaxApi = Object.freeze({
       ipcRenderer.invoke(IPC_CHANNELS.backupCreate, trigger) as ReturnType<MaxApi['backups']['create']>,
     list: () =>
       ipcRenderer.invoke(IPC_CHANNELS.backupList) as ReturnType<MaxApi['backups']['list']>,
+    status: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.backupStatus) as ReturnType<MaxApi['backups']['status']>,
     restore: (backupIdOrPath: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.backupRestore, backupIdOrPath) as ReturnType<MaxApi['backups']['restore']>,
     verify: (backupIdOrPath: string) =>

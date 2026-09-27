@@ -948,6 +948,10 @@ export function registerIpcHandlers({
     trust(event);
     return database.backups.listBackups();
   });
+  ipcMain.handle(IPC_CHANNELS.backupStatus, (event) => {
+    trust(event);
+    return database.backups.getStatus();
+  });
   ipcMain.handle(IPC_CHANNELS.backupVerify, (event, backupIdOrPath: unknown) => {
     trust(event);
     return database.backups.verifyBackup(parseId(backupIdOrPath));

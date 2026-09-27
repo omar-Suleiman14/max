@@ -335,6 +335,7 @@ const reconciliationApi = {
 const backupsApi = {
   create: vi.fn(() => Promise.resolve({ ok: true as const, value: { checksum: 'safe', createdAt: '2026-08-30', filename: 'pre-delete.maxbak', filePath: 'pre-delete.maxbak', id: 'backup-safe', schemaVersion: 6, sizeBytes: 1, trigger: 'pre-delete' as const } })),
   list: vi.fn(() => Promise.resolve([])),
+  status: vi.fn(() => Promise.resolve({ currentSchemaVersion: 19 })),
   restore: vi.fn(),
   verify: vi.fn(() => Promise.resolve({ checksumMatch: true, sqliteIntegrityPassed: true, valid: true })),
 };

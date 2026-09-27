@@ -19,6 +19,11 @@ export type BackupVerificationResult = Readonly<{
   valid: boolean;
 }>;
 
+export type LocalBackupStatus = Readonly<{
+  currentSchemaVersion: number;
+  lastScheduledFailureAt?: string;
+}>;
+
 export type RestoreResult = Readonly<{
   error?: string;
   preRestoreBackupId?: string;

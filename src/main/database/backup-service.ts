@@ -17,9 +17,11 @@ import type {
   BackupMetadata,
   BackupTrigger,
   BackupVerificationResult,
+  LocalBackupStatus,
   RestoreResult,
 } from '../../shared/backup-contract';
 import { ObjectDomainError } from './object-repository';
+import { migrations } from './migrations';
 
 const MAX_RETAINED_BACKUPS = 15;
 
@@ -38,6 +40,31 @@ export class BackupService {
     if (!existsSync(this.#backupDir)) {
       mkdirSync(this.#backupDir, { recursive: true });
     }
+  }
+
+  getStatus(): LocalBackupStatus {
+    let lastScheduledFailureAt: string | undefined;
+    try {
+      const value = JSON.parse(readFileSync(join(this.#backupDir, 'schedule-failure.state'), 'utf8')) as { at?: unknown };
+      if (typeof value.at === 'string' && Number.isFinite(Date.parse(value.at))) lastScheduledFailureAt = value.at;
+    } catch { /* Optional status must never prevent local work. */ }
+    return { currentSchemaVersion: migrations.at(-1)?.id ?? 0, ...(lastScheduledFailureAt ? { lastScheduledFailureAt } : {}) };
+  }
+
+  recordScheduledFailure(): void {
+    try {
+      const path = join(this.#backupDir, 'schedule-failure.state');
+      const temporary = `${path}.tmp`;
+      writeFileSync(temporary, JSON.stringify({ at: new Date().toISOString() }), 'utf8');
+      renameSync(temporary, path);
+    } catch { /* A status write cannot block local Max. */ }
+  }
+
+  clearScheduledFailure(): void {
+    try {
+      const path = join(this.#backupDir, 'schedule-failure.state');
+      if (existsSync(path)) unlinkSync(path);
+    } catch { /* A status write cannot block local Max. */ }
   }
 
   createBackup(trigger: BackupTrigger = 'manual'): BackupMetadata {
@@ -202,6 +229,10 @@ export class BackupService {
       const row = db.prepare('SELECT MAX(id) as max_id FROM system_migrations').get() as { max_id: number | null };
       if (row?.max_id) schemaVersion = row.max_id;
       db.close();
+
+      if (schemaVersion !== undefined && schemaVersion > (migrations.at(-1)?.id ?? 0)) {
+        return { checksumMatch: true, error: 'Backup schema is newer than this Max version.', schemaVersion, sqliteIntegrityPassed: true, valid: false };
+      }
 
       return {
         checksumMatch: true,

@@ -10,6 +10,7 @@ import type {
   CloudBackupCreateResult,
   CloudBackupMetadata,
   CloudBackupStatus,
+  LocalBackupStatus,
   RestoreResult,
 } from './backup-contract';
 import type {
@@ -96,6 +97,7 @@ export const IPC_CHANNELS = {
   accountUpdate: 'max:accounts:update',
   backupCreate: 'max:backup:create',
   backupList: 'max:backup:list',
+  backupStatus: 'max:backup:status',
   backupRestore: 'max:backup:restore',
   backupVerify: 'max:backup:verify',
   cloudBackupCreate: 'max:cloud-backup:create',
@@ -288,6 +290,7 @@ export type MaxApi = Readonly<{
   backups: Readonly<{
     create: (trigger?: BackupTrigger) => Promise<MutationResult<BackupMetadata>>;
     list: () => Promise<readonly BackupMetadata[]>;
+    status: () => Promise<LocalBackupStatus>;
     restore: (backupIdOrPath: string) => Promise<MutationResult<RestoreResult>>;
     verify: (backupIdOrPath: string) => Promise<BackupVerificationResult>;
   }>;
