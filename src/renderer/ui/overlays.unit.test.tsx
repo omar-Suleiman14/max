@@ -118,7 +118,7 @@ describe('modal overlays', () => {
   it('close from the backdrop', async () => {
     render(<>{overlays[0]!.mount()}</>);
     await open();
-    fireEvent.mouseDown(document.querySelector('.overlay')!);
+    fireEvent.pointerDown(document.querySelector('.overlay')!);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });
