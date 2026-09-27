@@ -15,6 +15,7 @@ import { ActionValueEditor, type ValueChoice } from './action-value-editor';
 import './quick-actions.css';
 import { configFor, draftFromJson, draftToJson, stepLabels, stepTypes } from './workflow-draft';
 import { WorkflowRunHistory } from './workflow-run-history';
+import { QuickActionForm } from './quick-action-form';
 
 const empty = (): WorkspaceWorkflowDraft => ({ name: '', enabled: true, icon: '', inputSchema: { fields: [] }, steps: [] });
 const literal = (value: unknown): WorkflowValue => ({ source: 'literal', value });
@@ -36,6 +37,7 @@ export function QuickActionSettings({ locale }: { locale: Locale }) {
   const [json, setJson] = useState<string>();
   const [jsonError, setJsonError] = useState('');
   const [historyId, setHistoryId] = useState<string>();
+  const [previewId, setPreviewId] = useState<string>();
   const iconButtonRef = useRef<HTMLButtonElement>(null);
   const reload = () => Promise.all([window.maxApi.workspace.listWorkflows(), window.maxApi.workspace.inspectWorkflows()]).then(([rows, findings]) => { setActions(rows); setReports(findings); window.dispatchEvent(new Event('max:workspace-changed')); });
   useEffect(() => {
@@ -146,10 +148,12 @@ export function QuickActionSettings({ locale }: { locale: Locale }) {
         <button type="button" aria-label={ar ? 'سجل التنفيذ' : 'Run history'} aria-expanded={historyId === action.id} onClick={() => setHistoryId(historyId === action.id ? undefined : action.id)}>{ar ? 'السجل' : 'History'}</button>
         <button type="button" onClick={() => { setDraft(action); setError(''); }}><strong><PageIconRenderer icon={action.icon || 'lucide:Zap'} size={16} /> {action.name}</strong><small>{action.inputSchema.fields.length} {ar ? 'مدخلات' : 'inputs'} · {action.steps.length} {ar ? 'خطوات' : 'steps'}{!action.enabled && (ar ? ' · معطل' : ' · Disabled')}</small></button>
         {reports.find((report) => report.workflowId === action.id && !report.canRun)?.issues[0] && <span className="action-validation-error" role="status">{ar ? 'يحتاج إصلاحًا' : 'Needs repair'}: {ar ? reports.find((report) => report.workflowId === action.id)!.issues[0]!.location.replace(/^Step (\d+)/, 'الخطوة $1').replace('Property ', 'الخاصية ') : reports.find((report) => report.workflowId === action.id)!.issues[0]!.location} · {validationLabel(reports.find((report) => report.workflowId === action.id)!.issues[0]!, ar)}</span>}
+        <button type="button" disabled={!action.enabled} onClick={() => setPreviewId((id) => id === action.id ? undefined : action.id)}>{ar ? 'معاينة' : 'Preview'}</button>
         <button type="button" disabled={index === 0 || saving} aria-label={ar ? 'تحريك لأعلى' : 'Move up'} onClick={() => { const previous = actions[index - 1]; if (!previous) return; setSaving(true); void window.maxApi.workspace.updateWorkflow(action.id, { positionKey: generateOrderKey(actions[index - 2]?.positionKey, previous.positionKey) }).then(async (result) => { if (!result.ok) setError(result.error.message); await reload(); }).finally(() => setSaving(false)); }}>↑</button>
         <button type="button" disabled={index === actions.length - 1 || saving} aria-label={ar ? 'تحريك لأسفل' : 'Move down'} onClick={() => { const next = actions[index + 1]; if (!next) return; setSaving(true); void window.maxApi.workspace.updateWorkflow(action.id, { positionKey: generateOrderKey(next.positionKey, actions[index + 2]?.positionKey) }).then(async (result) => { if (!result.ok) setError(result.error.message); await reload(); }).finally(() => setSaving(false)); }}>↓</button>
       </div>)}
       {historyId && actions.find((action) => action.id === historyId) && <WorkflowRunHistory key={historyId} workflow={actions.find((action) => action.id === historyId)!} locale={locale} />}
+      {previewId && actions.find((action) => action.id === previewId) && <QuickActionForm key={previewId} action={actions.find((action) => action.id === previewId)!} locale={locale} onOpenSettings={() => setPreviewId(undefined)} />}
       <button type="button" className="btn btn-secondary" onClick={() => { setDraft(empty()); setError(''); }}>{ar ? '+ إجراء سريع' : '+ Quick action'}</button>
     </> : <>
       <div className="action-row">

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import type { WorkspaceWorkflow } from '../../shared/workflow-contract';
+import type { WorkspaceWorkflow, WorkflowExecutionResult } from '../../shared/workflow-contract';
 import type { Locale } from '../app/i18n';
 import { lastUsedInputs, rememberInputs } from './last-used-inputs';
 import { ReactiveActionForm } from './reactive-action-form';
@@ -40,6 +40,7 @@ export function QuickActionForm({ action, locale, onBusyChange, onEnabled, onOpe
   const [done, setDone] = useState(false);
   // What a "Show a result" step returned; it stays until the next run.
   const [outputs, setOutputs] = useState<readonly (readonly [string, string])[]>([]);
+  const [preview, setPreview] = useState<WorkflowExecutionResult>();
   const [running, setRunning] = useState(false);
   const [enabling, setEnabling] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -56,6 +57,7 @@ export function QuickActionForm({ action, locale, onBusyChange, onEnabled, onOpe
   useEffect(() => {
     setError('');
     setMissing([]);
+    setPreview(undefined);
     setValues(lastUsedInputs(action.id, action.inputSchema.fields));
   }, [action, formInstance]);
 
@@ -74,7 +76,7 @@ export function QuickActionForm({ action, locale, onBusyChange, onEnabled, onOpe
     setFormInstance((current) => current + 1);
   }, [action, locale]);
 
-  const execute = async () => {
+  const execute = async (previewOnly = false) => {
     if (blocked || lock.current) return;
     const gaps = missingRequiredInputs(action.inputSchema.fields, values);
     if (gaps.length) {
@@ -86,9 +88,11 @@ export function QuickActionForm({ action, locale, onBusyChange, onEnabled, onOpe
     setBusy(true);
     setError('');
     setDone(false);
+    setPreview(undefined);
     try {
-      const result = await window.maxApi.workspace.executeWorkflow({ workflowId: action.id, inputs: values });
+      const result = await window.maxApi.workspace.executeWorkflow({ workflowId: action.id, inputs: values, ...(previewOnly ? { testMode: true } : {}) });
       if (!result.ok) { setError(result.error.message); setShowHistory(false); }
+      else if (previewOnly) setPreview(result.value);
       else {
         rememberInputs(action.id, values);
         window.dispatchEvent(new Event('max:workspace-changed'));
@@ -152,6 +156,8 @@ export function QuickActionForm({ action, locale, onBusyChange, onEnabled, onOpe
         <form key={`${action.id}:${formInstance}`} noValidate onSubmit={(event) => { event.preventDefault(); void execute(); }}>
           <WorkflowInputForm fields={action.inputSchema.fields} values={values} onChange={(next) => { setValues(next); setMissing([]); setError(''); }} disabled={running} locale={locale} missing={missing} />
           {error && <p className="quick-action-form__error" role="alert">{error}</p>}
+          {preview && <section aria-label={ar ? 'معاينة الإجراء' : 'Action preview'} className="quick-action-form__preview"><strong>{ar ? 'سيحدث عند التشغيل' : 'Would happen when run'}</strong>{preview.previewEffects?.length ? <ul>{preview.previewEffects.map((effect) => <li key={`${effect.kind}:${effect.recordId}`}>{effect.kind === 'created' ? (ar ? 'إنشاء' : 'Create') : (ar ? 'تحديث' : 'Update')}: {effect.title}</li>)}</ul> : <p>{ar ? 'لا توجد تغييرات على السجلات.' : 'No record changes.'}</p>}</section>}
+          <button className="btn btn-secondary" type="button" disabled={running} onClick={() => void execute(true)}>{ar ? 'معاينة' : 'Preview'}</button>
           <button className="btn btn-primary" type="submit" disabled={running}>
             {running ? (ar ? 'جار التنفيذ…' : 'Running…') : (ar ? 'تشغيل' : 'Run')}
           </button>

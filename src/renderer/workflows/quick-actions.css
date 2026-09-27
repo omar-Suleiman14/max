@@ -96,6 +96,8 @@
 .quick-action-form__result div { display: flex; justify-content: space-between; gap: 12px; }
 .quick-action-form__result dt { color: var(--muted); }
 .quick-action-form__result dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.quick-action-form__preview { margin: 10px 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--canvas-subtle); font-size: 13px; }
+.quick-action-form__preview ul { margin: 8px 0 0; padding-inline-start: 20px; }
 .quick-action-form__history-button { justify-self: start; padding: 4px 0; border: 0; background: none; color: var(--accent); cursor: pointer; }
 .workflow-run-history { min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; }
 .workflow-run-history h3 { margin: 0 0 10px; }

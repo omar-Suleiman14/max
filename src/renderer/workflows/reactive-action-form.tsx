@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { WorkflowFormEvaluation, WorkspaceWorkflow } from '../../shared/workflow-contract';
+import type { WorkflowExecutionResult, WorkflowFormEvaluation, WorkspaceWorkflow } from '../../shared/workflow-contract';
 import type { Locale } from '../app/i18n';
 import { lastUsedInputs, rememberInputs } from './last-used-inputs';
 import { listMissing, missingRequiredInputs } from './required-inputs';
@@ -20,6 +20,7 @@ export function ReactiveActionForm({ workflow, locale, onCompleted, onBusy }: { 
   const [overrides, setOverrides] = useState<string[]>([]), [evaluation, setEvaluation] = useState<WorkflowFormEvaluation>();
   const [error, setError] = useState(''), [snapshot, setSnapshot] = useState('');
   const [missing, setMissing] = useState<readonly string[]>([]);
+  const [dryRun, setDryRun] = useState<WorkflowExecutionResult>();
   const [queued, setQueued] = useState(false);
   const [revision, setRevision] = useState(0), [confirming, setConfirming] = useState(false), [running, setRunning] = useState(false);
   const previewToken = useRef<string | undefined>(undefined);
@@ -72,9 +73,21 @@ export function ReactiveActionForm({ workflow, locale, onCompleted, onBusy }: { 
   };
   const attemptRef = useRef(attempt); attemptRef.current = attempt;
   useEffect(() => { if (queued && !pending && evaluation) attemptRef.current(); }, [queued, pending, evaluation]);
+  const previewChanges = async () => {
+    if (pending || !evaluation || running) return;
+    const gaps = missingRequiredInputs(workflow.inputSchema.fields, values, evaluation);
+    if (gaps.length) { setError(`${ar ? 'أكمل أولًا: ' : 'Fill in first: '}${listMissing(gaps, ar ? 'ar' : 'en')}`); return; }
+    setRunning(true); onBusy(true); setError(''); setDryRun(undefined);
+    try {
+      const result = await window.maxApi.workspace.executeWorkflow({ workflowId: workflow.id, inputs: values, overrides, evaluationToken: evaluation.token, confirmedWarnings: warnings.map(w => w.id), testMode: true });
+      if (result.ok) setDryRun(result.value);
+      else setError(result.error.message);
+    } catch { setError(ar ? 'تعذرت معاينة التغييرات.' : 'Could not preview changes.'); }
+    finally { setRunning(false); onBusy(false); }
+  };
 
   return <form onSubmit={e => { e.preventDefault(); attempt(); }} aria-busy={pending || running}>
-    <WorkflowInputForm fields={workflow.inputSchema.fields} values={values} missing={missing} onChange={next => { setConfirming(false); setMissing([]); setError(''); applyValues(next); }} disabled={running || confirming} locale={locale} evaluation={evaluation} onEdit={(path, reset, removedRow) => {
+    <WorkflowInputForm fields={workflow.inputSchema.fields} values={values} missing={missing} onChange={next => { setConfirming(false); setMissing([]); setError(''); setDryRun(undefined); applyValues(next); }} disabled={running || confirming} locale={locale} evaluation={evaluation} onEdit={(path, reset, removedRow) => {
       setConfirming(false);
       setOverrides(old => {
         if (removedRow === undefined) return reset ? old.filter(p => p !== path) : [...new Set([...old, path])];
@@ -89,6 +102,8 @@ export function ReactiveActionForm({ workflow, locale, onCompleted, onBusy }: { 
     {!!evaluation?.summary.length && <dl className="action-live-summary" aria-label={ar ? 'المعاينة' : 'Preview'}>{evaluation.summary.map((s, i) => <div key={i}><dt>{s.label}</dt><dd>{typeof s.value === 'number' ? new Intl.NumberFormat(ar ? 'ar' : 'en', { maximumFractionDigits: 6 }).format(s.value) : scalarText(s.value ?? '—')}</dd></div>)}</dl>}
     <div aria-live="polite">{evaluation?.messages.map(m => <p className={'action-message action-message-' + m.severity.toLowerCase()} key={m.id}>{m.message}</p>)}</div>
     {error && <p className="quick-action-form__error" role="alert">{error}</p>}
+    {dryRun && <section aria-label={ar ? 'معاينة التغييرات' : 'Change preview'} className="quick-action-form__preview"><strong>{ar ? 'سيحدث عند التشغيل' : 'Would happen when run'}</strong>{dryRun.previewEffects?.length ? <ul>{dryRun.previewEffects.map(effect => <li key={`${effect.kind}:${effect.recordId}`}>{effect.kind === 'created' ? (ar ? 'إنشاء' : 'Create') : (ar ? 'تحديث' : 'Update')}: {effect.title}</li>)}</ul> : <p>{ar ? 'لا توجد تغييرات على السجلات.' : 'No record changes.'}</p>}</section>}
+    <button className="btn btn-secondary" type="button" disabled={running || pending || !evaluation} onClick={() => void previewChanges()}>{ar ? 'معاينة التغييرات' : 'Preview changes'}</button>
     {confirming ? <div className="action-warning-confirm" role="group" aria-label={ar ? 'تأكيد التحذيرات' : 'Confirm warnings'}><strong>{warnings.length} {ar ? 'تحذيرات · هل تريد المتابعة؟' : 'warnings · Continue anyway?'}</strong>{warnings.map(w => <p key={w.id}>{w.message}</p>)}<div className="action-row"><button type="button" disabled={running} onClick={() => setConfirming(false)}>{ar ? 'إلغاء' : 'Cancel'}</button><button className="btn btn-primary" type="button" disabled={running} onClick={() => attempt(true)}>{ar ? 'متابعة' : 'Continue'}</button></div></div>
       : <button className="btn btn-primary" type="submit" disabled={running}>{running ? (ar ? 'جار التنفيذ…' : 'Running…') : queued ? (ar ? 'جارٍ التحقق…' : 'Checking…') : (ar ? 'تشغيل' : 'Run')}</button>}
   </form>;

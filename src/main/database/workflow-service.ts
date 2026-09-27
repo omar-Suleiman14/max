@@ -426,22 +426,22 @@ export class WorkflowService {
     };
 
     if (input.testMode) {
-      const savepoint = `workflow_test_${runId.replaceAll('-', '')}`;
-      this.#database.exec(`SAVEPOINT ${savepoint};`);
-      try {
+      return this.#unitOfWork.preview(() => {
+        const before = this.#database.prepare('SELECT COALESCE(MAX(rowid), 0) AS id FROM workspace_audit_log').get() as { id: number };
         const result = perform(false);
-        this.#database.exec(`ROLLBACK TO ${savepoint}; RELEASE ${savepoint};`);
-        const completedAt = new Date().toISOString();
-        this.#database.prepare(`
-          INSERT INTO workspace_workflow_runs (
-            id, workflow_id, workflow_version, status, input_json, result_json, actor_id, started_at, completed_at, error_json
-          ) VALUES (?, ?, ?, 'rolled_back', ?, ?, ?, ?, ?, NULL)
-        `).run(runId, workflow.id, workflow.version, JSON.stringify(input.inputs), JSON.stringify(result.result), actorId, startedAt, completedAt);
-        return { ...result, completedAt };
-      } catch (error) {
-        this.#database.exec(`ROLLBACK TO ${savepoint}; RELEASE ${savepoint};`);
-        throw error;
-      }
+        const created = new Set(result.createdRecordIds);
+        const updated = this.#database.prepare("SELECT DISTINCT entity_id FROM workspace_audit_log WHERE rowid > ? AND entity_kind = 'record' AND action = 'updated'")
+          .all(before.id) as { entity_id: string }[];
+        const effects = [
+          ...result.createdRecordIds.map((recordId) => ({ kind: 'created' as const, recordId })),
+          ...updated.filter((row) => !created.has(row.entity_id)).map((row) => ({ kind: 'updated' as const, recordId: row.entity_id })),
+        ].map(({ kind, recordId }) => {
+          const record = this.#recordRepo.getRecord(recordId);
+          if (!record) throw new WorkspaceDomainError('not-found', 'Previewed record is unavailable.');
+          return { kind, recordId, title: record.title, databaseId: record.databaseId };
+        });
+        return { ...result, previewEffects: effects };
+      });
     }
 
     try {

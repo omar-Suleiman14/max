@@ -155,6 +155,7 @@ export type WorkflowExecutionResult = Readonly<{
   runId: string;
   status: WorkflowRunStatus;
   workflowId: string;
+  previewEffects?: readonly Readonly<{ kind: 'created' | 'updated'; recordId: string; title: string; databaseId: string }>[];
 }>;
 
 export const WORKFLOW_MAX_ITEMS = 100;

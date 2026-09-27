@@ -3,7 +3,7 @@ import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { WorkspaceWorkflow, WorkspaceWorkflowDraft, WorkflowValidationReport } from '../../shared/workflow-contract';
+import type { WorkspaceWorkflow, WorkspaceWorkflowDraft, WorkflowExecutionResult, WorkflowValidationReport } from '../../shared/workflow-contract';
 import { QuickActionForm } from './quick-action-form';
 import { QuickActionSettings } from './quick-action-settings';
 
@@ -11,7 +11,7 @@ afterEach(() => { cleanup(); window.localStorage.clear(); });
 const action: WorkspaceWorkflow = { id: 'configured', name: 'Record attendance', enabled: true, createdAt: '', updatedAt: '', version: 1, kind: 'custom', positionKey: 'a0', steps: [], inputSchema: { fields: [{ key: 'count', label: 'Count', type: 'number', required: true }] } };
 function api(actions: readonly WorkspaceWorkflow[] = []) {
   let rows: WorkspaceWorkflow[] = [...actions];
-  const executeWorkflow = vi.fn(() => Promise.resolve({ ok: true, value: { status: 'completed' } }));
+  const executeWorkflow = vi.fn<() => Promise<{ ok: true; value: Partial<WorkflowExecutionResult> }>>(() => Promise.resolve({ ok: true, value: { status: 'completed' } }));
   const workspace = {
     listWorkflows: vi.fn(() => Promise.resolve(rows)),
     inspectWorkflows: vi.fn<() => Promise<readonly WorkflowValidationReport[]>>(() => Promise.resolve([])),
@@ -28,9 +28,19 @@ function api(actions: readonly WorkspaceWorkflow[] = []) {
   return workspace;
 }
 describe('running one quick action', () => {
+  it('previews record changes without treating the preview as a completed run', async () => {
+    const workspace = api([action]);
+    workspace.executeWorkflow.mockResolvedValue({ ok: true, value: { status: 'rolled_back', previewEffects: [{ kind: 'created', recordId: 'preview-id', title: 'Preview task', databaseId: 'tasks' }] } });
+    render(<QuickActionForm action={action} locale="en" onOpenSettings={vi.fn()} />);
+    await userEvent.setup().type(await screen.findByLabelText('Count *'), '12');
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Preview' }));
+    expect(workspace.executeWorkflow).toHaveBeenCalledWith({ workflowId: action.id, inputs: { count: 12 }, testMode: true });
+    expect(await screen.findByText('Create: Preview task')).toBeInTheDocument();
+    expect(screen.queryByText(/Done · ready/)).not.toBeInTheDocument();
+  });
   it('runs the action once per submission and confirms when it lands', async () => {
     const workspace = api([action]);
-    let finish!: (value: { ok: boolean; value: { status: string } }) => void;
+    let finish!: (value: { ok: true; value: Partial<WorkflowExecutionResult> }) => void;
     workspace.executeWorkflow.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
     render(<QuickActionForm action={action} locale="en" onOpenSettings={vi.fn()} />);
 

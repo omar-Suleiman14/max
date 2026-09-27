@@ -1,10 +1,14 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { DatabaseService } from './database-service';
 import type { WorkflowValue, WorkspaceWorkflowDraft } from '../../shared/workflow-contract';
 
 const opened: DatabaseService[] = [];
+const temporaryDirectories: string[] = [];
 function workspace() { const db = new DatabaseService(':memory:'); db.initialize(); opened.push(db); return db; }
-afterEach(() => opened.splice(0).forEach((db) => db.close()));
+afterEach(() => { opened.splice(0).forEach((db) => db.close()); temporaryDirectories.splice(0).forEach((directory) => rmSync(directory, { recursive: true, force: true })); });
 const literal = (value: unknown): WorkflowValue => ({ source: 'literal', value });
 const variable = (key: string): WorkflowValue => ({ source: 'variable', key });
 const property = (key: string, databaseId: string, propertyId: string): WorkflowValue => ({ source: 'property', record: variable(key), databaseId, propertyId });
@@ -73,6 +77,59 @@ describe('Generic workspace actions', () => {
     db.properties.archiveProperty(property.id);
     expect(() => db.workflows.execute({ workflowId: workflow.id, inputs: {} })).toThrow('Step 2');
     expect(db.records.listRecords(database.id)).toHaveLength(0);
+    expect(db.workflows.listWorkflowRuns(workflow.id)).toHaveLength(0);
+  });
+  it('leaves records and run history unchanged after a dry run', () => {
+    const db = workspace();
+    const database = db.databases.createDatabase({ title: 'Tasks' });
+    const workflow = db.workflows.createWorkflow({ name: 'Create task', inputSchema: { fields: [] }, steps: [
+      { type: 'CREATE_RECORD', config: { databaseId: database.id, title: literal('Preview task') } },
+    ] });
+    const preview = db.workflows.execute({ workflowId: workflow.id, inputs: {}, testMode: true });
+    expect(preview.status).toBe('rolled_back');
+    expect(preview.createdRecordIds).toHaveLength(1);
+    expect(preview.previewEffects).toEqual([{ kind: 'created', recordId: preview.createdRecordIds[0], title: 'Preview task', databaseId: database.id }]);
+    expect(db.records.listRecords(database.id)).toHaveLength(0);
+    expect(db.workflows.listWorkflowRuns(workflow.id)).toHaveLength(0);
+  });
+  it('keeps a complete SQLite snapshot byte-identical through a dry run', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'max-workflow-preview-'));
+    temporaryDirectories.push(directory);
+    const db = new DatabaseService(join(directory, 'workspace.sqlite'));
+    db.initialize(); opened.push(db);
+    const database = db.databases.createDatabase({ title: 'Tasks' });
+    const workflow = db.workflows.createWorkflow({ name: 'Create task', inputSchema: { fields: [] }, steps: [
+      { type: 'CREATE_RECORD', config: { databaseId: database.id, title: literal('Preview task') } },
+    ] });
+    const before = db.backups.createBackup('manual').checksum;
+    db.workflows.execute({ workflowId: workflow.id, inputs: {}, testMode: true });
+    const after = db.backups.createBackup('manual').checksum;
+    expect(after).toBe(before);
+  });
+  it('does not consume the next Auto ID during a dry run', () => {
+    const db = workspace();
+    const database = db.databases.createDatabase({ title: 'Tasks' });
+    const autoId = db.properties.createProperty({ databaseId: database.id, name: 'Number', type: 'auto_id' });
+    const workflow = db.workflows.createWorkflow({ name: 'Create task', inputSchema: { fields: [] }, steps: [
+      { type: 'CREATE_RECORD', config: { databaseId: database.id, title: literal('Task') } },
+    ] });
+    db.workflows.execute({ workflowId: workflow.id, inputs: {}, testMode: true });
+    const created = db.workflows.execute({ workflowId: workflow.id, inputs: {} });
+    expect(db.records.getRecord(created.createdRecordIds[0]!)?.properties[autoId.id]).toBe('1');
+  });
+  it('previews created and updated records by title without saving the workflow effects', () => {
+    const db = workspace();
+    const s = scenario(db);
+    const workflow = db.workflows.createWorkflow(s.draft);
+    const preview = db.workflows.execute({ workflowId: workflow.id, inputs: s.inputs, testMode: true });
+    expect(preview.previewEffects).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'created', title: 'Event', databaseId: s.events.id }),
+      expect.objectContaining({ kind: 'updated', title: 'A', databaseId: s.nodes.id }),
+      expect.objectContaining({ kind: 'updated', title: 'B', databaseId: s.nodes.id }),
+    ]));
+    expect(db.records.listRecords(s.events.id)).toHaveLength(0);
+    expect(db.records.getRecord(s.a.id)?.properties[s.capacity.id]).toBe(100);
+    expect(db.records.getRecord(s.b.id)?.properties[s.capacity.id]).toBe(20);
     expect(db.workflows.listWorkflowRuns(workflow.id)).toHaveLength(0);
   });
   it('persists action presentation, defaults older definitions, and rejects shortcut collisions', () => {
