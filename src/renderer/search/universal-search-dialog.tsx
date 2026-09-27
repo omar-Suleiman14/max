@@ -15,6 +15,8 @@ import {
   Zap,
 } from 'lucide-react';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { compareResults, kindLabel } from './result-ranking';
+import { handleListboxKey, resultCountMessage } from '../ui/listbox-keys';
 
 import type { SearchResult, SearchResultKind } from '../../shared/views-search-contract';
 import type { WorkspaceWorkflow } from '../../shared/workflow-contract';
@@ -23,7 +25,6 @@ import { localeDigit, shortcutDigit } from '../app/keyboard';
 import { FocusedOverlay } from '../ui/focused-overlay';
 import { PageIconRenderer } from '../ui/page-icon-renderer';
 import { searchCopy } from './search-i18n';
-import { normalizeSearchText } from '../../shared/search-text';
 
 const QuickActionForm = lazy(() => import('../workflows/quick-action-form').then((module) => ({ default: module.QuickActionForm })));
 
@@ -56,13 +57,6 @@ export type UniversalSearchResult = SearchResult | Readonly<{
 type Section = Readonly<{ items: readonly UniversalSearchResult[]; title: string }>;
 
 /** Exact title, prefix title, contains title, then body or metadata matches. */
-function rankResult(result: UniversalSearchResult, query: string): number {
-  const title = normalizeSearchText(result.title);
-  if (title === query) return 0;
-  if (title.startsWith(query)) return 1;
-  if (title.includes(query)) return 2;
-  return 3;
-}
 
 function resultIcon(kind: SearchResultKind | 'action' | 'database' | 'record') {
   switch (kind) {
@@ -174,9 +168,8 @@ export function UniversalSearchDialog({
             title: result.displayTitle,
           }));
           const seen = new Set(generic.map((result) => result.id));
-          const normalizedQuery = normalizeSearchText(trimmed);
           setMatches([...generic, ...legacyResults.filter((result) => !seen.has(result.id))]
-            .sort((a, b) => rankResult(a, normalizedQuery) - rankResult(b, normalizedQuery) || a.title.localeCompare(b.title, locale)));
+            .sort((a, b) => compareResults(a, b, trimmed, locale)));
         } catch {
           if (active) setMatches([]);
         } finally {
@@ -221,17 +214,9 @@ export function UniversalSearchDialog({
   }, [mode, onClose, onModeChange, onSelect]);
 
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (handleListboxKey(event, { activeIndex: safeIndex, count: flat.length, onActiveChange: setActiveIndex, onChoose: (index) => { if (!loading) choose(flat[index]); } })) return;
     if (event.nativeEvent.isComposing) return;
-    if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      setActiveIndex(flat.length > 0 ? (safeIndex + 1) % flat.length : 0);
-    } else if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      setActiveIndex(flat.length > 0 ? (safeIndex - 1 + flat.length) % flat.length : 0);
-    } else if (event.key === 'Enter') {
-      event.preventDefault();
-      if (!loading) choose(flat[safeIndex]);
-    } else if (!trimmed && (event.ctrlKey || event.metaKey || event.altKey)) {
+    if (!trimmed && (event.ctrlKey || event.metaKey || event.altKey)) {
       // Digits run the listed actions, on Arabic keyboards too.
       const digit = shortcutDigit(event);
       const action = digit === null ? undefined : sections[0]?.items[digit - 1];
@@ -321,17 +306,13 @@ export function UniversalSearchDialog({
             </Suspense>
           </div>
         ) : (
-          <div
-            ref={listRef}
-            aria-busy={loading}
-            aria-label={searchCopy(locale, 'search')}
-            className="search-dialog__list"
-            id="workspace-search-results"
-            role="listbox"
-          >
-            {sections.map((section) => (
-              <div className="search-dialog__group" key={section.title}>
-                <p className="search-dialog__group-title">{section.title}</p>
+          <div ref={listRef} className="search-dialog__list">
+            <p aria-live="polite" className="sr-only" role="status">{!loading && trimmed ? resultCountMessage(flat.length, locale) : ''}</p>
+            {/* Only option groups live inside the listbox; status and empty states sit beside it. */}
+            <div aria-busy={loading} aria-label={searchCopy(locale, 'search')} id="workspace-search-results" role="listbox">
+            {sections.map((section, sectionIndex) => (
+              <div aria-labelledby={`workspace-search-group-${sectionIndex}`} className="search-dialog__group" key={section.title} role="group">
+                <p className="search-dialog__group-title" id={`workspace-search-group-${sectionIndex}`}>{section.title}</p>
                 {section.items.map((item) => {
                   rowIndex += 1;
                   const index = rowIndex;
@@ -357,6 +338,7 @@ export function UniversalSearchDialog({
                         {item.subtitle && <span className="search-row__subtitle">{item.subtitle}</span>}
                       </span>
                       {item.metadata && <span className="search-row__meta">{item.metadata}</span>}
+                      {!isAction && <span className="search-row__kind">{kindLabel(item.kind, locale)}</span>}
                       {digit && <kbd className="search-row__shortcut">Ctrl {digit}</kbd>}
                       {isActive
                         ? <CornerDownLeft aria-hidden="true" className="search-row__enter" size={14} />
@@ -367,6 +349,7 @@ export function UniversalSearchDialog({
               </div>
             ))}
 
+            </div>
             {loading && flat.length === 0 && (
               <p className="search-dialog__empty" role="status">{ar ? 'جارٍ البحث…' : 'Searching…'}</p>
             )}

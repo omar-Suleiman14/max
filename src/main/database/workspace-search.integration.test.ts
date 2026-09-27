@@ -110,6 +110,20 @@ describe('searching the whole workspace', () => {
     expect(db.workspaceSearch.search('needle', 10).map((result) => result.entityId)).toEqual([exact.id, prefix.id, contains.id, body.id]);
   });
 
+  it('ranks by the same tiers across records, pages and databases', () => {
+    const db = workspace();
+    const body = page(db, 'Quarter notes', [{ content: 'the budget is tight', id: 'b1', type: 'text' }]);
+    const database = db.databases.createDatabase({ title: 'Old budgets' });
+    const prefix = page(db, 'Budget plan', []);
+    const exact = db.records.createRecord({ databaseId: database.id, properties: {}, title: 'Budget' });
+
+    const ranked = db.workspaceSearch.search('budget', 10).map((result) => result.entityId);
+    expect(ranked.indexOf(exact.id)).toBe(0);
+    expect(ranked.indexOf(prefix.id)).toBe(1);
+    expect(ranked.indexOf(database.id)).toBeGreaterThan(1);
+    expect(ranked.indexOf(body.id)).toBeGreaterThan(ranked.indexOf(database.id));
+  });
+
   it('finds a record by any of its property values', () => {
     const db = workspace();
     const created = db.databases.createDatabase({ title: 'Inventory' });
