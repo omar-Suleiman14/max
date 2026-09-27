@@ -739,7 +739,7 @@ describe('Max shell', () => {
     await user.type(search, 'notes');
     expect(screen.queryByRole('button', { name: /clear|close/i })).not.toBeInTheDocument();
     expect(screen.getByText('Esc')).toBeInTheDocument();
-    fireEvent.mouseDown(document.querySelector('.overlay')!);
+    fireEvent.pointerDown(document.querySelector('.overlay')!);
     expect(search).not.toBeInTheDocument();
   });
 

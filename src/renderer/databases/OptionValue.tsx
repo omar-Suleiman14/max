@@ -1,6 +1,7 @@
 import '../ui/database-popover.css';
 import { GripVertical, Check, MoreHorizontal, Plus, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useOverlayLayer } from '../ui/overlay-stack';
 import { createPortal } from 'react-dom';
 import { anchorPopover, currentViewport, type AnchoredPosition } from '../ui/anchor-popover';
 import { propertySaveError } from '../ui/property-editing-copy';
@@ -45,14 +46,14 @@ export function OptionValue({ property, value, onChange, multiple = false, local
     setPosition(anchorPopover(rect, { preferredHeight: 340, width: 300 }, currentViewport(), 4));
   }, []);
   useLayoutEffect(() => { if (open) place(); }, [open, place, editing]);
+  // A layer while open; its own Escape (leaving the colour editor first) still runs before the stack.
+  useOverlayLayer(popup, { anchor: trigger.current, enabled: open, onClose: () => { setOpen(false); trigger.current?.focus(); } });
   useEffect(() => {
     if (!open) return;
     const reposition = () => place();
-    const close = (event: MouseEvent) => { if (!popup.current?.contains(event.target as Node) && !trigger.current?.contains(event.target as Node)) setOpen(false); };
-    document.addEventListener('mousedown', close);
     window.addEventListener('resize', reposition);
     document.addEventListener('scroll', reposition, true);
-    return () => { document.removeEventListener('mousedown', close); window.removeEventListener('resize', reposition); document.removeEventListener('scroll', reposition, true); };
+    return () => { window.removeEventListener('resize', reposition); document.removeEventListener('scroll', reposition, true); };
   }, [open, place]);
 
   const saveOptions = async (next: readonly PropertyOptionDraft[]) => {

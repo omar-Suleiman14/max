@@ -1,6 +1,7 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { anchorPopover, currentViewport, type AnchoredPosition, type AnchorRect } from './anchor-popover';
+import { useOverlayLayer } from './overlay-stack';
 import './database-popover.css';
 
 /** Compact editor anchored to its trigger, with no blocking backdrop. */
@@ -25,14 +26,6 @@ export function DatabasePopover({ children, onClose, labelId, className = '' }: 
     setPosition(anchorPopover(rect, { preferredHeight: 380, width }, currentViewport()));
     (root.current?.querySelector<HTMLElement>('input:not([type=hidden])') ?? root.current?.querySelector<HTMLElement>('button'))?.focus();
   }, [anchor, openingRect]);
-  useEffect(() => {
-    const outside = (event: PointerEvent) => {
-      if (!(event.target instanceof Element) || root.current?.contains(event.target) || anchor?.contains(event.target)) return;
-      if (event.target.closest('.max-select-popup,.overlay,.option-popup')) return;
-      onClose();
-    };
-    document.addEventListener('pointerdown', outside);
-    return () => document.removeEventListener('pointerdown', outside);
-  }, [anchor, onClose]);
-  return createPortal(<div ref={root} className={`database-anchored-popover ${className}`} role="dialog" aria-labelledby={labelId} style={position} onKeyDown={event => { if (event.key === 'Escape' && !document.querySelector('.max-select-popup,.overlay')) { event.preventDefault(); event.stopPropagation(); onClose(); anchor?.focus(); } }}>{children}</div>, document.body);
+  useOverlayLayer(root, { anchor, onClose: () => { onClose(); if (anchor?.isConnected) anchor.focus(); } });
+  return createPortal(<div ref={root} className={`database-anchored-popover ${className}`} role="dialog" aria-labelledby={labelId} style={position}>{children}</div>, document.body);
 }

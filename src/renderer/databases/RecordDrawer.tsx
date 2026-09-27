@@ -27,6 +27,7 @@ import {
   Maximize2,
 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
+import { containTab, isTopmostOverlay, useOverlayLayer } from '../ui/overlay-stack';
 
 import type { Locale } from '../app/i18n';
 import type { DatabaseSchema } from '../../shared/database-contract';
@@ -116,6 +117,8 @@ export function RecordDrawer({
     return patch ? save(patch) : saveQueue.current;
   };
   const close = () => { void flush().then(() => { if (!failedPatch.current) onClose(); }); };
+  // A modal layer: its backdrop closes it, and Escape closes whatever is on top of it first.
+  useOverlayLayer(drawerRef, { clickAway: false, enabled: isOpen, onClose: close });
   const flushRef = useRef(flush);
   flushRef.current = flush;
   useEffect(() => () => { void flushRef.current(); }, []);
@@ -165,14 +168,11 @@ export function RecordDrawer({
 
   return (
     <>
-      <div className="drawer-backdrop" data-page-mode={displayMode} onClick={close} onKeyDown={(event) => { if (event.key === 'Escape') { event.stopPropagation(); if (iconPickerOpen) setIconPickerOpen(false); else if (addingProperty) setAddingProperty(false); else close(); } }} role="dialog" aria-modal="true" aria-label={record.title}>
-        <div ref={drawerRef} className="drawer-container record-drawer" data-full-page={fullPage} onClick={(e) => e.stopPropagation()} onKeyDown={(event) => {
-          if (event.key !== 'Tab') return;
-          const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button:not([disabled]),input:not([disabled]),[contenteditable=true],[tabindex="0"]')).filter((element) => element.getClientRects().length > 0);
-          const first = controls[0], last = controls.at(-1);
-          if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
-          if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
-        }}>
+      <div className="drawer-backdrop" data-page-mode={displayMode} onPointerDown={(event) => {
+        if (event.defaultPrevented || event.currentTarget !== event.target || !isTopmostOverlay(drawerRef.current)) return;
+        close();
+      }} role="dialog" aria-modal="true" aria-label={record.title}>
+        <div ref={drawerRef} className="drawer-container record-drawer" data-full-page={fullPage} onClick={(e) => e.stopPropagation()} onKeyDown={(event) => containTab(event, drawerRef.current)}>
           {/* Header */}
           <div className="drawer-header">
             <div className="flex items-center gap-2">

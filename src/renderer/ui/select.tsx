@@ -2,6 +2,7 @@ import { createPortal } from 'react-dom';
 import { Children, isValidElement, useEffect, useId, useRef, useState, type ChangeEvent, type ReactNode, type SelectHTMLAttributes } from 'react';
 import { ChevronDown, Check } from 'lucide-react';
 import { anchorPopover, currentViewport, type AnchoredPosition } from './anchor-popover';
+import { useOverlayLayer } from './overlay-stack';
 
 function textContent(node: ReactNode): string { return Children.toArray(node).map((child): string => typeof child === 'string' || typeof child === 'number' ? String(child) : isValidElement<{ children?: ReactNode }>(child) ? textContent(child.props.children) : '').join(''); }
 
@@ -33,20 +34,19 @@ export function Select({ children, value, defaultValue, onChange, onBlur, onKeyD
     setLabel(parent?.querySelector('span')?.textContent ?? undefined);
   }, [children]);
 
+  // Focus stays on the trigger; the list is still the topmost layer for Escape and presses outside.
+  useOverlayLayer(popup, { anchor: trigger.current, enabled: open, onClose: () => setOpen(false) });
+
   useEffect(() => {
     if (!open) return;
-    const close = (event: Event) => {
-      if (event.target instanceof Node && !trigger.current?.contains(event.target) && !popup.current?.contains(event.target)) setOpen(false);
-    };
     const closeOnMove = () => setOpen(false);
     const closeOnScroll = (event: Event) => {
       if (event.target instanceof Node && popup.current?.contains(event.target)) return;
       setOpen(false);
     };
-    document.addEventListener('pointerdown', close);
     window.addEventListener('resize', closeOnMove);
     document.addEventListener('scroll', closeOnScroll, true);
-    return () => { document.removeEventListener('pointerdown', close); window.removeEventListener('resize', closeOnMove); document.removeEventListener('scroll', closeOnScroll, true); };
+    return () => { window.removeEventListener('resize', closeOnMove); document.removeEventListener('scroll', closeOnScroll, true); };
   }, [open]);
 
   useEffect(() => { if (open) popup.current?.querySelector('[data-active="true"]')?.scrollIntoView?.({ block: 'nearest' }); }, [active, open]);
