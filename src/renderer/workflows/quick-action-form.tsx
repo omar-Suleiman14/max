@@ -7,6 +7,7 @@ import { ReactiveActionForm } from './reactive-action-form';
 import { hasReactiveFields } from './reactive-config';
 import { listMissing, missingRequiredInputs } from './required-inputs';
 import { WorkflowInputForm } from './workflow-input-form';
+import { resultOutputs } from './result-outputs';
 import './quick-actions.css';
 
 export type QuickActionFormProps = Readonly<{
@@ -36,6 +37,8 @@ export function QuickActionForm({ action, locale, onBusyChange, onEnabled, onOpe
   const [error, setError] = useState('');
   const [missing, setMissing] = useState<readonly string[]>([]);
   const [done, setDone] = useState(false);
+  // What a "Show a result" step returned; it stays until the next run.
+  const [outputs, setOutputs] = useState<readonly (readonly [string, string])[]>([]);
   const [running, setRunning] = useState(false);
   const [enabling, setEnabling] = useState(false);
   const [formInstance, setFormInstance] = useState(0);
@@ -61,12 +64,13 @@ export function QuickActionForm({ action, locale, onBusyChange, onEnabled, onOpe
     return () => window.clearTimeout(timer);
   }, [done]);
 
-  const completed = useCallback(() => {
+  const completed = useCallback((result?: Readonly<Record<string, unknown>>) => {
+    setOutputs(resultOutputs(action, result, locale));
     setError('');
     setMissing([]);
     setDone(true);
     setFormInstance((current) => current + 1);
-  }, []);
+  }, [action, locale]);
 
   const execute = async () => {
     if (blocked || lock.current) return;
@@ -86,7 +90,7 @@ export function QuickActionForm({ action, locale, onBusyChange, onEnabled, onOpe
       else {
         rememberInputs(action.id, values);
         window.dispatchEvent(new Event('max:workspace-changed'));
-        completed();
+        completed(result.value.result);
       }
     } catch {
       setError(ar ? 'تعذر تنفيذ الإجراء.' : 'Could not run this action.');
@@ -131,6 +135,7 @@ export function QuickActionForm({ action, locale, onBusyChange, onEnabled, onOpe
   return (
     <div className="quick-action-form">
       <p aria-live="polite" className="quick-action-form__done" data-shown={done || undefined}>{done ? (ar ? 'تم · جاهز للتالي' : 'Done · ready for the next one') : ''}</p>
+      {outputs.length > 0 && <dl aria-label={ar ? 'النتيجة' : 'Result'} className="quick-action-form__result">{outputs.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>}
       {hasReactiveFields(action.inputSchema) ? (
         <ReactiveActionForm
           key={`${action.id}:${formInstance}`}

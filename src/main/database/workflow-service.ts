@@ -445,10 +445,11 @@ export class WorkflowService {
         break;
       }
       case 'VALIDATE': {
-        const condition = config.condition as string | undefined;
+        // A formula string (Max 1.x) or a value reference from the editor.
+        const condition = config.condition;
         const errorMessage = config.errorMessage as string | undefined;
-        if (condition) {
-          const isValid = this.#expression(condition, variables);
+        if (condition !== undefined && condition !== null && condition !== '') {
+          const isValid = typeof condition === 'string' ? this.#expression(condition, variables) : this.#resolveValue(condition, variables);
           if (!isValid) {
             throw new WorkspaceDomainError('constraint-violation', errorMessage || 'Workflow validation failed.');
           }
@@ -506,7 +507,10 @@ export class WorkflowService {
 
       case 'RETURN_RESULT': {
         const resultExpression = config.resultExpression as string | undefined;
-        if (resultExpression) {
+        // Named outputs authored in the editor: each label maps to a value reference.
+        if (Array.isArray(config.outputs)) {
+          variables.result = Object.fromEntries((config.outputs as { label: string; value: unknown }[]).map((output) => [output.label, this.#resolveValue(output.value, variables)]));
+        } else if (resultExpression) {
           variables.result = this.#resolveValue(resultExpression, variables);
         } else {
           const resObj: Record<string, unknown> = {};
@@ -692,7 +696,13 @@ export class WorkflowService {
         if (step.type === 'UPDATE_RECORD') required('record');
         if (step.type === 'COMPUTE' && c.value === undefined && !c.assignments) required('expression');
         if (step.type === 'VALIDATE') { required('condition'); checkValue(c.condition); }
-        if (step.type === 'RETURN_RESULT') { if (c.resultExpression) checkValue(c.resultExpression); else for (const value of Object.values(c)) if (typeof value === 'string' && value.charCodeAt(0) === 36) checkValue(value); }
+        if (step.type === 'RETURN_RESULT' && Array.isArray(c.outputs)) {
+          for (const output of c.outputs as unknown[]) {
+            const entry = output as { label?: unknown; value?: unknown } | null;
+            if (!entry || typeof entry.label !== 'string' || !entry.label.trim()) throw new WorkspaceDomainError('invalid-input', 'Step ' + (draft.steps.indexOf(step) + 1) + ': every result needs a name.');
+            checkValue(entry.value);
+          }
+        } else if (step.type === 'RETURN_RESULT') { if (c.resultExpression) checkValue(c.resultExpression); else for (const value of Object.values(c)) if (typeof value === 'string' && value.charCodeAt(0) === 36) checkValue(value); }
         for (const key of ['properties', 'propertyValues', 'increments', 'assignments']) if (c[key] !== undefined && (!c[key] || typeof c[key] !== 'object' || Array.isArray(c[key]))) throw new WorkspaceDomainError('invalid-input', 'Property mappings must be an object.');
         for (const key of ['multiple', 'required']) if (c[key] !== undefined && typeof c[key] !== 'boolean') throw new WorkspaceDomainError('invalid-input', 'Lookup options must be boolean.');
         if (['CREATE_RECORD', 'FIND_RECORD', 'UPDATE_RECORD'].includes(step.type)) this.#databaseExists(c.databaseId);

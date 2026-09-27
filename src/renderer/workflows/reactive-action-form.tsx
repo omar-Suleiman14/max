@@ -15,7 +15,7 @@ import { scalarText } from '../../shared/scalar-text';
  * why. Now a press during a preview is remembered and runs the moment the
  * preview lands, and a press that cannot run names what is stopping it.
  */
-export function ReactiveActionForm({ workflow, locale, onCompleted, onBusy }: { workflow: WorkspaceWorkflow; locale: Locale; onCompleted: () => void; onBusy: (busy: boolean) => void }) {
+export function ReactiveActionForm({ workflow, locale, onCompleted, onBusy }: { workflow: WorkspaceWorkflow; locale: Locale; onCompleted: (result?: Readonly<Record<string, unknown>>) => void; onBusy: (busy: boolean) => void }) {
   const ar = locale === 'ar'; const [values, setValues] = useState(() => lastUsedInputs(workflow.id, workflow.inputSchema.fields));
   const [overrides, setOverrides] = useState<string[]>([]), [evaluation, setEvaluation] = useState<WorkflowFormEvaluation>();
   const [error, setError] = useState(''), [snapshot, setSnapshot] = useState('');
@@ -53,7 +53,7 @@ export function ReactiveActionForm({ workflow, locale, onCompleted, onBusy }: { 
     try {
       const result = await window.maxApi.workspace.executeWorkflow({ workflowId: workflow.id, inputs: values, overrides, evaluationToken: evaluation?.token, confirmedWarnings: confirmed ? warnings.map(w => w.id) : [] });
       if (!result.ok) { setError(result.error.message); setConfirming(false); setRevision(v => v + 1); }
-      else { rememberInputs(workflow.id, values); onCompleted(); window.dispatchEvent(new Event('max:workspace-changed')); }
+      else { rememberInputs(workflow.id, values); onCompleted(result.value.result); window.dispatchEvent(new Event('max:workspace-changed')); }
     } catch { setError(ar ? 'تعذر تنفيذ الإجراء.' : 'Could not execute action.'); }
     finally { lock.current = false; setRunning(false); onBusy(false); }
   };

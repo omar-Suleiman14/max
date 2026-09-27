@@ -90,3 +90,8 @@
 .action-inline-create label[data-required-unmet] :is(input, .database-cell-button) {
   border-color: color-mix(in srgb, var(--danger) 55%, transparent);
 }
+.quick-action-form__result { display: grid; gap: 4px; margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--canvas-subtle); font-size: 13px; }
+.quick-action-form__result div { display: flex; justify-content: space-between; gap: 12px; }
+.quick-action-form__result dt { color: var(--muted); }
+.quick-action-form__result dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.action-json { width: 100%; box-sizing: border-box; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; padding: 10px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--canvas-subtle); color: var(--text); }
