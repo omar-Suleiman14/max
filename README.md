@@ -47,8 +47,13 @@ keyboard access are built in rather than bolted on.
 
 ## Backups
 
-**Local backup works.** Max writes a full snapshot of the workspace to a file
-you choose, on a schedule or on demand, and restores from one.
+For local setup, backup and recovery steps in English and Arabic, see the
+[user guide](docs/user-guide.md).
+
+**Local database backup works.** Max writes a SQLite snapshot on a schedule or
+on demand and restores from one. Images and attachments live separately in the
+application's `assets` directory; copy that directory too when moving or
+recovering a workspace on another computer.
 
 **Max Cloud backup is being fixed.** It is present in the application but it is
 not yet trustworthy end to end, and the work to make it so is tracked in the

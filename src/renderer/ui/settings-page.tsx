@@ -272,7 +272,7 @@ export function SettingsPage({
           </div>
 
           <div className="settings-backup-content" data-setting="local-backups">
-            <BackupManager locale={locale} />
+            <BackupManager locale={locale} schedule={shopMetadata?.backupSchedule} />
           </div>
         </div>
 

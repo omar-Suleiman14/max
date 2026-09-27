@@ -1,0 +1,14 @@
+{
+  "name": "@max/design-tokens",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "react-native": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./desktop.css": "./desktop.css"
+  }
+}

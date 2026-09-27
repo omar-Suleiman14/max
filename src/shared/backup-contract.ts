@@ -1,10 +1,13 @@
 export type BackupTrigger = 'daily' | 'manual' | 'pre-delete' | 'pre-migration' | 'pre-restore' | 'weekly';
+export const BACKUP_FORMAT_VERSION = 1;
 
 export type BackupMetadata = Readonly<{
   checksum: string;
   createdAt: string;
   filename: string;
   filePath: string;
+  /** Missing on backups created before format versioning; those are format 1. */
+  formatVersion?: number;
   id: string;
   schemaVersion: number;
   sizeBytes: number;
@@ -14,9 +17,17 @@ export type BackupMetadata = Readonly<{
 export type BackupVerificationResult = Readonly<{
   checksumMatch: boolean;
   error?: string;
+  formatVersion?: number;
   schemaVersion?: number;
   sqliteIntegrityPassed: boolean;
   valid: boolean;
+}>;
+
+export type LocalBackupStatus = Readonly<{
+  currentBackupFormatVersion: number;
+  currentSchemaVersion: number;
+  lastScheduledFailureAt?: string;
+  lastRestoreSafetyPath?: string;
 }>;
 
 export type RestoreResult = Readonly<{

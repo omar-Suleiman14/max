@@ -17,9 +17,12 @@ import type {
   BackupMetadata,
   BackupTrigger,
   BackupVerificationResult,
+  LocalBackupStatus,
   RestoreResult,
 } from '../../shared/backup-contract';
+import { BACKUP_FORMAT_VERSION } from '../../shared/backup-contract';
 import { ObjectDomainError } from './object-repository';
+import { migrations } from './migrations';
 
 const MAX_RETAINED_BACKUPS = 15;
 
@@ -40,12 +43,42 @@ export class BackupService {
     }
   }
 
+  getStatus(): LocalBackupStatus {
+    let lastScheduledFailureAt: string | undefined;
+    let lastRestoreSafetyPath: string | undefined;
+    try {
+      const value = JSON.parse(readFileSync(join(this.#backupDir, 'schedule-failure.state'), 'utf8')) as { at?: unknown };
+      if (typeof value.at === 'string' && Number.isFinite(Date.parse(value.at))) lastScheduledFailureAt = value.at;
+    } catch { /* Optional status must never prevent local work. */ }
+    try {
+      const value = JSON.parse(readFileSync(join(this.#backupDir, 'restore-status.state'), 'utf8')) as { safetyPath?: unknown };
+      if (typeof value.safetyPath === 'string' && existsSync(value.safetyPath)) lastRestoreSafetyPath = value.safetyPath;
+    } catch { /* Optional status must never prevent local work. */ }
+    return { currentBackupFormatVersion: BACKUP_FORMAT_VERSION, currentSchemaVersion: migrations.at(-1)?.id ?? 0, ...(lastScheduledFailureAt ? { lastScheduledFailureAt } : {}), ...(lastRestoreSafetyPath ? { lastRestoreSafetyPath } : {}) };
+  }
+
+  recordScheduledFailure(): void {
+    try {
+      const path = join(this.#backupDir, 'schedule-failure.state');
+      const temporary = `${path}.tmp`;
+      writeFileSync(temporary, JSON.stringify({ at: new Date().toISOString() }), 'utf8');
+      renameSync(temporary, path);
+    } catch { /* A status write cannot block local Max. */ }
+  }
+
+  clearScheduledFailure(): void {
+    try {
+      const path = join(this.#backupDir, 'schedule-failure.state');
+      if (existsSync(path)) unlinkSync(path);
+    } catch { /* A status write cannot block local Max. */ }
+  }
+
   createBackup(trigger: BackupTrigger = 'manual'): BackupMetadata {
     if (this.#dbPath === ':memory:') {
       // In-memory support for testing
       const id = randomUUID();
       const now = new Date().toISOString();
-      const filename = `max-backup-${now.replace(/[:.]/g, '-')}-${trigger}.maxbak`;
+      const filename = `max-backup-${now.replace(/[:.]/g, '-')}-${trigger}-${id}.maxbak`;
       const filePath = join(this.#backupDir, filename);
 
       const memDb = new DatabaseSync(':memory:');
@@ -53,7 +86,7 @@ export class BackupService {
         CREATE TABLE system_migrations (id INTEGER PRIMARY KEY, name TEXT, applied_at TEXT);
         INSERT INTO system_migrations VALUES (1, 'foundation', '${now}');
       `);
-      memDb.exec(`VACUUM INTO '${filePath.replace(/\\/g, '/')}'`);
+      memDb.prepare('VACUUM INTO ?').run(filePath);
       memDb.close();
 
       const buffer = readFileSync(filePath);
@@ -64,6 +97,7 @@ export class BackupService {
         createdAt: now,
         filePath,
         filename,
+        formatVersion: BACKUP_FORMAT_VERSION,
         id,
         schemaVersion: 1,
         sizeBytes: buffer.length,
@@ -71,7 +105,7 @@ export class BackupService {
       };
 
       writeFileSync(`${filePath}.json`, JSON.stringify(meta, null, 2), 'utf-8');
-      this.#pruneOldBackups();
+      if (trigger !== 'pre-restore' && trigger !== 'pre-migration') this.#pruneOldBackups();
       return meta;
     }
 
@@ -81,17 +115,23 @@ export class BackupService {
 
     const id = randomUUID();
     const now = new Date().toISOString();
-    const filename = `max-backup-${now.replace(/[:.]/g, '-')}-${trigger}.maxbak`;
+    const filename = `max-backup-${now.replace(/[:.]/g, '-')}-${trigger}-${id}.maxbak`;
     const filePath = join(this.#backupDir, filename);
+    const existedBefore = existsSync(filePath);
 
-    // Use clean SQLite VACUUM INTO to produce a consistent, unfragmented snapshot
+    // A plain file copy can omit committed writes in the WAL. If SQLite cannot
+    // produce a consistent snapshot, fail without publishing a backup.
+    let live: DatabaseSync | undefined;
     try {
-      const live = new DatabaseSync(this.#dbPath, { readOnly: true });
-      live.exec(`VACUUM INTO '${filePath.replace(/\\/g, '/')}'`);
-      live.close();
-    } catch {
-      // Fallback to atomic copy if VACUUM fails
-      copyFileSync(this.#dbPath, filePath);
+      live = new DatabaseSync(this.#dbPath, { readOnly: true });
+      live.prepare('VACUUM INTO ?').run(filePath);
+    } catch (error) {
+      live?.close();
+      live = undefined;
+      if (!existedBefore && existsSync(filePath)) unlinkSync(filePath);
+      throw error;
+    } finally {
+      live?.close();
     }
 
     const buffer = readFileSync(filePath);
@@ -114,6 +154,7 @@ export class BackupService {
       createdAt: now,
       filePath,
       filename,
+      formatVersion: BACKUP_FORMAT_VERSION,
       id,
       schemaVersion,
       sizeBytes: stats.size,
@@ -121,7 +162,7 @@ export class BackupService {
     };
 
     writeFileSync(`${filePath}.json`, JSON.stringify(meta, null, 2), 'utf-8');
-    this.#pruneOldBackups();
+    if (trigger !== 'pre-restore' && trigger !== 'pre-migration') this.#pruneOldBackups();
     return meta;
   }
 
@@ -150,6 +191,7 @@ export class BackupService {
   verifyBackup(backupIdOrPath: string): BackupVerificationResult {
     let filePath = backupIdOrPath;
     let expectedChecksum: string | undefined;
+    let formatVersion: unknown;
 
     if (!existsSync(filePath)) {
       const found = this.listBackups().find((b) => b.id === backupIdOrPath || b.filename === backupIdOrPath);
@@ -158,16 +200,24 @@ export class BackupService {
       }
       filePath = found.filePath;
       expectedChecksum = found.checksum;
+      formatVersion = found.formatVersion;
     } else {
       const jsonPath = `${filePath}.json`;
       if (existsSync(jsonPath)) {
         try {
           const meta = JSON.parse(readFileSync(jsonPath, 'utf-8')) as BackupMetadata;
           expectedChecksum = meta.checksum;
+          formatVersion = meta.formatVersion;
         } catch {
-          // ignore
+          return { checksumMatch: false, error: 'Backup metadata could not be read.', sqliteIntegrityPassed: false, valid: false };
         }
       }
+    }
+
+    const declaredVersion = formatVersion === undefined ? 1 : formatVersion;
+    if (typeof declaredVersion !== 'number' || !Number.isInteger(declaredVersion) || declaredVersion !== BACKUP_FORMAT_VERSION) {
+      const label = typeof declaredVersion === 'number' || typeof declaredVersion === 'string' ? String(declaredVersion) : 'invalid';
+      return { checksumMatch: false, error: `Unsupported backup format version: ${label}.`, sqliteIntegrityPassed: false, valid: false };
     }
 
     const fileBuffer = readFileSync(filePath);
@@ -203,8 +253,13 @@ export class BackupService {
       if (row?.max_id) schemaVersion = row.max_id;
       db.close();
 
+      if (schemaVersion !== undefined && schemaVersion > (migrations.at(-1)?.id ?? 0)) {
+        return { checksumMatch: true, error: 'Backup schema is newer than this Max version.', schemaVersion, sqliteIntegrityPassed: true, valid: false };
+      }
+
       return {
         checksumMatch: true,
+        formatVersion: declaredVersion,
         schemaVersion,
         sqliteIntegrityPassed: true,
         valid: true,
@@ -244,6 +299,10 @@ export class BackupService {
       return { restored: true, safetyRollbackOccurred: false };
     }
 
+    if (existsSync(`${this.#dbPath}-wal`) && statSync(`${this.#dbPath}-wal`).size > 0) {
+      return { error: 'Close the active database before restoring.', restored: false, safetyRollbackOccurred: false };
+    }
+
     // 3. Take safety snapshot of CURRENT database before restoring
     let safetyBackup: BackupMetadata | undefined;
     try {
@@ -256,18 +315,28 @@ export class BackupService {
       };
     }
 
-    // 4. Overwrite active database file with target backup
+    // 4. Stage and verify beside the database so replacement is a single
+    // filesystem rename. The caller must close its SQLite connection first.
+    const stagedPath = join(dirname(this.#dbPath), `.max-restore-${randomUUID()}.sqlite`);
+    let replaced = false;
     try {
-      copyFileSync(targetPath, this.#dbPath);
+      copyFileSync(targetPath, stagedPath);
+      const stagedVerification = this.verifyBackup(stagedPath);
+      if (!stagedVerification.valid) throw new Error(stagedVerification.error ?? 'Staged backup failed verification.');
+      renameSync(stagedPath, this.#dbPath);
+      replaced = true;
 
-      // Verify active db after copy
       const check = new DatabaseSync(this.#dbPath, { readOnly: true });
-      const row = check.prepare('PRAGMA integrity_check').get();
-      check.close();
-
-      if (!row) {
-        throw new Error('Integrity check returned empty');
-      }
+      let integrity: string | undefined;
+      try { integrity = (check.prepare('PRAGMA integrity_check').get() as { integrity_check?: string } | undefined)?.integrity_check; }
+      finally { check.close(); }
+      if (integrity !== 'ok') throw new Error('Restored database failed integrity verification.');
+      try {
+        const statusPath = join(this.#backupDir, 'restore-status.state');
+        const temporaryPath = `${statusPath}.tmp`;
+        writeFileSync(temporaryPath, JSON.stringify({ safetyPath: safetyBackup.filePath }), 'utf8');
+        renameSync(temporaryPath, statusPath);
+      } catch { /* Optional status cannot invalidate a completed restore. */ }
 
       return {
         preRestoreBackupId: safetyBackup.id,
@@ -275,18 +344,27 @@ export class BackupService {
         safetyRollbackOccurred: false,
       };
     } catch (restoreErr) {
-      // 5. Automatic rollback on failure!
-      try {
-        copyFileSync(safetyBackup.filePath, this.#dbPath);
-      } catch {
-        // rollback copy failed
+      let rolledBack = false;
+      if (replaced) {
+        const rollbackPath = join(dirname(this.#dbPath), `.max-rollback-${randomUUID()}.sqlite`);
+        try {
+          copyFileSync(safetyBackup.filePath, rollbackPath);
+          renameSync(rollbackPath, this.#dbPath);
+          rolledBack = true;
+        } catch {
+          // The verified protective backup remains available for manual recovery.
+        } finally {
+          try { if (existsSync(rollbackPath)) unlinkSync(rollbackPath); } catch { /* Preserve the result. */ }
+        }
       }
       return {
-        error: `Restore failed and was rolled back to previous state: ${restoreErr instanceof Error ? restoreErr.message : String(restoreErr)}`,
+        error: `${rolledBack ? 'Restore failed and was rolled back' : 'Restore failed; the protective backup remains available'}: ${restoreErr instanceof Error ? restoreErr.message : String(restoreErr)}`,
         preRestoreBackupId: safetyBackup.id,
         restored: false,
-        safetyRollbackOccurred: true,
+        safetyRollbackOccurred: rolledBack,
       };
+    } finally {
+      try { if (existsSync(stagedPath)) unlinkSync(stagedPath); } catch { /* Preserve the result. */ }
     }
   }
 
@@ -316,6 +394,7 @@ export class BackupService {
       createdAt: input.createdAt,
       filePath,
       filename,
+      formatVersion: BACKUP_FORMAT_VERSION,
       id: input.id,
       schemaVersion: 0,
       sizeBytes: input.bytes.byteLength,

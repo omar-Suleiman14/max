@@ -187,7 +187,7 @@ export function SettingsDialog({
           </div>
 
           <div style={{ marginTop: '16px' }}>
-            <BackupManager locale={locale} />
+            <BackupManager locale={locale} schedule={shopMetadata?.backupSchedule} />
           </div>
         </section>
 

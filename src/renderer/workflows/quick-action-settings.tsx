@@ -5,49 +5,74 @@ import { IconPickerDialog } from '../ui/icon-picker-dialog';
 import { PageIconRenderer } from '../ui/page-icon-renderer';
 import { scalarText } from '../../shared/scalar-text';
 import { generateOrderKey } from '../../shared/order-key';
-import { useEffect, useRef, useState } from 'react';
-import type { WorkspaceWorkflow, WorkspaceWorkflowDraft, WorkflowStep, WorkflowStepType, WorkflowValue } from '../../shared/workflow-contract';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import type { WorkspaceWorkflow, WorkspaceWorkflowDraft, WorkflowStep, WorkflowStepType, WorkflowValue, WorkflowValidationReport, WorkflowValidationIssue } from '../../shared/workflow-contract';
 import type { WorkspaceProperty } from '../../shared/property-contract';
 import type { PropertyFilterNode, FilterOperator } from '../../shared/query-contract';
 import type { Locale } from '../app/i18n';
 import { Select } from '../ui/select';
 import { ActionValueEditor, type ValueChoice } from './action-value-editor';
 import './quick-actions.css';
+import { configFor, draftFromJson, draftToJson, stepLabels, stepTypes } from './workflow-draft';
+import { WorkflowRunHistory } from './workflow-run-history';
+import { QuickActionForm } from './quick-action-form';
 
 const empty = (): WorkspaceWorkflowDraft => ({ name: '', enabled: true, icon: '', inputSchema: { fields: [] }, steps: [] });
 const literal = (value: unknown): WorkflowValue => ({ source: 'literal', value });
 const variable = (key: string): WorkflowValue => ({ source: 'variable', key });
-const stepTypes: WorkflowStepType[] = ['FIND_RECORD', 'COMPUTE', 'CREATE_RECORD', 'UPDATE_RECORD', 'FOR_EACH', 'SUM'];
-const en = ['Find record', 'Calculate value', 'Create record', 'Update record', 'For each row', 'Sum rows'];
-const arabic = ['بحث عن سجل', 'حساب قيمة', 'إنشاء سجل', 'تحديث سجل', 'لكل صف', 'مجموع الصفوف'];
-
+const validationLabel = (issue: WorkflowValidationIssue, ar: boolean) => ar ? ({
+  missing_database: 'قاعدة بيانات مفقودة', missing_property: 'خاصية مفقودة', invalid_mapping: 'تعيين غير صالح', incompatible_value: 'قيمة غير متوافقة', missing_input: 'مدخل مطلوب مفقود', unsupported_conversion: 'تحويل غير مدعوم', impossible_reference: 'مرجع غير متاح', invalid_definition: 'تعريف غير صالح',
+} as const)[issue.code] : issue.message;
 export function QuickActionSettings({ locale }: { locale: Locale }) {
   const ar = locale === 'ar';
   const [actions, setActions] = useState<readonly WorkspaceWorkflow[]>([]);
+  const [reports, setReports] = useState<readonly WorkflowValidationReport[]>([]);
   const [draft, setDraft] = useState<WorkspaceWorkflowDraft>();
   const [databases, setDatabases] = useState<readonly { id: string; title: string }[]>([]);
   const [schemas, setSchemas] = useState<Record<string, readonly WorkspaceProperty[]>>({});
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [pickingIcon, setPickingIcon] = useState(false);
+  // The JSON view is for developers; ordinary authoring never needs it.
+  const [json, setJson] = useState<string>();
+  const [jsonError, setJsonError] = useState('');
+  const [historyId, setHistoryId] = useState<string>();
+  const [previewId, setPreviewId] = useState<string>();
+  const openDraft = (next: WorkspaceWorkflowDraft) => {
+    setDraft(next);
+    setJson(undefined);
+    setJsonError('');
+    setError('');
+    setPickingIcon(false);
+  };
+  const closeDraft = () => {
+    setDraft(undefined);
+    setJson(undefined);
+    setJsonError('');
+    setPickingIcon(false);
+  };
   const iconButtonRef = useRef<HTMLButtonElement>(null);
-  const reload = () => window.maxApi.workspace.listWorkflows().then(setActions);
+  const reload = () => Promise.all([window.maxApi.workspace.listWorkflows(), window.maxApi.workspace.inspectWorkflows()]).then(([rows, findings]) => { setActions(rows); setReports(findings); window.dispatchEvent(new Event('max:workspace-changed')); });
   useEffect(() => {
     let active = true;
-    void Promise.all([window.maxApi.workspace.listWorkflows(), window.maxApi.workspace.getNavigation()]).then(async ([rows, nav]) => {
+    void Promise.all([window.maxApi.workspace.listWorkflows(), window.maxApi.workspace.getNavigation(), window.maxApi.workspace.inspectWorkflows()]).then(async ([rows, nav, findings]) => {
       const entries = await Promise.all(nav.databases.map(async (db) => [db.id, (await window.maxApi.workspace.getDatabaseSchema(db.id)).properties] as const));
-      if (active) { setActions(rows); setDatabases(nav.databases); setSchemas(Object.fromEntries(entries)); }
+      if (active) { setActions(rows); setReports(findings); setDatabases(nav.databases); setSchemas(Object.fromEntries(entries)); }
     }).catch(() => setError(ar ? 'تعذر تحميل الإجراءات.' : 'Could not load actions.'));
     return () => { active = false; };
   }, [ar]);
   const save = async () => {
     if (!draft || saving) return;
+    if (draft.shortcut && actions.some((action) => action.id !== draft.id && action.shortcut === draft.shortcut)) {
+      setError(ar ? 'هذا الاختصار مستخدم لإجراء آخر.' : 'This shortcut is already used by another action.');
+      return;
+    }
     setSaving(true); setError('');
     try {
       const definition = JSON.parse(JSON.stringify(draft)) as WorkspaceWorkflowDraft;
       const result = draft.id ? await window.maxApi.workspace.updateWorkflow(draft.id, definition) : await window.maxApi.workspace.createWorkflow(definition);
       if (!result.ok) { setError(result.error.message); return; }
-      setDraft(undefined); await reload();
+      closeDraft(); await reload();
       window.dispatchEvent(new Event('max:workspace-changed'));
     } catch { setError(ar ? 'تعذر حفظ الإجراء.' : 'Could not save action.'); }
     finally { setSaving(false); }
@@ -68,14 +93,15 @@ export function QuickActionSettings({ locale }: { locale: Locale }) {
   };
   const outputChoices = (steps: WorkspaceWorkflowDraft['steps']): ValueChoice[] => steps.flatMap((step, i) => {
     const key = scalarText(step.config.outputVariable ?? ''); if (!key) return [];
-    const value = variable(key); const label = 'Step ' + (i + 1);
+    const value = variable(key); const label = (ar ? 'الخطوة ' : 'Step ') + (i + 1);
     return [{ label, value }, ...(['CREATE_RECORD','UPDATE_RECORD','FIND_RECORD'].includes(step.type) && !step.config.multiple ? properties(step.config.databaseId).map(p => ({ label: label + ' · ' + p.name, value: { source: 'property' as const, record: value, databaseId: String(step.config.databaseId), propertyId: p.id } })) : [])];
   });
   const itemChoices = (collection: unknown): ValueChoice[] => {
     const ref = collection as WorkflowValue; const field = ref?.source === 'variable' ? draft?.inputSchema.fields.find(f => (f.key ?? f.id) === ref.key) : undefined;
-    return [{ label: 'Current item', value: { source: 'item' } }, { label: 'Current index (0 based)', value: { source: 'index' } }, ...(field?.fields ?? []).flatMap((f, i) => {
+    return [{ label: ar ? 'الصف الحالي' : 'Current item', value: { source: 'item' } }, { label: ar ? 'رقم الصف الحالي (يبدأ من 0)' : 'Current index (0 based)', value: { source: 'index' } }, ...(field?.fields ?? []).flatMap((f, i) => {
       const value: WorkflowValue = { source: 'item', field: f.key ?? f.id ?? 'input_' + (i + 1) };
-      return [{ label: 'Row · ' + f.label, value }, ...(f.type === 'record' ? properties(f.databaseId).map(p => ({ label: 'Row · ' + f.label + ' · ' + p.name, value: { source: 'property' as const, record: value, databaseId: f.databaseId!, propertyId: p.id } })) : [])];
+      const row = ar ? 'الصف · ' : 'Row · ';
+      return [{ label: row + f.label, value }, ...(f.type === 'record' ? properties(f.databaseId).map(p => ({ label: row + f.label + ' · ' + p.name, value: { source: 'property' as const, record: value, databaseId: f.databaseId!, propertyId: p.id } })) : [])];
     })];
   };
   const renderSteps = (steps: WorkspaceWorkflowDraft['steps'], setSteps: (steps: WorkspaceWorkflowDraft['steps']) => void, inherited: ValueChoice[], depth = 0): React.ReactNode => {
@@ -92,7 +118,7 @@ export function QuickActionSettings({ locale }: { locale: Locale }) {
         </div>;
         const filters = (c.filter as { conditions?: PropertyFilterNode[] } | undefined)?.conditions ?? [];
         return <div className="action-step" key={step.id ?? index}>
-          <div className="action-row"><strong>{index + 1}</strong><Select aria-label={ar ? 'العملية' : 'Operation'} value={step.type} onChange={(e) => setSteps(steps.map((s, i) => i === index ? { ...s, type: e.target.value as WorkflowStepType, config: { outputVariable: s.config.outputVariable, ...(['FOR_EACH', 'SUM'].includes(e.target.value) ? { collection: variable(draft?.inputSchema.fields.find(f => f.type === 'collection')?.key ?? 'rows'), ...(e.target.value === 'FOR_EACH' ? { steps: [], yield: { source: 'item' } } : { value: literal(0) }) } : {}) } } : s))}>{stepTypes.filter(type => depth < 3 || type !== 'FOR_EACH').map((type) => <option key={type} value={type}>{(ar ? arabic : en)[stepTypes.indexOf(type)]}</option>)}</Select><button type="button" disabled={index === 0} aria-label={ar ? 'تحريك الخطوة لأعلى' : 'Move step up'} onClick={() => { const reordered = [...steps]; [reordered[index - 1], reordered[index]] = [reordered[index]!, reordered[index - 1]!]; setSteps(reordered); }}>↑</button><button type="button" aria-label={ar ? 'حذف الخطوة' : 'Remove step'} onClick={() => setSteps(steps.filter((_, i) => i !== index))}>×</button></div>
+          <div className="action-row"><strong>{index + 1}</strong><Select aria-label={ar ? 'العملية' : 'Operation'} value={step.type} onChange={(e) => setSteps(steps.map((s, i) => i === index ? { ...s, type: e.target.value as WorkflowStepType, config: configFor(e.target.value as WorkflowStepType, s.config, draft?.inputSchema.fields.find(f => f.type === 'collection')?.key ?? 'rows') } : s))}>{stepTypes.filter(type => depth < 3 || type !== 'FOR_EACH').map((type) => <option key={type} value={type}>{stepLabels(ar)[stepTypes.indexOf(type)]}</option>)}</Select><button type="button" disabled={index === 0} aria-label={ar ? 'تحريك الخطوة لأعلى' : 'Move step up'} onClick={() => { const reordered = [...steps]; [reordered[index - 1], reordered[index]] = [reordered[index]!, reordered[index - 1]!]; setSteps(reordered); }}>↑</button><button type="button" disabled={index === steps.length - 1} aria-label={ar ? 'تحريك الخطوة لأسفل' : 'Move step down'} onClick={() => { const reordered = [...steps]; [reordered[index + 1], reordered[index]] = [reordered[index]!, reordered[index + 1]!]; setSteps(reordered); }}>↓</button><button type="button" aria-label={ar ? 'حذف الخطوة' : 'Remove step'} onClick={() => setSteps(steps.filter((_, i) => i !== index))}>×</button></div>
           {['CREATE_RECORD', 'UPDATE_RECORD', 'FIND_RECORD'].includes(step.type) && dbSelect(c.databaseId, (databaseId) => patchStep(index, { databaseId, properties: {}, increments: {}, filter: undefined }))}
           {['FOR_EACH', 'SUM'].includes(step.type) && <>
             <label>{ar ? 'الصفوف' : 'Collection'}{valueEditor(c.collection ?? literal([]), collection => patchStep(index, { collection }))}</label>
@@ -102,6 +128,20 @@ export function QuickActionSettings({ locale }: { locale: Locale }) {
             </>}
           </>}
           {step.type === 'COMPUTE' && valueEditor(c.value ?? literal(0), (value) => patchStep(index, { value }))}
+          {step.type === 'VALIDATE' && <>
+            <label>{ar ? 'يستمر الإجراء فقط عندما' : 'Continue only when'}{typeof c.condition === 'string'
+              ? <input aria-label={ar ? 'تعبير الشرط القديم' : 'Legacy condition expression'} dir="ltr" value={c.condition} onChange={(e) => patchStep(index, { condition: e.target.value })} />
+              : valueEditor(c.condition ?? literal(true), (condition) => patchStep(index, { condition }))}</label>
+            <label>{ar ? 'الرسالة عند الفشل' : 'Message when it fails'}<input value={scalarText(c.errorMessage ?? '')} onChange={(e) => patchStep(index, { errorMessage: e.target.value })} placeholder={ar ? 'مثال: الكمية غير كافية' : 'For example: not enough stock'} /></label>
+          </>}
+          {step.type === 'RETURN_RESULT' && <div className="action-outputs">
+            {((c.outputs ?? []) as { label: string; value: WorkflowValue }[]).map((output, i, outputs) => <div className="action-row" key={i}>
+              <input aria-label={ar ? 'اسم النتيجة' : 'Result name'} placeholder={ar ? 'اسم النتيجة' : 'Result name'} value={output.label} onChange={(e) => patchStep(index, { outputs: outputs.map((o, j) => i === j ? { ...o, label: e.target.value } : o) })} />
+              {valueEditor(output.value, (value) => patchStep(index, { outputs: outputs.map((o, j) => i === j ? { ...o, value } : o) }))}
+              <button type="button" aria-label={ar ? 'حذف النتيجة' : 'Remove result'} onClick={() => patchStep(index, { outputs: outputs.filter((_, j) => i !== j) })}>×</button>
+            </div>)}
+            <button type="button" onClick={() => patchStep(index, { outputs: [...((c.outputs ?? []) as unknown[]), { label: '', value: literal('') }] })}>{ar ? '+ نتيجة تظهر بعد التشغيل' : '+ Result shown after running'}</button>
+          </div>}
           {step.type === 'CREATE_RECORD' && <label>{ar ? 'عنوان السجل' : 'Record title'}{valueEditor(c.title ?? literal(''), (title) => patchStep(index, { title }))}</label>}
           {step.type === 'UPDATE_RECORD' && <label>{ar ? 'السجل' : 'Record'}{valueEditor(c.record ?? literal(''), (record) => patchStep(index, { record }))}</label>}
           {['CREATE_RECORD', 'UPDATE_RECORD'].includes(step.type) && mapping('properties')}
@@ -113,31 +153,46 @@ export function QuickActionSettings({ locale }: { locale: Locale }) {
             <label><input type="checkbox" checked={Boolean(c.multiple)} onChange={(e) => patchStep(index, { multiple: e.target.checked })} />{ar ? 'إرجاع كل النتائج' : 'Return all matches'}</label>
           </>}
         </div>;
-      })}<button type="button" onClick={() => { const id = crypto.randomUUID(); setSteps([...steps, { id, type: 'CREATE_RECORD', config: { outputVariable: id } }]); }}>+ Step</button></div>;
+      })}<button type="button" onClick={() => { const id = crypto.randomUUID(); setSteps([...steps, { id, type: 'CREATE_RECORD', config: { outputVariable: id } }]); }}>{ar ? '+ خطوة' : '+ Step'}</button></div>;
   };
   return <div className="quick-action-settings">
-    {error && <p role="alert">{error}</p>}
+    {!draft && error && <p role="alert">{error}</p>}
     {!draft ? <>
       {!actions.length && <p>{ar ? 'لا توجد إجراءات سريعة بعد.' : 'No quick actions yet.'}</p>}
-      {actions.map((action, index) => <div className="action-list-row" key={action.id}>
-        <button type="button" onClick={() => { setDraft(action); setError(''); }}><strong><PageIconRenderer icon={action.icon || 'lucide:Zap'} size={16} /> {action.name}</strong><small>{action.inputSchema.fields.length} {ar ? 'مدخلات' : 'inputs'} · {action.steps.length} {ar ? 'خطوات' : 'steps'}{!action.enabled && (ar ? ' · معطل' : ' · Disabled')}</small></button>
+      {actions.map((action, index) => <div className="action-list-row" key={action.id} role="group" aria-label={action.name} style={{ '--action-color': action.color ?? undefined } as CSSProperties}>
+        <button type="button" aria-label={ar ? 'سجل التنفيذ' : 'Run history'} aria-expanded={historyId === action.id} onClick={() => setHistoryId(historyId === action.id ? undefined : action.id)}>{ar ? 'السجل' : 'History'}</button>
+        <button type="button" onClick={() => openDraft(action)}><strong><PageIconRenderer icon={action.icon || 'lucide:Zap'} size={16} /> {action.name}</strong><small>{action.inputSchema.fields.length} {ar ? 'مدخلات' : 'inputs'} · {action.steps.length} {ar ? 'خطوات' : 'steps'}{!action.enabled && (ar ? ' · معطل' : ' · Disabled')}</small></button>
+        {reports.find((report) => report.workflowId === action.id && !report.canRun)?.issues[0] && <span className="action-validation-error" role="status">{ar ? 'يحتاج إصلاحًا' : 'Needs repair'}: {ar ? reports.find((report) => report.workflowId === action.id)!.issues[0]!.location.replace(/^Step (\d+)/, 'الخطوة $1').replace('Property ', 'الخاصية ') : reports.find((report) => report.workflowId === action.id)!.issues[0]!.location} · {validationLabel(reports.find((report) => report.workflowId === action.id)!.issues[0]!, ar)}</span>}
+        <button type="button" disabled={!action.enabled} onClick={() => setPreviewId((id) => id === action.id ? undefined : action.id)}>{ar ? 'معاينة' : 'Preview'}</button>
         <button type="button" disabled={index === 0 || saving} aria-label={ar ? 'تحريك لأعلى' : 'Move up'} onClick={() => { const previous = actions[index - 1]; if (!previous) return; setSaving(true); void window.maxApi.workspace.updateWorkflow(action.id, { positionKey: generateOrderKey(actions[index - 2]?.positionKey, previous.positionKey) }).then(async (result) => { if (!result.ok) setError(result.error.message); await reload(); }).finally(() => setSaving(false)); }}>↑</button>
+        <button type="button" disabled={index === actions.length - 1 || saving} aria-label={ar ? 'تحريك لأسفل' : 'Move down'} onClick={() => { const next = actions[index + 1]; if (!next) return; setSaving(true); void window.maxApi.workspace.updateWorkflow(action.id, { positionKey: generateOrderKey(next.positionKey, actions[index + 2]?.positionKey) }).then(async (result) => { if (!result.ok) setError(result.error.message); await reload(); }).finally(() => setSaving(false)); }}>↓</button>
       </div>)}
-      <button type="button" className="btn btn-secondary" onClick={() => { setDraft(empty()); setError(''); }}>{ar ? '+ إجراء سريع' : '+ Quick action'}</button>
+      {historyId && actions.find((action) => action.id === historyId) && <WorkflowRunHistory key={historyId} workflow={actions.find((action) => action.id === historyId)!} locale={locale} />}
+      {previewId && actions.find((action) => action.id === previewId) && <QuickActionForm key={previewId} action={actions.find((action) => action.id === previewId)!} locale={locale} onOpenSettings={() => setPreviewId(undefined)} />}
+      <button type="button" className="btn btn-secondary" onClick={() => openDraft(empty())}>{ar ? '+ إجراء سريع' : '+ Quick action'}</button>
     </> : <>
       <div className="action-row">
+        <label>{ar ? 'اللون' : 'Color'}<input aria-label={ar ? 'لون الإجراء' : 'Action color'} type="color" value={draft.color ?? '#5965d7'} onChange={(event) => setDraft({ ...draft, color: event.target.value })} /></label>
+        <button type="button" onClick={() => setDraft({ ...draft, color: null })}>{ar ? 'اللون الافتراضي' : 'Default color'}</button>
+        <label>{ar ? 'الاختصار' : 'Shortcut'}<Select aria-label={ar ? 'اختصار الإجراء' : 'Action shortcut'} value={draft.shortcut ?? ''} onChange={(event) => setDraft({ ...draft, shortcut: event.target.value || null })}><option value="">{ar ? 'بدون اختصار' : 'No shortcut'}</option>{Array.from({ length: 9 }, (_, index) => <option key={index + 1} value={`Digit${index + 1}`}>{`Ctrl/⌘ Alt ${index + 1}`}</option>)}</Select></label>
         <label>{ar ? 'الأيقونة' : 'Icon'}<div><button ref={iconButtonRef} type="button" aria-label={ar ? 'اختر أيقونة' : 'Choose icon'} onClick={() => setPickingIcon((open) => !open)}><PageIconRenderer icon={draft.icon || 'lucide:Zap'} size={20} /></button>{pickingIcon && <IconPickerDialog anchor={iconButtonRef.current} locale={locale} currentIcon={draft.icon ?? undefined} onClose={() => setPickingIcon(false)} onSelect={(icon) => { setDraft({ ...draft, icon }); setPickingIcon(false); }} />}</div></label>
         <label>{ar ? 'الاسم' : 'Name'}<input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></label>
         <label><input type="checkbox" checked={draft.enabled !== false} onChange={(e) => setDraft({ ...draft, enabled: e.target.checked })} />{ar ? 'مفعل' : 'Enabled'}</label>
       </div>
+      <div className="action-row"><button type="button" aria-pressed={json !== undefined} onClick={() => { if (json === undefined) { setJson(draftToJson(draft)); setJsonError(''); return; } const next = draftFromJson(json, draft, ar); if (typeof next === 'string') { setJsonError(next); return; } setDraft(next); setJson(undefined); }}>{json === undefined ? (ar ? 'عرض JSON' : 'Edit as JSON') : (ar ? 'تطبيق والعودة للمحرر' : 'Apply and return to the editor')}</button>{json !== undefined && <button type="button" onClick={() => { setJson(undefined); setJsonError(''); }}>{ar ? 'تجاهل تغييرات JSON' : 'Discard JSON changes'}</button>}</div>
+      {json !== undefined ? <>
+        <textarea aria-label={ar ? 'تعريف الإجراء بصيغة JSON' : 'Action definition as JSON'} className="action-json" dir="ltr" rows={18} spellCheck={false} value={json} onChange={(e) => { setJson(e.target.value); setJsonError(''); }} />
+        {jsonError && <p className="action-save-error" role="alert">{jsonError}</p>}
+      </> : <>
       <h3>{ar ? 'المدخلات' : 'Inputs'}</h3>
       <ActionInputsEditor fields={draft.inputSchema.fields} onChange={fields => setDraft({ ...draft, inputSchema: { ...draft.inputSchema, fields } })} databases={databases} schemas={schemas} locale={locale}/>
-      <ActionFormBehavior schema={draft.inputSchema} onChange={inputSchema => setDraft({ ...draft, inputSchema })} choices={formChoices(draft.inputSchema.fields, schemas)} schemas={schemas} locale={locale}/>
+      <ActionFormBehavior schema={draft.inputSchema} onChange={inputSchema => setDraft({ ...draft, inputSchema })} choices={formChoices(draft.inputSchema.fields, schemas, false, locale)} schemas={schemas} locale={locale}/>
       <h3>{ar ? 'الخطوات' : 'Steps'}</h3>
       {renderSteps(draft.steps, steps => setDraft({ ...draft, steps }), choicesAt(0))}
+      </>}
 
       {error && <p className="action-save-error" role="alert">{error}</p>}
-      <div className="action-row action-footer"><button className="btn btn-primary" disabled={saving || !draft.name.trim()} type="button" onClick={() => void save()}>{ar ? 'حفظ' : 'Save'}</button><button type="button" disabled={saving} onClick={() => setDraft(undefined)}>{ar ? 'إلغاء' : 'Cancel'}</button>{draft.id && <button type="button" disabled={saving} onClick={() => { setSaving(true); void window.maxApi.workspace.archiveWorkflow(draft.id!).then(async (result) => { if (!result.ok) setError(result.error.message); else { setDraft(undefined); await reload(); } }).finally(() => setSaving(false)); }}>{ar ? 'أرشفة الإجراء' : 'Archive action'}</button>}</div>
+      <div className="action-row action-footer"><button className="btn btn-primary" disabled={saving || !draft.name.trim() || json !== undefined} type="button" onClick={() => void save()}>{ar ? 'حفظ' : 'Save'}</button><button type="button" disabled={saving} onClick={closeDraft}>{ar ? 'إلغاء' : 'Cancel'}</button>{draft.id && <button type="button" disabled={saving} onClick={() => { setSaving(true); void window.maxApi.workspace.archiveWorkflow(draft.id!).then(async (result) => { if (!result.ok) setError(result.error.message); else { closeDraft(); await reload(); } }).finally(() => setSaving(false)); }}>{ar ? 'أرشفة الإجراء' : 'Archive action'}</button>}</div>
     </>}
   </div>;
 }

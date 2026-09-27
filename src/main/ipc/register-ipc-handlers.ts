@@ -16,7 +16,7 @@ import type {
   CompleteOnboardingDraft,
   ShopMetadata,
 } from '../../shared/blueprint-contract';
-import type { BackupTrigger } from '../../shared/backup-contract';
+import type { BackupTrigger, RestoreResult } from '../../shared/backup-contract';
 import { IPC_CHANNELS, type SystemHealth } from '../../shared/ipc-contract';
 import {
   objectKinds,
@@ -97,6 +97,7 @@ type RegisterIpcHandlersOptions = Readonly<{
   chaos?: ChaosService;
   cloudBackups: CloudBackupService;
   database: DatabaseService;
+  restoreLocalBackup?: (backupIdOrPath: string) => RestoreResult;
   developmentServerUrl?: string;
   maps?: StaticMapProvider;
   photos?: PhotoLibrary;
@@ -492,6 +493,7 @@ export function registerIpcHandlers({
   chaos,
   cloudBackups,
   database,
+  restoreLocalBackup,
   developmentServerUrl,
   maps,
   photos,
@@ -953,13 +955,17 @@ export function registerIpcHandlers({
     trust(event);
     return database.backups.listBackups();
   });
+  ipcMain.handle(IPC_CHANNELS.backupStatus, (event) => {
+    trust(event);
+    return database.backups.getStatus();
+  });
   ipcMain.handle(IPC_CHANNELS.backupVerify, (event, backupIdOrPath: unknown) => {
     trust(event);
     return database.backups.verifyBackup(parseId(backupIdOrPath));
   });
   ipcMain.handle(IPC_CHANNELS.backupRestore, (event, backupIdOrPath: unknown) => {
     trust(event);
-    return mutation(() => database.backups.restoreBackup(parseId(backupIdOrPath)));
+    return mutation(() => (restoreLocalBackup ?? ((path) => database.backups.restoreBackup(path)))(parseId(backupIdOrPath)));
   });
   ipcMain.handle(IPC_CHANNELS.cloudBackupStatus, (event) => {
     trust(event);
@@ -981,7 +987,10 @@ export function registerIpcHandlers({
   });
   ipcMain.handle(IPC_CHANNELS.cloudBackupRestore, (event, sessionToken: unknown, backupId: unknown) => {
     trust(event);
-    return asyncMutation(() => cloudBackups.restore(parseSessionToken(sessionToken), parseId(backupId)));
+    return asyncMutation(async () => {
+      const downloaded = await cloudBackups.download(parseSessionToken(sessionToken), parseId(backupId));
+      return (restoreLocalBackup ?? ((path) => database.backups.restoreBackup(path)))(downloaded.filePath);
+    });
   });
   ipcMain.handle(IPC_CHANNELS.cloudBackupRunScheduled, (event, sessionToken: unknown, schedule: unknown) => {
     trust(event);
@@ -1263,6 +1272,18 @@ export function registerIpcHandlers({
   ipcMain.handle(IPC_CHANNELS.workspaceListWorkflows, (event) => {
     trust(event);
     return database.workflows.listWorkflows();
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceListWorkflowRuns, (event, workflowId: unknown) => {
+    trust(event);
+    return database.workflows.listWorkflowRuns(parseId(workflowId));
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceInspectWorkflows, (event) => {
+    trust(event);
+    return database.workflows.inspectWorkflows();
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceWorkflowsUsingProperty, (event, propertyId: unknown) => {
+    trust(event);
+    return database.workflows.listWorkflowsUsingProperty(parseId(propertyId));
   });
   ipcMain.handle(IPC_CHANNELS.workspaceGetWorkflow, (event, id: unknown) => {
     trust(event);

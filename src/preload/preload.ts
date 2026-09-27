@@ -49,6 +49,8 @@ const maxApi: MaxApi = Object.freeze({
       ipcRenderer.invoke(IPC_CHANNELS.backupCreate, trigger) as ReturnType<MaxApi['backups']['create']>,
     list: () =>
       ipcRenderer.invoke(IPC_CHANNELS.backupList) as ReturnType<MaxApi['backups']['list']>,
+    status: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.backupStatus) as ReturnType<MaxApi['backups']['status']>,
     restore: (backupIdOrPath: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.backupRestore, backupIdOrPath) as ReturnType<MaxApi['backups']['restore']>,
     verify: (backupIdOrPath: string) =>
@@ -338,6 +340,12 @@ const maxApi: MaxApi = Object.freeze({
       ipcRenderer.invoke(IPC_CHANNELS.workspaceListViews, ownerId, ownerType) as ReturnType<MaxApi['workspace']['listViews']>,
     listWorkflows: () =>
       ipcRenderer.invoke(IPC_CHANNELS.workspaceListWorkflows) as ReturnType<MaxApi['workspace']['listWorkflows']>,
+    listWorkflowRuns: (workflowId: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceListWorkflowRuns, workflowId) as ReturnType<MaxApi['workspace']['listWorkflowRuns']>,
+    inspectWorkflows: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceInspectWorkflows) as ReturnType<MaxApi['workspace']['inspectWorkflows']>,
+    workflowsUsingProperty: (propertyId: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceWorkflowsUsingProperty, propertyId) as ReturnType<MaxApi['workspace']['workflowsUsingProperty']>,
     migrateV01: (locale?: 'ar' | 'en') =>
       ipcRenderer.invoke(IPC_CHANNELS.workspaceMigrateV01, locale) as ReturnType<MaxApi['workspace']['migrateV01']>,
     previewTypeConversion: (propertyId: string, targetType: WorkspacePropertyType) =>

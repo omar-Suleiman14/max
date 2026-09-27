@@ -9,7 +9,8 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
-import type { BackupMetadata, BackupVerificationResult } from '../../shared/backup-contract';
+import { BACKUP_FORMAT_VERSION, type BackupMetadata, type BackupVerificationResult, type LocalBackupStatus } from '../../shared/backup-contract';
+import type { BackupSchedule } from '../../shared/blueprint-contract';
 import type { Locale } from '../app/i18n';
 import { Button } from '../ui/button';
 import { FocusedOverlay } from '../ui/focused-overlay';
@@ -18,6 +19,7 @@ import { CloudBackupPanel } from './cloud-backup-panel';
 
 type BackupManagerProps = Readonly<{
   locale: Locale;
+  schedule?: BackupSchedule;
 }>;
 
 function formatBytes(bytes: number): string {
@@ -26,8 +28,10 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
-export function BackupManager({ locale }: BackupManagerProps) {
+export function BackupManager({ locale, schedule: configuredSchedule }: BackupManagerProps) {
   const [backups, setBackups] = useState<readonly BackupMetadata[]>([]);
+  const [schedule, setSchedule] = useState<BackupSchedule>('manual');
+  const [status, setStatus] = useState<LocalBackupStatus>();
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [verifyingId, setVerifyingId] = useState<string>();
@@ -49,11 +53,15 @@ export function BackupManager({ locale }: BackupManagerProps) {
 
   useEffect(() => {
     void loadBackups();
+    const loadStatus = () => { void window.maxApi.backups.status().then(setStatus).catch(() => undefined); };
+    loadStatus();
+    const statusTimer = window.setInterval(loadStatus, 60000);
+    void window.maxApi.shop.getMetadata().then((metadata) => setSchedule(metadata.backupSchedule)).catch(() => undefined);
     // Downloading a cloud backup puts a new file in the local backup list, so
     // the list has to hear about it from outside this component.
-    const refresh = () => { void loadBackups(); };
+    const refresh = () => { void loadBackups(); loadStatus(); };
     window.addEventListener('max:backups-changed', refresh);
-    return () => window.removeEventListener('max:backups-changed', refresh);
+    return () => { window.clearInterval(statusTimer); window.removeEventListener('max:backups-changed', refresh); };
   }, [loadBackups]);
 
   async function handleCreateBackup() {
@@ -70,7 +78,7 @@ export function BackupManager({ locale }: BackupManagerProps) {
   async function handleVerify(backup: BackupMetadata) {
     setVerifyingId(backup.id);
     try {
-      const result = await window.maxApi.backups.verify(backup.filePath);
+      const result = await window.maxApi.backups.verify(backup.id);
       setVerificationResults((prev) => ({ ...prev, [backup.id]: result }));
     } catch {
       // ignore
@@ -83,11 +91,17 @@ export function BackupManager({ locale }: BackupManagerProps) {
     setRestoring(true);
     setNotice(undefined);
     try {
-      const res = await window.maxApi.backups.restore(backup.filePath);
+      const res = await window.maxApi.backups.restore(backup.id);
       if (res.ok && res.value.restored) {
-        setNotice({ message: backupCopy(locale, 'restoreSuccess'), type: 'success' });
+        let safety: BackupMetadata | undefined;
+        try {
+          const list = await window.maxApi.backups.list();
+          setBackups(list);
+          safety = list.find((entry) => entry.id === res.value.preRestoreBackupId);
+        } catch { /* Restoration succeeded even if refreshing the list fails. */ }
+        setNotice({ message: `${backupCopy(locale, 'restoreSuccess')} ${safety ? `${backupCopy(locale, 'protectiveBackup')}: ${safety.filePath}` : ''}`, type: 'success' });
+        void window.maxApi.backups.status().then(setStatus).catch(() => undefined);
         setRestoreConfirmBackup(undefined);
-        await loadBackups();
       } else {
         setNotice({
           message: res.ok ? (res.value.error ?? backupCopy(locale, 'restoreFailed')) : res.error.message,
@@ -100,6 +114,18 @@ export function BackupManager({ locale }: BackupManagerProps) {
       setRestoring(false);
     }
   }
+
+  const activeSchedule = configuredSchedule ?? schedule;
+  const latest = backups[0];
+  const lastScheduled = backups.find((backup) => backup.trigger === 'daily' || backup.trigger === 'weekly');
+  const nextScheduledAt = activeSchedule !== 'manual' && lastScheduled
+    ? new Date(Date.parse(lastScheduled.createdAt) + (activeSchedule === 'weekly' ? 7 : 1) * 86400000)
+    : undefined;
+  const triggerLabel = (backup: BackupMetadata) => {
+    const key = ({ daily: 'daily', weekly: 'weekly', manual: 'manual', 'pre-delete': 'preDelete', 'pre-migration': 'preMigration', 'pre-restore': 'preRestore' } as const)[backup.trigger];
+    return backupCopy(locale, key);
+  };
+  const dateTime = (value: string | Date) => new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
 
   return (
     <div className="backup-manager">
@@ -121,6 +147,8 @@ export function BackupManager({ locale }: BackupManagerProps) {
         </div>
       </div>
 
+      <p role="note">{backupCopy(locale, 'assetsNotIncluded')}</p>
+
       {notice && (
         <div
           className={`badge ${notice.type === 'success' ? 'badge--success' : 'badge--danger'}`}
@@ -131,16 +159,21 @@ export function BackupManager({ locale }: BackupManagerProps) {
         </div>
       )}
 
+      <p role="status">{backupCopy(locale, 'latestBackup')}: {latest ? dateTime(latest.createdAt) : backupCopy(locale, 'noLatestBackup')}</p>
+      {status?.lastScheduledFailureAt && <p role="alert" className="badge badge--danger">{backupCopy(locale, 'scheduledFailure')} {dateTime(status.lastScheduledFailureAt)}</p>}
+      {status?.lastRestoreSafetyPath && <p role="status">{backupCopy(locale, 'protectiveBackup')}: <span dir="auto">{status.lastRestoreSafetyPath}</span></p>}
+      <p>{backupCopy(locale, 'backupSchedule')}: {backupCopy(locale, activeSchedule)}{activeSchedule !== 'manual' && <> · {backupCopy(locale, 'nextBackup')}: {nextScheduledAt ? dateTime(nextScheduledAt) : backupCopy(locale, 'scheduledBackup')}</>}</p>
+
       <details className="backup-history-disclosure">
         <summary>{backupCopy(locale, 'backupHistory')} <span>{backups.length}</span></summary>
         {loading && <p role="status">{locale === 'ar' ? 'جارٍ التحميل…' : 'Loading backups…'}</p>}
         {!loading && backups.length === 0 && <div className="backup-empty"><Archive size={22} /><p>{backupCopy(locale, 'emptyBackups')}</p></div>}
         {backups.map((backup) => <details className="backup-snapshot" key={backup.id}>
-          <summary><span>{new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(backup.createdAt))}</span><small>{formatBytes(backup.sizeBytes)}</small></summary>
-          <div className="backup-snapshot-body"><small>{backup.filename}</small><div className="backup-snapshot-actions">
+          <summary><span>{dateTime(backup.createdAt)} · {triggerLabel(backup)} · {locale === 'ar' ? 'صيغة النسخة' : 'Format'} v{backup.formatVersion ?? 1}</span><small>{formatBytes(backup.sizeBytes)}</small></summary>
+          <div className="backup-snapshot-body"><small>{backupCopy(locale, 'location')}: <span dir="auto">{backup.filePath}</span></small><div className="backup-snapshot-actions">
             <Button disabled={verifyingId === backup.id} icon={<ShieldCheck size={14} />} onClick={() => void handleVerify(backup)}>{backupCopy(locale, verifyingId === backup.id ? 'verifying' : 'verify')}</Button>
-            <Button icon={<RotateCcw size={14} />} onClick={() => setRestoreConfirmBackup(backup)}>{backupCopy(locale, 'restore')}</Button>
-          </div>{verificationResults[backup.id] && <p role="status">{backupCopy(locale, verificationResults[backup.id]!.valid ? 'integrityOk' : 'corrupted')}</p>}</div>
+            <Button disabled={(backup.formatVersion ?? 1) !== BACKUP_FORMAT_VERSION || (status !== undefined && backup.schemaVersion > status.currentSchemaVersion)} icon={<RotateCcw size={14} />} onClick={() => setRestoreConfirmBackup(backup)}>{backupCopy(locale, 'restore')}</Button>
+          </div>{(backup.formatVersion ?? 1) !== BACKUP_FORMAT_VERSION && <p role="alert">{locale === 'ar' ? 'صيغة النسخة الاحتياطية غير مدعومة في هذا الإصدار من ماكس.' : 'This backup format is not supported by this Max version.'}</p>}{status !== undefined && backup.schemaVersion > status.currentSchemaVersion && <p role="alert">{backupCopy(locale, 'newerSchema')}</p>}{verificationResults[backup.id] && <div role="status"><p>{backupCopy(locale, 'checksumResult')}: {backupCopy(locale, verificationResults[backup.id]!.checksumMatch ? 'passed' : 'failed')}</p><p>{backupCopy(locale, 'sqliteResult')}: {backupCopy(locale, verificationResults[backup.id]!.sqliteIntegrityPassed ? 'passed' : 'failed')}</p>{verificationResults[backup.id]!.error && <p>{verificationResults[backup.id]!.error}</p>}</div>}</div>
         </details>)}
       </details>
 
@@ -163,6 +196,7 @@ export function BackupManager({ locale }: BackupManagerProps) {
               <AlertTriangle aria-hidden="true" size={18} style={{ flexShrink: 0 }} />
               <span>{backupCopy(locale, 'confirmRestore')}</span>
             </div>
+            <p>{locale === 'ar' ? 'سيُعاد تشغيل ماكس لفتح مساحة العمل المستعادة.' : 'Max will restart to open the restored workspace.'}</p>
 
             <p style={{ fontSize: '13px', color: 'var(--text-soft)' }}>
               {backupCopy(locale, 'targetSnapshot')}: <strong>{restoreConfirmBackup.filename}</strong> (

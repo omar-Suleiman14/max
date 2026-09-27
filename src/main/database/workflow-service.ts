@@ -11,6 +11,9 @@ import type {
   WorkflowFieldState,
   WorkflowInputSchema,
   WorkflowInputField,
+  WorkflowRunSummary,
+  WorkflowValidationReport,
+  WorkflowValidationIssue,
   WorkflowStep,
   WorkspaceWorkflow,
   WorkspaceWorkflowDraft,
@@ -34,6 +37,8 @@ type WorkflowRow = Readonly<{
   archived_at: string | null;
   created_at: string;
   icon: string | null;
+  color: string | null;
+  shortcut: string | null;
   id: string;
   input_schema_json: string;
   kind: WorkspaceWorkflow['kind'];
@@ -51,6 +56,8 @@ function workflowFromRow(row: WorkflowRow): WorkspaceWorkflow {
     archivedAt: row.archived_at,
     createdAt: row.created_at,
     icon: row.icon,
+    color: row.color,
+    shortcut: row.shortcut,
     id: row.id,
     inputSchema: parseStoredJson<WorkflowInputSchema>(row.input_schema_json, { fields: [] }),
     kind: row.kind,
@@ -61,6 +68,37 @@ function workflowFromRow(row: WorkflowRow): WorkspaceWorkflow {
     updatedAt: row.updated_at,
     version: row.version,
   };
+}
+
+function safeRunMessage(message: string): string {
+  // Validation messages and expression errors can contain arbitrary author
+  // text, including short secrets. Only fixed engine copy is safe to return.
+  const trusted = new Set([
+    'Lookup returned no record.',
+    'Workflow validation failed.',
+    'Iteration requires a collection of at most 100 items.',
+    'Sum requires finite numeric values.',
+    'Sum is too large.',
+    'A finite number is required.',
+    'Action exceeds 1,000 executed steps.',
+    'Action failed. Check the configured values.',
+    'Action failed. No changes were saved.',
+  ]);
+  return trusted.has(message) ? message : 'Action step failed. Review its configuration and inputs.';
+}
+
+function referencesProperty(value: unknown, propertyId: string): boolean {
+  if (Array.isArray(value)) return value.some((entry) => referencesProperty(entry, propertyId));
+  if (!value || typeof value !== 'object') return false;
+  const entry = value as Record<string, unknown>;
+  if (entry.source === 'literal') return false;
+  if (entry.propertyId === propertyId) return true;
+  if (Array.isArray(entry.displayPropertyIds) && entry.displayPropertyIds.includes(propertyId)) return true;
+  for (const key of ['properties', 'propertyValues', 'increments'] as const) {
+    const mapping = entry[key];
+    if (mapping && typeof mapping === 'object' && !Array.isArray(mapping) && Object.hasOwn(mapping, propertyId)) return true;
+  }
+  return Object.values(entry).some((child) => referencesProperty(child, propertyId));
 }
 
 export class WorkflowService {
@@ -116,14 +154,16 @@ export class WorkflowService {
     const stepsJson = JSON.stringify(steps);
     const resultSchemaJson = draft.resultSchema ? JSON.stringify(draft.resultSchema) : null;
     const kind = draft.kind ?? 'custom';
+    this.#validatePresentation(draft.color, draft.shortcut);
+    this.#assertShortcutAvailable(draft.shortcut);
 
     this.#database
       .prepare(`
         INSERT INTO workspace_workflows (
-          id, name, icon, kind, input_schema_json, steps_json, result_schema_json, version, position_key, created_at, updated_at, enabled, archived_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, NULL)
+          id, name, icon, color, shortcut, kind, input_schema_json, steps_json, result_schema_json, version, position_key, created_at, updated_at, enabled, archived_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, NULL)
       `)
-      .run(id, name, draft.icon ?? null, kind, inputSchemaJson, stepsJson, resultSchemaJson, positionKey, now, now, draft.enabled === false ? 0 : 1);
+      .run(id, name, draft.icon ?? null, draft.color ?? null, draft.shortcut ?? null, kind, inputSchemaJson, stepsJson, resultSchemaJson, positionKey, now, now, draft.enabled === false ? 0 : 1);
 
     // Save initial revision
     this.#database
@@ -138,6 +178,8 @@ export class WorkflowService {
       archivedAt: null,
       createdAt: now,
       icon: draft.icon ?? null,
+      color: draft.color ?? null,
+      shortcut: draft.shortcut ?? null,
       id,
       inputSchema: draft.inputSchema ?? { fields: [] },
       kind,
@@ -166,6 +208,58 @@ export class WorkflowService {
     return rows.map(workflowFromRow);
   }
 
+  listWorkflowsUsingProperty(propertyId: string): readonly Readonly<{ id: string; name: string }>[] {
+    return this.listWorkflows()
+      .filter((workflow) => referencesProperty(workflow.inputSchema, propertyId) || referencesProperty(workflow.steps, propertyId))
+      .map(({ id, name }) => ({ id, name }));
+  }
+
+  inspectWorkflows(): readonly WorkflowValidationReport[] {
+    return this.listWorkflows().map((workflow) => this.inspectWorkflow(workflow));
+  }
+
+  inspectWorkflow(workflow: WorkspaceWorkflow): WorkflowValidationReport {
+    try {
+      this.validate(workflow);
+      return { workflowId: workflow.id, issues: [], canRun: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Action configuration is invalid.';
+      const location = /^(?:(?:Step \d+: )+|Input \d+ \([^)]*\): )?(?:Property [^:]+: )?/.exec(message)?.[0]?.replace(/: $/, '') || 'Action';
+      const code: WorkflowValidationIssue['code'] = message.includes('Referenced database') ? 'missing_database'
+        : message.includes('Referenced property') ? 'missing_property'
+          : message.includes('mappings must') ? 'invalid_mapping'
+            : message.includes('finite number') || message.includes('numeric adjustment') ? 'incompatible_value'
+              : message.includes('is required') ? 'missing_input'
+                : message.includes('does not support') ? 'unsupported_conversion'
+                  : message.includes('unavailable') || message.includes('Unknown current item') ? 'impossible_reference'
+                    : 'invalid_definition';
+      return { workflowId: workflow.id, issues: [{ code, location, message, severity: 'error' }], canRun: false };
+    }
+  }
+
+  listWorkflowRuns(workflowId: string): readonly WorkflowRunSummary[] {
+    if (!this.getWorkflow(workflowId)) throw new WorkspaceDomainError('not-found', 'Workflow not found.');
+    type RunRow = { id: string; workflow_id: string; workflow_version: number; status: WorkflowRunSummary['status']; started_at: string; completed_at: string | null; error_json: string | null };
+    const rows = this.#database.prepare(`
+      SELECT id, workflow_id, workflow_version, status, started_at, completed_at, error_json
+      FROM workspace_workflow_runs WHERE workflow_id = ? ORDER BY started_at DESC, rowid DESC LIMIT 20
+    `).all(workflowId) as RunRow[];
+    return rows.map((row) => {
+      const error = parseStoredJson<unknown>(row.error_json, {});
+      const raw = error && typeof error === 'object' && 'message' in error && typeof error.message === 'string' ? error.message : '';
+      const step = /^Step (\d+):\s*/.exec(raw);
+      // Never send input_json, result_json, or a message resembling a credential
+      // across IPC. A workflow author can set their own validation message.
+      const detail = raw.replace(/^Step \d+:\s*/, '');
+      return {
+        id: row.id, workflowId: row.workflow_id, workflowVersion: row.workflow_version,
+        status: row.status, startedAt: row.started_at, completedAt: row.completed_at,
+        ...(step ? { stepNumber: Number(step[1]) } : {}),
+        ...(raw ? { message: safeRunMessage(detail) } : {}),
+      };
+    });
+  }
+
   updateWorkflow(id: string, patch: Partial<WorkspaceWorkflowDraft>): WorkspaceWorkflow {
     return this.#unitOfWork.run(() => this.#update(id, patch));
   }
@@ -177,12 +271,16 @@ export class WorkflowService {
     }
 
     this.validate({ ...current, ...patch });
+    this.#validatePresentation(patch.color ?? current.color, patch.shortcut ?? current.shortcut);
+    this.#assertShortcutAvailable(patch.shortcut ?? current.shortcut, id);
     const name = patch.name !== undefined ? patch.name.trim() : current.name;
     if (!name || name.length > 120) {
       throw new WorkspaceDomainError('invalid-input', 'Workflow name must be 1–120 characters.');
     }
 
     const icon = patch.icon !== undefined ? patch.icon : current.icon;
+    const color = patch.color !== undefined ? patch.color : current.color;
+    const shortcut = patch.shortcut !== undefined ? patch.shortcut : current.shortcut;
     const kind = patch.kind !== undefined ? patch.kind : current.kind;
     const inputSchemaJson = patch.inputSchema !== undefined ? JSON.stringify(patch.inputSchema) : JSON.stringify(current.inputSchema);
     const stepsJson = patch.steps !== undefined ? JSON.stringify(patch.steps) : JSON.stringify(current.steps);
@@ -194,11 +292,11 @@ export class WorkflowService {
     this.#database
       .prepare(`
         UPDATE workspace_workflows
-        SET name = ?, icon = ?, kind = ?, input_schema_json = ?, steps_json = ?, result_schema_json = ?,
+        SET name = ?, icon = ?, color = ?, shortcut = ?, kind = ?, input_schema_json = ?, steps_json = ?, result_schema_json = ?,
             version = ?, position_key = ?, updated_at = ?, enabled = ?
         WHERE id = ?
       `)
-      .run(name, icon ?? null, kind, inputSchemaJson, stepsJson, resultSchemaJson, nextVersion, positionKey, now, (patch.enabled ?? current.enabled) ? 1 : 0, id);
+      .run(name, icon ?? null, color ?? null, shortcut ?? null, kind, inputSchemaJson, stepsJson, resultSchemaJson, nextVersion, positionKey, now, (patch.enabled ?? current.enabled) ? 1 : 0, id);
 
     // Save revision
     this.#database
@@ -216,6 +314,18 @@ export class WorkflowService {
     this.#database
       .prepare('UPDATE workspace_workflows SET archived_at = ?, updated_at = ? WHERE id = ?')
       .run(now, now, id);
+  }
+
+  #validatePresentation(color: string | null | undefined, shortcut: string | null | undefined): void {
+    if (color != null && !/^#[0-9a-fA-F]{6}$/.test(color)) throw new WorkspaceDomainError('invalid-input', 'Choose a valid action color.');
+    if (shortcut != null && !/^Digit[1-9]$/.test(shortcut)) throw new WorkspaceDomainError('invalid-input', 'Choose a valid action shortcut.');
+  }
+
+  #assertShortcutAvailable(shortcut: string | null | undefined, exceptId?: string): void {
+    if (!shortcut) return;
+    const row = this.#database.prepare('SELECT id FROM workspace_workflows WHERE shortcut = ? AND archived_at IS NULL AND id != ? LIMIT 1')
+      .get(shortcut, exceptId ?? '') as { id: string } | undefined;
+    if (row) throw new WorkspaceDomainError('constraint-violation', 'This shortcut is already used by another action.');
   }
 
   #hasFormBehavior(schema: WorkflowInputSchema): boolean {
@@ -324,6 +434,14 @@ export class WorkflowService {
         const resultObj = (finalResult && typeof finalResult === 'object' && !Array.isArray(finalResult)
           ? finalResult
           : { value: finalResult }) as Readonly<Record<string, unknown>>;
+        const computedKeys = new Set<string>();
+        if (!persistRun) for (const step of workflow.steps) {
+          if (!['COMPUTE', 'SUM', 'FOR_EACH'].includes(step.type)) continue;
+          if (typeof step.config.outputVariable === 'string') computedKeys.add(step.config.outputVariable);
+          if (step.type === 'COMPUTE' && step.config.assignments && typeof step.config.assignments === 'object') {
+            for (const key of Object.keys(step.config.assignments)) computedKeys.add(key);
+          }
+        }
 
         return {
           completedAt,
@@ -332,26 +450,27 @@ export class WorkflowService {
           runId,
           status: persistRun ? 'completed' : 'rolled_back',
           workflowId: workflow.id,
+          ...(!persistRun ? { previewComputed: [...computedKeys].filter((name) => Object.hasOwn(variables, name)).map((name) => ({ name, value: variables[name] })) } : {}),
         };
     };
 
     if (input.testMode) {
-      const savepoint = `workflow_test_${runId.replaceAll('-', '')}`;
-      this.#database.exec(`SAVEPOINT ${savepoint};`);
-      try {
+      return this.#unitOfWork.preview(() => {
+        const before = this.#database.prepare('SELECT COALESCE(MAX(rowid), 0) AS id FROM workspace_audit_log').get() as { id: number };
         const result = perform(false);
-        this.#database.exec(`ROLLBACK TO ${savepoint}; RELEASE ${savepoint};`);
-        const completedAt = new Date().toISOString();
-        this.#database.prepare(`
-          INSERT INTO workspace_workflow_runs (
-            id, workflow_id, workflow_version, status, input_json, result_json, actor_id, started_at, completed_at, error_json
-          ) VALUES (?, ?, ?, 'rolled_back', ?, ?, ?, ?, ?, NULL)
-        `).run(runId, workflow.id, workflow.version, JSON.stringify(input.inputs), JSON.stringify(result.result), actorId, startedAt, completedAt);
-        return { ...result, completedAt };
-      } catch (error) {
-        this.#database.exec(`ROLLBACK TO ${savepoint}; RELEASE ${savepoint};`);
-        throw error;
-      }
+        const created = new Set(result.createdRecordIds);
+        const updated = this.#database.prepare("SELECT DISTINCT entity_id FROM workspace_audit_log WHERE rowid > ? AND entity_kind = 'record' AND action = 'updated'")
+          .all(before.id) as { entity_id: string }[];
+        const effects = [
+          ...result.createdRecordIds.map((recordId) => ({ kind: 'created' as const, recordId })),
+          ...updated.filter((row) => !created.has(row.entity_id)).map((row) => ({ kind: 'updated' as const, recordId: row.entity_id })),
+        ].map(({ kind, recordId }) => {
+          const record = this.#recordRepo.getRecord(recordId);
+          if (!record) throw new WorkspaceDomainError('not-found', 'Previewed record is unavailable.');
+          return { kind, recordId, title: record.title, databaseId: record.databaseId };
+        });
+        return { ...result, previewEffects: effects };
+      });
     }
 
     try {
@@ -445,10 +564,11 @@ export class WorkflowService {
         break;
       }
       case 'VALIDATE': {
-        const condition = config.condition as string | undefined;
+        // A formula string (Max 1.x) or a value reference from the editor.
+        const condition = config.condition;
         const errorMessage = config.errorMessage as string | undefined;
-        if (condition) {
-          const isValid = this.#expression(condition, variables);
+        if (condition !== undefined && condition !== null && condition !== '') {
+          const isValid = typeof condition === 'string' ? this.#expression(condition, variables) : this.#resolveValue(condition, variables);
           if (!isValid) {
             throw new WorkspaceDomainError('constraint-violation', errorMessage || 'Workflow validation failed.');
           }
@@ -506,7 +626,10 @@ export class WorkflowService {
 
       case 'RETURN_RESULT': {
         const resultExpression = config.resultExpression as string | undefined;
-        if (resultExpression) {
+        // Named outputs authored in the editor: each label maps to a value reference.
+        if (Array.isArray(config.outputs)) {
+          variables.result = Object.fromEntries((config.outputs as { label: string; value: unknown }[]).map((output) => [output.label, this.#resolveValue(output.value, variables)]));
+        } else if (resultExpression) {
           variables.result = this.#resolveValue(resultExpression, variables);
         } else {
           const resObj: Record<string, unknown> = {};
@@ -627,6 +750,7 @@ export class WorkflowService {
     const forbidden = (key: string) => ['__proto__', 'constructor', 'prototype', '__item', '__index'].includes(key);
     const checkFields = (fields: readonly WorkflowInputField[], names: Set<string>) => {
       for (const [index, field] of fields.entries()) {
+        try {
         const key = field.key ?? field.id ?? 'input_' + (index + 1);
         if (names.has(key) || forbidden(key)) throw new WorkspaceDomainError('invalid-input', 'Input identifiers must be unique and safe.');
         if (field.prefill) {
@@ -639,6 +763,10 @@ export class WorkflowService {
         if (field.propertySource) this.#property(field.propertySource.databaseId, field.propertySource.propertyId);
         if (field.defaultValue !== undefined && !field.derived && !field.requiredWhen) this.#inputs([{ ...field, key, required: false }], { [key]: field.defaultValue });
         if (field.type === 'collection') checkFields(field.fields ?? [], new Set());
+        } catch (error) {
+          if (error instanceof WorkspaceDomainError) throw new WorkspaceDomainError(error.code, `Input ${index + 1} (${field.label}): ${error.message}`, error.entityId);
+          throw error;
+        }
       }
     };
     checkFields(draft.inputSchema.fields, keys);
@@ -668,12 +796,13 @@ export class WorkflowService {
       let stepCount = 0;
       const checkSteps = (steps: WorkspaceWorkflowDraft['steps'], depth = 0): void => {
       if (depth > 3) throw new WorkspaceDomainError('invalid-input', 'Iteration nesting exceeds three levels.');
-      for (const step of steps) {
+      for (const [stepIndex, step] of steps.entries()) {
+        try {
         if (++stepCount > 100) throw new WorkspaceDomainError('invalid-input', 'An action supports at most 100 configured steps.');
         if (step.id && ids.has(step.id)) throw new WorkspaceDomainError('invalid-input', 'Step identifiers must be unique.');
         if (step.id) ids.add(step.id);
         const c = step.config;
-        const required = (key: string) => { if (c[key] === undefined || c[key] === null || c[key] === '') throw new WorkspaceDomainError('invalid-input', 'Step ' + (draft.steps.indexOf(step) + 1) + ': ' + key + ' is required.'); };
+        const required = (key: string) => { if (c[key] === undefined || c[key] === null || c[key] === '') throw new WorkspaceDomainError('invalid-input', key + ' is required.'); };
         if (['FIND_RECORD', 'COMPUTE', 'SUM'].includes(step.type) && !c.assignments) required('outputVariable');
         if (step.type === 'FOR_EACH' || step.type === 'SUM') {
           required('collection'); checkValue(c.collection);
@@ -692,21 +821,43 @@ export class WorkflowService {
         if (step.type === 'UPDATE_RECORD') required('record');
         if (step.type === 'COMPUTE' && c.value === undefined && !c.assignments) required('expression');
         if (step.type === 'VALIDATE') { required('condition'); checkValue(c.condition); }
-        if (step.type === 'RETURN_RESULT') { if (c.resultExpression) checkValue(c.resultExpression); else for (const value of Object.values(c)) if (typeof value === 'string' && value.charCodeAt(0) === 36) checkValue(value); }
+        if (step.type === 'RETURN_RESULT' && Array.isArray(c.outputs)) {
+          for (const output of c.outputs as unknown[]) {
+            const entry = output as { label?: unknown; value?: unknown } | null;
+            if (!entry || typeof entry.label !== 'string' || !entry.label.trim()) throw new WorkspaceDomainError('invalid-input', 'Every result needs a name.');
+            checkValue(entry.value);
+          }
+        } else if (step.type === 'RETURN_RESULT') { if (c.resultExpression) checkValue(c.resultExpression); else for (const value of Object.values(c)) if (typeof value === 'string' && value.charCodeAt(0) === 36) checkValue(value); }
         for (const key of ['properties', 'propertyValues', 'increments', 'assignments']) if (c[key] !== undefined && (!c[key] || typeof c[key] !== 'object' || Array.isArray(c[key]))) throw new WorkspaceDomainError('invalid-input', 'Property mappings must be an object.');
         for (const key of ['multiple', 'required']) if (c[key] !== undefined && typeof c[key] !== 'boolean') throw new WorkspaceDomainError('invalid-input', 'Lookup options must be boolean.');
         if (['CREATE_RECORD', 'FIND_RECORD', 'UPDATE_RECORD'].includes(step.type)) this.#databaseExists(c.databaseId);
         if (step.type === 'CREATE_RECORD' || step.type === 'UPDATE_RECORD') {
-          const mappings = (c.propertyValues ?? c.properties ?? {}) as Record<string, unknown>;
-          for (const [id, value] of Object.entries(mappings)) {
-            const property = this.#property(String(c.databaseId), id);
-            if (['formula', 'rollup', 'created_time', 'created_by', 'last_edited_time', 'last_edited_by', 'auto_id', 'button'].includes(property.type)) throw new WorkspaceDomainError('invalid-input', 'Selected property does not support this operation.');
-            checkValue(value);
-          }
-          for (const [id, value] of Object.entries((c.increments ?? {}) as Record<string, unknown>)) {
-            if (this.#property(String(c.databaseId), id).type !== 'number') throw new WorkspaceDomainError('invalid-input', 'Selected property does not support numeric adjustment.');
-            checkValue(value);
-          }
+        const mappings = (c.propertyValues ?? c.properties ?? {}) as Record<string, unknown>;
+        for (const [id, value] of Object.entries(mappings)) {
+            try {
+              const property = this.#property(String(c.databaseId), id);
+              if (['formula', 'rollup', 'created_time', 'created_by', 'last_edited_time', 'last_edited_by', 'auto_id', 'button'].includes(property.type)) throw new WorkspaceDomainError('invalid-input', 'Selected property does not support this operation.');
+              const literal = value && typeof value === 'object' && 'source' in value && (value as WorkflowValue).source === 'literal'
+                ? (value as Extract<WorkflowValue, { source: 'literal' }>).value : undefined;
+              if (property.type === 'number' && literal !== undefined && literal !== null && (typeof literal !== 'number' || !Number.isFinite(literal))) throw new WorkspaceDomainError('invalid-input', 'A finite number is required.');
+              checkValue(value);
+            } catch (error) {
+              if (error instanceof WorkspaceDomainError) throw new WorkspaceDomainError(error.code, `Property ${id}: ${error.message}`, error.entityId);
+              throw error;
+            }
+        }
+        for (const [id, value] of Object.entries((c.increments ?? {}) as Record<string, unknown>)) {
+            try {
+              if (this.#property(String(c.databaseId), id).type !== 'number') throw new WorkspaceDomainError('invalid-input', 'Selected property does not support numeric adjustment.');
+              const literal = value && typeof value === 'object' && 'source' in value && (value as WorkflowValue).source === 'literal'
+                ? (value as Extract<WorkflowValue, { source: 'literal' }>).value : undefined;
+              if (literal !== undefined && (typeof literal !== 'number' || !Number.isFinite(literal))) throw new WorkspaceDomainError('invalid-input', 'A finite number is required.');
+              checkValue(value);
+            } catch (error) {
+              if (error instanceof WorkspaceDomainError) throw new WorkspaceDomainError(error.code, `Property ${id}: ${error.message}`, error.entityId);
+              throw error;
+            }
+        }
           if (step.type === 'CREATE_RECORD') checkValue(c.titleExpression ?? c.title ?? "'Untitled'");
           else checkValue(c.record);
         }
@@ -727,6 +878,10 @@ export class WorkflowService {
           else for (const [key, expr] of Object.entries((c.assignments ?? {}) as Record<string, unknown>)) { if (forbidden(key)) throw new WorkspaceDomainError('invalid-input', 'Reserved output identifier.'); checkValue(expr); keys.add(key); }
         }
         if (typeof c.outputVariable === 'string') { if (keys.has(c.outputVariable) || forbidden(c.outputVariable)) throw new WorkspaceDomainError('invalid-input', 'Output identifiers must be unique.'); keys.add(c.outputVariable); }
+        } catch (error) {
+          if (error instanceof WorkspaceDomainError) throw new WorkspaceDomainError(error.code, `Step ${stepIndex + 1}: ${error.message}`, error.entityId);
+          throw error;
+        }
       }
       };
       assertDerivedOrder(draft.inputSchema.fields);

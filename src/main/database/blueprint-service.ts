@@ -69,7 +69,7 @@ export class BlueprintService {
     return {
       description: metadata.blueprintName ? `Exported blueprint from ${metadata.shopName || 'Max'}` : undefined,
       locale: metadata.locale,
-      name: metadata.blueprintName || metadata.shopName || 'Shop Blueprint',
+      name: metadata.blueprintName || metadata.shopName || 'Workspace Blueprint',
       properties: {
         item: itemProperties.map(mapProperty),
         person: personProperties.map(mapProperty),

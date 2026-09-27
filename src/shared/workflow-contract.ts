@@ -70,6 +70,8 @@ export type WorkspaceWorkflow = Readonly<{
   archivedAt?: string | null;
   createdAt: string;
   icon?: string | null;
+  color?: string | null;
+  shortcut?: string | null;
   id: string;
   inputSchema: WorkflowInputSchema;
   kind: 'built_in' | 'custom';
@@ -84,6 +86,8 @@ export type WorkspaceWorkflow = Readonly<{
 export type WorkspaceWorkflowDraft = Readonly<{
   enabled?: boolean;
   icon?: string | null;
+  color?: string | null;
+  shortcut?: string | null;
   id?: string;
   inputSchema: WorkflowInputSchema;
   kind?: 'built_in' | 'custom';
@@ -108,6 +112,31 @@ export type WorkspaceWorkflowRun = Readonly<{
   workflowVersion: number;
 }>;
 
+/** Safe, bounded run metadata for the renderer. Inputs and raw JSON stay in main. */
+export type WorkflowRunSummary = Readonly<{
+  id: string;
+  workflowId: string;
+  workflowVersion: number;
+  status: WorkflowRunStatus;
+  startedAt: string;
+  completedAt?: string | null;
+  stepNumber?: number;
+  message?: string;
+}>;
+
+export type WorkflowValidationIssue = Readonly<{
+  code: 'missing_database' | 'missing_property' | 'invalid_mapping' | 'incompatible_value' | 'missing_input' | 'unsupported_conversion' | 'impossible_reference' | 'invalid_definition';
+  location: string;
+  message: string;
+  severity: 'error' | 'warning';
+}>;
+
+export type WorkflowValidationReport = Readonly<{
+  workflowId: string;
+  issues: readonly WorkflowValidationIssue[];
+  canRun: boolean;
+}>;
+
 export type WorkflowExecutionInput = Readonly<{
   actorId?: string;
   inputs: Readonly<Record<string, unknown>>;
@@ -126,6 +155,8 @@ export type WorkflowExecutionResult = Readonly<{
   runId: string;
   status: WorkflowRunStatus;
   workflowId: string;
+  previewEffects?: readonly Readonly<{ kind: 'created' | 'updated'; recordId: string; title: string; databaseId: string }>[];
+  previewComputed?: readonly Readonly<{ name: string; value: unknown }>[];
 }>;
 
 export const WORKFLOW_MAX_ITEMS = 100;

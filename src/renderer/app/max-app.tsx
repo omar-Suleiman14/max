@@ -28,6 +28,7 @@ import type { BackupSchedule } from '../../shared/blueprint-contract';
 import type { UpdateStatus } from '../../shared/update-contract';
 import type { WorkspaceTemplateV2 as Blueprint } from '../../shared/template-v2-contract';
 import type { WorkspaceNavigation } from '../../shared/workspace-contract';
+import type { WorkspaceWorkflow } from '../../shared/workflow-contract';
 import {
   createPersistentCustomPage,
   loadPersistentCustomPages,
@@ -151,6 +152,14 @@ export function MaxApp() {
   const [graphOpen, setGraphOpen] = useState(() => readSessionValue('graph-open', 'false') === 'true');
   useEffect(() => { localStorage.setItem('max:session:graph-open', String(graphOpen)); }, [graphOpen]);
   const [quickActionsEnabled, setQuickActionsEnabled] = useState(readQuickActionsEnabled);
+  const [shortcutActions, setShortcutActions] = useState<readonly WorkspaceWorkflow[]>([]);
+  useEffect(() => {
+    let active = true;
+    const reload = () => { void window.maxApi.workspace.listWorkflows().then((rows) => { if (active) setShortcutActions(rows.filter((row) => row.enabled && !row.archivedAt && row.shortcut)); }).catch(() => { if (active) setShortcutActions([]); }); };
+    reload();
+    window.addEventListener('max:workspace-changed', reload);
+    return () => { active = false; window.removeEventListener('max:workspace-changed', reload); };
+  }, []);
   const openPopup = useCallback((mode: SearchPopupMode, actionId?: string) => {
     setPopupActionId(actionId);
     setPopupMode(mode);
@@ -333,7 +342,10 @@ export function MaxApp() {
       const command = event.ctrlKey || event.metaKey;
       // One key opens one popup. It searches the whole workspace and lists the
       // quick actions in the same place, so there is nothing else to remember.
-      if (command && !event.altKey && !event.shiftKey && matchesShortcut(event, 'b') && !isEditingTarget(event.target)) {
+      if (quickActionsEnabled && command && event.altKey && !event.shiftKey && !event.getModifierState('AltGraph') && !event.defaultPrevented && !event.repeat && /^Digit[1-9]$/.test(event.code)) {
+        const action = shortcutActions.find((row) => row.shortcut === event.code);
+        if (action) { event.preventDefault(); openPopup('actions', action.id); }
+      } else if (command && !event.altKey && !event.shiftKey && matchesShortcut(event, 'b') && !isEditingTarget(event.target)) {
         if (event.defaultPrevented) return;
         event.preventDefault();
         if (!event.repeat) toggleSidebar();
@@ -365,7 +377,7 @@ export function MaxApp() {
     }
     document.addEventListener('keydown', handleGlobalKeyDown);
     return () => document.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [customPages, graphEnabled, handleAddCustomPage, navigateSettingsSection, openPopup, page, toggleSidebar, workspaceNavigation]);
+  }, [customPages, graphEnabled, handleAddCustomPage, navigateSettingsSection, openPopup, page, quickActionsEnabled, shortcutActions, toggleSidebar, workspaceNavigation]);
 
   function navigate(nextPage: AppPage) {
     setGraphOpen(false);

@@ -222,6 +222,8 @@ function assertPropertyBody(value: JsonRecord, label: string): void {
 function assertRecordBody(value: JsonRecord, label: string): void {
   assertNullableString(value.contentJson, `${label}.contentJson`);
   assertNullableString(value.icon, `${label}.icon`);
+  if (value.color !== undefined && value.color !== null && (typeof value.color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(value.color))) invalid(`${label}.color must be a hex color.`);
+  if (value.shortcut !== undefined && value.shortcut !== null && (typeof value.shortcut !== 'string' || !/^Digit[1-9]$/.test(value.shortcut))) invalid(`${label}.shortcut is invalid.`);
   if (value.positionKey !== undefined) assertString(value.positionKey, `${label}.positionKey`, { max: 120 });
   if (value.properties !== undefined) assertJsonObject(value.properties, `${label}.properties`);
   assertOptionalId(value.templateId, `${label}.templateId`);

@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { DatabaseService } from './database-service';
 import { migrations } from './migrations';
@@ -112,6 +112,43 @@ describe('upgrading a workspace left at an older schema version', () => {
       expect(second.databases.getDatabase(created.id)?.title).toBe('Kept');
     } finally {
       second.close();
+    }
+  });
+
+  it('verifies a pre-migration backup and rolls the entire chain back when a later step fails', async () => {
+    const path = await databaseAtVersion(16);
+    const failing = migrations.find(({ id }) => id === 18)!;
+    const service = new DatabaseService(path);
+    const original = failing.up;
+    const injected = vi.spyOn(failing, 'up').mockImplementation((db) => {
+      const safety = service.backups.listBackups().find(({ trigger }) => trigger === 'pre-migration');
+      expect(safety).toBeDefined();
+      expect(service.backups.verifyBackup(safety!.id).valid).toBe(true);
+      original(db);
+      db.exec('CREATE TABLE injected_partial_migration (id INTEGER);');
+      throw new Error('injected migration failure');
+    });
+    try {
+      expect(() => service.initialize()).toThrow('injected migration failure');
+    } finally {
+      injected.mockRestore();
+      service.close();
+    }
+
+    const inspection = new DatabaseSync(path, { readOnly: true });
+    try {
+      expect(inspection.prepare('SELECT MAX(id) AS version FROM system_migrations').get()).toMatchObject({ version: 16 });
+      expect(inspection.prepare("SELECT name FROM sqlite_master WHERE name = 'injected_partial_migration'").get()).toBeUndefined();
+    } finally {
+      inspection.close();
+    }
+
+    const reopened = new DatabaseService(path);
+    try {
+      reopened.initialize();
+      expect(reopened.getHealth().schemaVersion).toBe(latestVersion);
+    } finally {
+      reopened.close();
     }
   });
 // Every case here builds a database on disk and replays the migration chain

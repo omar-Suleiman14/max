@@ -109,6 +109,7 @@ import { createPortal } from 'react-dom';
 
 import type { Locale } from '../app/i18n';
 import { anchorPopover, currentViewport, type AnchoredPosition } from './anchor-popover';
+import { moveInGrid, useOverlayFocus, useOverlayLayer } from './overlay-stack';
 import { PageIconRenderer } from './page-icon-renderer';
 
 type IconPickerDialogProps = Readonly<{
@@ -386,24 +387,9 @@ export function IconPickerDialog({
     };
   }, [anchor]);
 
-  useEffect(() => {
-    function handlePointerDown(event: MouseEvent) {
-      const target = event.target as Node;
-      // The trigger toggles the picker itself, so closing on it would fight the
-      // caller and reopen the popover on the same click.
-      if (popoverRef.current?.contains(target) || anchor?.contains(target)) return;
-      onClose();
-    }
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') onClose();
-    }
-    document.addEventListener('mousedown', handlePointerDown);
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [anchor, onClose]);
+  // The trigger toggles the picker itself, so a press on it is not a press outside.
+  useOverlayLayer(popoverRef, { anchor, onClose });
+  useOverlayFocus(popoverRef, { returnTo: anchor });
 
   const handleSelectIcon = useCallback((iconString: string) => {
     const selected = iconString.startsWith('lucide:') ? `${iconString.split('#')[0]}${showColors ? '#' + color : ''}` : iconString;
@@ -512,6 +498,7 @@ export function IconPickerDialog({
             aria-label={ar ? 'ابحث عن رمز' : 'Search icons'}
             className="icon-picker-popover__input"
             onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(event) => { if (event.key === 'ArrowDown') { event.preventDefault(); popoverRef.current?.querySelector<HTMLElement>('.icon-picker-popover__grid button')?.focus(); } }}
             placeholder={ar ? 'ابحث' : 'Search'}
             value={searchQuery}
           />
@@ -533,7 +520,7 @@ export function IconPickerDialog({
         <button className="icon-picker-popover__shuffle" onClick={() => { const candidates = filteredLucide.length ? filteredLucide : LUCIDE_CATALOG; handleSelectIcon(candidates[Math.floor(Math.random() * candidates.length)]!.id); }} type="button">{ar ? 'خلط' : 'Shuffle'}</button>
       </div>}
 
-      <div className="icon-picker-popover__body" onScroll={handleScroll}>
+      <div className="icon-picker-popover__body" onKeyDown={(event) => { moveInGrid(event, [...event.currentTarget.querySelectorAll<HTMLElement>('.icon-picker-popover__grid button')], ar); }} onScroll={handleScroll}>
         {!searchQuery && recentIcons.length > 0 && (
           <div className="icon-picker-popover__section">
             <span className="icon-picker-popover__section-title">{ar ? 'الأخيرة' : 'Recent'}</span>

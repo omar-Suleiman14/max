@@ -41,6 +41,7 @@ type PropertyEditorProps = Readonly<{
   isOpen: boolean;
   locale?: Locale;
   onClose: () => void;
+  onArchive?: (propertyId: string) => Promise<void>;
   onSave: (draft: WorkspacePropertyDraft | WorkspacePropertyPatch) => Promise<WorkspaceProperty | null>;
   property?: WorkspaceProperty | null;
   schema: DatabaseSchema | null;
@@ -71,6 +72,7 @@ export function PropertyEditor({
   isOpen,
   locale = 'en',
   onClose,
+  onArchive,
   onSave,
   property,
   schema,
@@ -120,6 +122,7 @@ export function PropertyEditor({
   const [preview, setPreview] = useState<TypeConversionPreview | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [archiveImpact, setArchiveImpact] = useState<readonly Readonly<{ id: string; name: string }>[]>();
 
   useEffect(() => {
     if (!isOpen || type !== 'rollup' || !rollupRelationId) return;
@@ -165,6 +168,7 @@ export function PropertyEditor({
     }
     setPreview(null);
     setError(null);
+    setArchiveImpact(undefined);
   }, [property, isOpen]);
 
   useEffect(() => {
@@ -291,6 +295,22 @@ export function PropertyEditor({
   };
 
   const relationProperties = schema?.properties.filter((p) => p.type === 'relation') || [];
+
+  const prepareArchive = async () => {
+    if (!property || saving) return;
+    setSaving(true); setError(null);
+    try { setArchiveImpact(await window.maxApi.workspace.workflowsUsingProperty(property.id)); }
+    catch { setError(locale === 'ar' ? 'تعذر فحص الإجراءات المرتبطة بهذه الخاصية.' : 'Could not check actions that use this property.'); }
+    finally { setSaving(false); }
+  };
+
+  const archive = async () => {
+    if (!property || !onArchive || saving) return;
+    setSaving(true); setError(null);
+    try { await onArchive(property.id); onClose(); }
+    catch { setError(locale === 'ar' ? 'تعذرت أرشفة الخاصية.' : 'Could not archive this property.'); }
+    finally { setSaving(false); }
+  };
 
   return (
     <DatabasePopover labelId={titleId} onClose={onClose}>
@@ -488,6 +508,7 @@ export function PropertyEditor({
           </div>
 
           <div className="modal-footer">
+            {isEditing && property?.type !== 'title' && onArchive && <button type="button" className="btn btn-secondary" disabled={saving} onClick={() => void prepareArchive()}>{locale === 'ar' ? 'أرشفة الخاصية' : 'Archive property'}</button>}
             <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>
               Cancel
             </button>
@@ -495,6 +516,12 @@ export function PropertyEditor({
               {saving ? 'Saving...' : isEditing ? 'Save Changes' : 'Create Property'}
             </button>
           </div>
+          {archiveImpact && <div role="alert" className="alert alert-warning">
+            <p>{archiveImpact.length ? (locale === 'ar' ? 'ستتأثر هذه الإجراءات:' : 'These actions will be affected:') : (locale === 'ar' ? 'لن تتأثر أي إجراءات.' : 'No actions will be affected.')}</p>
+            {archiveImpact.length > 0 && <ul>{archiveImpact.map((workflow) => <li key={workflow.id}>{workflow.name}</li>)}</ul>}
+            <p>{locale === 'ar' ? 'ستبقى الإجراءات محفوظة، لكنها ستحتاج إلى إصلاح قبل تشغيلها.' : 'The actions will stay saved, but will need repair before they can run.'}</p>
+            <button type="button" className="btn btn-danger" disabled={saving} onClick={() => void archive()}>{locale === 'ar' ? 'تأكيد الأرشفة' : 'Confirm archive'}</button>
+          </div>}
         </form>
         {pickingIcon && <IconPickerDialog anchor={iconButtonRef.current} locale="en" currentIcon={icon} onClose={() => setPickingIcon(false)} onSelect={(value) => { setIcon(value); setPickingIcon(false); }} showColors={false} />}
       </div>

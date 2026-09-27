@@ -10,6 +10,7 @@ import type {
   CloudBackupCreateResult,
   CloudBackupMetadata,
   CloudBackupStatus,
+  LocalBackupStatus,
   RestoreResult,
 } from './backup-contract';
 import type {
@@ -79,6 +80,8 @@ import type {
   WorkflowExecutionInput,
   WorkflowExecutionResult,
   WorkflowFormEvaluation,
+  WorkflowRunSummary,
+  WorkflowValidationReport,
   WorkspaceWorkflow,
   WorkspaceWorkflowDraft,
 } from './workflow-contract';
@@ -95,6 +98,7 @@ export const IPC_CHANNELS = {
   accountUpdate: 'max:accounts:update',
   backupCreate: 'max:backup:create',
   backupList: 'max:backup:list',
+  backupStatus: 'max:backup:status',
   backupRestore: 'max:backup:restore',
   backupVerify: 'max:backup:verify',
   cloudBackupCreate: 'max:cloud-backup:create',
@@ -215,6 +219,9 @@ export const IPC_CHANNELS = {
   workspaceArchiveView: 'max:workspace:views:archive',
   workspaceQueryDatabase: 'max:workspace:queries:execute',
   workspaceListWorkflows: 'max:workspace:workflows:list',
+  workspaceListWorkflowRuns: 'max:workspace:workflows:runs:list',
+  workspaceInspectWorkflows: 'max:workspace:workflows:inspect',
+  workspaceWorkflowsUsingProperty: 'max:workspace:workflows:using-property',
   workspaceGetWorkflow: 'max:workspace:workflows:get',
   workspaceCreateWorkflow: 'max:workspace:workflows:create',
   workspaceUpdateWorkflow: 'max:workspace:workflows:update',
@@ -304,6 +311,7 @@ export type MaxApi = Readonly<{
   backups: Readonly<{
     create: (trigger?: BackupTrigger) => Promise<MutationResult<BackupMetadata>>;
     list: () => Promise<readonly BackupMetadata[]>;
+    status: () => Promise<LocalBackupStatus>;
     restore: (backupIdOrPath: string) => Promise<MutationResult<RestoreResult>>;
     verify: (backupIdOrPath: string) => Promise<BackupVerificationResult>;
   }>;
@@ -460,6 +468,9 @@ export type MaxApi = Readonly<{
     listRelations: (databaseId: string) => Promise<readonly WorkspaceRelation[]>;
     listViews: (ownerId: string, ownerType?: 'database' | 'block') => Promise<readonly WorkspaceView[]>;
     listWorkflows: () => Promise<readonly WorkspaceWorkflow[]>;
+    listWorkflowRuns: (workflowId: string) => Promise<readonly WorkflowRunSummary[]>;
+    inspectWorkflows: () => Promise<readonly WorkflowValidationReport[]>;
+    workflowsUsingProperty: (propertyId: string) => Promise<readonly { readonly id: string; readonly name: string }[]>;
     migrateV01: (locale?: 'ar' | 'en') => Promise<WorkspaceMutationResult<MigrationSummary>>;
     previewTypeConversion: (propertyId: string, targetType: PropertyType) => Promise<TypeConversionPreview>;
     queryDatabase: (params: DatabaseQueryParams) => Promise<DatabaseQueryResult>;
