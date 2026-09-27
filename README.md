@@ -47,6 +47,9 @@ keyboard access are built in rather than bolted on.
 
 ## Backups
 
+For local setup, backup and recovery steps in English and Arabic, see the
+[user guide](docs/user-guide.md).
+
 **Local backup works.** Max writes a full snapshot of the workspace to a file
 you choose, on a schedule or on demand, and restores from one.
 
