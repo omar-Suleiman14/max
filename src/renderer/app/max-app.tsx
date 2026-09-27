@@ -1,4 +1,5 @@
 import { useWorkspaceDisplay } from '../pages/workspace-display-preferences';
+import { nextFavoriteKey } from '../../shared/tree-order';
 import { useAppearance } from './appearance';
 import { readSessionValue, usePagePosition } from './page-session';
 import { LegacyDatabaseLink } from '../databases/LegacyDatabaseLink';
@@ -438,15 +439,23 @@ export function MaxApp() {
     }));
   }
 
-  async function handleDeleteCustomPage(id: string) {
+  async function handleRestoreNode(id: string) {
+    const result = await window.maxApi.workspace.restoreNode(id).catch(() => undefined);
+    if (!result?.ok) { alert(locale === 'ar' ? 'تعذرت استعادة العنصر. يمكنك استعادته من الإعدادات، الأرشيف والمهملات.' : 'Could not restore this item. You can restore it from Settings, Archive & trash.'); return; }
+    window.dispatchEvent(new Event('max:workspace-changed'));
+    window.dispatchEvent(new Event('max:pages-restored'));
+  }
+
+  async function handleDeleteCustomPage(id: string): Promise<boolean> {
     try {
       const result = await window.maxApi.workspace.archiveNode(id);
-      if (!result.ok) { alert(result.error.message); return; }
+      if (!result.ok) { alert(result.error.message); return false; }
       if (page === id) navigate(firstWorkspacePageId(customPages.filter((p) => p.id !== id), workspaceNavigation.pages, workspaceNavigation.databases));
       setCustomPages((pages) => pages.filter((candidate) => candidate.id !== id));
       window.dispatchEvent(new Event('max:workspace-changed'));
       window.dispatchEvent(new Event('max:pages-restored'));
-    } catch { alert(locale === 'ar' ? 'تعذر نقل العنصر إلى المهملات.' : 'Could not move this item to Trash.'); }
+      return true;
+    } catch { alert(locale === 'ar' ? 'تعذر نقل العنصر إلى المهملات.' : 'Could not move this item to Trash.'); return false; }
   }
 
   async function handleCompleteOnboarding(
@@ -600,35 +609,33 @@ export function MaxApp() {
         onAddCustomPage={() => void handleAddCustomPage()}
         onAddSubpage={(parentId) => void handleAddSubpage(parentId)}
         onCollapse={toggleSidebar}
-        onDeletePage={(id) => { void handleDeleteCustomPage(id); }}
+        onDeletePage={(id) => handleDeleteCustomPage(id)}
         onDuplicatePage={(id) => void handleDuplicateCustomPage(id)}
         onExitSettings={() => navigate(previousPage.current || firstWorkspacePageId(customPages, workspaceNavigation.pages, workspaceNavigation.databases))}
         onNavigate={navigate}
         onNavigateView={navigateDatabaseView}
         onOpenSettings={() => navigateSettingsSection('settings-general')}
-        onRenamePage={(id, title) => handleUpdateCustomPage(id, { title })}
+        onRenamePage={(id, title) => {
+          if (customPages.some((candidate) => candidate.id === id)) { handleUpdateCustomPage(id, { title }); return; }
+          void window.maxApi.workspace.updateNode(id, { title }).then(() => window.dispatchEvent(new Event('max:workspace-changed'))).catch(() => undefined);
+        }}
         onResize={setSidebarWidth}
         onSettingsSectionChange={navigateSettingsSection}
-        onToggleFavorite={(id, favorite) => handleUpdateCustomPage(id, { favorite })}
-        onReorderNodes={(reorderedIds, movedId, parentNodeId) => {
-          const updatedCustomPages = [...customPages];
-          const updatedDatabases = [...workspaceNavigation.databases];
-          reorderedIds.forEach((id, position) => {
-            const positionKey = `p${String(position).padStart(8, '0')}`;
-            const customIndex = updatedCustomPages.findIndex((p) => p.id === id);
-            if (customIndex !== -1) {
-              updatedCustomPages[customIndex] = { ...updatedCustomPages[customIndex], positionKey, ...(id === movedId ? { parentNodeId } : {}) } as typeof updatedCustomPages[0];
-            } else {
-              const dbIndex = updatedDatabases.findIndex((d) => d.id === id);
-              if (dbIndex !== -1) {
-                updatedDatabases[dbIndex] = { ...updatedDatabases[dbIndex], positionKey, ...(id === movedId ? { parentNodeId } : {}) } as typeof updatedDatabases[0];
-              }
-            }
-            window.maxApi.workspace.updateNode(id, { positionKey, ...(id === movedId ? { parentNodeId } : {}) }).catch(() => undefined);
-          });
-          setCustomPages(updatedCustomPages);
-          setWorkspaceNavigation({ ...workspaceNavigation, databases: updatedDatabases });
+        onToggleFavorite={(id, favorite) => handleUpdateCustomPage(id, favorite ? { favorite, favoriteKey: nextFavoriteKey(customPages.filter((candidate) => candidate.favorite)) } : { favorite, favoriteKey: undefined })}
+        onMoveNodes={(moves) => {
+          const byId = new Map(moves.map((move) => [move.id, move] as const));
+          setCustomPages((pages) => pages.map((candidate) => {
+            const move = byId.get(candidate.id);
+            return move ? { ...candidate, parentNodeId: move.parentNodeId, positionKey: move.positionKey } : candidate;
+          }));
+          setWorkspaceNavigation((current) => ({ ...current, databases: current.databases.map((database) => {
+            const move = byId.get(database.id);
+            return move ? { ...database, parentNodeId: move.parentNodeId, positionKey: move.positionKey } : database;
+          }) }));
+          for (const move of moves) void window.maxApi.workspace.updateNode(move.id, { parentNodeId: move.parentNodeId, positionKey: move.positionKey }).catch(() => undefined);
         }}
+        onReorderFavorites={(keys) => { for (const [id, favoriteKey] of keys) handleUpdateCustomPage(id, { favoriteKey }); }}
+        onRestoreNode={(id) => handleRestoreNode(id)}
         page={page}
         settingsSection={settingsSection}
         runtimePlatform={runtimePlatform}

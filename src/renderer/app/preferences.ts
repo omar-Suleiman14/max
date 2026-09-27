@@ -6,6 +6,7 @@ export type EffectiveTheme = Exclude<ThemePreference, 'system'>;
 export const preferenceKeys = {
   locale: 'max.ui.locale',
   sidebarCollapsed: 'max.ui.sidebar-collapsed',
+  sidebarExpanded: 'max.ui.sidebar-expanded',
   sidebarWidth: 'max.ui.sidebar-width',
   theme: 'max.ui.theme',
 } as const;
@@ -36,6 +37,18 @@ export function readTheme(storage: Storage): ThemePreference {
 
 export function readSidebarCollapsed(storage: Storage): boolean {
   return storage.getItem(preferenceKeys.sidebarCollapsed) === 'true';
+}
+
+/** Which sidebar rows are open. Kept on the device, like the sidebar width. */
+export function readSidebarExpanded(storage: Storage): ReadonlySet<string> {
+  try {
+    const parsed: unknown = JSON.parse(storage.getItem(preferenceKeys.sidebarExpanded) ?? '[]');
+    return new Set(Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : []);
+  } catch { return new Set(); }
+}
+
+export function writeSidebarExpanded(storage: Storage, ids: ReadonlySet<string>): void {
+  try { storage.setItem(preferenceKeys.sidebarExpanded, JSON.stringify([...ids])); } catch { /* Device storage is optional. */ }
 }
 
 export function readSidebarWidth(storage: Storage): number {
