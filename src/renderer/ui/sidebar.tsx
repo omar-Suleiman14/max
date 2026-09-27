@@ -160,7 +160,7 @@ export function Sidebar({
   // Renaming happens in the row itself. It used to call window.prompt, which
   // Electron does not implement: the dialog never appeared, the call returned
   // null, and the menu item looked like it simply did nothing.
-  const [renamingPageId, setRenamingPageId] = useState<string>();
+  const [renamingPage, setRenamingPage] = useState<Readonly<{ id: string; list: 'favorites' | 'tree' }>>();
   const [renameDraft, setRenameDraft] = useState('');
   const [legacyViewNames, setLegacyViewNames] = useState<Readonly<Record<string, readonly { id: string; name: string }[]>>>({});
   const [databaseViewNames, setDatabaseViewNames] = useState<Readonly<Record<string, readonly { id: string; name: string }[]>>>({});
@@ -496,7 +496,7 @@ export function Sidebar({
     const actions = [
       ...(p ? [{ icon: Plus, id: 'subpage', label: ar ? 'إضافة صفحة فرعية' : 'Add sub-page', run: () => { toggleExpanded(item.id, true); onAddSubpage(item.id); } }] : []),
       ...(p ? [{ icon: Star, id: 'favorite', label: p.favorite ? (ar ? 'إزالة من المفضلة' : 'Remove from favorites') : (ar ? 'إضافة للمفضلة' : 'Add to favorites'), run: () => onToggleFavorite(item.id, !p.favorite) }] : []),
-      { icon: Pencil, id: 'rename', label: ar ? 'إعادة تسمية' : 'Rename', run: () => { setRenameDraft(item.kind === 'page' ? (p?.title ?? '') : item.title); setRenamingPageId(item.id); } },
+      { icon: Pencil, id: 'rename', label: ar ? 'إعادة تسمية' : 'Rename', run: () => { setRenameDraft(item.kind === 'page' ? (p?.title ?? '') : item.title); setRenamingPage({ id: item.id, list: menu?.list ?? 'tree' }); } },
       ...(p ? [{ icon: Copy, id: 'duplicate', label: ar ? 'إنشاء نسخة' : 'Duplicate', run: () => onDuplicatePage(item.id) }] : []),
       { danger: true, icon: Trash2, id: 'trash', label: ar ? 'نقل إلى المهملات' : 'Move to Trash', run: () => { void moveToTrash(item.id, item.title); } },
     ];
@@ -630,7 +630,22 @@ export function Sidebar({
                           type="button"
                         >
                           <PageIconRenderer className="nav-item__custom-icon" fallback="lucide:Star" icon={favorite.icon || 'lucide:Star'} size={17} />
-                          {!collapsed && <span className="nav-item__title">{favoriteTitle}</span>}
+                          {!collapsed && (renamingPage?.id === favorite.id && renamingPage.list === 'favorites'
+                            ? <input
+                                aria-label={locale === 'ar' ? 'اسم الصفحة' : 'Page name'}
+                                autoFocus
+                                className="nav-item__rename"
+                                onBlur={() => { onRenamePage(favorite.id, renameDraft.trim() || favoriteTitle); setRenamingPage(undefined); }}
+                                onChange={(event) => setRenameDraft(event.target.value)}
+                                onClick={(event) => { event.stopPropagation(); event.preventDefault(); }}
+                                onKeyDown={(event) => {
+                                  event.stopPropagation();
+                                  if (event.key === 'Enter') { event.preventDefault(); onRenamePage(favorite.id, renameDraft.trim() || favoriteTitle); setRenamingPage(undefined); focusRow(`[data-sidebar-favorite="${favorite.id}"]`); }
+                                  if (event.key === 'Escape') { event.preventDefault(); setRenamingPage(undefined); focusRow(`[data-sidebar-favorite="${favorite.id}"]`); }
+                                }}
+                                value={renameDraft}
+                              />
+                            : <span className="nav-item__title">{favoriteTitle}</span>)}
                         </button>
                         {!collapsed && (
                           <button
@@ -677,7 +692,7 @@ export function Sidebar({
                 const pageTitle = title || translate(locale, 'untitledPage');
                 const icon = database?.icon ?? p?.icon ?? (row.kind === 'database' ? 'lucide:Database' : 'lucide:FileText');
                 const expanded = expandedPageIds.has(row.id);
-                const renaming = renamingPageId === row.id;
+                const renaming = renamingPage?.id === row.id && renamingPage.list === 'tree';
 
                 return (
                   <div
@@ -724,13 +739,13 @@ export function Sidebar({
                             aria-label={row.kind === 'database' ? (locale === 'ar' ? 'اسم قاعدة البيانات' : 'Database name') : (locale === 'ar' ? 'اسم الصفحة' : 'Page name')}
                             autoFocus
                             className="nav-item__rename"
-                            onBlur={() => { onRenamePage(row.id, renameDraft.trim() || title); setRenamingPageId(undefined); }}
+                            onBlur={() => { onRenamePage(row.id, renameDraft.trim() || title); setRenamingPage(undefined); }}
                             onChange={(event) => setRenameDraft(event.target.value)}
                             onClick={(event) => { event.stopPropagation(); event.preventDefault(); }}
                             onKeyDown={(event) => {
                               event.stopPropagation();
-                              if (event.key === 'Enter') { event.preventDefault(); onRenamePage(row.id, renameDraft.trim() || title); setRenamingPageId(undefined); focusRow(`[data-sidebar-row="${row.id}"]`); }
-                              if (event.key === 'Escape') { event.preventDefault(); setRenamingPageId(undefined); focusRow(`[data-sidebar-row="${row.id}"]`); }
+                              if (event.key === 'Enter') { event.preventDefault(); onRenamePage(row.id, renameDraft.trim() || title); setRenamingPage(undefined); focusRow(`[data-sidebar-row="${row.id}"]`); }
+                              if (event.key === 'Escape') { event.preventDefault(); setRenamingPage(undefined); focusRow(`[data-sidebar-row="${row.id}"]`); }
                             }}
                             value={renameDraft}
                           />

@@ -144,6 +144,19 @@ describe('Sidebar drag and drop', () => {
 });
 
 describe('Sidebar favourites', () => {
+  it('renames a nested favourite while its parent is collapsed', async () => {
+    const user = userEvent.setup();
+    const { props } = mount({ customPages: [...pages.slice(0, 3), { ...pages[3]!, favorite: true, favoriteKey: 'b0' }] });
+    expect(within(workspace()).queryByRole('button', { name: 'Q3' })).not.toBeInTheDocument();
+    await user.pointer({ keys: '[MouseRight]', target: within(favorites()).getByRole('button', { name: 'Q3' }) });
+    await user.click(screen.getByRole('menuitem', { name: 'Rename' }));
+    const input = within(favorites()).getByRole('textbox', { name: 'Page name' });
+    expect(input).toHaveFocus();
+    await user.clear(input);
+    await user.type(input, 'Quarter 3{Enter}');
+    expect(props.onRenamePage).toHaveBeenCalledWith('q3', 'Quarter 3');
+  });
+
   it('lists favourites in their own order and removes one', async () => {
     const user = userEvent.setup();
     const { props } = mount({ customPages: [pages[0]!, { ...pages[1]!, favoriteKey: '0V' }, pages[2]!, pages[3]!] });
