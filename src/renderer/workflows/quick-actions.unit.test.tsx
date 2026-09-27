@@ -30,12 +30,14 @@ function api(actions: readonly WorkspaceWorkflow[] = []) {
 describe('running one quick action', () => {
   it('previews record changes without treating the preview as a completed run', async () => {
     const workspace = api([action]);
-    workspace.executeWorkflow.mockResolvedValue({ ok: true, value: { status: 'rolled_back', previewEffects: [{ kind: 'created', recordId: 'preview-id', title: 'Preview task', databaseId: 'tasks' }] } });
+    workspace.executeWorkflow.mockResolvedValue({ ok: true, value: { status: 'rolled_back', previewEffects: [{ kind: 'created', recordId: 'preview-id', title: 'Preview task', databaseId: 'tasks' }], previewComputed: [{ name: 'total', value: 12 }] } });
     render(<QuickActionForm action={action} locale="en" onOpenSettings={vi.fn()} />);
     await userEvent.setup().type(await screen.findByLabelText('Count *'), '12');
     await userEvent.setup().click(screen.getByRole('button', { name: 'Preview' }));
     expect(workspace.executeWorkflow).toHaveBeenCalledWith({ workflowId: action.id, inputs: { count: 12 }, testMode: true });
     expect(await screen.findByText('Create: Preview task')).toBeInTheDocument();
+    expect(screen.getByText('Computed values')).toBeInTheDocument();
+    expect(screen.getByText('total')).toBeInTheDocument();
     expect(screen.queryByText(/Done · ready/)).not.toBeInTheDocument();
   });
   it('runs the action once per submission and confirms when it lands', async () => {

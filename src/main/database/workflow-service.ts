@@ -414,6 +414,14 @@ export class WorkflowService {
         const resultObj = (finalResult && typeof finalResult === 'object' && !Array.isArray(finalResult)
           ? finalResult
           : { value: finalResult }) as Readonly<Record<string, unknown>>;
+        const computedKeys = new Set<string>();
+        if (!persistRun) for (const step of workflow.steps) {
+          if (!['COMPUTE', 'SUM', 'FOR_EACH'].includes(step.type)) continue;
+          if (typeof step.config.outputVariable === 'string') computedKeys.add(step.config.outputVariable);
+          if (step.type === 'COMPUTE' && step.config.assignments && typeof step.config.assignments === 'object') {
+            for (const key of Object.keys(step.config.assignments)) computedKeys.add(key);
+          }
+        }
 
         return {
           completedAt,
@@ -422,6 +430,7 @@ export class WorkflowService {
           runId,
           status: persistRun ? 'completed' : 'rolled_back',
           workflowId: workflow.id,
+          ...(!persistRun ? { previewComputed: [...computedKeys].filter((name) => Object.hasOwn(variables, name)).map((name) => ({ name, value: variables[name] })) } : {}),
         };
     };
 
@@ -808,6 +817,9 @@ export class WorkflowService {
             try {
               const property = this.#property(String(c.databaseId), id);
               if (['formula', 'rollup', 'created_time', 'created_by', 'last_edited_time', 'last_edited_by', 'auto_id', 'button'].includes(property.type)) throw new WorkspaceDomainError('invalid-input', 'Selected property does not support this operation.');
+              const literal = value && typeof value === 'object' && 'source' in value && (value as WorkflowValue).source === 'literal'
+                ? (value as Extract<WorkflowValue, { source: 'literal' }>).value : undefined;
+              if (property.type === 'number' && literal !== undefined && literal !== null && (typeof literal !== 'number' || !Number.isFinite(literal))) throw new WorkspaceDomainError('invalid-input', 'A finite number is required.');
               checkValue(value);
             } catch (error) {
               if (error instanceof WorkspaceDomainError) throw new WorkspaceDomainError(error.code, `Property ${id}: ${error.message}`, error.entityId);
@@ -817,6 +829,9 @@ export class WorkflowService {
         for (const [id, value] of Object.entries((c.increments ?? {}) as Record<string, unknown>)) {
             try {
               if (this.#property(String(c.databaseId), id).type !== 'number') throw new WorkspaceDomainError('invalid-input', 'Selected property does not support numeric adjustment.');
+              const literal = value && typeof value === 'object' && 'source' in value && (value as WorkflowValue).source === 'literal'
+                ? (value as Extract<WorkflowValue, { source: 'literal' }>).value : undefined;
+              if (literal !== undefined && (typeof literal !== 'number' || !Number.isFinite(literal))) throw new WorkspaceDomainError('invalid-input', 'A finite number is required.');
               checkValue(value);
             } catch (error) {
               if (error instanceof WorkspaceDomainError) throw new WorkspaceDomainError(error.code, `Property ${id}: ${error.message}`, error.entityId);

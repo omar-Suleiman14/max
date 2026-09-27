@@ -5,6 +5,7 @@ import { lastUsedInputs, rememberInputs } from './last-used-inputs';
 import { listMissing, missingRequiredInputs } from './required-inputs';
 import { WorkflowInputForm } from './workflow-input-form';
 import { scalarText } from '../../shared/scalar-text';
+import { WorkflowPreview } from './workflow-preview';
 
 /**
  * An action whose form recalculates as it is filled in.
@@ -102,7 +103,7 @@ export function ReactiveActionForm({ workflow, locale, onCompleted, onBusy }: { 
     {!!evaluation?.summary.length && <dl className="action-live-summary" aria-label={ar ? 'المعاينة' : 'Preview'}>{evaluation.summary.map((s, i) => <div key={i}><dt>{s.label}</dt><dd>{typeof s.value === 'number' ? new Intl.NumberFormat(ar ? 'ar' : 'en', { maximumFractionDigits: 6 }).format(s.value) : scalarText(s.value ?? '—')}</dd></div>)}</dl>}
     <div aria-live="polite">{evaluation?.messages.map(m => <p className={'action-message action-message-' + m.severity.toLowerCase()} key={m.id}>{m.message}</p>)}</div>
     {error && <p className="quick-action-form__error" role="alert">{error}</p>}
-    {dryRun && <section aria-label={ar ? 'معاينة التغييرات' : 'Change preview'} className="quick-action-form__preview"><strong>{ar ? 'سيحدث عند التشغيل' : 'Would happen when run'}</strong>{dryRun.previewEffects?.length ? <ul>{dryRun.previewEffects.map(effect => <li key={`${effect.kind}:${effect.recordId}`}>{effect.kind === 'created' ? (ar ? 'إنشاء' : 'Create') : (ar ? 'تحديث' : 'Update')}: {effect.title}</li>)}</ul> : <p>{ar ? 'لا توجد تغييرات على السجلات.' : 'No record changes.'}</p>}</section>}
+    {dryRun && <WorkflowPreview action={workflow} locale={locale} preview={dryRun} />}
     <button className="btn btn-secondary" type="button" disabled={running || pending || !evaluation} onClick={() => void previewChanges()}>{ar ? 'معاينة التغييرات' : 'Preview changes'}</button>
     {confirming ? <div className="action-warning-confirm" role="group" aria-label={ar ? 'تأكيد التحذيرات' : 'Confirm warnings'}><strong>{warnings.length} {ar ? 'تحذيرات · هل تريد المتابعة؟' : 'warnings · Continue anyway?'}</strong>{warnings.map(w => <p key={w.id}>{w.message}</p>)}<div className="action-row"><button type="button" disabled={running} onClick={() => setConfirming(false)}>{ar ? 'إلغاء' : 'Cancel'}</button><button className="btn btn-primary" type="button" disabled={running} onClick={() => attempt(true)}>{ar ? 'متابعة' : 'Continue'}</button></div></div>
       : <button className="btn btn-primary" type="submit" disabled={running}>{running ? (ar ? 'جار التنفيذ…' : 'Running…') : queued ? (ar ? 'جارٍ التحقق…' : 'Checking…') : (ar ? 'تشغيل' : 'Run')}</button>}

@@ -79,6 +79,16 @@ describe('Generic workspace actions', () => {
     expect(db.records.listRecords(database.id)).toHaveLength(0);
     expect(db.workflows.listWorkflowRuns(workflow.id)).toHaveLength(0);
   });
+  it('rejects incompatible literal mappings before saving a workflow', () => {
+    const db = workspace();
+    const database = db.databases.createDatabase({ title: 'Tasks' });
+    const number = db.properties.createProperty({ databaseId: database.id, name: 'Priority', type: 'number' });
+    expect(() => db.workflows.createWorkflow({ name: 'Bad mapping', inputSchema: { fields: [] }, steps: [
+      { type: 'CREATE_RECORD', config: { databaseId: database.id, title: literal('Task'), properties: { [number.id]: literal('high') } } },
+    ] })).toThrow(`Step 1: Property ${number.id}: A finite number is required.`);
+    expect(db.workflows.listWorkflows()).toHaveLength(0);
+    expect(db.records.listRecords(database.id)).toHaveLength(0);
+  });
   it('leaves records and run history unchanged after a dry run', () => {
     const db = workspace();
     const database = db.databases.createDatabase({ title: 'Tasks' });
@@ -127,6 +137,7 @@ describe('Generic workspace actions', () => {
       expect.objectContaining({ kind: 'updated', title: 'A', databaseId: s.nodes.id }),
       expect.objectContaining({ kind: 'updated', title: 'B', databaseId: s.nodes.id }),
     ]));
+    expect(preview.previewComputed).toEqual(expect.arrayContaining([{ name: 'y', value: 3 }, { name: 'z', value: 9 }]));
     expect(db.records.listRecords(s.events.id)).toHaveLength(0);
     expect(db.records.getRecord(s.a.id)?.properties[s.capacity.id]).toBe(100);
     expect(db.records.getRecord(s.b.id)?.properties[s.capacity.id]).toBe(20);

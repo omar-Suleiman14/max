@@ -9,6 +9,7 @@ import { listMissing, missingRequiredInputs } from './required-inputs';
 import { WorkflowInputForm } from './workflow-input-form';
 import { resultOutputs } from './result-outputs';
 import { WorkflowRunHistory } from './workflow-run-history';
+import { WorkflowPreview } from './workflow-preview';
 import './quick-actions.css';
 
 export type QuickActionFormProps = Readonly<{
@@ -156,7 +157,7 @@ export function QuickActionForm({ action, locale, onBusyChange, onEnabled, onOpe
         <form key={`${action.id}:${formInstance}`} noValidate onSubmit={(event) => { event.preventDefault(); void execute(); }}>
           <WorkflowInputForm fields={action.inputSchema.fields} values={values} onChange={(next) => { setValues(next); setMissing([]); setError(''); }} disabled={running} locale={locale} missing={missing} />
           {error && <p className="quick-action-form__error" role="alert">{error}</p>}
-          {preview && <section aria-label={ar ? 'معاينة الإجراء' : 'Action preview'} className="quick-action-form__preview"><strong>{ar ? 'سيحدث عند التشغيل' : 'Would happen when run'}</strong>{preview.previewEffects?.length ? <ul>{preview.previewEffects.map((effect) => <li key={`${effect.kind}:${effect.recordId}`}>{effect.kind === 'created' ? (ar ? 'إنشاء' : 'Create') : (ar ? 'تحديث' : 'Update')}: {effect.title}</li>)}</ul> : <p>{ar ? 'لا توجد تغييرات على السجلات.' : 'No record changes.'}</p>}</section>}
+          {preview && <WorkflowPreview action={action} locale={locale} preview={preview} />}
           <button className="btn btn-secondary" type="button" disabled={running} onClick={() => void execute(true)}>{ar ? 'معاينة' : 'Preview'}</button>
           <button className="btn btn-primary" type="submit" disabled={running}>
             {running ? (ar ? 'جار التنفيذ…' : 'Running…') : (ar ? 'تشغيل' : 'Run')}
