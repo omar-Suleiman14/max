@@ -27,7 +27,7 @@ import {
   Maximize2,
 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
-import { containTab, useOverlayLayer } from '../ui/overlay-stack';
+import { containTab, isTopmostOverlay, useOverlayLayer } from '../ui/overlay-stack';
 
 import type { Locale } from '../app/i18n';
 import type { DatabaseSchema } from '../../shared/database-contract';
@@ -168,7 +168,10 @@ export function RecordDrawer({
 
   return (
     <>
-      <div className="drawer-backdrop" data-page-mode={displayMode} onClick={close} role="dialog" aria-modal="true" aria-label={record.title}>
+      <div className="drawer-backdrop" data-page-mode={displayMode} onPointerDown={(event) => {
+        if (event.defaultPrevented || event.currentTarget !== event.target || !isTopmostOverlay(drawerRef.current)) return;
+        close();
+      }} role="dialog" aria-modal="true" aria-label={record.title}>
         <div ref={drawerRef} className="drawer-container record-drawer" data-full-page={fullPage} onClick={(e) => e.stopPropagation()} onKeyDown={(event) => containTab(event, drawerRef.current)}>
           {/* Header */}
           <div className="drawer-header">
