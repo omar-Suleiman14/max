@@ -196,18 +196,37 @@ export class DatabaseService {
       return;
     }
 
-    this.#database.exec(MIGRATIONS_TABLE_SQL);
     this.#validateMigrationPlan(migrations);
-
-    const appliedMigrations = this.#database
-      .prepare('SELECT id, name FROM system_migrations ORDER BY id')
-      .all() as { id: number; name: string }[];
+    const existingTables = this.#database
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")
+      .all() as { name: string }[];
+    const hasHistory = existingTables.some(({ name }) => name === 'system_migrations');
+    const appliedMigrations = hasHistory
+      ? this.#database.prepare('SELECT id, name FROM system_migrations ORDER BY id').all() as { id: number; name: string }[]
+      : [];
     this.#validateAppliedMigrations(appliedMigrations);
     const appliedIds = new Set(appliedMigrations.map(({ id }) => id));
+    const pending = migrations.filter(({ id }) => !appliedIds.has(id));
 
-    for (const migration of migrations) {
-      if (!appliedIds.has(migration.id)) {
-        this.#applyMigration(migration);
+    if (pending.length > 0) {
+      if (existingTables.length > 0) {
+        if (!hasHistory) throw new Error('Existing database has no migration history. The database was left unchanged.');
+        const integrity = this.#database.prepare('PRAGMA integrity_check').get() as { integrity_check?: string } | undefined;
+        if (integrity?.integrity_check !== 'ok') throw new Error('Database integrity check failed before migration. The database was left unchanged.');
+        const snapshot = this.backups.createBackup('pre-migration');
+        const verification = this.backups.verifyBackup(snapshot.id);
+        if (!verification.valid) throw new Error(`Pre-migration backup failed verification: ${verification.error ?? 'unknown error'}`);
+      }
+      // One transaction covers the whole chain. A failed step or process
+      // interruption cannot leave a successfully applied prefix on disk.
+      this.#database.exec('BEGIN IMMEDIATE;');
+      try {
+        this.#database.exec(MIGRATIONS_TABLE_SQL);
+        for (const migration of pending) this.#applyMigration(migration);
+        this.#database.exec('COMMIT;');
+      } catch (error) {
+        if (this.#database.isTransaction) this.#database.exec('ROLLBACK;');
+        throw error;
       }
     }
 
@@ -401,20 +420,10 @@ export class DatabaseService {
   }
 
   #applyMigration(migration: Migration): void {
-    this.#database.exec('BEGIN IMMEDIATE;');
-
-    try {
-      migration.up(this.#database);
-      this.#database
-        .prepare('INSERT INTO system_migrations (id, name, applied_at) VALUES (?, ?, ?)')
-        .run(migration.id, migration.name, new Date().toISOString());
-      this.#database.exec('COMMIT;');
-    } catch (error) {
-      if (this.#database.isTransaction) {
-        this.#database.exec('ROLLBACK;');
-      }
-      throw error;
-    }
+    migration.up(this.#database);
+    this.#database
+      .prepare('INSERT INTO system_migrations (id, name, applied_at) VALUES (?, ?, ?)')
+      .run(migration.id, migration.name, new Date().toISOString());
   }
 
   #validateMigrationPlan(plan: readonly Migration[]): void {
